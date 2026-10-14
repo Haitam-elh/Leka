@@ -30,6 +30,7 @@ import type { Verification } from "@/lib/outcomes";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import type { IntentionDetail } from "@/lib/intentions/api";
 import { makeQueryClient } from "@/lib/query";
+import { sampleJourney } from "@/lib/intentions/journey-sample";
 
 const ME = "9c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
 const ID = "5c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
@@ -72,13 +73,14 @@ const { ApiError } = await import("@/lib/api");
 const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
 
 function intention(overrides: Partial<IntentionDetail> = {}): IntentionDetail {
+  const status = overrides.status ?? "approved";
   return {
     id: ID,
     title: "Redémarre Billing API en production",
     text: "Redémarre Billing API en production",
     kind: "change",
     scope: {},
-    status: "approved",
+    status,
     phase: "active",
     status_changed_at: ago(5),
     summary: null,
@@ -91,6 +93,8 @@ function intention(overrides: Partial<IntentionDetail> = {}): IntentionDetail {
     goal: "act",
     understanding: null,
     links: [],
+    version: 1,
+    journey: sampleJourney(status),
     ...overrides,
   };
 }
@@ -116,14 +120,25 @@ function step(overrides: Partial<PlanStep> = {}): PlanStep {
   };
 }
 
+/** What the API allows with a plan in its plainest case (plan_controls). */
+function controlsOf(status: Plan["status"], steps: PlanStep[]): Plan["controls"] {
+  if (status === "planned") return ["start", "schedule", "cancel"];
+  if (status === "scheduled") return ["unschedule"];
+  if (status === "running") {
+    return steps.some((s) => s.status === "awaiting") ? ["stop", "confirm_step"] : ["stop"];
+  }
+  return status === "succeeded" ? [] : ["plan"];
+}
+
 function plan(overrides: Partial<Plan> = {}): Plan {
+  const status = overrides.status ?? "planned";
   return {
     id: "p1",
     intention_id: ID,
     decision_id: "d1",
     number: 1,
     revision: 1,
-    status: "planned",
+    status,
     created_by: ME,
     started_by: null,
     timezone: "UTC",
@@ -137,6 +152,7 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     steps: [step()],
     events: [],
     expectations: [],
+    controls: controlsOf(status, overrides.steps ?? [step()]),
     ...overrides,
   };
 }
@@ -384,6 +400,8 @@ describe("an intention's actions", () => {
     expect(await screen.findByTestId("plan")).toHaveTextContent(
       "Toutes les actions sont exécutées. LEKA vérifie maintenant le résultat.",
     );
+    // Run is not done: to be verified, said so (LEKA-443).
+    expect(screen.getByTestId("plan-status")).toHaveTextContent("Exécuté · à vérifier");
     const evidence = screen.getByTestId("step-evidence");
     expect(evidence).toHaveTextContent("Envoyé à https://ops.acme.example/leka");
     expect(evidence).toHaveTextContent("Réponse 200 en 120 ms");
@@ -412,6 +430,22 @@ describe("an intention's actions", () => {
     expect(await screen.findByTestId("plan-step")).toHaveTextContent("Le système a répondu 500");
     await user.click(screen.getByTestId("plan-retry"));
     await waitFor(() => expect(api.plan).toHaveBeenCalledWith(ID));
+  });
+
+  it("offers only what the API allows with it — never a retry it would refuse", async () => {
+    // Failed, but the intention asked again since: no plan to retry here.
+    api.of.mockResolvedValue([
+      plan({
+        status: "failed",
+        error: "http_500",
+        steps: [step({ status: "failed", executor: "webhook", error: "http_500" })],
+        controls: [],
+      }),
+    ]);
+    show(intention({ status: "failed" }));
+    expect(await screen.findByTestId("plan-step")).toHaveTextContent("Le système a répondu 500");
+    expect(screen.queryByTestId("plan-retry")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("plan-controls")).not.toBeInTheDocument();
   });
 
   it("lets anyone else follow it — and never runs a link that is not http(s)", async () => {

@@ -70,6 +70,8 @@ function analysisFixture(
     requested_by: null,
     context_id: "c1",
     context_version: 2,
+    intention_version: 1,
+    current: true,
     readiness: "ready",
     started_at: "2026-10-08T09:00:00Z",
     finished_at: "2026-10-08T09:00:01.200Z",

@@ -40,6 +40,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from sqlalchemy import text as sql
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -67,6 +68,16 @@ class Intention(Base, WorkspaceScopedMixin):
         Index("ix_intentions_workspace_updated", "workspace_id", "updated_at"),
         Index("ix_intentions_workspace_status", "workspace_id", "status"),
         Index("ix_intentions_workspace_created_by", "workspace_id", "created_by"),
+        # One intention per request its asker sent (LEKA-443): sent twice — a
+        # click twice, a network that gave up and tried again — the same.
+        Index(
+            "uq_intentions_request_key",
+            "workspace_id",
+            "created_by",
+            "request_key",
+            unique=True,
+            postgresql_where=sql("request_key IS NOT NULL"),
+        ),
     )
 
     # Its words, as asked; its title, the first of them unless one is given.
@@ -104,6 +115,14 @@ class Intention(Base, WorkspaceScopedMixin):
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # How many events it has: each event's place in its history.
     events_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    # Which version of what was asked it is (LEKA-443): 1 as asked, one more
+    # each time its words, scope or answers are asked again. What came of an
+    # earlier version — an analysis, a decision — is said replaced, never
+    # shown as its result.
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+    # The key its asker's request came with (Idempotency-Key): the same
+    # request twice is this intention, not a second one.
+    request_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
 
 class IntentionEvent(Base, WorkspaceScopedMixin):
@@ -176,7 +195,17 @@ class IntentionLink(Base, WorkspaceScopedMixin):
     )
 
 
-ANALYSIS_STATUSES = ("running", "complete", "partial", "inconclusive", "failed", "blocked")
+ANALYSIS_STATUSES = (
+    "running",
+    "complete",
+    "partial",
+    "inconclusive",
+    "failed",
+    "blocked",
+    # Stopped by a person while it ran (LEKA-443): what it came to is kept,
+    # never the intention's result.
+    "stopped",
+)
 ANALYSIS_TRIGGERS = ("created", "asked_again", "requested", "sweep")
 
 
@@ -213,6 +242,8 @@ class IntentionAnalysis(Base, WorkspaceScopedMixin):
     # is archived and the analysis must still say what it read.
     context_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     context_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # The version of the intention it analysed (LEKA-443).
+    intention_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     readiness: Mapped[str | None] = mapped_column(String(10), nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

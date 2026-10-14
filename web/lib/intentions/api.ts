@@ -92,9 +92,16 @@ export interface IntentionPage {
 const BASE = "/intentions";
 
 export const intentions = {
-  /** Asked: kept, its context assembled — 422 when nothing can start it. */
-  create: (ask: IntentAsk) =>
-    apiFetch<IntentionCreated>(BASE, { method: "POST", body: JSON.stringify(ask) }),
+  /** Asked: kept, its context assembled — 422 when nothing can start it.
+   * Sent again with the same key — a click twice, a request retried after
+   * the network gave up — it answers the intention it made, never a second
+   * one (LEKA-443). */
+  create: (ask: IntentAsk, key?: string) =>
+    apiFetch<IntentionCreated>(BASE, {
+      method: "POST",
+      body: JSON.stringify(ask),
+      headers: key ? { "Idempotency-Key": key } : undefined,
+    }),
   /** Asked again: its context made again, a new version (LEKA-374). */
   ask: (id: string, ask: IntentAsk) =>
     apiFetch<IntentionCreated>(`${BASE}/${id}/ask`, {
@@ -127,6 +134,8 @@ export const intentions = {
       method: "POST",
       body: JSON.stringify({ reason: reason || null }),
     }),
+  /** « Arrêter l'analyse » (LEKA-443): kept, ready to analyse again. */
+  stop: (id: string) => apiFetch<IntentionDetail>(`${BASE}/${id}/stop`, { method: "POST" }),
   archive: (id: string) => apiFetch<IntentionDetail>(`${BASE}/${id}/archive`, { method: "POST" }),
   restore: (id: string) => apiFetch<IntentionDetail>(`${BASE}/${id}/restore`, { method: "POST" }),
   /** Its latest analysis (LEKA-388) — 404 while there is none. */
@@ -153,8 +162,8 @@ export const intentions = {
   feasibility: (id: string) => apiFetch<Feasibility>(`${BASE}/${id}/feasibility`),
 };
 
-export function submitIntention(ask: AskWithAnswers): Promise<IntentionCreated> {
-  return intentions.create(ask);
+export function submitIntention(ask: AskWithAnswers, key?: string): Promise<IntentionCreated> {
+  return intentions.create(ask, key);
 }
 
 /** The intention asked again, as it now stands: the same context made

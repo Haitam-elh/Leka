@@ -10,6 +10,7 @@ import {
   type IntentionPhase,
   intentions,
 } from "@/lib/intentions/api";
+import { working } from "@/lib/intentions/journey";
 
 export const intentionKeys = {
   all: ["intentions"] as const,
@@ -34,6 +35,11 @@ export function useIntentions(phase: IntentionPhase | null, q: string) {
     queryFn: ({ pageParam }) => intentions.list({ phase, q, cursor: pageParam }),
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.next_cursor,
+    // A row LEKA works on moves by itself: read again, as its page is.
+    refetchInterval: (query) =>
+      query.state.data?.pages.some((page) => page.data.some((row) => working(row.journey)))
+        ? WHILE_WORKING * 3
+        : false,
   });
 }
 
@@ -41,11 +47,16 @@ export function useIntentionCounts() {
   return useQuery({ queryKey: intentionKeys.counts, queryFn: intentions.counts });
 }
 
+/** How often what LEKA is working on is read again (LEKA-443): its state is
+ * the API's, never a progress drawn here. */
+const WHILE_WORKING = 5_000;
+
 export function useIntention(id: string) {
   return useQuery({
     queryKey: intentionKeys.one(id),
     queryFn: () => intentions.one(id),
     enabled: Boolean(id),
+    refetchInterval: (query) => (working(query.state.data?.journey) ? WHILE_WORKING : false),
   });
 }
 
@@ -57,10 +68,10 @@ export function useIntentionHistory(id: string) {
   });
 }
 
-type Change = "cancel" | "archive" | "restore";
+type Change = "cancel" | "archive" | "restore" | "stop";
 
-/** Cancelling, archiving, restoring: the intention as it now is, and every
- * list and count read again. */
+/** Cancelling, archiving, restoring, stopping its analysis (LEKA-443): the
+ * intention as it now is, and every list, count and analysis read again. */
 export function useIntentionChange(id: string) {
   const client = useQueryClient();
   return useMutation({

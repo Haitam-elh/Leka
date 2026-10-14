@@ -196,9 +196,27 @@ export function TimelineTab({ id }: { id: string }) {
   } else if (timeline.data.length === 0) {
     body = <p className="text-[0.8125rem] text-shell-muted">{filtered ? w.emptyFiltered : w.empty}</p>;
   } else {
+    // Its versions apart (LEKA-443): asked again, what came of each version
+    // under it — the earlier ones said replaced.
+    const ordered = [...timeline.data].reverse();
+    const latest = Math.max(...ordered.map((item) => item.version ?? 1));
+    const versioned = latest > 1;
     body = (
       <ol className="relative space-y-4 border-s border-shell-line ps-5" data-testid="intention-history">
-        {[...timeline.data].reverse().map((item) => {
+        {ordered.flatMap((item, i) => {
+          const version = item.version ?? 1;
+          const heading =
+            versioned && (i === 0 || (ordered[i - 1].version ?? 1) !== version) ? (
+              <li
+                key={`version-${version}-${item.id}`}
+                className="-ms-5 ps-5 pt-1 text-xs font-semibold tracking-wide text-shell-nav uppercase"
+                data-testid="timeline-version"
+                data-version={version}
+                data-current={version === latest || undefined}
+              >
+                {fill(version === latest ? w.versionCurrent : w.versionReplaced, { version })}
+              </li>
+            ) : null;
           const who =
             item.actor === "system"
               ? w.leka
@@ -208,13 +226,14 @@ export function TimelineTab({ id }: { id: string }) {
                   ? fill(w.by, { name: item.by_name })
                   : w.someone;
           const more = itemMore(t, item);
-          return (
+          const event = (
             <li
               key={item.id}
-              className="relative"
+              className={cn("relative", versioned && version < latest && "opacity-75")}
               data-testid="intention-event"
               data-category={item.category}
               data-kind={item.kind}
+              data-version={version}
             >
               <span
                 aria-hidden="true"
@@ -233,6 +252,7 @@ export function TimelineTab({ id }: { id: string }) {
               ) : null}
             </li>
           );
+          return heading ? [heading, event] : [event];
         })}
       </ol>
     );

@@ -21,9 +21,15 @@ result the decision interface reads — kept, and the intention moved on.
            context the same id at a newer version): then the analysis is
            kept, said superseded, moves nothing, opens no decision
 
-THE SWEEP (`run_pending_analyses`, hourly) runs what no job did: an
-intention analysing whose context version has no analysis yet — a worker
-that died, a queue that was down.
+THE SWEEP (`run_pending_analyses`, every 15 minutes) says interrupted
+what ran past its deadline — its intention failed, to be analysed again,
+never left analysing (LEKA-443) — then runs what no job did: an intention
+analysing whose context version has no analysis on its way or done — a
+worker that died, a queue that was down.
+
+Whatever raises while it runs is said failed, never left running
+(LEKA-443); a person stopping it is said stopped — what it found kept,
+never the intention's result.
 
 Every analysis is a row (GET /intentions/{id}/analysis): which capabilities
 and why, what each did — succeeded, failed, timed out, skipped — the
@@ -85,6 +91,7 @@ from leka.intentions.decisions import Target
 from leka.intentions.dispatch import dispatch
 from leka.intentions.explain import ContextRead, SourceState, explain
 from leka.intentions.grounding import side
+from leka.intentions.journey import ANALYSIS_DEADLINE
 from leka.intentions.lifecycle import Actor
 from leka.intentions.lifecycle import IntentionStatus as S
 from leka.intentions.models import Intention, IntentionAnalysis
@@ -174,8 +181,10 @@ def run_pending_analyses() -> dict[str, int]:
 
 
 async def analyse_pending(*, limit: int = 100) -> dict[str, int]:
-    """Every intention analysing whose context version has no analysis yet,
-    analysed now. Idempotent."""
+    """The analyses past their deadline said interrupted (LEKA-443); then
+    every intention analysing whose context version has no analysis on its
+    way or done, analysed now. Idempotent."""
+    interrupted = await interrupt_overdue(limit=limit)
     with system_scope():
         async with session_factory() as session:
             # A blocked analysis is not one: questions judged blocked before
@@ -192,7 +201,9 @@ async def analyse_pending(*, limit: int = 100) -> dict[str, int]:
                     IntentionAnalysis.context_version.is_not_distinct_from(
                         Intention.readiness["version"].as_integer()
                     ),
-                    IntentionAnalysis.status != "blocked",
+                    # Blocked, stopped by a person, or failed: none read it
+                    # for this attempt (LEKA-443).
+                    IntentionAnalysis.status.not_in(("blocked", "stopped", "failed")),
                 )
                 .exists()
             )
@@ -207,7 +218,7 @@ async def analyse_pending(*, limit: int = 100) -> dict[str, int]:
                 .limit(limit)
             )
             pending = rows.tuples().all()
-    done = {"analysed": 0, "blocked": 0, "failed": 0}
+    done = {"analysed": 0, "blocked": 0, "failed": 0, "interrupted": interrupted}
     for workspace_id, intention_id in pending:
         outcome = await analyse_intention(workspace_id, intention_id, trigger="sweep")
         status = str(outcome.get("status"))
@@ -458,6 +469,7 @@ async def _analyse_intention(
                 requested_by=by,
                 context_id=context_id,
                 context_version=version,
+                intention_version=intention.version,
                 readiness=ready.status if ready is not None else None,
                 started_at=moment,
                 selection=[],
@@ -501,80 +513,91 @@ async def _analyse_intention(
             session.add(row)
             await session.commit()
             analysis_id = row.id
-        chosen = [c for c in capabilities if any(ch.chosen and ch.name == c.name for ch in choices)]
-        rules = [c for c in chosen if c.method == "rules"]
-        # What a model writes, from what the rules found: after them.
-        writers = [c for c in chosen if c.method == "model"]
-        # One plan for all of them (LEKA-399): who waits on whom, in levels.
-        the_plan = orchestrate(chosen)
-        wants = frozenset(part for c in rules for part in c.reads)
-        context = await _context(workspace_id, context_id, version)
-        material = await _material(workspace_id, asked, context, wants, ready, moment)
-        started = time.monotonic()
-        outcomes: list[StepOutcome] = await run_plan(
-            the_plan,
-            {c.name: c for c in capabilities},
-            material,
-            side=side,
-            started=started,
-            fallbacks={c.name: c for c in capabilities},
-        )
-        for choice in choices:
-            if not choice.chosen and choice.reason == "no_model":
+        try:
+            chosen = [
+                c for c in capabilities if any(ch.chosen and ch.name == c.name for ch in choices)
+            ]
+            rules = [c for c in chosen if c.method == "rules"]
+            # What a model writes, from what the rules found: after them.
+            writers = [c for c in chosen if c.method == "model"]
+            # One plan for all of them (LEKA-399): who waits on whom, in levels.
+            the_plan = orchestrate(chosen)
+            wants = frozenset(part for c in rules for part in c.reads)
+            context = await _context(workspace_id, context_id, version)
+            material = await _material(workspace_id, asked, context, wants, ready, moment)
+            started = time.monotonic()
+            outcomes: list[StepOutcome] = await run_plan(
+                the_plan,
+                {c.name: c for c in capabilities},
+                material,
+                side=side,
+                started=started,
+                fallbacks={c.name: c for c in capabilities},
+            )
+            for choice in choices:
+                if not choice.chosen and choice.reason == "no_model":
+                    outcomes.append(
+                        StepOutcome(choice.name, choice.version, "skipped", reason="no_model")
+                    )
+            result = assemble(
+                outcomes,
+                readiness=ready.status if ready is not None else "limited",
+                sources=len(context.sources) if context is not None else 0,
+                contradictions=len(context.conflicts) if context is not None else 0,
+                context_level=(
+                    context.quality.level if context is not None and context.quality else None
+                ),
+                background=frozenset(c.name for c in rules if c.always),
+            )
+            # What LEKA proposes, apart from what it found (LEKA-389).
+            result = replace(result, recommendations=recommend(result, asked, material.changes))
+            for capability in writers:
+                at = max(0, round((time.monotonic() - started) * 1000))
+                outcome, answer, read = await _write(
+                    workspace_id, capability, asked, result, context, moment, by=asker
+                )
+                # The conclusion: it reads what every capability before it said.
                 outcomes.append(
-                    StepOutcome(choice.name, choice.version, "skipped", reason="no_model")
+                    replace(
+                        outcome,
+                        level=the_plan.step(capability.name).level,
+                        started_ms=at,
+                        handed=tuple(o.name for o in outcomes if o.status == "succeeded"),
+                    )
                 )
-        result = assemble(
-            outcomes,
-            readiness=ready.status if ready is not None else "limited",
-            sources=len(context.sources) if context is not None else 0,
-            contradictions=len(context.conflicts) if context is not None else 0,
-            context_level=(
-                context.quality.level if context is not None and context.quality else None
-            ),
-            background=frozenset(c.name for c in rules if c.always),
-        )
-        # What LEKA proposes, apart from what it found (LEKA-389).
-        result = replace(result, recommendations=recommend(result, asked, material.changes))
-        for capability in writers:
-            at = max(0, round((time.monotonic() - started) * 1000))
-            outcome, answer, read = await _write(
-                workspace_id, capability, asked, result, context, moment, by=asker
+                if answer is not None:
+                    result = answered(result, answer, read)
+            # On what it rests, said (LEKA-441): the sources' state as it read.
+            result = await _explained(
+                workspace_id,
+                result,
+                asked,
+                understood,
+                outcomes,
+                context,
+                readiness=ready.status if ready is not None else "limited",
+                now=moment,
+                background=frozenset(c.name for c in rules if c.always),
             )
-            # The conclusion: it reads what every capability before it said.
-            outcomes.append(
-                replace(
-                    outcome,
-                    level=the_plan.step(capability.name).level,
-                    started_ms=at,
-                    handed=tuple(o.name for o in outcomes if o.status == "succeeded"),
-                )
+            return await _finish(
+                workspace_id,
+                intention_id,
+                analysis_id,
+                asked,
+                result,
+                outcomes,
+                context_id,
+                moment,
+                orchestrated=the_plan.said(),
             )
-            if answer is not None:
-                result = answered(result, answer, read)
-        # On what it rests, said (LEKA-441): the sources' state as it read.
-        result = await _explained(
-            workspace_id,
-            result,
-            asked,
-            understood,
-            outcomes,
-            context,
-            readiness=ready.status if ready is not None else "limited",
-            now=moment,
-            background=frozenset(c.name for c in rules if c.always),
-        )
-        return await _finish(
-            workspace_id,
-            intention_id,
-            analysis_id,
-            asked,
-            result,
-            outcomes,
-            context_id,
-            moment,
-            orchestrated=the_plan.said(),
-        )
+        except Exception as error:
+            # Whatever went wrong, never left running: said failed — its
+            # type kept for whoever diagnoses it — and the intention can be
+            # analysed again (LEKA-443).
+            logger.exception(
+                "intention_analysis_crashed", intention=str(intention_id), analysis=str(analysis_id)
+            )
+            return await _crashed(workspace_id, intention_id, analysis_id, error)
 
 
 # What became of the synthesis, by how its execution ended (LEKA-429).
@@ -1000,25 +1023,32 @@ async def _finish(
         if orchestrated is not None:
             row.detail = {**row.detail, "orchestration": dict(orchestrated)}
         row.result = result_of(result)
-        row.status = result.status
+        # Stopped by a person, or said interrupted while it ran (LEKA-443):
+        # what it came to is kept, as what it was — never the intention's.
+        ended = row.status if row.status != "running" else None
         row.finished_at = datetime.now(UTC)
-        failed = [o for o in outcomes if o.status in ("failed", "timed_out")]
-        row.error = failed[0].error if result.status == "failed" and failed else None
+        if ended is None:
+            row.status = result.status
+            failed = [o for o in outcomes if o.status in ("failed", "timed_out")]
+            row.error = failed[0].error if result.status == "failed" and failed else None
         # Its context as it stands now: asked again meanwhile, the same id at
         # a newer version (LEKA-433) — this one is then superseded.
         current_version = (
             intention.readiness.get("version") if intention.readiness is not None else None
         )
         current = (
-            intention.status == S.ANALYSING.value
+            ended is None
+            and intention.status == S.ANALYSING.value
             and intention.archived_at is None
             and intention.context_id == context_id
             and row.context_version == current_version
+            and (row.intention_version is None or row.intention_version == intention.version)
         )
         if not current:
-            row.detail = {**row.detail, "superseded": True}
+            if ended is None:
+                row.detail = {**row.detail, "superseded": True}
             await session.commit()
-            return {"status": result.status, "analysis": str(analysis_id), "superseded": True}
+            return {"status": row.status, "analysis": str(analysis_id), "superseded": True}
         service = IntentionService(
             repository, findings=IntelligenceRepository(session, workspace_id)
         )
@@ -1067,6 +1097,111 @@ async def _finish(
         causes=len(result.causes),
     )
     return {"status": result.status, "analysis": str(analysis_id)}
+
+
+async def _fail_if_current(
+    repository: IntentionRepository,
+    intention: Intention,
+    row: IntentionAnalysis,
+    error: str,
+    moment: datetime,
+) -> None:
+    """Its intention failed, when this analysis was the one it waited for:
+    analysing, this version, started since it was — never one it moved on
+    from."""
+    if (
+        intention.status != S.ANALYSING.value
+        or intention.archived_at is not None
+        or (row.intention_version is not None and row.intention_version != intention.version)
+        or row.started_at < intention.status_changed_at
+    ):
+        return
+    await IntentionService(repository).move(
+        intention.id,
+        S.FAILED,
+        actor=Actor.SYSTEM,
+        reason="Its analysis could not finish.",
+        detail={
+            "analysis_id": str(row.id),
+            "number": row.number,
+            "status": "failed",
+            "error": error,
+        },
+        now=moment,
+    )
+
+
+async def _crashed(
+    workspace_id: uuid.UUID,
+    intention_id: uuid.UUID,
+    analysis_id: uuid.UUID,
+    error: BaseException,
+) -> dict[str, object]:
+    """An analysis that raised (LEKA-443): said failed, the error's type kept
+    for whoever diagnoses it; its intention failed when it waited for it —
+    to be analysed again."""
+    moment = datetime.now(UTC)
+    async with session_factory() as session:
+        repository = IntentionRepository(session, workspace_id)
+        intention = await repository.intention(intention_id, lock=True)
+        row = await session.get(IntentionAnalysis, analysis_id, with_for_update=True)
+        if row is None or intention is None:
+            return {"status": "gone"}
+        if row.status == "running":
+            row.status = "failed"
+            row.error = "crashed"
+            row.finished_at = moment
+            row.detail = {**row.detail, "crashed": type(error).__name__}
+            await _fail_if_current(repository, intention, row, "crashed", moment)
+        await session.commit()
+    return {"status": "failed", "analysis": str(analysis_id), "error": "crashed"}
+
+
+async def interrupt_overdue(*, now: datetime | None = None, limit: int = 100) -> int:
+    """Analyses running past their deadline — a worker that died, a job lost
+    (LEKA-443): said interrupted; their intention failed when it waited for
+    one, to be analysed again — never left analysing. Idempotent."""
+    moment = now or datetime.now(UTC)
+    with system_scope():
+        async with session_factory() as session:
+            rows = (
+                (
+                    await session.execute(
+                        select(
+                            IntentionAnalysis.workspace_id,
+                            IntentionAnalysis.id,
+                            IntentionAnalysis.intention_id,
+                        )
+                        .where(
+                            IntentionAnalysis.status == "running",
+                            IntentionAnalysis.started_at < moment - ANALYSIS_DEADLINE,
+                        )
+                        .order_by(IntentionAnalysis.started_at)
+                        .limit(limit)
+                    )
+                )
+                .tuples()
+                .all()
+            )
+    interrupted = 0
+    for workspace_id, analysis_id, intention_id in rows:
+        with workspace_scope(workspace_id):
+            async with session_factory() as session:
+                repository = IntentionRepository(session, workspace_id)
+                intention = await repository.intention(intention_id, lock=True)
+                row = await session.get(IntentionAnalysis, analysis_id, with_for_update=True)
+                if row is None or row.status != "running":
+                    continue
+                row.status = "failed"
+                row.error = "interrupted"
+                row.finished_at = moment
+                if intention is not None:
+                    await _fail_if_current(repository, intention, row, "interrupted", moment)
+                await session.commit()
+                interrupted += 1
+    if interrupted:
+        logger.warning("intention_analyses_interrupted", count=interrupted)
+    return interrupted
 
 
 async def _decide(

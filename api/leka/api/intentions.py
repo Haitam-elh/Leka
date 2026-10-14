@@ -47,7 +47,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Header, Query, status
 
 from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
@@ -96,7 +96,6 @@ from leka.intentions import (
     SourceToReadRead,
     Understanding,
     Withdrawal,
-    intention_read,
     queue_analysis,
     route_intention,
 )
@@ -197,7 +196,19 @@ REFUSED = (
 
 @router.post("", response_model=IntentionCreated, status_code=status.HTTP_201_CREATED)
 async def create(
-    body: IntentionRequest, service: Asking, principal: Asker, session: SessionDep
+    body: IntentionRequest,
+    service: Asking,
+    principal: Asker,
+    session: SessionDep,
+    request_key: Annotated[
+        str | None,
+        Header(
+            alias="Idempotency-Key",
+            max_length=100,
+            description="The same key sent again — a click twice, a request retried — answers "
+            "the intention it made, never a second one (LEKA-443).",
+        ),
+    ] = None,
 ) -> IntentionCreated:
     """Ask LEKA: the intention kept — submitted, then analysing — and the
     context it asks for assembled, its subject the intention (LEKA-373).
@@ -206,7 +217,15 @@ async def create(
     analysis is queued (LEKA-388). `answers`: what its asker answered to
     LEKA's questions before asking (LEKA-439), kept and read with it."""
     try:
-        intention, context = await service.create(body, by=principal.user_id)
+        if request_key:
+            replayed = await service.replayed(principal.user_id, request_key)
+            if replayed is not None:
+                return IntentionCreated(
+                    intention=await service.detail_now(replayed[0]), context=replayed[1]
+                )
+        intention, context = await service.create(
+            body, by=principal.user_id, request_key=request_key or None
+        )
     except REFUSED as error:
         raise _refused(error) from error
     created = IntentionCreated(intention=await service.detail_now(intention), context=context)
@@ -296,6 +315,7 @@ async def brief(
 @router.get("", response_model=PageEnvelope[IntentionRead])
 async def intentions(
     session: SessionDep,
+    service: Reading,
     principal: Reader,
     page: PageParams,
     phase: Annotated[
@@ -323,9 +343,7 @@ async def intentions(
     result = await serve_page(
         session, statement, request=page, catalogue=SORTS, id_column=Intention.id
     )
-    return PageEnvelope(
-        data=[intention_read(found) for found in result.items], next_cursor=result.next_cursor
-    )
+    return PageEnvelope(data=await service.reads(result.items), next_cursor=result.next_cursor)
 
 
 @router.get("/counts", response_model=IntentionCounts)
@@ -503,6 +521,21 @@ async def cancel(
     return await service.detail_now(found)
 
 
+@router.post("/{intention_id}/stop", response_model=IntentionDetail)
+async def stop(intention_id: uuid.UUID, service: Asking, principal: Asker) -> IntentionDetail:
+    """« Arrêter l'analyse » (LEKA-443): its analysis stopped — the intention
+    kept, ready to analyse again (POST …/analyse resumes it); what the
+    analysis running finds is kept, never its result. Stopped twice, the
+    same. 409 when it is not being analysed."""
+    try:
+        found = await service.stop(intention_id, by=principal.user_id, steward=_steward(principal))
+    except REFUSED as error:
+        raise _refused(error) from error
+    if found is None:
+        raise _missing()
+    return await service.detail_now(found)
+
+
 @router.post("/{intention_id}/archive", response_model=IntentionDetail)
 async def archive(intention_id: uuid.UUID, service: Asking, principal: Asker) -> IntentionDetail:
     """Set aside, once done with — completed, rejected, cancelled; 409
@@ -610,9 +643,9 @@ async def analysis(intention_id: uuid.UUID, service: Reading) -> IntentionAnalys
 async def analyse(
     intention_id: uuid.UUID, service: Asking, principal: Asker, session: SessionDep
 ) -> IntentionAnalysisRequested:
-    """Analysed again, as it now stands — failed, it is retried first. 409
-    in any other state than analysing or failed; `queued` false when one is
-    already on its way."""
+    """Analysed again, as it now stands — failed, it is retried first;
+    stopped, resumed (LEKA-443). 409 in any other state than analysing,
+    stopped or failed; `queued` false when one is already on its way."""
     try:
         found = await service.analyse_again(
             intention_id, by=principal.user_id, steward=_steward(principal)

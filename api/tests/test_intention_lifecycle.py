@@ -61,14 +61,24 @@ def test_a_decision_is_a_persons_never_leka_s(to: IntentionStatus) -> None:
 @pytest.mark.parametrize(
     ("at", "to"),
     [
-        (S.SUBMITTED, S.ANALYSING),
         (S.ANALYSING, S.AWAITING_DECISION),
+        (S.ANALYSING, S.COMPLETED),
         (S.EXECUTING, S.VERIFYING),
     ],
 )
 def test_what_leka_concludes_and_runs_is_leka_s(at: IntentionStatus, to: IntentionStatus) -> None:
     with pytest.raises(IllegalTransitionError):
         move(at, to, P)
+
+
+def test_an_analysis_stopped_by_a_person_is_kept_ready_and_resumed_by_one() -> None:
+    # LEKA-443: « Arrêter l'analyse » — never by LEKA, never closing it.
+    assert move(S.ANALYSING, S.SUBMITTED, P).name == "stopped"
+    assert move(S.SUBMITTED, S.ANALYSING, P).name == "resumed"
+    assert move(S.SUBMITTED, S.ANALYSING, SYS).name == "analysis_started"
+    with pytest.raises(IllegalTransitionError):
+        move(S.ANALYSING, S.SUBMITTED, SYS)
+    assert S.SUBMITTED not in CLOSED
 
 
 def test_nothing_is_approved_before_it_is_analysed_nor_run_before_approved() -> None:

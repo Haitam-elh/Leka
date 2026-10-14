@@ -3,6 +3,7 @@
 import {
   Archive,
   ArchiveRestore,
+  ArrowLeft,
   ArrowRight,
   Link2,
   MessageSquareText,
@@ -30,8 +31,8 @@ import {
   type Step,
   StepBadge,
   STEPS,
-  stepOf,
 } from "@/components/intentions/intention-stepper";
+import { JourneyNote, StopAnalysis, useRights } from "@/components/intentions/journey";
 import { BriefView } from "@/components/intentions/brief";
 import { FeasibilityCard } from "@/components/intentions/feasibility";
 import { kindOf, StatusPill } from "@/components/intentions/intentions-list";
@@ -54,6 +55,7 @@ import { ApiError } from "@/lib/api";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import type { IntentionDetail, IntentionLink } from "@/lib/intentions/api";
+import { may } from "@/lib/intentions/journey";
 import { useAnswer, useIntention, useIntentionChange } from "@/lib/intentions/queries";
 import { buildBreadcrumb } from "@/lib/navigation/breadcrumb";
 import { matchRoute } from "@/lib/navigation/active";
@@ -88,7 +90,8 @@ export function IntentionScreen() {
   const missing =
     !valid || (intention.error instanceof ApiError && intention.error.status === 404);
 
-  const where = data ? stepOf(data.status, decides(data)) : null;
+  // Where it stands is the API's (LEKA-443): never a state of the screen's.
+  const where = data ? data.journey.step : null;
   const shown: View = (segment as View | null | undefined) ?? (where ? SEGMENT_OF[where.at] : "overview");
   const step: Step | null = STEP_OF[shown] ?? null;
   const hrefOf = (each: Step) => `${routes.intentions()}/${id}/${SEGMENT_OF[each]}`;
@@ -130,7 +133,9 @@ export function IntentionScreen() {
   const w = t.intentions.steps;
   // Step 2 says it is analysing while it is, and that it analysed after.
   const analysed =
-    step === "analysis" && data !== undefined && !["analysing", "submitted"].includes(data.status);
+    step === "analysis" &&
+    data !== undefined &&
+    !["ready", "analysing"].includes(data.journey.state);
   const heading = step
     ? analysed
       ? w.analysis.done
@@ -161,12 +166,14 @@ export function IntentionScreen() {
             current={where.at}
             shown={step ?? undefined}
             reached={where.reached}
-            done={data.status === "completed"}
+            done={where.done}
             hrefOf={hrefOf}
             testIdOf={(each) => `tab-${SEGMENT_OF[each]}`}
-            last={decides(data) ? undefined : STEPS.indexOf("results")}
+            last={where.last < STEPS.length - 1 ? where.last : undefined}
           />
           <Asked intention={data} />
+          {/* What happened, since when, what comes next and who (LEKA-443). */}
+          <JourneyNote intention={data} />
           {/* What an agent is doing for it — its PDF the moment it is drawn. */}
           <div className="mb-4">
             <AgentWork intentionId={data.id} />
@@ -196,25 +203,11 @@ const STEP_OF: Partial<Record<View, Step>> = {
   actions: "action",
 };
 
-const DECIDED: readonly IntentionDetail["status"][] = [
-  "awaiting_decision",
-  "approved",
-  "scheduled",
-  "executing",
-  "verifying",
-  "rejected",
-];
-
 /** Whether it goes, or went, past its results: something to do on the
  * systems, put to a decision. A question answered stops at its results —
- * as the tab Actions reads it. */
+ * as its journey says (LEKA-443). */
 function decides(intention: IntentionDetail): boolean {
-  if (DECIDED.includes(intention.status)) return true;
-  const understood = intention.understanding;
-  if (!understood) return intention.status !== "completed";
-  return (
-    understood.goal.code === "act" || understood.actions.some((action) => action.changes_systems)
-  );
+  return intention.journey.step.last >= STEPS.indexOf("decision");
 }
 
 /** Mockup 04's banner: what was asked, said once above every step. */
@@ -299,7 +292,7 @@ function Subtitle({ intention }: { intention: IntentionDetail }) {
   const name = intention.created_by && intention.created_by === me?.id ? t.intentions.you : null;
   return (
     <span className="flex flex-wrap items-center gap-2 text-[0.8125rem] text-shell-muted">
-      <StatusPill status={intention.status} />
+      <StatusPill status={intention.status} journey={intention.journey} />
       {intention.archived_at ? <Pill tone="neutral">{t.intentions.archived}</Pill> : null}
       <span>
         {name ? fill(t.intentions.createdBy, { when, name }) : fill(t.intentions.created, { when })}
@@ -313,9 +306,12 @@ function Actions({ intention }: { intention: IntentionDetail }) {
   const w = t.intentions.actions;
   const confirm = useConfirm();
   const change = useIntentionChange(intention.id);
-  const cancellable = intention.moves.includes("cancelled");
-  const archivable =
-    !intention.archived_at && ["completed", "rejected", "cancelled"].includes(intention.status);
+  const rights = useRights(intention);
+  // What its state allows, to whoever may (LEKA-443): never a control the
+  // API would refuse.
+  const cancellable = may(intention.journey, "cancel", rights);
+  const archivable = !intention.archived_at && intention.journey.controls.includes("archive");
+  const modifiable = may(intention.journey, "modify_decision", rights);
 
   async function run(kind: "cancel" | "archive" | "restore", reason?: string) {
     try {
@@ -328,6 +324,19 @@ function Actions({ intention }: { intention: IntentionDetail }) {
 
   return (
     <div className="flex flex-wrap gap-2">
+      {/* Mockup 03: « Arrêter l'analyse », while it is analysed. */}
+      <StopAnalysis intention={intention} />
+      {/* Mockup 06: « Modifier la décision » — only while it is open. */}
+      {modifiable ? (
+        <Link
+          href={`${routes.intentions()}/${intention.id}/decision`}
+          className={buttonVariants({ variant: "outline" })}
+          data-testid="intention-modify-decision"
+        >
+          <ArrowLeft className="rtl:-scale-x-100 size-4" aria-hidden="true" />
+          {t.intentions.journey.controls.modify_decision}
+        </Link>
+      ) : null}
       {cancellable ? (
         <Button
           type="button"
@@ -459,19 +468,6 @@ function Overview({ intention }: { intention: IntentionDetail }) {
           ) : (
             <p className="text-[0.8125rem] text-shell-muted">{w.noLinks}</p>
           )}
-        </Card>
-        <Card title={w.next}>
-          <ul className="flex flex-wrap gap-2" data-testid="intention-moves">
-            {intention.moves.length ? (
-              intention.moves.map((status) => (
-                <li key={status}>
-                  <Pill tone="neutral">{t.intentions.statuses[status]}</Pill>
-                </li>
-              ))
-            ) : (
-              <li className="text-[0.8125rem] text-shell-muted">—</li>
-            )}
-          </ul>
         </Card>
       </div>
     </div>

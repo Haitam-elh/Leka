@@ -83,7 +83,7 @@ test.describe("Intention decisions", () => {
     await dialog.getByRole("textbox").fill("Pas pendant les soldes.");
     await dialog.getByRole("button", { name: "Refuser" }).click();
 
-    await expect(page.getByTestId("intention-status")).toContainText("Refusée");
+    await expect(page.getByTestId("intention-status")).toContainText("Rejetée");
     await expect(decision.getByTestId("decision-status")).toHaveText("Refusée");
     const vote = decision.getByTestId("decision-vote");
     await expect(vote).toContainText("Refusée par vous");

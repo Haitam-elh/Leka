@@ -9,6 +9,7 @@ import {
   CircleDashed,
   CircleX,
   Clock,
+  History,
   Layers,
   LoaderCircle,
   type LucideIcon,
@@ -44,17 +45,15 @@ import {
   IntelligenceSection,
   Pill,
 } from "@/components/intelligence";
+import { useRights } from "@/components/intentions/journey";
 import { exactDate, timeAgo } from "@/components/knowledge/time";
-import {
-  useCurrentUser,
-  usePermissions,
-} from "@/components/shell/shell-provider";
 import { ErrorState } from "@/components/states/error-state";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { routes } from "@/config/routes";
 import { ApiError } from "@/lib/api";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
+import { may } from "@/lib/intentions/journey";
 import {
   analysisEvidence,
   capabilityName,
@@ -118,31 +117,46 @@ function useLinks(): Links {
   );
 }
 
-/** Whether one is on its way: the intention analysing, and no analysis
- * finished on its current context yet. */
-function onItsWay(
-  intention: IntentionDetail,
-  analysis: IntentionAnalysis | null | undefined,
-) {
-  if (intention.status !== "analysing" || intention.archived_at) return false;
-  if (!analysis) return true;
-  const currentVersion = intention.readiness?.version;
-  return (
-    analysis.status === "running" ||
-    analysis.context_id !== intention.context_id ||
-    (currentVersion != null && analysis.context_version !== currentVersion)
-  );
+/** Whether one is on its way, as its journey says (LEKA-443): queued, or an
+ * analysis of this attempt running — its analysis read again till then. */
+function onItsWay(intention: IntentionDetail) {
+  const { state, reason } = intention.journey;
+  if (intention.archived_at) return false;
+  return state === "analysing" || (state === "ready" && reason === "queued");
 }
 
-/** Its asker, or who may approve, while it can be analysed again. */
+/** Its asker, or who may approve, while its state lets it be analysed
+ * again. */
 function useMayAnalyse(intention: IntentionDetail): boolean {
-  const me = useCurrentUser();
-  const steward = usePermissions()?.includes("intention:approve") ?? false;
-  const yours = Boolean(me?.id) && intention.created_by === me?.id;
+  const rights = useRights(intention);
+  return may(intention.journey, "analyse_again", rights);
+}
+
+/** An analysis that is not its result (LEKA-443): stopped, or of a version
+ * of the request asked again since — said so, never drawn as its result. */
+function NotCurrent({ analysis }: { analysis: IntentionAnalysis }) {
+  const t = useDictionary();
+  const w = t.intentions.journey;
+  const stopped = analysis.status === "stopped";
   return (
-    (yours || steward) &&
-    !intention.archived_at &&
-    (intention.status === "failed" || intention.status === "analysing")
+    <div
+      role="status"
+      className="flex items-start gap-3 rounded-xl bg-shell-canvas px-4 py-3 text-[0.8125rem]"
+      data-testid="analysis-not-current"
+      data-why={stopped ? "stopped" : "replaced"}
+    >
+      <History className="mt-0.5 size-4 shrink-0 text-shell-muted" aria-hidden="true" />
+      <div className="min-w-0 text-brand-navy">
+        <p className="font-semibold">
+          {stopped ? w.states.ready : w.replacedTitle}
+        </p>
+        <p className="text-shell-muted">
+          {stopped
+            ? w.stoppedAnalysis
+            : fill(w.replaced, { version: analysis.intention_version ?? 1 })}
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -150,10 +164,8 @@ function useMayAnalyse(intention: IntentionDetail): boolean {
  * intention — which it moved — read again too. */
 function useAnalysisOf(intention: IntentionDetail) {
   const client = useQueryClient();
-  const analysis = useIntentionAnalysis(intention.id, (data) =>
-    onItsWay(intention, data),
-  );
-  const live = onItsWay(intention, analysis.data);
+  const analysis = useIntentionAnalysis(intention.id, () => onItsWay(intention));
+  const live = onItsWay(intention);
   // Which analysis it is, and whether finished: once read, a change to a
   // finished one is an analysis that just ended.
   const seen = useRef<string | undefined>(undefined);
@@ -224,6 +236,7 @@ const RESULT_TONES: Record<IntentionAnalysis["status"], TileTone> = {
   inconclusive: "info",
   failed: "danger",
   blocked: "danger",
+  stopped: "neutral",
 };
 
 function seconds(analysis: IntentionAnalysis): string | null {
@@ -484,6 +497,16 @@ function PreviousCard({ intentionId }: { intentionId: string }) {
             <Pill tone={RESULT_TONES[analysis.status]}>
               {w.statuses[analysis.status]}
             </Pill>
+            {analysis.intention_version ? (
+              <span className="text-shell-muted">
+                {fill(t.intentions.journey.version, { version: analysis.intention_version })}
+              </span>
+            ) : null}
+            {!analysis.current && analysis.status !== "stopped" ? (
+              <Pill tone="neutral" data-testid="analysis-replaced">
+                {t.intentions.journey.replacedTitle}
+              </Pill>
+            ) : null}
             <span className="text-shell-muted">
               {w.triggers[analysis.trigger]} · {timeAgo(t, analysis.started_at)}
             </span>
@@ -512,11 +535,13 @@ function Head({
   const title = running ? w.running : waiting ? w.waiting : w.title;
   const tone: TileTone =
     analysis && !live ? RESULT_TONES[analysis.status] : "violet";
-  const again =
-    may &&
-    (intention.status === "failed" || (!live && analysis?.status === "blocked"))
+  // Its state allows it (LEKA-443): failed, or not run, analysed again;
+  // queued, started now rather than waited for.
+  const again = !may
+    ? null
+    : intention.journey.state === "analysis_failed" || analysis?.status === "blocked"
       ? w.again
-      : may && waiting && !analysis
+      : waiting
         ? w.now
         : null;
   return (
@@ -716,13 +741,14 @@ export function AnalysisProgress({
           </>
         ) : data ? (
           <>
+            {!data.current && !live ? <NotCurrent analysis={data} /> : null}
             <StepsCard analysis={data} />
             {data.status === "running" ? (
               <AnalysisState status="running" />
             ) : shown?.status === "failed" ? (
               // What stopped it, said where it stopped: there are no results.
               <AnalysisState status="failed" missing={shown.missing} />
-            ) : shown && shown.findings.length ? (
+            ) : shown && shown.findings.length && data.current ? (
               <FirstFindings
                 intentionId={intention.id}
                 findings={shown.findings}
@@ -806,6 +832,14 @@ export function AnalysisResults({ intention }: { intention: IntentionDetail }) {
   if (!data || data.status === "running" || live) {
     return <AnalysisState status="running" />;
   }
+  // Stopped, or of an earlier version: never its result (LEKA-443).
+  if (!data.current) {
+    return (
+      <div className="space-y-4" data-testid="intention-results">
+        <NotCurrent analysis={data} />
+      </div>
+    );
+  }
   return (
     <div className="space-y-4" data-testid="intention-results">
       {shown ? (
@@ -873,7 +907,8 @@ export function DecisionAside({ intention }: { intention: IntentionDetail }) {
     () => (data ? intentionAnalysis(t, data, links) : null),
     [data, t, links],
   );
-  const said = shown && shown.status !== "failed" && shown.status !== "pending";
+  const said =
+    shown && data?.current && shown.status !== "failed" && shown.status !== "pending";
   return (
     <aside
       className="min-w-0 space-y-4"
@@ -908,7 +943,8 @@ export function EvidenceTab({ intention }: { intention: IntentionDetail }) {
   const w = t.intentions.analysis.evidence;
   const links = useLinks();
   const { analysis } = useAnalysisOf(intention);
-  const result = analysis.data?.result ?? null;
+  // Its evidence is its current analysis's — never a replaced one's.
+  const result = analysis.data?.current ? (analysis.data.result ?? null) : null;
   const items = useMemo(
     () => (result ? analysisEvidence(t, result, links) : []),
     [result, t, links],

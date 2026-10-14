@@ -591,7 +591,7 @@ function IntentionsCard() {
                 <span className="min-w-0 flex-1 truncate text-sm font-medium text-brand-navy">
                   {intention.title}
                 </span>
-                <StatusPill status={intention.status} />
+                <StatusPill status={intention.status} journey={intention.journey} />
               </Link>
             </li>
           ))}

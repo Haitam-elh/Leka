@@ -43,7 +43,7 @@ test.describe("Intentions", () => {
       "data-state",
       "current",
     );
-    await expect(page.getByTestId("intention-status")).toContainText("En analyse");
+    await expect(page.getByTestId("intention-status")).toContainText("Prête à analyser");
     await expect(page.getByTestId("intention-text")).toContainText(asked);
     // Step 1: what it is, and the context linked to it.
     await page.getByTestId("tab-overview").click();
@@ -108,7 +108,7 @@ test.describe("Intentions", () => {
     await expect(page.getByTestId("intention-step-2")).toBeVisible();
 
     await page.getByTestId("intention-follow").click();
-    await expect(page.getByTestId("intention-status")).toContainText("En analyse");
+    await expect(page.getByTestId("intention-status")).toContainText("Prête à analyser");
     // Its answer kept with it.
     await page.getByTestId("tab-overview").click();
     await expect(page.getByTestId("brief-answers")).toContainText("payment-api");
@@ -127,13 +127,13 @@ test.describe("Intentions", () => {
     expect(intention.status).toBe("needs_clarification");
 
     await page.goto(`/intentions/${intention.id}/overview`);
-    await expect(page.getByTestId("intention-status")).toContainText("À préciser");
+    await expect(page.getByTestId("intention-status")).toContainText("Clarification requise");
     const question = page.locator(
       '[data-testid="brief-question"][data-kind="action_without_target"]',
     );
     await question.getByTestId("brief-words").fill("payment-api");
     await question.getByTestId("brief-send").click();
-    await expect(page.getByTestId("intention-status")).toContainText("En analyse");
+    await expect(page.getByTestId("intention-status")).toContainText("Prête à analyser");
     await page.getByTestId("tab-history").click();
     await page.getByTestId("timeline-category-intention").click();
     await expect(page.getByTestId("intention-event").last()).toContainText("Précisée");

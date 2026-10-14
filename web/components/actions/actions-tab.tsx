@@ -385,7 +385,7 @@ function StepCard({
       </div>
       <Stages plan={plan} step={step} verification={verification} />
       <Evidence step={step} />
-      {step.status === "awaiting" && plan.status === "running" && steward ? (
+      {step.status === "awaiting" && plan.controls.includes("confirm_step") && steward ? (
         <Report intentionId={plan.intention_id} step={step} />
       ) : null}
     </li>
@@ -493,7 +493,10 @@ function Controls({ plan, intention }: { plan: Plan; intention: IntentionDetail 
     await run({ kind: "cancel", reason: reason.trim() });
   }
 
-  if (plan.status === "planned") {
+  // What may be done with it now is the API's (LEKA-443): the rules its
+  // routes apply — never a button they would refuse.
+  const can = (control: Plan["controls"][number]) => plan.controls.includes(control);
+  if (plan.status === "planned" && can("start")) {
     return (
       <div className="flex flex-col gap-3" data-testid="plan-controls">
         {plan.suggested_for && windowed ? (
@@ -561,7 +564,7 @@ function Controls({ plan, intention }: { plan: Plan; intention: IntentionDetail 
       </div>
     );
   }
-  if (plan.status === "scheduled") {
+  if (plan.status === "scheduled" && can("unschedule")) {
     return (
       <div className="flex flex-wrap items-center gap-3" data-testid="plan-controls">
         <p className="text-[0.8125rem] text-brand-navy">
@@ -581,7 +584,7 @@ function Controls({ plan, intention }: { plan: Plan; intention: IntentionDetail 
       </div>
     );
   }
-  if (plan.status === "running") {
+  if (plan.status === "running" && can("stop")) {
     return (
       <div className="flex flex-wrap items-center gap-3" data-testid="plan-controls">
         <p className="flex items-center gap-2 text-[0.8125rem] text-brand-navy">
@@ -602,13 +605,9 @@ function Controls({ plan, intention }: { plan: Plan; intention: IntentionDetail 
       </div>
     );
   }
-  // Ran, but what was expected did not come (LEKA-392): tried again too.
-  const over =
-    plan.status === "failed" ||
-    plan.status === "cancelled" ||
-    plan.status === "blocked" ||
-    (plan.status === "succeeded" && intention.status === "failed");
-  if (over && (intention.status === "failed" || intention.status === "approved")) {
+  // Over — failed, stopped, or ran but what was expected did not come
+  // (LEKA-392): a new plan of what did not succeed.
+  if (can("plan")) {
     return (
       <div data-testid="plan-controls">
         <Button
@@ -653,7 +652,11 @@ function PlanView({
                 {fill(w.plan, { number: plan.number })}
               </h2>
               <Pill tone={PLAN_TONES[plan.status]} data-testid="plan-status">
-                {w.statuses[plan.status]}
+                {/* Run is not done: until its outcome is verified, said so
+                    (LEKA-443). */}
+                {plan.status === "succeeded" && intention.journey.state === "to_verify"
+                  ? w.succeededToVerify
+                  : w.statuses[plan.status]}
               </Pill>
               {plan.started_at ? (
                 <span className="text-xs text-shell-muted">{timeAgo(t, plan.started_at)}</span>
@@ -712,7 +715,7 @@ export function ActionsTab({ intention }: { intention: IntentionDetail }) {
   }
   const [latest] = plans.data;
   if (latest) return <PlanView plan={latest} intention={intention} steward={steward} />;
-  if (intention.status === "approved") {
+  if (intention.journey.controls.includes("start_actions")) {
     return (
       <section
         className="flex flex-col gap-3 rounded-xl border border-shell-line bg-white p-5"
@@ -764,7 +767,7 @@ export function ActionsTab({ intention }: { intention: IntentionDetail }) {
     >
       <p className="font-semibold text-brand-navy">{w.emptyTitle}</p>
       <p className="text-shell-muted">
-        {intention.status === "awaiting_decision" ? w.waitingDecision : w.emptyBody}
+        {intention.journey.state === "decision_required" ? w.waitingDecision : w.emptyBody}
       </p>
     </div>
   );

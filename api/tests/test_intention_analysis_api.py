@@ -479,7 +479,7 @@ async def test_asked_again_it_is_queued_and_the_sweep_runs_what_waits(
     assert swept["analysed"] >= 1
     assert (await _get(client, f"/{intention['id']}"))["status"] == "completed"
     again = await analyse_pending()
-    assert again == {"analysed": 0, "blocked": 0, "failed": 0}
+    assert again == {"analysed": 0, "blocked": 0, "failed": 0, "interrupted": 0}
 
 
 async def test_a_member_reads_another_workspace_sees_nothing(

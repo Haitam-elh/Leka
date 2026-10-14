@@ -27,7 +27,7 @@ import secrets
 import time as clock
 import uuid
 from collections.abc import Mapping, Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import cast
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -155,11 +155,38 @@ def _step_plan(step: IntentionPlanStep) -> StepPlan:
     )
 
 
+def plan_controls(
+    status: str, steps: Sequence[str], intention_status: str | None, *, latest: bool
+) -> list[str]:
+    """What may be done with a plan now (LEKA-443) — the rules start(),
+    cancel(), report() and plan() apply, said once for the screens. Only the
+    latest plan is acted on.
+
+        planned     start it now or at a time; cancel it
+        scheduled   unschedule it
+        running     stop it; confirm a step that waits on a person
+        over        a new plan of what did not succeed (failed), or of all
+                    of it (approved again)"""
+    if not latest or intention_status is None:
+        return []
+    if status == "planned":
+        return ["start", "schedule", "cancel"]
+    if status == "scheduled":
+        return ["unschedule"]
+    if status == "running":
+        return ["stop", "confirm_step"] if "awaiting" in steps else ["stop"]
+    if intention_status in (S.FAILED.value, S.APPROVED.value):
+        return ["plan"]
+    return []
+
+
 def plan_read(
     plan: IntentionPlan,
     steps: Sequence[IntentionPlanStep],
     events: Sequence[IntentionPlanEvent],
     now: datetime | None = None,
+    *,
+    controls: Sequence[str] = (),
 ) -> IntentionPlanRead:
     suggested = (
         scheduled_for([_step_plan(s) for s in steps], _now(now), _zone(plan.timezone))
@@ -186,6 +213,7 @@ def plan_read(
         error=plan.error,
         steps=[IntentionPlanStepRead.model_validate(s) for s in steps],
         events=[IntentionPlanEventRead.model_validate(e) for e in events],
+        controls=list(controls),
     )
 
 
@@ -289,7 +317,16 @@ class ActionService:
         )
 
     async def read(self, plan: IntentionPlan, now: datetime | None = None) -> IntentionPlanRead:
-        return plan_read(plan, await self._steps(plan.id), await self._events(plan.id), now)
+        steps = await self._steps(plan.id)
+        intention = await self._intentions.intention(plan.intention_id)
+        latest = await self._latest(plan.intention_id)
+        controls = plan_controls(
+            plan.status,
+            [s.status for s in steps],
+            intention.status if intention is not None and intention.archived_at is None else None,
+            latest=latest is not None and latest.id == plan.id,
+        )
+        return plan_read(plan, steps, await self._events(plan.id), now, controls=controls)
 
     async def plans(self, intention_id: uuid.UUID) -> list[IntentionPlanRead] | None:
         if await self._intentions.intention(intention_id) is None:
@@ -1093,5 +1130,74 @@ async def start_due(*, now: datetime | None = None) -> dict[str, int]:
 
 
 def run_due_plans() -> dict[str, int]:
-    """Entry point for the schedule."""
-    return asyncio.run(start_due())
+    """Entry point for the schedule: the steps left running past their
+    deadline said interrupted (LEKA-443), then the plans due."""
+
+    async def both() -> dict[str, int]:
+        interrupted = await interrupt_overdue_steps()
+        return {**await start_due(), "interrupted": interrupted}
+
+    return asyncio.run(both())
+
+
+# A call takes at most its timeout (TIMEOUT); a step still running well past
+# it, the worker died mid-call — what the system did is not known (LEKA-443).
+STEP_DEADLINE = timedelta(minutes=10)
+
+
+async def interrupt_overdue_steps(*, now: datetime | None = None, limit: int = 100) -> int:
+    """Steps left running past their deadline — a worker that died during a
+    call (LEKA-443): said failed, `interrupted`, what the system did said
+    unknown; the plan finished failed and its intention failed — to be
+    checked, then retried. Never left running. Idempotent."""
+    moment = _now(now)
+    with system_scope():
+        async with session_factory() as session:
+            overdue = (
+                (
+                    await session.execute(
+                        select(
+                            IntentionPlanStep.workspace_id,
+                            IntentionPlanStep.plan_id,
+                            IntentionPlanStep.id,
+                        )
+                        .where(
+                            IntentionPlanStep.status == "running",
+                            IntentionPlanStep.started_at < moment - STEP_DEADLINE,
+                        )
+                        .limit(limit)
+                    )
+                )
+                .tuples()
+                .all()
+            )
+    interrupted = 0
+    for workspace_id, plan_id, step_id in overdue:
+        with workspace_scope(workspace_id):
+            async with session_factory() as session:
+                service = ActionService(session, workspace_id)
+                plan = await session.scalar(
+                    select(IntentionPlan).where(IntentionPlan.id == plan_id).with_for_update()
+                )
+                step = await session.get(IntentionPlanStep, step_id, with_for_update=True)
+                if plan is None or step is None or step.status != "running":
+                    continue
+                step.status = "failed"
+                step.error = "interrupted"
+                step.finished_at = moment
+                step.evidence = {
+                    **step.evidence,
+                    "interrupted": {
+                        "at": moment.isoformat(),
+                        "said": "No answer was recorded: what the system did is not known.",
+                    },
+                }
+                service._event(
+                    plan, "step_failed", at=moment, step=step, detail={"error": "interrupted"}
+                )
+                await service.advance(plan, now=moment)
+                await session.commit()
+                interrupted += 1
+    if interrupted:
+        logger.warning("intention_steps_interrupted", count=interrupted)
+    return interrupted

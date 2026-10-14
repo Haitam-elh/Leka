@@ -358,6 +358,8 @@ const STATUSES: Record<IntentionAnalysis["status"], AnalysisStatus> = {
   failed: "failed",
   // Not run: the tab says why, from its context's readiness.
   blocked: "pending",
+  // Stopped by a person (LEKA-443): what it found, short of the whole.
+  stopped: "partial",
 };
 
 /** A precondition, in words: met or not, as the analysis says it. */

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useWatch } from "react-hook-form";
 
 import { SelectField } from "@/components/forms/choice-fields";
@@ -168,6 +168,10 @@ export function IntentionForm({
   const [answers, setAnswers] = useState<IntentionAnswer[]>([]);
   const [reviewing, setReviewing] = useState(false);
   const [readAs, setReadAs] = useState<string | null>(null);
+  // One key per request as it stands (LEKA-443): sent again — a click
+  // twice, a network that gave up and is retried — it is the intention it
+  // made, never a second one. Changed, it is another request.
+  const requestKey = useRef<{ ask: string; key: string } | null>(null);
 
   const form = useLekaForm<IntentionRequest>({
     schema: intentionRequestSchema,
@@ -182,10 +186,14 @@ export function IntentionForm({
     },
     onSubmit: async (values) => {
       const ask = { ...askOf(values), answers };
+      const said = JSON.stringify(ask);
+      if (requestKey.current?.ask !== said) {
+        requestKey.current = { ask: said, key: crypto.randomUUID() };
+      }
       try {
         const made = reasking
           ? await reaskIntention(reasking, ask)
-          : await submitIntention(ask);
+          : await submitIntention(ask, requestKey.current.key);
         clearDraft(workspace?.id);
         // What every list and page says of it is now this.
         client.setQueryData(
