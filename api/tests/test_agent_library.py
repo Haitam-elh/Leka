@@ -32,6 +32,7 @@ VERSIONS = {
     "code-review": "1.2.0",
     "debug-assistant": "1.2.0",
     "documentation-assistant": "1.2.0",
+    "release-analysis": "1.2.0",
     "security-review": "1.2.0",
     "test-analysis": "1.2.0",
 }
@@ -383,3 +384,21 @@ def test_the_debug_assistant_finds_the_root_cause_before_a_remedy() -> None:
         assert step in said, step
     assert "Après trois hypothèses" in said
     assert "garrytan/gstack" in said
+
+
+def test_the_release_analysis_caps_its_verdict() -> None:
+    # LEKA-447: ECC's deployment-patterns and production-audit, rewritten
+    # for what LEKA sees — what really ships, the risk angles, the way back,
+    # what came after, a verdict capped by what is missing.
+    said = {d.key: d for d in catalogue()}["release-analysis"].instructions or ""
+    assert "## Sa méthode" in said
+    for step in (
+        "Ce qui part vraiment",
+        "Les angles de risque",
+        "Le retour arrière",
+        "Après la mise en production",
+        "Le verdict, plafonné",
+    ):
+        assert step in said, step
+    assert "Une CI verte ne prouve pas" in said
+    assert "affaan-m/ECC" in said
