@@ -12,6 +12,8 @@ export interface WorkspaceMembership {
   name: string;
   slug: string;
   role: string;
+  /** A demonstration, its data fictive (LEKA-449). */
+  demo?: boolean;
 }
 
 /** The brackets the site's forms have always offered. */

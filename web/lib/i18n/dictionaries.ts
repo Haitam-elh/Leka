@@ -7279,6 +7279,24 @@ const fr = {
       unknown: "La demande n'a pas abouti. Réessayez.",
     },
   },
+  /** The demonstration (LEKA-449): Nova Retail, a company that does not exist. */
+  demo: {
+    banner:
+      "Environnement de démonstration : les données de Nova Retail sont fictives, et rien ici n'atteint un vrai outil. Les actions sont simulées.",
+    leave: "Quitter la démo",
+    restart: "Recommencer",
+    connect: "Connecter mes outils",
+    explore: "Explorer la démo",
+    opening: "Ouverture de la démo…",
+    failed: "La démo n'a pas pu s'ouvrir. Réessayez.",
+    chooseTitle: "Par où commencer ?",
+    connectTitle: "Connecter une source",
+    connectBody: "Choisissez vos outils ci-dessous : LEKA lit votre environnement, en lecture seule.",
+    exploreTitle: "Explorer la démo",
+    exploreBody:
+      "Nova Retail, une entreprise fictive avec son code, ses tickets, ses incidents et sa documentation : posez vos questions sans rien connecter.",
+    exploreHint: "Ou explorez la démo : une entreprise fictive, sans rien connecter.",
+  },
   /** Choosing a language (docs/languages.md). Every name in it is the
    * catalogue's: a language's own name, and its name in English. */
   language: {
@@ -14297,6 +14315,24 @@ const en: Dictionary = {
       server: "Something went wrong on our side. Try again in a moment.",
       unknown: "That did not go through. Try again.",
     },
+  },
+  /** The demonstration (LEKA-449): Nova Retail, a company that does not exist. */
+  demo: {
+    banner:
+      "Demonstration environment: Nova Retail's data is fictive, and nothing here reaches a real tool. Actions are simulated.",
+    leave: "Leave the demo",
+    restart: "Start again",
+    connect: "Connect my tools",
+    explore: "Explore the demo",
+    opening: "Opening the demo…",
+    failed: "The demo could not open. Try again.",
+    chooseTitle: "Where to start?",
+    connectTitle: "Connect a source",
+    connectBody: "Choose your tools below: LEKA reads your environment, read-only.",
+    exploreTitle: "Explore the demo",
+    exploreBody:
+      "Nova Retail, a fictive company with its code, tickets, incidents and documentation: ask your questions without connecting anything.",
+    exploreHint: "Or explore the demo: a fictive company, nothing to connect.",
   },
   language: {
     title: "Language",
