@@ -34,17 +34,18 @@ test.describe("Intention actions", () => {
     await dialog.getByRole("button", { name: "Lancer maintenant" }).click();
     await expect(page.getByTestId("plan-status")).toHaveText("En cours");
     await expect(step.getByTestId("step-status")).toHaveText("À confirmer");
-    await expect(page.getByTestId("intention-status")).toContainText("En exécution");
+    await expect(page.getByTestId("intention-status")).toContainText("Action en cours");
     // Checked before it ran.
     await expect(page.getByTestId("plan-checks")).toContainText("La décision est toujours validée");
 
     await step.getByTestId("step-report-note").fill("Redémarré depuis la console, healthcheck vert.");
     await step.getByTestId("step-done").click();
-    await expect(page.getByTestId("plan-status")).toHaveText("Exécuté");
+    // Run is not done: to be verified (LEKA-443).
+    await expect(page.getByTestId("plan-status")).toHaveText("Exécuté · à vérifier");
     await expect(step.getByTestId("step-evidence")).toContainText(
       "Confirmé : « Redémarré depuis la console, healthcheck vert. »",
     );
-    await expect(page.getByTestId("intention-status")).toContainText("En vérification");
+    await expect(page.getByTestId("intention-status")).toContainText("Résultat à vérifier");
     await expect(page.getByTestId("plan-journal")).toContainText("Actions exécutées");
   });
 
@@ -63,7 +64,9 @@ test.describe("Intention actions", () => {
     await page.getByTestId("plan-schedule-at").fill(local);
     await page.getByTestId("plan-schedule").click();
     await expect(page.getByTestId("plan-status")).toHaveText("Planifié");
-    await expect(page.getByTestId("intention-status")).toContainText("Planifiée");
+    // Approved, its actions scheduled — said why (LEKA-443).
+    await expect(page.getByTestId("intention-status")).toContainText("Approuvée");
+    await expect(page.getByTestId("journey-why")).toHaveText("Les actions sont planifiées.");
 
     await page.getByTestId("plan-cancel").click();
     const dialog = page.getByRole("alertdialog");

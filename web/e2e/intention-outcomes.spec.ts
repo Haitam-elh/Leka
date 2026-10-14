@@ -36,8 +36,8 @@ async function done(page: Page) {
   const step = page.getByTestId("plan-step");
   await step.getByTestId("step-report-note").fill("Redémarré depuis la console.");
   await step.getByTestId("step-done").click();
-  await expect(page.getByTestId("plan-status")).toHaveText("Exécuté");
-  await expect(page.getByTestId("intention-status")).toContainText("En vérification");
+  await expect(page.getByTestId("plan-status")).toHaveText("Exécuté · à vérifier");
+  await expect(page.getByTestId("intention-status")).toContainText("Résultat à vérifier");
   await expect(page.getByTestId("verification-status")).toHaveText("En vérification");
 }
 
@@ -115,7 +115,9 @@ test.describe("Intention outcomes", () => {
     await dialog.getByRole("button", { name: "Conclure" }).click();
 
     await expect(page.getByTestId("verification-status")).toHaveText("Non atteint");
-    await expect(page.getByTestId("intention-status")).toContainText("En échec");
+    // Ran, short of what was expected: the action failed, said why.
+    await expect(page.getByTestId("intention-status")).toContainText("Action échouée");
+    await expect(page.getByTestId("journey-why")).toContainText("le résultat attendu n'est pas constaté");
     await expect(page.getByTestId("verification-concluded")).toContainText(
       "Conclu par vous : « Toujours des erreurs de connexion. »",
     );
