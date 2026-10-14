@@ -30,8 +30,6 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 STATUSES = "status IN ('running', 'complete', 'partial', 'inconclusive', 'failed', 'blocked'{})"
-# The moves by which a person asks it again (lifecycle.py).
-ASKED = "('asked_again', 'clarified')"
 
 
 def upgrade() -> None:
@@ -48,19 +46,20 @@ def upgrade() -> None:
     )
     op.add_column("intention_analyses", sa.Column("intention_version", sa.Integer(), nullable=True))
     op.execute(
-        f"""
+        """
         UPDATE intentions i SET version = 1 + (
             SELECT count(*) FROM intention_events e
-            WHERE e.intention_id = i.id AND e.kind = 'moved' AND e.name IN {ASKED}
+            WHERE e.intention_id = i.id AND e.kind = 'moved'
+              AND e.name IN ('asked_again', 'clarified')
         )
         """
     )
     op.execute(
-        f"""
+        """
         UPDATE intention_analyses a SET intention_version = 1 + (
             SELECT count(*) FROM intention_events e
             WHERE e.intention_id = a.intention_id AND e.kind = 'moved'
-              AND e.name IN {ASKED} AND e.at <= a.started_at
+              AND e.name IN ('asked_again', 'clarified') AND e.at <= a.started_at
         )
         """
     )

@@ -265,15 +265,16 @@ def test_the_matrix_covers_every_lifecycle_state_and_every_move() -> None:
 
 def _every_facts() -> list[Facts]:
     found = []
+    moves: tuple[tuple[str | None, dict[str, object]], ...] = (
+        (None, {}),
+        ("failed", {"analysis_id": "a", "error": "crashed"}),
+        ("failed", {"plan_id": "p", "error": "x", "step": 1}),
+        ("stopped", {}),
+        ("verified", {}),
+        ("answered", {}),
+    )
     for status in IntentionStatus:
-        for last, detail in (
-            (None, {}),
-            ("failed", {"analysis_id": "a", "error": "crashed"}),
-            ("failed", {"plan_id": "p", "error": "x", "step": 1}),
-            ("stopped", {}),
-            ("verified", {}),
-            ("answered", {}),
-        ):
+        for last, detail in moves:
             for analysis in (None, "running", "partial", "complete"):
                 for acting in (True, False):
                     found.append(
