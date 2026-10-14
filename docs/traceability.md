@@ -79,15 +79,14 @@ errors (`test_parsing_job.py`), quarantine and stale records
 ambiguous merges (`test_resolution.py`), cross-workspace rows refused by
 the database (`test_tenant_isolation.py`).
 
-## 3. Breaks found
+## 3. Breaks found, and fixed
 
-Each is a test marked `xfail(strict=True)` in the same file: it turns
-green when fixed, and the mark must then go.
+Each has its test in the same file, now green.
 
-| | Break | Why it matters | Test |
+| | Break | Fixed | Test |
 |---|---|---|---|
-| R1 | A source connected but never read (or still on its first pass) appears nowhere in the analysis. | The answer may lie in it: a limit of coverage unsaid before a conclusion. | `test_a_source_connected_but_never_read_is_said_as_a_limit` |
-| R2 | An inferred proof (`maintained_by`, `contributes_to`) carries no source and no record: `sources: []`. Its context element knows the entities it was inferred from (`inferred_from`), but the analysis drops them. | A proof shown must be traceable to a source; this one stops at the rule. | `test_an_inferred_proof_names_the_sources_it_was_inferred_from` |
+| R1 | A source connected but never read (or still on its first pass) appeared nowhere in the analysis: a limit of coverage unsaid before a conclusion. | The analysis now says it among its limits — `limit.source_unread`: « connected, not read yet: what it holds is not in this answer » (`leka/intentions/processing.py`, `explain.py`). | `test_a_source_connected_but_never_read_is_said_as_a_limit` |
+| R2 | An inferred proof (`maintained_by`, `contributes_to`) carried no source: `sources: []`, the proof stopping at the rule. | A rule's inference with no record of its own now names the sources of its two ends — what it was inferred from (`leka/intentions/analysis.py`, `Proofs.tie`). | `test_an_inferred_proof_names_the_sources_it_was_inferred_from` |
 
 Seen, and kept as they are:
 

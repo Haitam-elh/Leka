@@ -6,7 +6,9 @@ goes the whole way with the real stages, each run by hand where the job
 loop would queue it: the pass, extraction, parsing, normalisation,
 validation, resolution, enrichment, the company model, the context an
 intention is grounded in, its analysis and what that says it rests on.
-docs/traceability.md draws the chain and what links each step to the next.
+docs/traceability.md draws the chain and what links each step to the next,
+and the two breaks this found, fixed: a source connected and never read is
+said as a limit; an inferred proof names the sources it rests on.
 
 What these protect:
 - One question answered from GitHub's own records, each stage asserted on
@@ -410,10 +412,9 @@ async def test_another_workspace_sees_nothing_of_it(
         assert (await client.get(path)).status_code == 404, path
 
 
-# ── breaks found (LEKA-444): each turns green, and must be unmarked, when fixed ──
+# ── breaks found (LEKA-444), fixed ───────────────────────────────────────────
 
 
-@pytest.mark.xfail(strict=True, reason="LEKA-444 R1: a source connected but never read is unsaid")
 async def test_a_source_connected_but_never_read_is_said_as_a_limit(
     client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
 ) -> None:
@@ -429,7 +430,6 @@ async def test_a_source_connected_but_never_read_is_said_as_a_limit(
     assert any("GitHub C" in n["text"] for n in explanation["limits"])
 
 
-@pytest.mark.xfail(strict=True, reason="LEKA-444 R2: an inferred proof names no source")
 async def test_an_inferred_proof_names_the_sources_it_was_inferred_from(
     client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
 ) -> None:

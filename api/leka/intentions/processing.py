@@ -923,6 +923,19 @@ async def _explained(
             )
             for row in rows
         }
+    # Connected, never read: it may hold the answer — said as a limit (LEKA-444).
+    with workspace_scope(workspace_id):
+        async with session_factory() as session:
+            unread = (
+                await session.scalars(
+                    select(Source.name).where(
+                        Source.workspace_id == workspace_id,
+                        Source.status.in_(("active", "degraded", "error")),
+                        Source.last_synced_at.is_(None),
+                        Source.id.not_in(ids),
+                    )
+                )
+            ).all()
     read = (
         ContextRead(
             version=context.version,
@@ -942,6 +955,7 @@ async def _explained(
         readiness=readiness,
         now=now,
         background=background,
+        unread=unread,
     )
     return replace(held, explanation=explanation.model_dump(mode="json"))
 

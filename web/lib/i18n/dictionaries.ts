@@ -6616,6 +6616,8 @@ const fr = {
           "{source} se synchronisait encore : ce qu'elle apporte n'a pas été lu.",
         "limit.source_degraded":
           "{source} est dégradée : ce qu'elle disait peut être incomplet.",
+        "limit.source_unread":
+          "{source} est connectée mais pas encore lue : ce qu'elle contient n'est pas dans cette réponse.",
         "limit.context_limited":
           "Il manque à son contexte quelque chose dont elle a besoin.",
         "limit.capability.standing":
@@ -13479,6 +13481,8 @@ const en: Dictionary = {
           "{source} was still syncing: what it brings was not read.",
         "limit.source_degraded":
           "{source} is degraded: what it said may be incomplete.",
+        "limit.source_unread":
+          "{source} is connected but not read yet: what it holds is not in this answer.",
         "limit.context_limited": "Its context lacks something it needs.",
         "limit.capability.standing":
           "Its state, and how well LEKA knows it, are not known.",
