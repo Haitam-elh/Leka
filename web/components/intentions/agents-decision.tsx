@@ -27,6 +27,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { routes } from "@/config/routes";
 import { ApiError } from "@/lib/api";
+import { summaryOf } from "@/components/capabilities/catalogue";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import type {
@@ -116,7 +117,8 @@ function Why({ agent }: { agent: ProposedAgent }) {
 }
 
 function AgentLine({ agent }: { agent: ProposedAgent }) {
-  const w = useDictionary().intentions.agents;
+  const t = useDictionary();
+  const w = t.intentions.agents;
   return (
     <li
       className="flex gap-3 border-t border-shell-line py-3 first:border-t-0 first:pt-0 last:pb-0"
@@ -131,7 +133,7 @@ function AgentLine({ agent }: { agent: ProposedAgent }) {
             {agent.available ? w.ready : w.unavailable}
           </Pill>
         </p>
-        <p className="text-[0.8125rem] text-shell-muted">{agent.summary}</p>
+        <p className="text-[0.8125rem] text-shell-muted">{summaryOf(t, agent)}</p>
         {agent.why ? <p className="text-[0.8125rem] text-brand-navy">{agent.why}</p> : null}
         <Why agent={agent} />
         <div className="flex flex-wrap items-center gap-3 pt-0.5">
@@ -330,7 +332,8 @@ function ChosenAgent({
   readable: Readable[];
   unlock?: React.ReactNode;
 }) {
-  const w = useDictionary().intentions.agents;
+  const t = useDictionary();
+  const w = t.intentions.agents;
   const said = w.deliverables as Record<string, string>;
   const drawn = agent.deliverables.filter((d) => DRAWN.has(d));
   const needed = (agent.fields ?? []).filter(
@@ -348,7 +351,7 @@ function ChosenAgent({
         />
         <span className="min-w-0">
           <span className="block text-[0.9375rem] font-semibold text-brand-navy">{agent.title}</span>
-          <span className="block text-[0.8125rem] text-shell-muted">{agent.summary}</span>
+          <span className="block text-[0.8125rem] text-shell-muted">{summaryOf(t, agent)}</span>
           <Why agent={agent} />
         </span>
       </label>

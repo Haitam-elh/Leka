@@ -8,6 +8,7 @@ import { useRef, useState } from "react";
 
 import { cn } from "cn";
 import { Wordmark } from "@/components/brand/logo";
+import { summaryOf } from "@/components/capabilities/catalogue";
 import { SourceLogo } from "@/components/sources/source-logo";
 import { buttonVariants } from "@/components/ui/button";
 import { SAID, splitSaid } from "@/components/v2/said";
@@ -289,7 +290,7 @@ function AgentChips({ onPick }: { onPick: (slash: string) => void }) {
             key={agent.key}
             type="button"
             onClick={() => onPick(said[index])}
-            title={agent.summary}
+            title={summaryOf(t, agent)}
             aria-label={fill(w.insert, { slash: said[index] })}
             className="rounded-full border border-shell-line bg-white px-3 py-1 text-[0.8125rem] text-brand-navy outline-none hover:border-brand-violet hover:text-brand-violet focus-visible:ring-3 focus-visible:ring-brand-violet/40"
             data-testid="v2-agent-chip"
