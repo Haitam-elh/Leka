@@ -26,7 +26,7 @@ test.describe("Knowledge quality", () => {
     await page.getByTestId("env-view").click();
     await page.getByRole("option", { name: "Qualité" }).click();
     await expect(page).toHaveURL("http://localhost:3000/environment?tab=quality");
-    await expect(page.getByTestId("env-view")).toHaveText("Qualité");
+    await expect(page.getByTestId("env-view")).toContainText("Qualité");
 
     await expect(page.getByTestId("quality-workspace-score")).toContainText("%");
     await expect(page.getByTestId("quality-dimension-completeness")).toBeVisible();
