@@ -87,10 +87,13 @@ export function IntentionStepper({
   return (
     <nav
       aria-label={t.label}
-      className="mb-6 overflow-x-auto"
+      className="-mx-2 mb-4 overflow-x-auto"
       data-testid="intention-stepper"
     >
-      <ol className="flex min-w-[42rem] items-start">
+      {/* Room inside the scroller for a disc's ring and halo (6px): a
+          scroller clips what overflows it, the top of the open step's ring
+          with it (2026-10-14). */}
+      <ol className="flex min-w-[42rem] items-start px-2 py-2">
         {STEPS.map((step, i) => {
           const skipped = last !== undefined && i > last;
           const finished = !skipped && (i < at || (i === at && done));

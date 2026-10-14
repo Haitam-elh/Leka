@@ -55,7 +55,7 @@ import { ApiError } from "@/lib/api";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import type { IntentionDetail, IntentionLink } from "@/lib/intentions/api";
-import { may } from "@/lib/intentions/journey";
+import { may, working } from "@/lib/intentions/journey";
 import { useAnswer, useIntention, useIntentionChange } from "@/lib/intentions/queries";
 import { buildBreadcrumb } from "@/lib/navigation/breadcrumb";
 import { matchRoute } from "@/lib/navigation/active";
@@ -176,7 +176,7 @@ export function IntentionScreen() {
           <JourneyNote intention={data} />
           {/* What an agent is doing for it — its PDF the moment it is drawn. */}
           <div className="mb-4">
-            <AgentWork intentionId={data.id} />
+            <AgentWork intentionId={data.id} live={working(data.journey)} />
           </div>
         </>
       ) : null}

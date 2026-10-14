@@ -33,12 +33,12 @@ function inputsSaid(run: AgentRun): string {
     .join(" · ");
 }
 
-export function AgentWork({ intentionId }: { intentionId: string }) {
+export function AgentWork({ intentionId, live = false }: { intentionId: string; live?: boolean }) {
   const t = useDictionary();
   const w = t.intentions.agentWork;
   const statuses = t.agentRuns.statuses as Record<string, string>;
   const errors = t.agentRuns.errors as Record<string, string>;
-  const { data } = useIntentionRuns(intentionId);
+  const { data } = useIntentionRuns(intentionId, live);
   if (!data?.length) return null;
   return (
     <section
@@ -60,7 +60,12 @@ export function AgentWork({ intentionId }: { intentionId: string }) {
               : fill(w.stopped, { agent });
           return (
             <li key={run.id} className="flex flex-col gap-3 sm:flex-row sm:items-center" data-testid="agent-work-run">
-              <IconTile icon={moving ? LoaderCircle : Bot} tone={moving ? "violet" : "success"} className="size-11" />
+              <IconTile
+                icon={moving ? LoaderCircle : Bot}
+                tone={moving ? "violet" : "success"}
+                className="size-11"
+                spin={moving}
+              />
               <div className="min-w-0 flex-1">
                 <p className="flex flex-wrap items-center gap-2">
                   <span className="text-[1rem] font-semibold text-brand-navy">{said}</span>

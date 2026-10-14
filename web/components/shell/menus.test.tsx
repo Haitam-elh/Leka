@@ -12,9 +12,10 @@ import { describe, expect, it, vi } from "vitest";
 import { DICTIONARIES } from "@/lib/i18n/dictionaries";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 
+const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/",
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => router,
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -76,6 +77,18 @@ describe("the account menu", () => {
     // Focus comes back where it was, or the next Tab starts from the top of
     // the page and the keyboard user loses their place.
     expect(screen.getByTestId("user-menu")).toHaveFocus();
+  });
+
+  it("opens the settings, from the sidebar's menu as from the header's", async () => {
+    // It went nowhere: an item with nothing to do (2026-10-14).
+    for (const variant of ["sidebar", "header"] as const) {
+      const user = userEvent.setup();
+      const { unmount } = mount(<UserMenu variant={variant} />);
+      await user.click(await screen.findByTestId("user-menu"));
+      await user.click(await screen.findByTestId("settings"));
+      expect(router.push).toHaveBeenLastCalledWith("/settings");
+      unmount();
+    }
   });
 
   it("says the language, and opens the picker of every one LEKA offers", async () => {

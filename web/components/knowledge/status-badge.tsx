@@ -4,6 +4,7 @@ import { cn } from "cn";
 
 import { type StatusVariant, statusLabel, statusLook, TONES } from "@/components/knowledge/status";
 import { useDictionary } from "@/lib/i18n/locale-provider";
+import { SPINNING } from "@/lib/motion";
 
 export interface StatusBadgeProps {
   /** `family.value` — see components/knowledge/status.ts for the whole list. */
@@ -62,7 +63,7 @@ export function StatusBadge({
           className={cn(
             "shrink-0",
             size === "sm" ? "size-3" : "size-3.5",
-            spins && "motion-safe:animate-spin",
+            spins && SPINNING,
           )}
         />
       )}

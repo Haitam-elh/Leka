@@ -38,6 +38,7 @@ import type { IntentionDetail } from "@/lib/intentions/api";
 import { notify } from "@/lib/notify";
 import type { Verification } from "@/lib/outcomes";
 import { useVerifications } from "@/lib/outcomes-queries";
+import { SPINNING } from "@/lib/motion";
 
 /**
  * An intention's tab Actions (LEKA-391), as mockup 06: what an approved
@@ -351,7 +352,7 @@ function StepCard({
         <Icon
           className={cn(
             "mt-0.5 size-5 shrink-0",
-            step.status === "running" && "motion-safe:animate-spin",
+            step.status === "running" && SPINNING,
             look.tone === "success" && "text-state-success",
             look.tone === "danger" && "text-state-danger",
             look.tone === "warning" && "text-state-warning",
