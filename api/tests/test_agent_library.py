@@ -32,6 +32,7 @@ VERSIONS = {
     "code-review": "1.2.0",
     "documentation-assistant": "1.2.0",
     "security-review": "1.2.0",
+    "test-analysis": "1.2.0",
 }
 
 LIBRARY = {
@@ -344,3 +345,21 @@ def test_the_documentation_assistant_maps_what_a_reader_finds() -> None:
     ):
         assert step in said, step
     assert "garrytan/gstack" in said and "affaan-m/ECC" in said
+
+
+def test_the_test_analysis_plans_by_behaviour() -> None:
+    # LEKA-447: ECC's pr-test-analyzer and test-collaboration, gstack's
+    # test-audit, rewritten for what LEKA sees — the behaviour, not the file;
+    # the right level; incidents as tests; what a green does not prove.
+    said = {d.key: d for d in catalogue()}["test-analysis"].instructions or ""
+    assert "## Sa méthode" in said
+    for step in (
+        "Le comportement, pas le fichier",
+        "Le bon niveau",
+        "Les incidents deviennent des tests",
+        "L'écart, classé",
+        "Ce qu'un vert ne prouve pas",
+    ):
+        assert step in said, step
+    assert "ne dis jamais qu'un test manque" in said
+    assert "affaan-m/ECC" in said and "garrytan/gstack" in said

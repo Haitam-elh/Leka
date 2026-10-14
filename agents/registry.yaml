@@ -64,7 +64,7 @@ agents:
 
   - path: development/test-analysis/SKILL.md
     name: test-analysis
-    version: 1.1.0
+    version: 1.2.0
     status: active
 
   - path: documentation/documentation-assistant/SKILL.md
