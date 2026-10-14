@@ -64,7 +64,7 @@ export function AppHeader({
         )}
       </button>
 
-      <UserMenu variant="header" />
+      <UserMenu />
     </header>
   );
 }

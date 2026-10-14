@@ -1,6 +1,6 @@
 /**
  * The overview: what needs someone first, the workspace's real figures
- * (LEKA-442: a decision, something in trouble, a request under way; then
+ * (LEKA-442: something in trouble, a request under way; then
  * what moved and whether what LEKA sees can be trusted).
  *
  * What these protect is the decision of 2026-09-25 — real data, or an
@@ -8,8 +8,8 @@
  * "47 / 48 services" and "3 incidents" must not reach a customer; the
  * sources LEKA actually reads must — the environment's services, its
  * attention points and open incidents, as enrichment made them; this
- * week's events and the open contradictions — and what LEKA proposes,
- * waiting on someone, is listed where the mockup says "À valider" (LEKA-380).
+ * week's events and the open contradictions. What LEKA proposes, waiting
+ * on someone, is on « À valider »'s own page, not here (2026-10-14).
  */
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -332,11 +332,10 @@ describe("the overview", () => {
     expect(await screen.findByText("1 élément est en difficulté.")).toBeVisible();
   });
 
-  it("puts first what needs someone: a decision, what is wrong, a request under way", async () => {
+  it("puts first what needs someone: what is wrong, a request under way", async () => {
     mount();
     const now = await screen.findByTestId("overview-now");
     expect(within(now).getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
-      "À valider",
       "Ce qui ne va pas",
       "Mes intentions en cours",
     ]);
@@ -460,7 +459,6 @@ describe("the overview", () => {
     for (const mocked of ["98 %", "47 / 48 services", "Payment API", "Rollback", "Confiance élevée"]) {
       expect(screen.queryByText(new RegExp(mocked))).not.toBeInTheDocument();
     }
-    expect(screen.getByText("Rien à valider pour le moment.")).toBeVisible();
   });
 
   it("says so when the sources cannot be read", async () => {
@@ -488,29 +486,14 @@ describe("the overview", () => {
     expect(screen.getByText("Aucune source connectée pour l'instant.")).toBeVisible();
   });
 
-  it("lists what LEKA proposes, waiting on someone, each leading to it", async () => {
-    const owner = candidate({});
-    const code = candidate({
-      analyzer: "enrich_code",
-      family: "relationship",
-      code: "enrichment.code",
-      subject: { type: "entity", id: crypto.randomUUID(), name: "user-service", kind: "service" },
-      params: { name: "user-service", repository: "acme/user-service", match: "same" },
-      confidence: 0.8,
-    });
-    const more = [1, 2].map((n) => candidate({ params: { name: `db-${n}`, team: "Core" } }));
-    proposed.mockResolvedValue({ data: [owner, code, ...more], next_cursor: null });
+  it("leaves « À valider » to its page: the sidebar says what waits there", async () => {
+    proposed.mockResolvedValue({ data: [candidate({})], next_cursor: null });
     mount();
+    await screen.findByTestId("overview-trouble");
 
-    const lines = within(await screen.findByTestId("approvals-waiting")).getAllByRole("listitem");
-    expect(lines).toHaveLength(3);
-    expect(lines[0]).toHaveTextContent("Platform est responsable de postgres-prod");
-    expect(lines[0]).toHaveTextContent(
-      "2 des 2 personnes qui le maintiennent sont membres de Platform · 85 %",
-    );
-    expect(within(lines[0]).getByRole("link")).toHaveAttribute("href", `/approvals/${owner.id}`);
-    expect(lines[1]).toHaveTextContent("acme/user-service est le code de user-service");
-    expect(screen.getByText("4 éléments en attente")).toBeVisible();
-    expect(screen.queryByText("Rien à valider pour le moment.")).not.toBeInTheDocument();
+    // A proposal's percentage, alone on the dashboard, said nothing to a
+    // customer (2026-10-14).
+    expect(screen.queryByTestId("approvals-waiting")).not.toBeInTheDocument();
+    expect(screen.queryByText(/85 %/)).not.toBeInTheDocument();
   });
 });

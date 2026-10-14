@@ -48,6 +48,8 @@ test.describe("Intentions", () => {
     // Step 1: what it is, and the context linked to it.
     await page.getByTestId("tab-overview").click();
     await expect(page).toHaveURL(/\/overview$/);
+    // Folded under « Plus de détails » (2026-10-14): opened, it is there.
+    await page.getByTestId("intention-detail").locator("summary").click();
     await expect(page.getByTestId("intention-link").first()).toContainText("v1");
 
     // Its history: asked, its context linked, LEKA analysing.

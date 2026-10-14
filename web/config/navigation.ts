@@ -8,14 +8,17 @@
  *   Mon environnement              Le système vivant de votre entreprise.
  *     Vue globale · Applications · Infrastructure · Données · Dépendances
  *     · Équipes · Événements · Domaines · Qualité · Activité
- *   Capacités                      Votre équipe technologique à la demande.
- *     Capacités disponibles · Mes capacités · Configuration
- *   Administration                 Sources · Sécurité & gouvernance
- *                                  · Équipe & accès · Facturation · Paramètres
+ *   Compétences                    Votre équipe technologique à la demande.
+ *     Compétences disponibles · Mes compétences · Réglages
+ *   ─────────────────────────────  fixed at the foot of the sidebar
+ *   Configuration                  Sources · Sécurité · Équipe · Facturation
+ *                                  · Paramètres
  *
  * À valider sits with the intentions — what waits on a decision — and
  * Activité with the environment — what happened in it: Karim's call,
- * 2026-10-07. A folded section says what waits in it.
+ * 2026-10-07. A folded section says what waits in it. Configuration is
+ * always in reach at the foot, out of the pillars' way (the product call,
+ * 2026-10-14); its section id stays `administration`, kept in browsers.
  *
  * THREE PILLARS, nothing technical: the knowledge graph, agents, skills are
  * how LEKA does it, not what a customer comes for — they show through the

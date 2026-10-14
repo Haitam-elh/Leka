@@ -107,6 +107,14 @@ export function wordConflict(t: Dictionary, conflict: Conflict): Worded {
   };
 }
 
+/** How sure LEKA is, in words a customer reads (2026-10-14: « tout est à
+ * 60 % »): a percentage said nothing about what to do with it. */
+export function sureWord(t: Dictionary, confidence: number): string {
+  const sure = t.approvals.sure;
+  if (confidence >= 0.85) return sure.high;
+  return confidence >= 0.7 ? sure.medium : sure.low;
+}
+
 export function wordItem(t: Dictionary, item: Item): Worded {
   if (item.kind === "decision") return wordDecision(t, item.data);
   return item.kind === "conflict" ? wordConflict(t, item.data) : wordCandidate(t, item.data);

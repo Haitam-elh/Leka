@@ -49,6 +49,7 @@ import { scopeLines } from "@/components/intentions/scope";
 import { TimelineTab } from "@/components/intentions/timeline-tab";
 import { UnderstandingPanel } from "@/components/intentions/understanding";
 import { useConfirm } from "@/components/interactions/confirm";
+import { Folded } from "@/components/intelligence/folded";
 import { Pill } from "@/components/intelligence/pill";
 import { timeAgo } from "@/components/knowledge/time";
 import { PageContainer, PageHeader } from "@/components/shell/page-container";
@@ -78,6 +79,10 @@ import { notify } from "@/lib/notify";
  *
  * Its asker, or who may approve, cancels it while it can be, archives it
  * once done with, restores it. Nothing is shown that the API did not say.
+ *
+ * Each step shows its essential in one column — the answer, the decision,
+ * what is delivered — and folds the rest under one line (2026-10-14: « la
+ * longue colonne de droite, les blocs empilés qu'on ne lit pas »).
  */
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -286,13 +291,14 @@ function ResultsStep({ intention }: { intention: IntentionDetail }) {
  * launched, or done by hand; and, when it changes systems, the decision
  * on its actions (LEKA-390). */
 function DecisionStep({ intention }: { intention: IntentionDetail }) {
+  const w = useDictionary().intentions.folded;
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:items-start">
-      <div className="min-w-0 space-y-4">
-        <IntentionDecision intentionId={intention.id} />
-        <AgentsDecision intention={intention} />
-      </div>
-      <DecisionAside intention={intention} />
+    <div className="min-w-0 space-y-4">
+      <IntentionDecision intentionId={intention.id} />
+      <AgentsDecision intention={intention} />
+      <Folded title={w.decision} hint={w.decisionHint} testId="decision-detail">
+        <DecisionAside intention={intention} />
+      </Folded>
     </div>
   );
 }
@@ -459,45 +465,44 @@ function Overview({ intention }: { intention: IntentionDetail }) {
   const t = useDictionary();
   const { format: locale } = useLocale();
   const w = t.intentions.overview;
+  const folded = t.intentions.folded;
   const kind = kindOf(t, intention.kind);
   const scope = scopeLines(t, locale, intention.scope as Record<string, unknown>);
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-      <div className="flex flex-col gap-4">
-        {/* What it asks to do, put to a decision (LEKA-390). */}
-        <IntentionDecision intentionId={intention.id} />
-        {/* What LEKA understood and still asks, answered here (LEKA-439);
-            an intention kept before its brief: what LEKA understood. */}
-        {intention.brief && intention.understanding ? (
-          <BriefPanel intention={intention} />
-        ) : intention.understanding ? (
-          <UnderstandingPanel
-            understanding={intention.understanding}
-            intentionId={intention.status === "needs_clarification" ? intention.id : undefined}
-          />
-        ) : null}
-        {/* What was asked is the banner above every step: here, what it is
-            and where. */}
-        <Card title={w.asked}>
-          <dl className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] gap-x-3 gap-y-2 text-[0.8125rem]">
-            <dt className="text-shell-muted">{w.kind}</dt>
-            <dd className="text-brand-navy">{kind ?? "—"}</dd>
-            <dt className="text-shell-muted">{w.scope}</dt>
-            <dd className="text-brand-navy">
-              {scope.length ? scope.map((line) => <span key={line} className="block">{line}</span>) : w.noScope}
-            </dd>
-          </dl>
-        </Card>
-        <Card title={w.summary}>
-          <SummarySaid intention={intention} none={w.noSummary} />
-        </Card>
-      </div>
-      <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4">
+      {/* What it asks to do, put to a decision (LEKA-390). */}
+      <IntentionDecision intentionId={intention.id} />
+      {/* What LEKA understood and still asks, answered here (LEKA-439);
+          an intention kept before its brief: what LEKA understood. */}
+      {intention.brief && intention.understanding ? (
+        <BriefPanel intention={intention} />
+      ) : intention.understanding ? (
+        <UnderstandingPanel
+          understanding={intention.understanding}
+          intentionId={intention.status === "needs_clarification" ? intention.id : undefined}
+        />
+      ) : null}
+      {/* What was asked is the banner above every step: here, what it is
+          and where. */}
+      <Card title={w.asked}>
+        <dl className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] gap-x-3 gap-y-2 text-[0.8125rem]">
+          <dt className="text-shell-muted">{w.kind}</dt>
+          <dd className="text-brand-navy">{kind ?? "—"}</dd>
+          <dt className="text-shell-muted">{w.scope}</dt>
+          <dd className="text-brand-navy">
+            {scope.length ? scope.map((line) => <span key={line} className="block">{line}</span>) : w.noScope}
+          </dd>
+        </dl>
+      </Card>
+      <Card title={w.summary}>
+        <SummarySaid intention={intention} none={w.noSummary} />
+      </Card>
+      <Folded title={folded.overview} hint={folded.overviewHint} testId="intention-detail">
         {/* What it takes to carry it through here (LEKA-439). */}
         <FeasibilityCard intentionId={intention.id} />
         {/* Whether its context can ground its analysis (LEKA-387). */}
         {intention.readiness ? <ReadinessPanel readiness={intention.readiness} /> : null}
-        {/* The capability it goes to, and why (LEKA-398). */}
+        {/* The skill it goes to, and why (LEKA-398). */}
         <RoutingPanel intentionId={intention.id} />
         <Card title={w.links} icon={<Link2 className="size-4 text-shell-muted" aria-hidden="true" />}>
           {intention.links.length ? (
@@ -510,7 +515,7 @@ function Overview({ intention }: { intention: IntentionDetail }) {
             <p className="text-[0.8125rem] text-shell-muted">{w.noLinks}</p>
           )}
         </Card>
-      </div>
+      </Folded>
     </div>
   );
 }

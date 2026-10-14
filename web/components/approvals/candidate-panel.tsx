@@ -4,6 +4,7 @@ import { ArrowRight, Check, RotateCcw, Sparkles, TriangleAlert, X } from "lucide
 import Link from "next/link";
 import { useState } from "react";
 
+import { sureWord } from "@/components/approvals/items";
 import { CandidateBadge, FAMILY_ICON } from "@/components/approvals/parts";
 import { levelWord, wordCandidate } from "@/components/approvals/words";
 import { useConfirm } from "@/components/interactions/confirm";
@@ -190,7 +191,7 @@ function Facts({ candidate }: { candidate: CandidateDetail }) {
                   candidate.analyzer,
               }),
             },
-            { label: p.confidence, value: `${Math.round(candidate.confidence * 100)} %` },
+            { label: p.confidence, value: sureWord(t, candidate.confidence) },
             { label: p.seen, value: timeAgo(t, candidate.last_seen_at) },
             {
               label: p.sources,

@@ -8,13 +8,15 @@ import { cn } from "cn";
 import { Wordmark } from "@/components/brand/logo";
 import { RailSection, SidebarSection } from "@/components/shell/sidebar-section";
 import { SidebarNavItem } from "@/components/shell/sidebar-nav-item";
-import { UserMenu } from "@/components/shell/user-menu";
 import { WorkspaceSwitcher } from "@/components/shell/workspace-switcher";
 import type { NavGroup, NavSection } from "@/config/navigation";
 import type { BadgeKey } from "@/config/routes";
 import { usePermissions } from "@/components/shell/shell-provider";
 import { activeNav, hrefOf, visibleNavigation } from "@/lib/navigation/tree";
 import { useDictionary } from "@/lib/i18n/locale-provider";
+
+/** The group fixed at the foot of the sidebar (2026-10-14). */
+const FOOT = "administration";
 
 /** Remembered per browser: the sections a person opened or closed. */
 export const SECTIONS_KEY = "leka.sidebar.sections";
@@ -45,6 +47,7 @@ export function AppSidebar({ collapsed, onToggle, onNavigate, badges }: AppSideb
   const t = useDictionary();
   // Where the rail's section menus are drawn: inside the landmark.
   const navigation = useRef<HTMLElement>(null);
+  const foot = useRef<HTMLElement>(null);
 
   return (
     <div className="group/sidebar flex h-full flex-col bg-shell-surface">
@@ -114,8 +117,32 @@ export function AppSidebar({ collapsed, onToggle, onNavigate, badges }: AppSideb
         </Suspense>
       </nav>
 
-      <div className={cn("border-t border-shell-line px-3.5 py-3", collapsed && "px-2")}>
-        <UserMenu variant="sidebar" collapsed={collapsed} />
+      {/* Configuration, fixed at the foot (2026-10-14): Sources, Sécurité,
+          Équipe, Facturation always in reach. Who you are is top right —
+          said once, not twice. */}
+      <div className={cn("border-t border-shell-line px-3 py-3", collapsed && "px-2")}>
+        <nav ref={foot} aria-label={t.shell.configurationNavigation} data-testid="sidebar-configuration">
+          <Suspense
+            fallback={
+              <NavigationTree
+                collapsed={collapsed}
+                search=""
+                onNavigate={onNavigate}
+                badges={badges}
+                container={foot}
+                part="foot"
+              />
+            }
+          >
+            <LiveNavigationTree
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+              badges={badges}
+              container={foot}
+              part="foot"
+            />
+          </Suspense>
+        </nav>
         <div className="my-2 border-t border-shell-line" aria-hidden="true" />
         <WorkspaceSwitcher collapsed={collapsed} />
       </div>
@@ -125,6 +152,8 @@ export function AppSidebar({ collapsed, onToggle, onNavigate, badges }: AppSideb
 
 type TreeProps = Pick<AppSidebarProps, "collapsed" | "onNavigate" | "badges"> & {
   container: React.RefObject<HTMLElement | null>;
+  /** The pillars, or the configuration fixed at the foot. */
+  part?: "main" | "foot";
 };
 
 function LiveNavigationTree(props: TreeProps) {
@@ -153,6 +182,7 @@ function NavigationTree({
   onNavigate,
   badges,
   container,
+  part = "main",
 }: TreeProps & { search: string }) {
   const t = useDictionary();
   const pathname = usePathname() ?? "/";
@@ -163,7 +193,9 @@ function NavigationTree({
   // entries that happen to need none: half a navigation looks like a
   // product missing features, not like one still loading.
   const permissions = usePermissions();
-  const groups: NavGroup[] = permissions === null ? [] : visibleNavigation(permissions);
+  const groups: NavGroup[] = (permissions === null ? [] : visibleNavigation(permissions)).filter(
+    (group) => (group.id === FOOT) === (part === "foot"),
+  );
 
   // What the person chose, section by section, remembered; a section never
   // touched follows its `defaultOpen` (config/navigation.ts). Read after
@@ -208,7 +240,9 @@ function NavigationTree({
   }
 
   function toggle(section: NavSection) {
-    const next = { ...chosen, [section.id]: !isOpen(section) };
+    // The foot's tree and the pillars' remember into one place: what is
+    // stored is the latest either chose, kept.
+    const next = { ...chosen, ...readOpenSections(), [section.id]: !isOpen(section) };
     if (section.id === arrivedIn) setArrivedIn(undefined);
     setChosen(next);
     try {

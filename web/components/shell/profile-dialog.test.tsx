@@ -63,7 +63,7 @@ async function openProfile() {
   render(
     <LocaleProvider>
       <ShellProvider>
-        <UserMenu variant="sidebar" />
+        <UserMenu />
       </ShellProvider>
     </LocaleProvider>,
   );

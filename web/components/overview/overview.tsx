@@ -6,7 +6,6 @@ import {
   Lightbulb,
   type LucideIcon,
   ScanSearch,
-  ShieldCheck,
   Sparkle,
   TriangleAlert,
 } from "lucide-react";
@@ -14,8 +13,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { cn } from "cn";
-import { FAMILY_ICON } from "@/components/approvals/parts";
-import { items, wordItem } from "@/components/approvals/items";
 import { CATEGORY_TONE, CHIP, KIND_ICON } from "@/components/activity/activity";
 import { wordActivity } from "@/components/activity/items";
 import { LekaInsights } from "@/components/insights/leka-insights";
@@ -35,9 +32,6 @@ import {
 import { StatusPill } from "@/components/intentions/intentions-list";
 import { routes } from "@/config/routes";
 import { fill } from "@/lib/i18n/dictionaries";
-import { useConflicts } from "@/lib/conflicts-queries";
-import { useDecisionQueue } from "@/lib/decisions-queries";
-import { useCandidates } from "@/lib/enrichment-queries";
 import { useEnvironment, useMonitoring } from "@/lib/environment-queries";
 import { useIntentions } from "@/lib/intentions/queries";
 import { byState, TROUBLE } from "@/lib/twin";
@@ -354,93 +348,6 @@ function ActivityCard() {
 /** What waits on someone: the actions intentions ask to do (LEKA-390), the
  * conflicts between sources to settle (LEKA-382), then the enrichments
  * LEKA proposes (LEKA-380) — three, each leading to itself in À valider. */
-function ApprovalsCard() {
-  const t = useDictionary();
-  const proposed = useCandidates("proposed");
-  const open = useConflicts("open");
-  const waiting = useDecisionQueue("proposed");
-  const all = items(
-    proposed.data?.data ?? [],
-    open.data?.data ?? [],
-    waiting.data?.data ?? [],
-  );
-  const shown = all.slice(0, 3);
-  return (
-    <Card
-      title={t.overview.approvalsTitle}
-      titleIcon={
-        <Sparkle
-          className="size-5 fill-shell-nav-active text-shell-nav-active"
-          aria-hidden="true"
-        />
-      }
-      action={{ label: t.overview.seeAll, href: routes.approvals() }}
-    >
-      {shown.length === 0 ? (
-        <Empty
-          icon={ShieldCheck}
-          title={t.overview.approvalsEmpty}
-          body={t.overview.approvalsEmptyBody}
-        />
-      ) : (
-        <>
-          <ul
-            className="divide-y divide-shell-line/60"
-            data-testid="approvals-waiting"
-          >
-            {shown.map((item) => {
-              const { title, why } = wordItem(t, item);
-              const sure =
-                item.kind === "candidate"
-                  ? ` · ${Math.round(item.data.confidence * 100)} %`
-                  : "";
-              return (
-                <li key={`${item.kind}:${item.id}`}>
-                  <Link
-                    href={
-                      item.kind === "candidate"
-                        ? routes.approval(item.id)
-                        : `${routes.approval(item.id)}?kind=${item.kind}`
-                    }
-                    className="-mx-1.5 flex items-start gap-3 rounded-lg px-1.5 py-2.5 outline-none hover:bg-shell-canvas focus-visible:ring-3 focus-visible:ring-brand-violet/40"
-                  >
-                    <IconTile
-                      icon={FAMILY_ICON[item.family] ?? Sparkle}
-                      tone="violet"
-                      className="size-9"
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[0.8125rem] leading-snug font-semibold text-brand-navy">
-                        {title}
-                      </span>
-                      <span className="block truncate text-xs text-shell-muted">
-                        {why ?? ""}
-                        {sure}
-                      </span>
-                    </span>
-                    <span className="mt-0.5 rounded-md bg-state-warning-soft px-2 py-0.5 text-xs font-medium whitespace-nowrap text-state-warning">
-                      {item.kind === "conflict"
-                        ? t.approvals.conflict.status.open
-                        : item.kind === "decision"
-                          ? t.decisions.statuses.proposed
-                          : t.approvals.status.proposed}
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-          {all.length > shown.length ? (
-            <p className="mt-1 text-xs text-shell-muted">
-              {fill(t.approvals.overview.waiting, { count: all.length })}
-            </p>
-          ) : null}
-        </>
-      )}
-    </Card>
-  );
-}
-
 /** « Qu'est-ce qui ne va pas, maintenant ? » — what the twin says is
  * unavailable or degraded, the worst first, each its state, how it is
  * known and the way to analyse it; what nothing says is said apart, never
@@ -684,8 +591,8 @@ function FreshnessCard() {
 export function Overview() {
   const load = useOverviewData();
 
-  // What needs someone first — a decision, something in trouble, a request
-  // under way — then what moved and whether what LEKA sees can be trusted
+  // What needs someone first — something in trouble, a request under way —
+  // then what moved and whether what LEKA sees can be trusted
   // (LEKA-442: docs/frontend/overview-and-twin.md says each card's question).
   return (
     <PageContainer>
@@ -696,11 +603,12 @@ export function Overview() {
       {load.status === "ready" ? (
         <FirstStepsCard sources={load.sources} />
       ) : null}
+      {/* « À valider » is in the sidebar, with its count — not here: worded
+          in figures, it said nothing to a customer (2026-10-14). */}
       <div
-        className="mt-4 grid gap-4 xl:grid-cols-3"
+        className="mt-4 grid gap-4 xl:grid-cols-2"
         data-testid="overview-now"
       >
-        <ApprovalsCard />
         <TroubleCard />
         <IntentionsCard />
       </div>

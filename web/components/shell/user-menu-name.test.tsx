@@ -50,7 +50,7 @@ function mount() {
   return render(
     <LocaleProvider>
       <ShellProvider>
-        <UserMenu variant="sidebar" />
+        <UserMenu />
       </ShellProvider>
     </LocaleProvider>,
   );

@@ -18,7 +18,7 @@ test.describe("Capabilities", () => {
   test("the catalogue, the architect's sheet, turned off and on", async ({ page }) => {
     await signIn(page);
     await page.goto("/capabilities");
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Les capacités de LEKA");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Les compétences de LEKA");
     // A model answers here: nothing holds the catalogue back (LEKA-438).
     await expect(page.getByTestId("catalogue-grid")).toBeVisible();
     await expect(page.getByTestId("catalogue-wide")).toHaveCount(0);

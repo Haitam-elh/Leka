@@ -374,7 +374,8 @@ describe("À valider", () => {
     expect(table).toHaveTextContent("2 des 2 personnes qui le maintiennent sont membres de Platform");
     expect(table).toHaveTextContent("acme/user-service est le code de user-service");
     expect(table).toHaveTextContent("Criticité de cart : critique au lieu de faible");
-    expect(table).toHaveTextContent("85 %");
+    expect(table).toHaveTextContent("Quasi certain");
+    expect(table).not.toHaveTextContent("85 %");
     expect(api.candidates).toHaveBeenCalledWith("proposed");
   });
 
@@ -383,10 +384,10 @@ describe("À valider", () => {
     mount();
     const table = await screen.findByRole("table");
 
-    await user.click(screen.getByRole("button", { name: /Sémantique/ }));
+    await user.click(screen.getByRole("button", { name: /Descriptions/ }));
     expect(within(table).getAllByRole("row")).toHaveLength(2);
     await user.click(screen.getByRole("button", { name: /^Tous/ }));
-    await user.type(screen.getByPlaceholderText("Rechercher un élément…"), "user-service");
+    await user.type(screen.getByPlaceholderText("Rechercher…"), "user-service");
     await waitFor(() => expect(table).not.toHaveTextContent("postgres-prod"));
     expect(table).toHaveTextContent("acme/user-service");
 
@@ -406,8 +407,8 @@ describe("À valider", () => {
       "href",
       `/environment/services/${USERS}`,
     );
-    expect(panel).toHaveTextContent("LEKA · analyse « Code d'un service »");
-    expect(panel).toHaveTextContent("80 %");
+    expect(panel).toHaveTextContent("LEKA, en cherchant : Code d'un service");
+    expect(panel).toHaveTextContent("Probable");
     expect(panel).toHaveTextContent("GitHub");
     expect(within(panel).getByTestId("candidate-evidence")).toHaveTextContent("Thomas Berger");
   });
@@ -495,7 +496,7 @@ describe("À valider", () => {
     expect(await within(panel).findByTestId("candidate-history")).toHaveTextContent(
       "Refusé par une personne",
     );
-    await user.click(await within(panel).findByRole("button", { name: "Retraiter" }));
+    await user.click(await within(panel).findByRole("button", { name: "Revérifier" }));
     await waitFor(() => expect(api.reprocess).toHaveBeenCalledWith(OWNER.id));
   });
 
@@ -534,7 +535,7 @@ describe("À valider: the conflicts between sources", () => {
     const table = await screen.findByRole("table");
     expect(table).toHaveTextContent("SLA de payment-api : 99.95 ou 99.9");
     expect(table).toHaveTextContent("LEKA recommande 99.95 · de peu");
-    expect(screen.getByRole("button", { name: /Conflits/ })).toBeVisible();
+    expect(screen.getByRole("button", { name: /Désaccords/ })).toBeVisible();
     expect(disputes.list).toHaveBeenCalledWith("open");
   });
 
@@ -545,11 +546,11 @@ describe("À valider: the conflicts between sources", () => {
     await user.click(within(await screen.findByRole("table")).getByText(/SLA de payment-api/));
     const panel = await screen.findByTestId("conflict-panel");
 
-    expect(panel).toHaveTextContent("Le modèle affiche 99.95");
+    expect(panel).toHaveTextContent("LEKA retient aujourd'hui 99.95");
     const sides = within(panel).getByTestId("conflict-sides");
     expect(sides).toHaveTextContent("99.95Recommandé");
-    expect(sides).toHaveTextContent("acme/backend· Fiabilité 85 %· dit il y a 1 j");
-    expect(sides).toHaveTextContent("acme-eu· Fiabilité 70 %");
+    expect(sides).toHaveTextContent("acme/backend· Source fiable à 85 %· dit il y a 1 j");
+    expect(sides).toHaveTextContent("acme-eu· Source fiable à 70 %");
     expect(panel).toHaveTextContent("source plus fiable, déjà affiché");
 
     await user.click(within(panel).getByRole("checkbox"));
@@ -600,7 +601,7 @@ describe("À valider: the conflicts between sources", () => {
     const panel = await screen.findByTestId("conflict-panel");
 
     expect(within(panel).getByTestId("conflict-sides")).toHaveTextContent("99.9Retenu");
-    expect(panel).toHaveTextContent("Le modèle affichera ce choix à sa prochaine construction.");
+    expect(panel).toHaveTextContent("LEKA retiendra ce choix à la prochaine mise à jour de votre environnement.");
     await user.click(within(panel).getByRole("button", { name: "Rouvrir" }));
     await waitFor(() => expect(disputes.reopen).toHaveBeenCalledWith(SLA.id));
     await user.click(within(panel).getByRole("tab", { name: "Décisions" }));

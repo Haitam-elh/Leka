@@ -3,7 +3,8 @@
 Where every page of LEKA lives, who may open it, how the sidebar groups
 them, and the rules that decide what the interface does when a person may
 not open one. Built in LEKA-338 on the shell from LEKA-337; the sidebar
-reorganised into three pillars by LEKA-428.
+reorganised into three pillars by LEKA-428; « Compétences » and
+Configuration fixed at its foot since the product call of 2026-10-14.
 
 **Two files are the source of truth**, not this document:
 
@@ -33,25 +34,29 @@ Mon environnement     Le système vivant de votre entreprise.   /environment  �
                                                               its Vue globale; its views are
                                                               chosen on the page, top right
   Activité                                       /activity
-Capacités             Votre équipe technologique à la demande.
-  Capacités disponibles                          /capabilities
-  Mes capacités                                  /capabilities?tab=mine
-  Configuration                                  /capabilities?tab=configuration
-─────────────────────────────────────────────────────────────────────────
-Administration
-  Sources                                        /sources
-  Sécurité & gouvernance                         /governance
-  Équipe & accès                                 /team
+Compétences           Votre équipe technologique à la demande.
+  Compétences disponibles                        /capabilities
+  Mes compétences                                /capabilities?tab=mine
+  Réglages                                       /capabilities?tab=configuration
+═════════════════════ fixed at the foot of the sidebar ═══════════════════
+Configuration                                    its own landmark, « Configuration
+  Sources                                        /sources        de l'espace »
+  Sécurité                                       /governance
+  Équipe                                         /team
   Facturation                                    /billing
   Paramètres                                     /settings
+─────────────────────────────────────────────────────────────────────────
+the workspace switcher
 ```
 
 Three pillars — what a customer does with LEKA — each with the sentence that
 says what it is for. What waits on someone, À valider, sits with the
 intentions; what happened, Activité, with the environment it happened in
 (Karim, 2026-10-07 — they sat apart, across the three, until then). The way
-home is « Mon Dashboard ». Administration is about running LEKA rather than
-using it.
+home is « Mon Dashboard ». Configuration is about running LEKA rather than
+using it: fixed at the foot, always in reach, out of the pillars' way. Who
+is signed in is said once, top right (the avatar's menu, with the role) —
+not a second time at the foot of the sidebar (2026-10-14).
 
 ## The site map
 
@@ -68,7 +73,7 @@ Every page, including those the sidebar does not list:
 │                                          deployments · logs · configuration · documentation · context
 │                                          · history (LEKA-383) — a thing no source shows any
 │                                          more opens on its history
-/capabilities                              the catalogue (LEKA-393): available · mine · configuration
+/capabilities                              the catalogue, « Compétences » (LEKA-393): available · mine · configuration
 │   └── /capabilities/:id
 /activity                                  what happened and what LEKA did (LEKA-383)
 /approvals
@@ -98,17 +103,17 @@ has no entry that is "the one without a path of its own".
 | Intentions › À valider | `/approvals`, `/approvals/:id` | `intention:approve` | available |
 | Mon environnement (its 9 views, chosen on the page) | `/environment`, `/environment/graph`, `/environment/:type/:id` | `workspace:read` | available |
 | Mon environnement › Activité | `/activity` | `workspace:read` | available |
-| Capacités › its 3 views | `/capabilities`, `/capabilities/:id` | `workspace:read` | available |
-| Administration › Sources | `/sources`, `/sources/:id` | `source:read` | available |
-| Administration › Sécurité & gouvernance | `/governance` | `workspace:update` | **plan-gated** |
-| Administration › Équipe & accès | `/team` | `member:invite` | available |
-| Administration › Facturation | `/billing` | `workspace:update` | available |
-| Administration › Paramètres | `/settings` | `workspace:read` | available |
+| Compétences › its 3 views | `/capabilities`, `/capabilities/:id` | `workspace:read` | available |
+| Configuration › Sources | `/sources`, `/sources/:id` | `source:read` | available |
+| Configuration › Sécurité | `/governance` | `workspace:update` | **plan-gated** |
+| Configuration › Équipe | `/team` | `member:invite` | available |
+| Configuration › Facturation | `/billing` | `workspace:update` | available |
+| Configuration › Paramètres | `/settings` | `workspace:read` | available |
 | — (workspace gate) | `/welcome` | `source:manage` | available |
 
-One of these is a choice rather than a fact, and Karim owns it: Sécurité &
-gouvernance is marked as an upper-plan feature. Changing it is one word in
-the registry. (Capacités was marked "bientôt" until its catalogue, LEKA-393.)
+One of these is a choice rather than a fact, and Karim owns it: Sécurité
+is marked as an upper-plan feature. Changing it is one word in
+the registry. (Compétences was marked "bientôt" until its catalogue, LEKA-393.)
 
 Two more are decisions worth stating. There is no `billing:*` permission, so
 paying for the workspace is treated as administering it — `workspace:update`,
@@ -116,7 +121,7 @@ which an admin has and a member does not. And approving is `intention:approve`,
 which an admin has: a member who cannot approve is not shown the queue.
 
 What a member sees, therefore: the three pillars whole — Intentions
-without À valider — and in Administration only Sources and Paramètres.
+without À valider — and in Configuration only Sources and Paramètres.
 
 ## The decisions
 
@@ -157,7 +162,7 @@ technical word at the top level, every page still reachable.
 Mon environnement are one screen (LEKA-369), and an address like
 `/environment/applications` would collide with an entity's sheet,
 `/environment/:type/:id`. A route declares the views it has; the first is
-the address with no tab. The Capacités views are read by its catalogue
+the address with no tab. The Compétences views are read by its catalogue
 (LEKA-393): `?tab=mine`, `?tab=configuration` — each a line of the sidebar.
 
 **F bis. Mon environnement opens on its Vue globale (Haitam, 2026-10-14).**
@@ -177,6 +182,25 @@ says what waits in it: À valider's count moves to Intentions' name, and on
 the rail to a dot on its icon. Arriving on a page opens its section, without
 remembering it. The sidebar keeps the mockup's 224px:
 240px truncated the figures of Mon environnement at 1440px.
+
+**H. « Compétences », and Configuration at the foot (the product call,
+2026-10-14).** « Capacité(s) » is « Compétence(s) » everywhere a customer
+reads it — menus, titles, empty states, tooltips; the ids (`capabilities`,
+`/capabilities`) stay, a rename there would break addresses and saved
+choices for nothing. « Capacités métier », the business architecture's
+word, is not LEKA's skills and keeps its name. Administration is
+Configuration — Sources, Sécurité, Équipe, Facturation, Paramètres — fixed
+at the foot of the sidebar, its own landmark; its section id stays
+`administration`, so what browsers remembered still holds. The name and role
+block that sat there is gone: the avatar top right says it, its menu with
+the role.
+
+**I. À valider is a page, not a dashboard card (2026-10-14).** The card
+said « 60 % » beside each proposal and nothing a customer could act on. It
+is gone from Mon Dashboard; the sidebar's count says what waits. The page
+says what each thing is in a customer's words — « LEKA a déduit ces
+informations de vos sources… » — and how sure LEKA is in words: « Quasi
+certain » (85 % and more), « Probable » (70 % and more), « À vérifier ».
 
 ## The rules
 

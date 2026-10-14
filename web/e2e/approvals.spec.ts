@@ -13,32 +13,34 @@ import { signIn } from "./sign-in";
  * is 99.95 to GitHub and 99.9 to Datadog; GitHub and Jira name two owners
  * for it, Nadia Kowalski and Nadia K. (LEKA-382).
  *
- * What a unit test cannot answer: that the proposals reach the overview,
- * the sidebar and À valider through the API, worded; and that a decision is
+ * What a unit test cannot answer: that the proposals reach the sidebar and
+ * À valider through the API, worded; and that a decision is
  * taken — accepted, rejected, sent back; a conflict settled and reopened.
  * The tests leave each as they found it, waiting: they can run again on the
  * same database.
  */
 
 test.describe("À valider", () => {
-  test("says what waits, on the overview and beside the sidebar's entry", async ({ page }) => {
+  test("says what waits beside the sidebar's entry, worded on its page", async ({ page }) => {
     await signIn(page);
 
-    // The conflicts first, then what LEKA proposes: three, the rest counted.
-    const waiting = page.getByTestId("approvals-waiting").getByRole("listitem");
-    await expect(waiting).toHaveCount(3);
-    await expect(waiting.filter({ hasText: "SLA de payment-api : 99.95 ou 99.9" })).toHaveCount(1);
-    await expect(page.getByText("4 éléments en attente", { exact: true })).toBeVisible();
+    // Not on the dashboard any more (2026-10-14): its count is the sidebar's.
     await expect(page.getByTestId("nav-approvals")).toContainText("4");
+    await expect(page.getByTestId("approvals-waiting")).toHaveCount(0);
 
-    await waiting.filter({ hasText: "SLA de payment-api" }).getByRole("link").click();
+    await page.getByTestId("nav-approvals").click();
+    const table = page.getByRole("table");
+    await table.getByText("SLA de payment-api : 99.95 ou 99.9").click();
     await expect(page).toHaveURL(/\/approvals\/[0-9a-f-]{36}\?kind=conflict$/);
     await expect(page.getByTestId("conflict-panel").getByTestId("conflict-sides")).toContainText(
       "acme-eu",
     );
 
     await page.goto("/approvals");
-    await page.getByRole("table").getByText("Platform est responsable de postgres-prod").click();
+    // How sure, in words — never a bare percentage.
+    const owner = page.getByRole("row").filter({ hasText: "Platform est responsable de postgres-prod" });
+    await expect(owner).toContainText(/Quasi certain|Probable|À vérifier/);
+    await owner.getByText("Platform est responsable de postgres-prod").click();
     await expect(page.getByTestId("candidate-panel")).toContainText(
       "2 des 2 personnes qui le maintiennent sont membres de Platform",
     );
@@ -57,10 +59,12 @@ test.describe("À valider", () => {
     );
     await expect(panel.getByTestId("candidate-evidence")).toContainText("Thomas Berger");
 
-    // Accepted: kept, applied by the model's next build.
+    // Accepted: kept, taken into account at the environment's next update.
     await panel.getByRole("button", { name: "Valider" }).click();
     await expect(panel.getByTestId("candidate-status")).toHaveText("Validé");
-    await expect(panel).toContainText("Appliqué au modèle à sa prochaine construction.");
+    await expect(panel).toContainText(
+      "Pris en compte à la prochaine mise à jour de votre environnement.",
+    );
 
     // Rejected, with why: withdrawn from the model.
     await panel.getByRole("button", { name: "Refuser" }).click();
@@ -71,8 +75,8 @@ test.describe("À valider", () => {
     await panel.getByRole("tab", { name: "Décisions" }).click();
     await expect(panel.getByTestId("candidate-history")).toContainText("« Le DBA en est responsable »");
 
-    // Sent back to its analysis: waiting again.
-    await panel.getByRole("button", { name: "Retraiter" }).click();
+    // Checked again by LEKA: waiting again.
+    await panel.getByRole("button", { name: "Revérifier" }).click();
     await expect(panel.getByTestId("candidate-status")).toHaveText("À valider");
   });
 
@@ -82,7 +86,7 @@ test.describe("À valider", () => {
 
     await page.getByRole("table").getByText("SLA de payment-api : 99.95 ou 99.9").click();
     const panel = page.getByTestId("conflict-panel");
-    await expect(panel).toContainText("Le modèle affiche 99.95");
+    await expect(panel).toContainText("LEKA retient aujourd'hui 99.95");
     const sides = panel.getByTestId("conflict-sides");
     await expect(sides).toContainText("acme/backend");
     await expect(sides).toContainText("Recommandé");

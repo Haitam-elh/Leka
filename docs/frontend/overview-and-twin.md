@@ -17,7 +17,6 @@ screens show, in what order, and why.
 |---|---|---|---|
 | Greeting, one sentence | « Is anything wrong right now? » | Read the page in one line | The twin first: elements `unavailable` or `degraded` (`GET /ingestion/enrichment/environment`, `states`); then a late read (`freshness.late`); then sources needing a look (`GET /sources`) |
 | **Nouvelle intention** (the composer) | « What do I want to know or do? » | Ask LEKA | — |
-| **À valider** | « What waits on my decision? » | Open the decision, the conflict or the proposal | The decisions, conflicts and enrichments waiting (LEKA-380, 382, 390) |
 | **Ce qui ne va pas** | « What is in trouble, and how do we know? » | Open the element's sheet, or **Analyser** (an intention about it) | The twin's elements `unavailable` or `degraded`, the worst first, each with how it is known: the incident, measured, by which source, how sure. The elements with no signal are counted apart, « ce n'est pas sain ». Alerts: on a paid plan, how many are open; on Free, the plan that includes them (`GET /monitoring`) |
 | **Mes intentions en cours** | « Where are my requests? » | Open the intention | The active intentions (`GET /intentions?phase=active`) and their status |
 | **Activité récente** | « What changed lately? » | Open what changed | What Activité tells: the same events, worded the same way (LEKA-438) |
@@ -28,10 +27,11 @@ screens show, in what order, and why.
 
 | Before | Why it went | Where the information is now |
 |---|---|---|
+| **À valider**, a card of proposals each with its percentage | « Incompréhensible, tout est à 60 % » (the product call, 2026-10-14): a figure alone, nothing a customer could act on | À valider's own page, worded for a customer, how sure said in words; its count beside « À valider » in the sidebar |
 | « État de votre environnement »: 4 KPI tiles, ~250 px of empty space (UX audit T1), « ? Services opérationnels » | Figures with no action, and an unknown that read like health | « Ce qui ne va pas » (what to act on) and the greeting |
 | « Sources connectées »: every source, 5 rows | Healthy sources do not need you | « Fraîcheur et couverture » shows only what fails, plus the freshness |
 
-**Density.** Before, the page had 4 KPI tiles with 4 footnotes, 6 cards and up to 13 list rows, including 5 healthy sources. After, it has 0 KPI tiles and 6 cards, each led by its question, and only the rows that need someone. Each list is capped at 4 or 5.
+**Density.** Before, the page had 4 KPI tiles with 4 footnotes, 6 cards and up to 13 list rows, including 5 healthy sources. After, it has 0 KPI tiles and 5 cards (6 until À valider went to its own page, 2026-10-14), each led by its question, and only the rows that need someone. Each list is capped at 4 or 5.
 
 Nothing essential is lost:
 - elements in trouble are listed one by one, and the greeting counts them;

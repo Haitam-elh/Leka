@@ -95,6 +95,8 @@ test.describe("Intention analysis", () => {
     await expect(page.getByTestId("analysis-summary")).toContainText(
       "Redémarrer demandé : une personne décide avant que quoi que ce soit ne soit fait.",
     );
+    // What it found, folded under its answer (2026-10-14): opened, all of it.
+    await page.getByTestId("analysis-detail").locator("summary").click();
     await page.getByTestId("findings-all").click();
     await expect(page.getByTestId("analysis")).toContainText(
       "Demandé : Redémarrer auth-service. Une personne doit l'approuver avant toute exécution.",

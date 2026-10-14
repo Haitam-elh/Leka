@@ -29,6 +29,7 @@ import {
   type TileTone,
   typeLabel,
 } from "@/components/environment/parts";
+import { Folded } from "@/components/intelligence/folded";
 import { word } from "@/components/insights/leka-insights";
 import { ReadinessPanel } from "@/components/intentions/readiness";
 import { NextSteps } from "@/components/intentions/decision-step";
@@ -715,10 +716,7 @@ export function AnalysisProgress({
   if (data === null && !live)
     return <Nothing title={w.none} body={w.noneBody} />;
   return (
-    <div
-      className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:items-start"
-      data-testid="intention-analysis"
-    >
+    <div className="min-w-0 space-y-4" data-testid="intention-analysis">
       <div className="min-w-0 space-y-4">
         <Head intention={intention} analysis={data} live={live} />
         {data?.status === "blocked" ? (
@@ -759,14 +757,19 @@ export function AnalysisProgress({
           </>
         ) : null}
       </div>
-      <aside className="min-w-0 space-y-4" aria-label={w.title}>
+      {/* What it reads, folded under one line (2026-10-14). */}
+      <Folded
+        title={t.intentions.folded.analysis}
+        hint={t.intentions.folded.analysisHint}
+        testId="analysis-detail-reads"
+      >
         {data ? <ReadsCard intentionId={intention.id} analysis={data} /> : null}
         {intention.readiness && data?.status !== "blocked" ? (
           <ReadinessPanel readiness={intention.readiness} />
         ) : null}
         <ScopeCard intention={intention} />
         <PreviousCard intentionId={intention.id} />
-      </aside>
+      </Folded>
     </div>
   );
 }
@@ -857,6 +860,9 @@ export function AnalysisResults({ intention }: { intention: IntentionDetail }) {
           // latest, said beside it (LEKA-441).
           again={may ? <AgainButton intention={intention} label={w.again} /> : undefined}
           proposals={shown.recommendations.length > 0}
+          // The answer in sight, then the plan and its agents; what it
+          // rests on, one click away (2026-10-14).
+          folded={{ title: t.intentions.folded.results, hint: t.intentions.folded.resultsHint }}
           level={2}
         />
       ) : (

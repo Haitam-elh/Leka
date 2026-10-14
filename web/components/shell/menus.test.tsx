@@ -61,7 +61,7 @@ function mount(children: React.ReactNode) {
 describe("the account menu", () => {
   it("opens with the keyboard and closes on Escape", async () => {
     const user = userEvent.setup();
-    mount(<UserMenu variant="header" />);
+    mount(<UserMenu />);
 
     await user.tab();
     expect(screen.getByTestId("user-menu")).toHaveFocus();
@@ -79,21 +79,20 @@ describe("the account menu", () => {
     expect(screen.getByTestId("user-menu")).toHaveFocus();
   });
 
-  it("opens the settings, from the sidebar's menu as from the header's", async () => {
+  it("opens the settings, and says the person's role under their address", async () => {
     // It went nowhere: an item with nothing to do (2026-10-14).
-    for (const variant of ["sidebar", "header"] as const) {
-      const user = userEvent.setup();
-      const { unmount } = mount(<UserMenu variant={variant} />);
-      await user.click(await screen.findByTestId("user-menu"));
-      await user.click(await screen.findByTestId("settings"));
-      expect(router.push).toHaveBeenLastCalledWith("/settings");
-      unmount();
-    }
+    const user = userEvent.setup();
+    mount(<UserMenu />);
+    await user.click(await screen.findByTestId("user-menu"));
+    // The role, in words: the sidebar's foot no longer says it (2026-10-14).
+    expect(await screen.findByTestId("user-menu-role")).toHaveTextContent(/^Administrateur$/);
+    await user.click(await screen.findByTestId("settings"));
+    expect(router.push).toHaveBeenLastCalledWith("/settings");
   });
 
   it("says the language, and opens the picker of every one LEKA offers", async () => {
     const user = userEvent.setup();
-    mount(<UserMenu variant="header" />);
+    mount(<UserMenu />);
 
     await user.tab();
     await user.keyboard("{Enter}");

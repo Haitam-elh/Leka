@@ -233,7 +233,7 @@ describe("the catalogue", () => {
     );
     expect(within(architect).getByTestId("capability-reasons")).not.toHaveTextContent("modèle");
     expect(screen.getByTestId("catalogue-wide")).toHaveTextContent(
-      "Aucun modèle de langage n'est configuré : 1 capacité ne peut pas s'exécuter ici.",
+      "Aucun modèle de langage n'est configuré : 1 compétence ne peut pas s'exécuter ici.",
     );
     // Not run yet: nothing said about it.
     expect(architect).not.toHaveTextContent("Pas encore exécutée");
@@ -263,7 +263,7 @@ describe("the catalogue", () => {
     expect(
       within(within(knowledge).getByTestId("catalogue-domain-own")).getByTestId("capability-card"),
     ).toHaveAttribute("data-key", "ownership");
-    expect(within(knowledge).getByTestId("catalogue-domain-count")).toHaveTextContent("1 capacité");
+    expect(within(knowledge).getByTestId("catalogue-domain-count")).toHaveTextContent("1 compétence");
 
     // The agents only, then LEKA's own only.
     await user.click(screen.getByTestId("catalogue-show-agents"));
@@ -370,7 +370,7 @@ describe("the catalogue", () => {
     route.search = "tab=configuration";
     show(<CatalogueScreen />);
     expect(await screen.findByTestId("catalogue-configuration")).toHaveTextContent(
-      "Seuls les admins activent ou désactivent une capacité.",
+      "Seuls les admins activent ou désactivent une compétence.",
     );
     await screen.findAllByTestId("configuration-row");
     expect(screen.queryByTestId("configuration-toggle")).not.toBeInTheDocument();

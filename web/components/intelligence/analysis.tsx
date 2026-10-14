@@ -14,6 +14,7 @@ import {
   UncertaintyList,
 } from "@/components/intelligence/confidence";
 import { EvidenceList } from "@/components/intelligence/evidence";
+import { Folded } from "@/components/intelligence/folded";
 import {
   AnalysisLimits,
   ConfidenceExplained,
@@ -116,9 +117,13 @@ export function AnalysisView({
   said,
   next,
   again,
+  folded,
   level = 3,
 }: {
   analysis: Analysis;
+  /** Its findings, evidence, impact and limits folded under one line, its
+   * synthesis alone in sight (2026-10-14: an intention's page). */
+  folded?: { title: string; hint?: string };
   /** The way to analyse again, when its context moved on since (LEKA-441). */
   again?: React.ReactNode;
   /** The way on from what it proposes, under its proposals — apart from
@@ -143,6 +148,83 @@ export function AnalysisView({
   // says, and takes the room a side column does not have.
   const count = (said: string, n: number) =>
     n > 0 ? fill(said, { count: n }) : undefined;
+  const details = (
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] xl:items-start">
+      <div className="min-w-0 space-y-4">
+        <IntelligenceSection
+          kind="fact"
+          title={w.findings.title}
+          count={count(w.findings.count, analysis.findings.length)}
+          level={level}
+        >
+          <FindingList findings={analysis.findings} max={4} />
+        </IntelligenceSection>
+        <IntelligenceSection
+          kind="hypothesis"
+          title={w.causes.title}
+          count={count(w.causes.count, analysis.causes.length)}
+          level={level}
+        >
+          <ProbableCauseList causes={analysis.causes} />
+        </IntelligenceSection>
+        <IntelligenceSection
+          kind="evidence"
+          title={w.evidence.title}
+          count={count(w.evidence.count, evidence.length)}
+          level={level}
+        >
+          <EvidenceList items={evidence} max={5} />
+        </IntelligenceSection>
+      </div>
+      <div className="min-w-0 space-y-4">
+        {explained ? (
+          <>
+            <NextStepPanel next={explained.next} level={level} />
+            <ConfidenceExplained confidence={explained.confidence} level={level} />
+          </>
+        ) : synthesis ? null : (
+          <ConfidencePanel
+            score={analysis.confidence}
+            support={analysis.support}
+            level={level}
+          />
+        )}
+        <IntelligenceSection
+          kind="impact"
+          title={w.impact.global}
+          level={level}
+        >
+          <ImpactPanel impact={analysis.impact} />
+        </IntelligenceSection>
+        {proposals ? (
+          <IntelligenceSection
+            kind="proposal"
+            title={w.recommendations.title}
+            count={count(
+              w.recommendations.count,
+              analysis.recommendations.length,
+            )}
+            level={level}
+          >
+            <RecommendationList
+              recommendations={analysis.recommendations}
+              compact
+              level={level === 2 ? 3 : 4}
+            />
+            {next ? <div className="mt-3">{next}</div> : null}
+          </IntelligenceSection>
+        ) : null}
+        {explained ? (
+          <>
+            <ConflictList conflicts={explained.conflicts} level={level} />
+            <AnalysisLimits explanation={explained} level={level} />
+            <SourcesConsulted sources={explained.consulted} level={level} />
+          </>
+        ) : null}
+        <UncertaintyList items={analysis.uncertainties} />
+      </div>
+    </div>
+  );
   return (
     <div
       className="space-y-4"
@@ -175,81 +257,13 @@ export function AnalysisView({
           {synthesis ? (
             <AnalysisSummary analysis={analysis} level={level} said={said} />
           ) : null}
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] xl:items-start">
-            <div className="min-w-0 space-y-4">
-              <IntelligenceSection
-                kind="fact"
-                title={w.findings.title}
-                count={count(w.findings.count, analysis.findings.length)}
-                level={level}
-              >
-                <FindingList findings={analysis.findings} max={4} />
-              </IntelligenceSection>
-              <IntelligenceSection
-                kind="hypothesis"
-                title={w.causes.title}
-                count={count(w.causes.count, analysis.causes.length)}
-                level={level}
-              >
-                <ProbableCauseList causes={analysis.causes} />
-              </IntelligenceSection>
-              <IntelligenceSection
-                kind="evidence"
-                title={w.evidence.title}
-                count={count(w.evidence.count, evidence.length)}
-                level={level}
-              >
-                <EvidenceList items={evidence} max={5} />
-              </IntelligenceSection>
-            </div>
-            <div className="min-w-0 space-y-4">
-              {explained ? (
-                <>
-                  <NextStepPanel next={explained.next} level={level} />
-                  <ConfidenceExplained confidence={explained.confidence} level={level} />
-                </>
-              ) : synthesis ? null : (
-                <ConfidencePanel
-                  score={analysis.confidence}
-                  support={analysis.support}
-                  level={level}
-                />
-              )}
-              <IntelligenceSection
-                kind="impact"
-                title={w.impact.global}
-                level={level}
-              >
-                <ImpactPanel impact={analysis.impact} />
-              </IntelligenceSection>
-              {proposals ? (
-                <IntelligenceSection
-                  kind="proposal"
-                  title={w.recommendations.title}
-                  count={count(
-                    w.recommendations.count,
-                    analysis.recommendations.length,
-                  )}
-                  level={level}
-                >
-                  <RecommendationList
-                    recommendations={analysis.recommendations}
-                    compact
-                    level={level === 2 ? 3 : 4}
-                  />
-                  {next ? <div className="mt-3">{next}</div> : null}
-                </IntelligenceSection>
-              ) : null}
-              {explained ? (
-                <>
-                  <ConflictList conflicts={explained.conflicts} level={level} />
-                  <AnalysisLimits explanation={explained} level={level} />
-                  <SourcesConsulted sources={explained.consulted} level={level} />
-                </>
-              ) : null}
-              <UncertaintyList items={analysis.uncertainties} />
-            </div>
-          </div>
+          {folded ? (
+            <Folded title={folded.title} hint={folded.hint} testId="analysis-detail">
+              {details}
+            </Folded>
+          ) : (
+            details
+          )}
         </>
       )}
     </div>
