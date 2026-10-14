@@ -182,6 +182,9 @@ class AddOnCheckoutCreate(BaseModel):
     # Opened from an intention's decision: the agents to launch once paid.
     intention_id: uuid.UUID | None = None
     launch: list[dict[str, JsonValue]] = Field(default_factory=list, max_length=3)
+    # Where Stripe sends the person back: the intention's decision, or the
+    # new home's thread (2026-10-14) — a choice, never an address.
+    back: Literal["intention", "home"] = "intention"
 
 
 class EntitlementRead(_Read):

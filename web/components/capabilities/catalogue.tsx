@@ -832,7 +832,13 @@ function useBoughtSaid() {
   }, [bought, pathname, router, t]);
 }
 
-export function CatalogueScreen() {
+export function CatalogueScreen({
+  askHref = routes.intentionNew(),
+}: {
+  /** Where « Demander une compétence » asks: the composer, or the new
+   * home's bar (2026-10-14). */
+  askHref?: string;
+} = {}) {
   const t = useDictionary();
   const w = t.catalogue;
   const [view, setView] = useView();
@@ -858,7 +864,7 @@ export function CatalogueScreen() {
           <h1 className="text-[2.125rem] leading-tight font-bold tracking-[-0.02em] text-brand-navy">{w.title}</h1>
           <p className="mt-1 text-[1.0625rem] text-shell-accent-muted">{w.subtitle}</p>
         </div>
-        <Link href={routes.intentionNew()} className={buttonVariants({ variant: "default" })} data-testid="catalogue-ask">
+        <Link href={askHref} className={buttonVariants({ variant: "default" })} data-testid="catalogue-ask">
           <Plus className="size-4" aria-hidden="true" />
           {w.ask}
         </Link>

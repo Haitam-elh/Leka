@@ -57,31 +57,6 @@ export function UserMenu() {
     name.slice(0, 1).toUpperCase() ||
     "?";
 
-  async function signOut() {
-    try {
-      await auth.logout();
-    } catch {
-      // The call can fail for reasons that have nothing to do with the
-      // session — the API restarting, a dropped connection. Someone who
-      // asked to leave must not be left sitting inside the application
-      // because of it, so the navigation below is not conditional on the
-      // answer. If the session outlived the attempt, the site's "Se
-      // connecter" shows them the form rather than letting them straight
-      // back in (markSignedOut); before LEKA-337 they stayed on the page
-      // with no sign that anything had happened.
-    }
-    // A full page load rather than router.push. Two reasons, one of them
-    // not about tests: the App Router keeps rendered pages in a client
-    // cache, and a soft navigation leaves the screens of the session we
-    // just ended sitting in it, one Back away from being painted again.
-    // This drops the whole tab.
-    //
-    // To leka-core.com's home page, the site: that is where people come
-    // from, and where "Se connecter" takes them back in.
-    markSignedOut();
-    window.location.assign("/");
-  }
-
   return (
     <>
       <DropdownMenu>
@@ -157,4 +132,31 @@ export function UserMenu() {
 function roleLabel(t: ReturnType<typeof useDictionary>, role: string): string {
   const roles: Record<string, string> = t.shell.roles;
   return roles[role] ?? role;
+}
+
+/** Signed out, whatever the API answers, and back on the site — the old
+ * interface's menu and the new one's (2026-10-14) alike. */
+export async function signOut() {
+  try {
+    await auth.logout();
+  } catch {
+    // The call can fail for reasons that have nothing to do with the
+    // session — the API restarting, a dropped connection. Someone who
+    // asked to leave must not be left sitting inside the application
+    // because of it, so the navigation below is not conditional on the
+    // answer. If the session outlived the attempt, the site's "Se
+    // connecter" shows them the form rather than letting them straight
+    // back in (markSignedOut); before LEKA-337 they stayed on the page
+    // with no sign that anything had happened.
+  }
+  // A full page load rather than router.push. Two reasons, one of them
+  // not about tests: the App Router keeps rendered pages in a client
+  // cache, and a soft navigation leaves the screens of the session we
+  // just ended sitting in it, one Back away from being painted again.
+  // This drops the whole tab.
+  //
+  // To leka-core.com's home page, the site: that is where people come
+  // from, and where "Se connecter" takes them back in.
+  markSignedOut();
+  window.location.assign("/");
 }

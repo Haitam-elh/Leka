@@ -244,10 +244,12 @@ function Unlock({
   agent,
   intentionId,
   launch,
+  back,
 }: {
   agent: ProposedAgent;
   intentionId: string;
   launch: () => AgentLaunch[];
+  back: Back;
 }) {
   const t = useDictionary();
   const w = t.intentions.agents;
@@ -271,7 +273,7 @@ function Unlock({
   const bundles = offers.data.bundles.filter((b) => offer.bundles.includes(b.key) && !b.owned);
   const start = (kind: "agent" | "bundle", key: string) =>
     buy.mutate(
-      { kind, key, intention_id: intentionId, launch: launch() },
+      { kind, key, intention_id: intentionId, launch: launch(), back },
       { onError: (error) => notify.error({ title: launchError(t, error) }) },
     );
   return (
@@ -435,10 +437,24 @@ function launchError(t: ReturnType<typeof useDictionary>, error: unknown): strin
 }
 
 /** Décision: « Lancer avec ces agents », or « Je le fais moi-même ». */
-export function AgentsDecision({ intention }: { intention: IntentionDetail }) {
+/** Where the person goes once decided: the intention's Action step — or,
+ * in the new home's thread (2026-10-14), nowhere: `onDone` is called, and
+ * Stripe brings a purchase back there (`back`). */
+type Back = "intention" | "home";
+
+export function AgentsDecision({
+  intention,
+  onDone,
+  back = "intention",
+}: {
+  intention: IntentionDetail;
+  onDone?: () => void;
+  back?: Back;
+}) {
   const t = useDictionary();
   const w = t.intentions.agents;
   const router = useRouter();
+  const toAction = () => (onDone ? onDone() : router.push(stepHref(intention.id, "actions")));
   const rights = useRights(intention);
   const decide = useDecide(intention.id);
   const { proposal, loading } = useProposal(intention);
@@ -472,10 +488,9 @@ export function AgentsDecision({ intention }: { intention: IntentionDetail }) {
     return () => window.clearInterval(every);
   }, [waiting, client, intention.id]);
   useEffect(() => {
-    if (bought && bought !== "cancelled" && intention.status === "executing") {
-      router.push(stepHref(intention.id, "actions"));
-    }
-  }, [bought, intention.status, intention.id, router]);
+    if (bought && bought !== "cancelled" && intention.status === "executing") toAction();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once it runs, not on every render
+  }, [bought, intention.status]);
 
   const launchable = may(intention.journey, "launch_agents", rights);
   const handable = may(intention.journey, "by_hand", rights);
@@ -519,7 +534,7 @@ export function AgentsDecision({ intention }: { intention: IntentionDetail }) {
     decide.launch.mutate(toLaunch(chosen), {
       onSuccess: () => {
         notify.success({ title: w.launched });
-        router.push(stepHref(intention.id, "actions"));
+        toAction();
       },
       onError: (error) => notify.error({ title: launchError(t, error) }),
     });
@@ -534,7 +549,7 @@ export function AgentsDecision({ intention }: { intention: IntentionDetail }) {
     decide.byHand.mutate(undefined, {
       onSuccess: () => {
         notify.success({ title: w.selfDone });
-        router.push(stepHref(intention.id, "actions"));
+        toAction();
       },
       onError: (error) =>
         notify.error({ title: error instanceof ApiError ? error.message : String(error) }),
@@ -583,6 +598,7 @@ export function AgentsDecision({ intention }: { intention: IntentionDetail }) {
                         agent={agent}
                         intentionId={intention.id}
                         launch={() => toLaunch([...chosen, agent])}
+                        back={back}
                       />
                     ) : undefined
                   }

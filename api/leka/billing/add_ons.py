@@ -75,9 +75,13 @@ async def checkout_add_on(
     intention_id: uuid.UUID | None = None,
     launch: Sequence[Mapping[str, Any]] = (),
     locale: str = "auto",
+    back: str = "intention",
 ) -> str:
     """A Checkout for an agent or a bundle — its URL. CheckoutRefusedError
-    when it cannot be bought here."""
+    when it cannot be bought here. Paid or not, Stripe sends the person
+    back where they bought it: the intention's decision, the new home's
+    thread (`back="home"`, 2026-10-14), or the catalogue — never an address
+    the request names."""
     sold = catalogue().add_ons
     found = add_on(kind, key)
     if not sold.available or found is None:
@@ -96,11 +100,12 @@ async def checkout_add_on(
         "leka_add_on_kind": found.kind,
         "leka_add_on_key": found.key,
     }
-    back = (
-        f"{settings.web_url}/intentions/{intention_id}/decision"
-        if intention_id is not None
-        else f"{settings.web_url}/capabilities"
-    )
+    if intention_id is None:
+        to = f"{settings.web_url}/capabilities?"
+    elif back == "home":
+        to = f"{settings.web_url}/v2?i={intention_id}&"
+    else:
+        to = f"{settings.web_url}/intentions/{intention_id}/decision?"
     made = await client.post(
         "/v1/checkout/sessions",
         {
@@ -123,8 +128,8 @@ async def checkout_add_on(
             "payment_method_collection": "always",
             "metadata": marks,
             "locale": locale,
-            "success_url": f"{back}?bought={found.key}",
-            "cancel_url": f"{back}?bought=cancelled",
+            "success_url": f"{to}bought={found.key}",
+            "cancel_url": f"{to}bought=cancelled",
         },
     )
     session.add(

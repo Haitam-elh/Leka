@@ -12,7 +12,10 @@ export type AddOns = components["schemas"]["AddOnsRead"];
 export type AgentOffer = components["schemas"]["AgentOfferRead"];
 export type BundleOffer = components["schemas"]["BundleOfferRead"];
 export type Entitlement = components["schemas"]["EntitlementRead"];
-export type AddOnCheckout = components["schemas"]["AddOnCheckoutCreate"];
+type Checkout = components["schemas"]["AddOnCheckoutCreate"];
+/** What is bought; where Stripe brings the person back is the API's
+ * default — the intention's decision — unless said. */
+export type AddOnCheckout = Omit<Checkout, "back"> & { back?: Checkout["back"] };
 
 export const billing = {
   usage: () => apiFetch<WorkspaceUsage>("/billing/usage"),

@@ -158,6 +158,7 @@ async def buy_add_on(
             intention_id=body.intention_id,
             launch=body.launch,
             locale=await _locale(session, principal),
+            back=body.back,
         )
     except BillingUnavailableError:
         raise _unavailable() from None

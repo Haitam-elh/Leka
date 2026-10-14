@@ -6698,6 +6698,12 @@ export interface components {
             launch?: {
                 [key: string]: components["schemas"]["JsonValue"];
             }[];
+            /**
+             * Back
+             * @default intention
+             * @enum {string}
+             */
+            back: "intention" | "home";
         };
         /**
          * AddOnsRead

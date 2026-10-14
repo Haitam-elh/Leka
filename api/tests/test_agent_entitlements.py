@@ -13,7 +13,8 @@ What these protect:
   agents, their price against the agents alone — what this workspace owns.
 - Bought: a Checkout at the catalogue's price, a subscription of its own;
   paid, owned — the plan untouched; cancelled, no longer. Opened from an
-  intention's decision, its agents launched once paid.
+  intention's decision, its agents launched once paid; back where it was
+  bought — the decision, or the new home's thread — never an address asked.
 """
 
 # ruff: noqa: F811 — fixtures imported to be requested by name.
@@ -252,3 +253,26 @@ async def test_opened_from_a_decision_its_agents_are_launched_once_paid(
             assert (row.status, row.intention_id, row.launch) == ("paid", intention, launch)
             assert (await owned(session, globex)).why("code-review") is None
     assert queued == [("leka.intentions.agents.run_bought_launch", str(globex), str(row.id))]
+
+
+async def test_bought_from_the_new_home_s_thread_it_comes_back_to_it(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    selling: FakeStripe,
+) -> None:
+    await sync_catalogue()
+    await _on(acme["globex"], "starter")
+    _as(identity, acme, "other_admin")
+    intention = uuid.uuid4()
+    asked = {"kind": "agent", "key": "code-review", "intention_id": str(intention)}
+    bought = await client.post(f"{API}/billing/add-ons/checkout", json={**asked, "back": "home"})
+    assert bought.status_code == 200, bought.text
+    [opened] = selling.posted("/v1/checkout/sessions")
+    assert opened["success_url"] == f"https://leka.test/v2?i={intention}&bought=code-review"
+    assert opened["cancel_url"] == f"https://leka.test/v2?i={intention}&bought=cancelled"
+    # A choice, never an address the request names.
+    elsewhere = await client.post(
+        f"{API}/billing/add-ons/checkout", json={**asked, "back": "https://elsewhere.test"}
+    )
+    assert elsewhere.status_code == 422
