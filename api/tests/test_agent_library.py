@@ -29,7 +29,7 @@ from leka.knowledge import EntityType
 
 VERSIONS = {
     "architecture-analysis": "1.2.0",
-    "code-review": "1.2.0",
+    "code-review": "1.3.0",
     "data-analysis": "1.2.0",
     "debug-assistant": "1.2.0",
     "documentation-assistant": "1.2.0",
@@ -69,7 +69,12 @@ def test_the_library_is_registered_each_agent_to_the_runtime_s_contract() -> Non
             VERSIONS.get(key, "1.1.0"),
         ), key
         assert set(d.entity_types) <= types, key
-        assert {"search_entities", "read_entity"} <= set(d.tools) <= NAMES, key
+        # The code review reads pull requests too (2026-10-14): GitHub's,
+        # read-only — its deliverable is the diff it read, commented.
+        reads = NAMES | (
+            {"list_pull_requests", "read_pull_request"} if key == "code-review" else set()
+        )
+        assert {"search_entities", "read_entity"} <= set(d.tools) <= reads, key
         assert all(not i.required for i in d.contract.inputs), key
         assert d.contract.formats == ("markdown",), key
         assert d.mode == ("proposes_action" if key == "build-fixer" else "read_only"), key
@@ -279,6 +284,17 @@ def test_the_code_review_reviews_by_a_method_it_can_prove() -> None:
     assert "Un avis, jamais une décision" in said
     # Credited, as their licence asks.
     assert "affaan-m/ECC" in said and "garrytan/gstack" in said
+
+
+def test_the_code_review_reads_the_diff_and_anchors_its_comments() -> None:
+    # 2026-10-14: its deliverable is the pull request as it read it, its
+    # comments on their lines — it reads the diff, and says where.
+    review = {d.key: d for d in catalogue()}["code-review"]
+    assert {"list_pull_requests", "read_pull_request"} <= set(review.tools)
+    said = review.instructions or ""
+    assert "read_pull_request" in said and "```leka-review" in said
+    for word in ('"verdict"', '"side"', '"kind"', '"severity"', '"suggestion"'):
+        assert word in said, word
 
 
 def test_the_security_review_separates_what_it_proves_from_what_it_suspects() -> None:

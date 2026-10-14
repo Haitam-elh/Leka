@@ -212,7 +212,12 @@ describe("its runs", () => {
 
     await user.click(within(done).getByRole("button", { name: /Paiement CB/ }));
     const detail = await screen.findByTestId("agent-run-detail");
-    expect(within(detail).getByTestId("agent-run-output")).toHaveTextContent("# Architecture — Paiement CB");
+    // Its report read as a page: a heading, not « # ».
+    expect(
+      within(within(detail).getByTestId("agent-run-output")).getByRole("heading", {
+        name: "Architecture — Paiement CB",
+      }),
+    ).toBeInTheDocument();
     expect(detail).toHaveTextContent("PPTX, PDF : pas encore générés");
     const steps = within(detail).getByTestId("agent-run-steps");
     expect(steps).toHaveTextContent("Contexte : 12 éléments fournis, 2 écartés");

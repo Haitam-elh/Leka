@@ -59,6 +59,7 @@ from leka.capabilities.gateway import (
 )
 from leka.capabilities.models import AgentRun, AgentRunEvent
 from leka.capabilities.repository import CapabilityRunRepository, stale_runs
+from leka.capabilities.review import review_of
 from leka.capabilities.runtime import (
     AgentTool,
     Injected,
@@ -437,8 +438,11 @@ async def _run(
         GraphService(GraphRepository(session, workspace_id)),
         KnowledgeService(EntityRepository(session, workspace_id)),
     )
+    # What it reads of pull requests, kept with the run: its deliverable
+    # shows its comments on the diff it read (review.py).
+    read: dict[str, Any] = {}
     if CODE_NAMES & {t.name for t in given}:
-        bound |= code_handlers(session, workspace_id)
+        bound |= code_handlers(session, workspace_id, read)
     # Each skill call checked and kept (skill_runs), about this run.
     bound |= skill_handlers(
         SkillRuntime(
@@ -507,6 +511,18 @@ async def _run(
     # What LEKA draws of it — the architect's deck (delivery.py): its files,
     # or why there are none; the analysis stands either way.
     detail = dict(run.detail)
+    if read.get("pulls"):
+        pulls = dict(read["pulls"])
+        detail["pulls"] = list(pulls.values())
+        detail["listed"] = read.get("listed") or {}
+        review = review_of(output, pulls)
+        if review is not None:
+            detail["review"] = review
+            steps.add(
+                "reviewed",
+                comments=len(review["comments"]),
+                dropped=review["dropped"],
+            )
     if definition.renders is not None:
         await session.commit()
         drawn = await draw(session, run, definition, output)

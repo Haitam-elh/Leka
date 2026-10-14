@@ -91,6 +91,8 @@ model with its id, its type and its line of text, **as data**.
 | `read_entity` | one thing by its id, and what it is tied to — only of its types | `workspace:read` |
 | `dependencies` | what one thing depends on (`depends_on`) or what depends on it (`used_by`), 1 to 3 steps — only of its types, the rest counted (LEKA-400) | `workspace:read` |
 | `what_happened` | incidents, deployments, changes, releases, merges around one thing, 1 to 30 days back — only of its types (LEKA-400) | `workspace:read` |
+| `list_files`, `read_file` | a GitHub repository's files, one file's text — the code-change agent's (§ 6 ter) | `workspace:read` |
+| `list_pull_requests`, `read_pull_request` | a GitHub repository's pull requests, one with its diff — the code review's (§ 6 quater) | `workspace:read` |
 
 **An agent is offered only the tools its file declares** (`tools:`, LEKA-400)
 — every read-only one when it declares none; an unknown tool refuses the
@@ -235,6 +237,41 @@ stays proposed and says why (`pull_requests_off`, `not_allowed` — the token
 cannot write — `branch_exists`…). Never a merge: reviewing and merging the
 pull request stays the team's. What fails while proposing never fails the
 run (`render_failed`, its code).
+
+## 6 quater. Its deliverable on the intention — the code review on the diff (2026-10-14)
+
+Whatever an agent delivers is read on the intention it works for, in its
+**Livrable** view (`/intentions/<id>/deliverable?run=<run>`). The agent
+block on the page leads there (**Voir le livrable**, or **Ouvrir la revue
+sur le code**):
+- **every agent**: its report, drawn as a page (`components/ui/markdown.tsx`:
+  headings, lists, tables, code, emphasis, links). What the model wrote as
+  HTML is shown as text, never run. Its files are shown too: the
+  architect's PDF and PowerPoint;
+- **the code review**: the repository as it read it.
+  - Two read-only tools (`code_tools.py`, GitHub only):
+    `list_pull_requests` gives its latest pull requests; `read_pull_request`
+    gives one, with each file and its unified diff (cut at 20,000
+    characters a file, 120,000 in all).
+  - What it read is kept with the run (`detail.pulls`, `detail.listed`).
+  - Its report ends with a `leka-review` block: the pull request, a
+    verdict, and comments, each on a file, a line and a side. Each comment
+    is an **issue** (with its severity), a **suggestion** (with the code it
+    proposes) or **good**.
+  - `review.py` keeps a comment only on a line the diff it read shows, or on
+    a whole file. Anything else is dropped and counted, never shown.
+  - `GET /agent-runs/<id>` answers `review` (the pulls listed, the one
+    reviewed with its files, the comments) and `report` (its text without
+    the block).
+  - The screen draws its pull requests, the reviewed one marked, and each
+    file's diff with old and new line numbers. Each comment sits under its
+    line: red for an issue, green for a suggestion or something done well,
+    with the proposed code. The report is one tab away.
+
+Tests: `test_code_review_deliverable.py` (the diff's lines, the comments
+held to what was read, end to end on a GitHub stand-in, read-only) and
+`deliverable.test.tsx` (the report, the numbered diff, the comments on
+their lines, red and green).
 
 ## 7. The API
 

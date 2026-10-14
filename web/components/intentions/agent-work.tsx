@@ -1,10 +1,13 @@
 "use client";
 
-import { Bot, LoaderCircle } from "lucide-react";
+import { Bot, FileText, LoaderCircle } from "lucide-react";
+import Link from "next/link";
 
 import { Deliverables } from "@/components/capabilities/agent-runs";
+import { deliverableHref } from "@/components/intentions/deliverable";
 import { IconTile } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
+import { buttonVariants } from "@/components/ui/button";
 import type { AgentRun } from "@/lib/agent-runs";
 import { useIntentionRuns } from "@/lib/agent-runs-queries";
 import { fill } from "@/lib/i18n/dictionaries";
@@ -82,7 +85,21 @@ export function AgentWork({ intentionId, live = false }: { intentionId: string; 
                   <p className="text-[0.8125rem] text-shell-muted">{w.filesSoon}</p>
                 ) : null}
               </div>
-              <Deliverables run={run} />
+              <div className="flex flex-wrap items-center gap-2">
+                <Deliverables run={run} />
+                {/* What it delivered, read here — every agent's report, the
+                    code review's comments on the diff (2026-10-14). */}
+                {run.status === "succeeded" ? (
+                  <Link
+                    href={deliverableHref(intentionId, run.id)}
+                    className={buttonVariants({ size: "sm", variant: run.deliverables.length ? "outline" : "default" })}
+                    data-testid="agent-work-open"
+                  >
+                    <FileText className="size-3.5" aria-hidden="true" />
+                    {run.key === "code-review" ? t.intentions.deliverable.openReview : t.intentions.deliverable.open}
+                  </Link>
+                ) : null}
+              </div>
             </li>
           );
         })}

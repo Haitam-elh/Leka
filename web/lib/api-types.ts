@@ -6672,6 +6672,13 @@ export interface components {
             finished_at: string | null;
             /** Output */
             output: string | null;
+            /**
+             * Report
+             * @description What a person reads of its output: its report, as written.
+             */
+            report?: string | null;
+            /** @description A code review's deliverable, when it reviewed a pull request. */
+            review?: components["schemas"]["CodeReviewRead"] | null;
             /** Events */
             events: components["schemas"]["AgentRunEventRead"][];
             usage: components["schemas"]["AgentRunUsage"];
@@ -9704,6 +9711,33 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * CodeReviewRead
+         * @description A code review's deliverable (2026-10-14): the repository's pull
+         *     requests as the agent listed them, the one it reviewed as it read it, its
+         *     comments on their lines — only those that hold on what it read.
+         */
+        CodeReviewRead: {
+            /** Repository */
+            repository: string;
+            /** Number */
+            number: number;
+            /** Verdict */
+            verdict: ("favorable" | "prudence" | "a_revoir") | null;
+            pull: components["schemas"]["PullRead"];
+            /**
+             * Pulls
+             * @description The repository's latest, as it listed them.
+             */
+            pulls: components["schemas"]["PullBriefRead"][];
+            /** Comments */
+            comments: components["schemas"]["ReviewCommentRead"][];
+            /**
+             * Dropped
+             * @description Comments it wrote that do not hold on the diff it read.
+             */
+            dropped: number;
         };
         /** ColumnRead */
         ColumnRead: {
@@ -18562,6 +18596,117 @@ export interface components {
             found_payload_days: number;
         };
         /**
+         * PullBriefRead
+         * @description A pull request as a repository lists it.
+         */
+        PullBriefRead: {
+            /** Number */
+            number: number;
+            /** Title */
+            title: string;
+            /** State */
+            state: string;
+            /** Merged */
+            merged: boolean;
+            /**
+             * Draft
+             * @default false
+             */
+            draft: boolean;
+            /** Author */
+            author: string;
+            /** Url */
+            url: string;
+            /** Created At */
+            created_at?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
+            /** Merged At */
+            merged_at?: string | null;
+        };
+        /**
+         * PullFileRead
+         * @description One file a pull request changes, with its diff as the agent read it.
+         */
+        PullFileRead: {
+            /** Path */
+            path: string;
+            /** Status */
+            status: string;
+            /** Additions */
+            additions: number;
+            /** Deletions */
+            deletions: number;
+            /**
+             * Patch
+             * @description Its unified diff, cut when very long.
+             */
+            patch: string;
+            /** Truncated */
+            truncated: boolean;
+        };
+        /**
+         * PullRead
+         * @description A pull request the agent read: what it says, each file and its diff.
+         */
+        PullRead: {
+            /** Number */
+            number: number;
+            /** Title */
+            title: string;
+            /** State */
+            state: string;
+            /** Merged */
+            merged: boolean;
+            /**
+             * Draft
+             * @default false
+             */
+            draft: boolean;
+            /** Author */
+            author: string;
+            /** Url */
+            url: string;
+            /** Created At */
+            created_at?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
+            /** Merged At */
+            merged_at?: string | null;
+            /**
+             * Body
+             * @default
+             */
+            body: string;
+            /**
+             * Base
+             * @default
+             */
+            base: string;
+            /**
+             * Head
+             * @default
+             */
+            head: string;
+            /**
+             * Additions
+             * @default 0
+             */
+            additions: number;
+            /**
+             * Deletions
+             * @default 0
+             */
+            deletions: number;
+            /**
+             * Changed Files
+             * @default 0
+             */
+            changed_files: number;
+            /** Files */
+            files: components["schemas"]["PullFileRead"][];
+        };
+        /**
          * QualityConflict
          * @description A conflict of the context (LEKA-372), judged: how much it matters to
          *     what was asked, and why.
@@ -19671,6 +19816,38 @@ export interface components {
             top: number;
             /** Said */
             said: string;
+        };
+        /**
+         * ReviewCommentRead
+         * @description One of the agent's comments, on a line its diff shows — or on a file.
+         */
+        ReviewCommentRead: {
+            /** Path */
+            path: string;
+            /** Line */
+            line: number | null;
+            /**
+             * Side
+             * @enum {string}
+             */
+            side: "new" | "old";
+            /**
+             * Kind
+             * @description issue: what is wrong (red); suggestion: what to do better, good: what is right (green).
+             * @enum {string}
+             */
+            kind: "issue" | "suggestion" | "good";
+            /** Severity */
+            severity: ("critique" | "eleve" | "moyen" | "faible") | null;
+            /** Title */
+            title: string;
+            /** Comment */
+            comment: string;
+            /**
+             * Suggestion
+             * @description The code it proposes instead, when it does.
+             */
+            suggestion: string | null;
         };
         /**
          * RiskRuleRead

@@ -34,6 +34,7 @@ import {
 } from "@/components/intentions/intention-stepper";
 import { JourneyNote, StopAnalysis, useRights } from "@/components/intentions/journey";
 import { BriefView } from "@/components/intentions/brief";
+import { DeliverableView } from "@/components/intentions/deliverable";
 import { FeasibilityCard } from "@/components/intentions/feasibility";
 import { kindOf, StatusPill } from "@/components/intentions/intentions-list";
 import { ReadinessPanel } from "@/components/intentions/readiness";
@@ -54,6 +55,7 @@ import { routes } from "@/config/routes";
 import { ApiError } from "@/lib/api";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
+import { useIntentionRuns } from "@/lib/agent-runs-queries";
 import type { IntentionDetail, IntentionLink } from "@/lib/intentions/api";
 import { may, working } from "@/lib/intentions/journey";
 import { useAnswer, useIntention, useIntentionChange } from "@/lib/intentions/queries";
@@ -116,6 +118,8 @@ export function IntentionScreen() {
     body = <div className="h-80 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />;
   } else if (shown === "history") {
     body = <TimelineTab id={data.id} />;
+  } else if (shown === "deliverable") {
+    body = <DeliverableView intention={data} />;
   } else if (shown === "evidence") {
     body = <EvidenceTab intention={data} />;
   } else if (shown === "analysis") {
@@ -142,7 +146,9 @@ export function IntentionScreen() {
       : w[step].heading
     : shown === "history"
       ? t.tabs.history
-      : t.tabs.evidence;
+      : shown === "deliverable"
+        ? t.tabs.deliverable
+        : t.tabs.evidence;
   const lead = step ? (analysed ? w.analysis.doneLead : w[step].lead) : undefined;
 
   return (
@@ -187,7 +193,15 @@ export function IntentionScreen() {
 }
 
 /** What the address may say, and the step each view is. */
-type View = "overview" | "analysis" | "results" | "decision" | "actions" | "evidence" | "history";
+type View =
+  | "overview"
+  | "analysis"
+  | "results"
+  | "decision"
+  | "actions"
+  | "evidence"
+  | "history"
+  | "deliverable";
 const SEGMENT_OF: Record<Step, View> = {
   intention: "overview",
   analysis: "analysis",
@@ -236,10 +250,15 @@ function Asked({ intention }: { intention: IntentionDetail }) {
  * one open marked. */
 function MoreViews({ id, shown }: { id: string; shown: View }) {
   const t = useDictionary();
-  const w = t.intentions.steps;
+  const w = { ...t.intentions.steps, deliverable: t.tabs.deliverable };
+  // Its agents' deliverable, once one worked on it (2026-10-14).
+  const runs = useIntentionRuns(id);
+  const views = runs.data?.length
+    ? (["deliverable", "evidence", "history"] as const)
+    : (["evidence", "history"] as const);
   return (
     <nav className="mt-6 flex flex-wrap gap-2" aria-label={t.intentions.title}>
-      {(["evidence", "history"] as const).map((view) => (
+      {views.map((view) => (
         <Link
           key={view}
           href={`${routes.intentions()}/${id}/${view}`}
