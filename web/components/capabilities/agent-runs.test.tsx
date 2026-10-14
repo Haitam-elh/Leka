@@ -158,12 +158,12 @@ describe("running an agent", () => {
   it("suggests what the intention says, and runs what the person kept", async () => {
     const intention = {
       title: "Architecture du paiement",
-      text: "Construis l'architecture du parcours Paiement CB sur le périmètre Digital - Espace Client TR, avec la vue applicative.",
+      text: "Construis l'architecture du parcours Paiement CB sur le périmètre Digital - Espace Client, avec la vue applicative.",
     };
     const prefill = suggestedInputs(ARCHITECT.inputs, intention);
     expect(prefill).toEqual({
       parcours: "Paiement CB",
-      perimetre: "Digital - Espace Client TR",
+      perimetre: "Digital - Espace Client",
       vue_applicative: true,
     });
     // Nothing named: the journey is the intention's title.
