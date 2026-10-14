@@ -569,6 +569,7 @@ def explain(
     readiness: str,
     now: datetime,
     background: Collection[str] = (),
+    unread: Sequence[str] = (),
 ) -> tuple[Result, AnalysisExplanation]:
     """The explanation — and the result held to it: partial while a source
     it read from was failing or syncing, its confidence never above its
@@ -596,6 +597,14 @@ def explain(
                 f"{source.name or source.source_id}: {source.said}",
                 source=source.name,
                 state=source.state,
+            )
+        )
+    for name in unread:
+        limits.append(
+            _note(
+                "limit.source_unread",
+                f"{name}: connected, not read yet — what it holds is not in this answer.",
+                source=name,
             )
         )
     if readiness == "limited":

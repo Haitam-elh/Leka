@@ -698,6 +698,12 @@ class Proofs:
             tuple(s.record_id for s in provenance.sources if s.record_id),
         )
 
+    def _sources_of(self, entity_id: uuid.UUID) -> tuple[SourceRef, ...]:
+        element = self._entities.get(entity_id)
+        if element is not None:
+            return self._held(element)[0]
+        return tuple(self._material.sources.get(entity_id, ()))
+
     def entity(self, thing: EntityBrief | Subject, *, detail: str | None = None) -> str:
         """A thing: what the context says of it, or its own sources."""
         element = self._entities.get(thing.id)
@@ -749,6 +755,13 @@ class Proofs:
         if element is not None:
             sources, records = self._held(element)
             inferred = element.provenance.origin == "inferred"
+            if inferred and not sources:
+                # A rule's inference names no record: it rests on what the
+                # sources say of its two ends — said, so the proof still
+                # leads to a source (LEKA-444).
+                sources = tuple(
+                    dict.fromkeys(self._sources_of(start.id) + self._sources_of(end.id))
+                )
             return self._keep(
                 Evidence(
                     id=f"tie:{start.id}:{kind}:{end.id}",
