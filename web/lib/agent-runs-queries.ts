@@ -15,13 +15,16 @@ export const agentRunKeys = {
 const FOLLOW_MS = 3000;
 
 /** The agents at work on an intention, followed while they are. */
-export function useIntentionRuns(intentionId: string) {
+export function useIntentionRuns(intentionId: string, live = false) {
   return useQuery({
     queryKey: agentRunKeys.intention(intentionId),
     queryFn: () => agentRuns.forIntention(intentionId),
     enabled: Boolean(intentionId),
+    // Read again while one runs — and while LEKA works on the intention: the
+    // agent it hands it to is started by its analysis, after this page
+    // first asked. Read once, empty, it was never read again (2026-10-14).
     refetchInterval: (query) =>
-      query.state.data?.some((run) => MOVING.has(run.status)) ? FOLLOW_MS : false,
+      live || query.state.data?.some((run) => MOVING.has(run.status)) ? FOLLOW_MS : false,
   });
 }
 

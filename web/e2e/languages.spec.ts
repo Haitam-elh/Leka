@@ -158,7 +158,7 @@ test("the account menu and the settings change the language and the region", asy
   const dialog = page.getByTestId("language-dialog");
   await dialog.getByRole("combobox").fill("english");
   await dialog.locator('[data-tag="en"]').click();
-  await expect(page.getByTestId("nav-section-environment-toggle")).toContainText("My environment");
+  await expect(page.getByTestId("nav-environment-overview")).toContainText("My environment");
 
   await page.goto("/settings");
   const settings = page.getByTestId("language-settings");

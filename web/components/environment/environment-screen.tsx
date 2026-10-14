@@ -303,37 +303,19 @@ export function EnvironmentScreen() {
         onView={viewName || tab === "architecture" ? setView : null}
         scope={scope}
         onScope={setScope}
+        tab={tab}
+        onTab={setTab}
       />
 
-      {/* Ten tabs and the legend share a line only when there is room for both. */}
-      <div className="mb-3 flex flex-col items-start gap-2 border-b border-shell-line pb-2 2xl:flex-row 2xl:items-center">
-        <div role="group" aria-label={w.tabsLabel} className="flex flex-wrap gap-0.5">
-          {TABS.map((key) => (
-            <button
-              key={key}
-              type="button"
-              aria-pressed={tab === key}
-              onClick={() => setTab(key)}
-              data-testid={`env-tab-${key}`}
-              className={cn(
-                "shrink-0 rounded-lg px-2.5 py-1 text-[0.8125rem] whitespace-nowrap font-medium outline-none transition-colors focus-visible:ring-3 focus-visible:ring-brand-violet/40",
-                tab === key
-                  ? "bg-brand-violet-soft text-shell-nav-active"
-                  : "text-shell-muted hover:bg-shell-canvas hover:text-brand-navy",
-              )}
-            >
-              {w.tabs[key]}
-            </button>
-          ))}
-        </div>
+      <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-shell-line pb-2">
         {tab === "architecture" ? (
           // The architecture says its states under its canvas: here, the way to the detail.
-          <div className="shrink-0 2xl:ms-auto">
+          <div className="ms-auto shrink-0">
             <DetailedLink />
           </div>
         ) : (
           // The six states, each defined (LEKA-442).
-          <TwinLegend className="px-2.5 2xl:ms-auto 2xl:pe-2" />
+          <TwinLegend className="px-2.5" />
         )}
       </div>
 
@@ -384,6 +366,8 @@ function Header({
   onView,
   scope,
   onScope,
+  tab,
+  onTab,
 }: {
   model: Model | undefined;
   freshness: Environment["freshness"] | undefined;
@@ -393,9 +377,12 @@ function Header({
   onView: ((view: "map" | "list") => void) | null;
   scope: string;
   onScope: (scope: string) => void;
+  tab: Tab;
+  onTab: (tab: Tab) => void;
 }) {
   const t = useDictionary();
   const w = t.environment;
+  const tabs = TABS.map((key) => ({ value: key, label: w.tabs[key] }));
   const scopes = [
     { value: GLOBAL, label: w.global },
     ...environments.map((name) => ({ value: name, label: name })),
@@ -439,6 +426,21 @@ function Header({
             </span>
           </p>
         )}
+        {/* Its views — the overall one, then applications to quality —
+            chosen here, top right (2026-10-14: the sidebar keeps only
+            Activité under Mon environnement). */}
+        <Select value={tab} onValueChange={(value) => onTab(isTab(value as string | null) ? (value as Tab) : FIRST_TAB)} items={tabs}>
+          <SelectTrigger className="min-w-44 bg-white" aria-label={w.tabsLabel} data-testid="env-view">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {tabs.map((option) => (
+              <SelectItem key={option.value} value={option.value} data-testid={`env-tab-${option.value}`}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Select
           value={scope}
           onValueChange={(value) => onScope((value as string | null) ?? GLOBAL)}

@@ -27,7 +27,7 @@ outcome is kept with what the controls did.
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from typing import Annotated, Literal
 from urllib.parse import quote
 
@@ -46,6 +46,7 @@ from leka.capabilities import (
     AgentRuntime,
     AgentRunUsage,
     CapabilityRunRepository,
+    CodeReviewRead,
     DeliverableRead,
     NotAwaitingError,
     NotYoursError,
@@ -57,6 +58,7 @@ from leka.capabilities import (
     find,
     queue_run,
     read_deliverable,
+    without_block,
 )
 from leka.capabilities.deliverables import MEDIA_TYPES
 from leka.core.errors import ErrorCode, FieldError
@@ -127,6 +129,40 @@ def _refused(error: RunRefusedError) -> ApiError:
         for r in refusal.reasons
     ]
     return ApiError(code, kind, message, details=details or None)
+
+
+def review_read(detail: Mapping[str, object]) -> CodeReviewRead | None:
+    """A code review's deliverable, from what its run kept (review.py)."""
+    review = detail.get("review")
+    pulls = detail.get("pulls")
+    if not isinstance(review, dict) or not isinstance(pulls, list):
+        return None
+    repository, number = review.get("repository"), review.get("number")
+    pull = next(
+        (
+            p
+            for p in pulls
+            if isinstance(p, dict)
+            and p.get("repository") == repository
+            and p.get("number") == number
+        ),
+        None,
+    )
+    if pull is None:
+        return None
+    listed = detail.get("listed")
+    others = listed.get(str(repository)) if isinstance(listed, dict) else None
+    return CodeReviewRead.model_validate(
+        {
+            "repository": repository,
+            "number": number,
+            "verdict": review.get("verdict"),
+            "pull": pull,
+            "pulls": others if isinstance(others, list) else [pull],
+            "comments": review.get("comments") or [],
+            "dropped": review.get("dropped") or 0,
+        }
+    )
 
 
 def run_read(run: AgentRun, principal: Principal) -> AgentRunRead:
@@ -288,6 +324,8 @@ async def get_run(run_id: uuid.UUID, session: SessionDep, principal: Reader) -> 
     return AgentRunDetail(
         **run_read(run, principal).model_dump(),
         output=run.output,
+        report=without_block(run.output) if run.output else None,
+        review=review_read(run.detail),
         events=[AgentRunEventRead.model_validate(e) for e in events],
         usage=AgentRunUsage(calls=calls, tokens_in=tokens_in, tokens_out=tokens_out, cost_usd=cost),
     )

@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { Card } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
+import { Markdown } from "@/components/ui/markdown";
 import { exactDate } from "@/components/knowledge/time";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -276,6 +277,8 @@ function stepSaid(w: Dictionary["agentRuns"], event: AgentRunEvent): string {
       ? detail.formats.map((f) => String(f).toUpperCase()).join(" + ")
       : "",
     slides: String(detail.slides ?? 0),
+    comments: String(detail.comments ?? 0),
+    dropped: String(detail.dropped ?? 0),
   });
 }
 
@@ -334,12 +337,13 @@ function RunDetail({ id }: { id: string }) {
               {w.download}
             </Button>
           </div>
-          <pre
-            className="max-h-96 overflow-auto rounded-md bg-white p-3 text-xs whitespace-pre-wrap text-brand-navy"
+          {/* Its report, read as a page — not the model's raw text. */}
+          <div
+            className="max-h-[32rem] overflow-auto rounded-md bg-white p-4"
             data-testid="agent-run-output"
           >
-            {data.output}
-          </pre>
+            <Markdown source={data.report ?? data.output} className="text-[0.875rem]" />
+          </div>
           {data.pending.length ? (
             <p className="text-xs text-shell-muted">
               {fill(w.pending, { formats: data.pending.map((f) => f.toUpperCase()).join(", ") })}

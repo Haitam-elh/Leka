@@ -59,6 +59,7 @@ from leka.capabilities.gateway import (
 )
 from leka.capabilities.models import AgentRun, AgentRunEvent
 from leka.capabilities.repository import CapabilityRunRepository, stale_runs
+from leka.capabilities.review import review_of
 from leka.capabilities.runtime import (
     AgentTool,
     Injected,
@@ -262,6 +263,36 @@ def _contexts(session: AsyncSession, workspace_id: uuid.UUID) -> ContextService:
     )
 
 
+# What read_content gives of one thing, at most: its latest records, the
+# start of each.
+MOST_RECORDS = 4
+RECORD_CHARS = 6_000
+
+
+def _contents(
+    session: AsyncSession, workspace_id: uuid.UUID
+) -> Callable[[uuid.UUID], Awaitable[list[dict[str, object]]]]:
+    """What one thing's records say — the records it was read from, the
+    latest first, the start of each: what read_content answers."""
+    repository = ContentRepository(session, workspace_id)
+
+    async def read(entity_id: uuid.UUID) -> list[dict[str, object]]:
+        rows = await repository.evidence_of(entity_id, limit=MOST_RECORDS, chars=RECORD_CHARS)
+        return [
+            {
+                "title": row.title,
+                "kind": row.kind,
+                "url": row.url,
+                "updated_at": row.updated_at,
+                "text": row.excerpt,
+                "gone": row.deleted_at is not None,
+            }
+            for row in rows
+        ]
+
+    return read
+
+
 async def _context(
     session: AsyncSession, run: AgentRun, definition: Definition
 ) -> AssembledContext | None:
@@ -436,9 +467,13 @@ async def _run(
         definition,
         GraphService(GraphRepository(session, workspace_id)),
         KnowledgeService(EntityRepository(session, workspace_id)),
+        content=_contents(session, workspace_id),
     )
+    # What it reads of pull requests, kept with the run: its deliverable
+    # shows its comments on the diff it read (review.py).
+    read: dict[str, Any] = {}
     if CODE_NAMES & {t.name for t in given}:
-        bound |= code_handlers(session, workspace_id)
+        bound |= code_handlers(session, workspace_id, read)
     # Each skill call checked and kept (skill_runs), about this run.
     bound |= skill_handlers(
         SkillRuntime(
@@ -472,7 +507,7 @@ async def _run(
                 request,
                 offered_now,
                 replace(needs_of(definition), tools=bool(given)),
-                rounds=TOOL_ROUNDS,
+                rounds=definition.rounds or TOOL_ROUNDS,
                 conclude=True,
             ),
             timeout=budget,
@@ -507,6 +542,18 @@ async def _run(
     # What LEKA draws of it — the architect's deck (delivery.py): its files,
     # or why there are none; the analysis stands either way.
     detail = dict(run.detail)
+    if read.get("pulls"):
+        pulls = dict(read["pulls"])
+        detail["pulls"] = list(pulls.values())
+        detail["listed"] = read.get("listed") or {}
+        review = review_of(output, pulls)
+        if review is not None:
+            detail["review"] = review
+            steps.add(
+                "reviewed",
+                comments=len(review["comments"]),
+                dropped=review["dropped"],
+            )
     if definition.renders is not None:
         await session.commit()
         drawn = await draw(session, run, definition, output)

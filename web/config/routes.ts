@@ -83,6 +83,8 @@ export const INTENTION_TABS = [
   "actions",
   "evidence",
   "history",
+  // What its agents delivered (2026-10-14).
+  "deliverable",
 ] as const;
 
 /** And of an entity sheet — the eight of the Payment API screen, then what

@@ -21,10 +21,12 @@ import { signIn } from "./sign-in";
 test.describe("Knowledge quality", () => {
   test("says how far what LEKA knows can be trusted, the weakest first", async ({ page }) => {
     await signIn(page);
-    await page.getByTestId("nav-section-environment-toggle").click();
-    await page.getByTestId("nav-environment-quality").click();
+    // Mon environnement, then its view chosen top right (2026-10-14).
+    await page.getByTestId("nav-environment-overview").click();
+    await page.getByTestId("env-view").click();
+    await page.getByRole("option", { name: "Qualité" }).click();
     await expect(page).toHaveURL("http://localhost:3000/environment?tab=quality");
-    await expect(page.getByTestId("env-tab-quality")).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId("env-view")).toContainText("Qualité");
 
     await expect(page.getByTestId("quality-workspace-score")).toContainText("%");
     await expect(page.getByTestId("quality-dimension-completeness")).toBeVisible();

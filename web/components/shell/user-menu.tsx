@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronDown, Globe, LogOut, Settings, User } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { cn } from "cn";
 
@@ -18,6 +19,7 @@ import { LanguageDialog } from "@/components/language/language-picker";
 import { ProfileDialog } from "@/components/shell/profile-dialog";
 import { useCurrentUser, useCurrentWorkspace } from "@/components/shell/shell-provider";
 import { language as languageOf } from "@/lib/i18n/languages";
+import { routes } from "@/config/routes";
 import { useDictionary, useLanguage } from "@/lib/i18n/locale-provider";
 import { auth, markSignedOut } from "@/lib/auth";
 
@@ -42,6 +44,7 @@ export function UserMenu({
   collapsed?: boolean;
 }) {
   const t = useDictionary();
+  const router = useRouter();
   const user = useCurrentUser();
   const workspace = useCurrentWorkspace();
   const { language } = useLanguage();
@@ -143,7 +146,8 @@ export function UserMenu({
               <User className="size-4" aria-hidden="true" />
               {t.shell.profile}
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            {/* It went nowhere: an item with nothing to do (2026-10-14). */}
+            <DropdownMenuItem onClick={() => router.push(routes.settings())} data-testid="settings">
               <Settings className="size-4" aria-hidden="true" />
               {t.nav.settings}
             </DropdownMenuItem>

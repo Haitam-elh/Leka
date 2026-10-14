@@ -110,7 +110,11 @@ export function AppShell({
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-shell-page">
+    // `relative` on the frame and on <main>: what a page positions absolutely
+    // — a label only screen readers read, a menu — is held inside them. Not
+    // held, it is placed against the document, makes it taller than the
+    // window, and the whole frame scrolls away, white below (2026-10-14).
+    <div className="relative flex h-screen overflow-hidden bg-shell-page">
       <SkipLink />
 
       {/* Named: a page with a side panel of its own used to have two
@@ -162,7 +166,7 @@ export function AppShell({
           id="main-content"
           tabIndex={-1}
           aria-busy={state.status === "loading" || undefined}
-          className="flex-1 overflow-y-auto outline-none"
+          className="relative flex-1 overflow-y-auto outline-none"
         >
           {/* First in the content and pinned to its top: above what is on
               screen rather than over it — that stays readable, it just may

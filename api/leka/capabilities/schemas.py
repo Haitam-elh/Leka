@@ -99,6 +99,14 @@ class AgentFrontMatter(BaseModel):
         description="The skills it may be offered (LEKA-401): none unless named, each within "
         "the kinds of things it may read",
     )
+    rounds: int | None = Field(
+        default=None,
+        ge=1,
+        le=40,
+        description="How many rounds of tool calls it may take before it must answer — the "
+        "runtime's default (16) when none: an agent that gathers a whole documentation asks "
+        "for more (2026-10-14)",
+    )
     renders: Literal["architecture_deck", "code_change"] | None = Field(
         default=None,
         description="What LEKA makes of what it delivers: architecture_deck — the editable "
@@ -714,10 +722,92 @@ class AgentRunUsage(BaseModel):
     cost_usd: float | None = Field(description="At list price; none when a price is not known.")
 
 
+class PullBriefRead(BaseModel):
+    """A pull request as a repository lists it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    number: int
+    title: str
+    state: str
+    merged: bool
+    draft: bool = False
+    author: str
+    url: str
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    merged_at: datetime | None = None
+
+
+class PullFileRead(BaseModel):
+    """One file a pull request changes, with its diff as the agent read it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    path: str
+    status: str
+    additions: int
+    deletions: int
+    patch: str = Field(description="Its unified diff, cut when very long.")
+    truncated: bool
+
+
+class PullRead(PullBriefRead):
+    """A pull request the agent read: what it says, each file and its diff."""
+
+    body: str = ""
+    base: str = ""
+    head: str = ""
+    additions: int = 0
+    deletions: int = 0
+    changed_files: int = 0
+    files: list[PullFileRead]
+
+
+class ReviewCommentRead(BaseModel):
+    """One of the agent's comments, on a line its diff shows — or on a file."""
+
+    model_config = ConfigDict(frozen=True)
+
+    path: str
+    line: int | None
+    side: Literal["new", "old"]
+    kind: Literal["issue", "suggestion", "good"] = Field(
+        description="issue: what is wrong (red); suggestion: what to do better, good: what "
+        "is right (green)."
+    )
+    severity: Literal["critique", "eleve", "moyen", "faible"] | None
+    title: str
+    comment: str
+    suggestion: str | None = Field(description="The code it proposes instead, when it does.")
+
+
+class CodeReviewRead(BaseModel):
+    """A code review's deliverable (2026-10-14): the repository's pull
+    requests as the agent listed them, the one it reviewed as it read it, its
+    comments on their lines — only those that hold on what it read."""
+
+    model_config = ConfigDict(frozen=True)
+
+    repository: str
+    number: int
+    verdict: Literal["favorable", "prudence", "a_revoir"] | None
+    pull: PullRead
+    pulls: list[PullBriefRead] = Field(description="The repository's latest, as it listed them.")
+    comments: list[ReviewCommentRead]
+    dropped: int = Field(description="Comments it wrote that do not hold on the diff it read.")
+
+
 class AgentRunDetail(AgentRunRead):
     """A run, with what it delivered and every step."""
 
     output: str | None
+    report: str | None = Field(
+        default=None, description="What a person reads of its output: its report, as written."
+    )
+    review: CodeReviewRead | None = Field(
+        default=None, description="A code review's deliverable, when it reviewed a pull request."
+    )
     events: list[AgentRunEventRead]
     usage: AgentRunUsage
 

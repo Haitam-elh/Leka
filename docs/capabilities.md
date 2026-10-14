@@ -123,13 +123,20 @@ how long).
 
 ## 7. In the app
 
-**Capacités** (mockup 13): the figures — available of how many, categories,
-runs this week against the last, the analysis time; by category, searched,
-sorted; each capability in words (LEKA's own in French, an agent as its file
-says it) with its category, its runs, and whether it can be used — and why
-not, in words: « Source à connecter : Confluence ou Microsoft 365 », « Aucun
-modèle de langage ne peut l'exécuter ici »; the week's use by category, the most used,
-the latest added; « Demander une capacité » asks LEKA (a new intention).
+**Capacités** (mockup 13). **One box per domain** (2026-10-14):
+- the domains, code first: Code & développement, Architecture, Exploitation
+  & incidents, Sécurité, Conformité, Infrastructure & cloud, Données,
+  Documentation, Connaissance…;
+- in each box, **its agents apart from LEKA's own capabilities**, never
+  mixed, each counted (« 3 agents · 4 capacités ») — a box per domain is
+  what a bundle will sell, when LEKA-446 sets one: no bundle and no price is
+  shown before the catalogue has them (`bundles: []`, nothing on sale);
+- each in words (LEKA's own in French, an agent as its file says it), its
+  runs, and whether it can be used — and why not, in words: « Source à
+  connecter : Confluence ou Microsoft 365 »; the model, once, above;
+- searched, chosen by need, **Tout · Agents · Capacités LEKA**, sorted;
+- under the boxes, the week's use by category, the most used, the latest
+  added; « Demander une capacité » asks LEKA (a new intention).
 **Mes capacités**: the starred. **Configuration**: every capability, turned
 on or off by an admin, saying why. A capability's sheet: what it takes and
 delivers, what it needs and whether it is there — **the model that would run
