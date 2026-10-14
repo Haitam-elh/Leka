@@ -30,7 +30,12 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/components/shell/shell-provider", () => ({
-  useCurrentWorkspace: () => ({ id: "ws-1", name: "Acme", slug: "acme", role: "owner" }),
+  useCurrentWorkspace: () => ({
+    id: "ws-1",
+    name: "Acme",
+    slug: "acme",
+    role: "owner",
+  }),
 }));
 
 const sourcesApi = { list: vi.fn() };
@@ -87,16 +92,53 @@ function preview(
       restated: null,
       acting: false,
       slots: [
-        { slot: "goal", state: "known", need: "blocking", value: "explain_cause", values: [], origin: "words" },
-        { slot: "target", state: "known", need: "useful", value: null, values: ["acme/backend"], origin: "company_model" },
-        { slot: "scope", state: "assumed", need: "optional", value: null, values: [], origin: "default" },
-        { slot: "expected", state: "known", need: "useful", value: "answer", values: [], origin: "words" },
-        { slot: "constraints", state: "missing", need: "optional", value: null, values: [], origin: null },
+        {
+          slot: "goal",
+          state: "known",
+          need: "blocking",
+          value: "explain_cause",
+          values: [],
+          origin: "words",
+        },
+        {
+          slot: "target",
+          state: "known",
+          need: "useful",
+          value: null,
+          values: ["acme/backend"],
+          origin: "company_model",
+        },
+        {
+          slot: "scope",
+          state: "assumed",
+          need: "optional",
+          value: null,
+          values: [],
+          origin: "default",
+        },
+        {
+          slot: "expected",
+          state: "known",
+          need: "useful",
+          value: "answer",
+          values: [],
+          origin: "words",
+        },
+        {
+          slot: "constraints",
+          state: "missing",
+          need: "optional",
+          value: null,
+          values: [],
+          origin: null,
+        },
       ],
       questions,
       limits: [],
     },
-    sources: [{ id: "s1", name: "acme/backend", kind: "github", status: "active" }],
+    sources: [
+      { id: "s1", name: "acme/backend", kind: "github", status: "active" },
+    ],
     feasibility: {
       verdict: "ready",
       needed: [],
@@ -120,7 +162,8 @@ function created(context: Record<string, unknown>) {
   return { intention: { id: "i1", links: [], status: "analysing" }, context };
 }
 
-const { IntentionForm } = await import("@/components/intentions/intention-form");
+const { IntentionForm } =
+  await import("@/components/intentions/intention-form");
 
 function show() {
   return render(
@@ -135,7 +178,15 @@ function show() {
 }
 
 function node(id: string, name: string, type = "service") {
-  return { id, type, layer: "services", name, status: null, entity_id: id, key: null };
+  return {
+    id,
+    type,
+    layer: "services",
+    name,
+    status: null,
+    entity_id: id,
+    key: null,
+  };
 }
 
 beforeEach(() => {
@@ -143,7 +194,12 @@ beforeEach(() => {
   intentionsApi.brief.mockResolvedValue(preview());
   sourcesApi.list.mockResolvedValue({
     data: [
-      { id: "s1", type: "github", display_name: "acme/backend", status: "active" },
+      {
+        id: "s1",
+        type: "github",
+        display_name: "acme/backend",
+        status: "active",
+      },
       { id: "s2", type: "jira", display_name: "OPS board", status: "degraded" },
       { id: "s3", type: "slack", display_name: "#incidents", status: "error" },
     ],
@@ -171,7 +227,9 @@ describe("the new intention's context and scope", () => {
     expect(list).not.toHaveTextContent("#incidents");
     // Each box named by its own source, not by the panel: GitHub is not Jira.
     expect(within(list).getAllByRole("checkbox")).toHaveLength(2);
-    expect(await screen.findByRole("checkbox", { name: "acme/backend" })).toBeChecked();
+    expect(
+      await screen.findByRole("checkbox", { name: "acme/backend" }),
+    ).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "OPS board" })).toBeChecked();
   });
 
@@ -197,11 +255,14 @@ describe("the new intention's context and scope", () => {
     });
     show();
     await screen.findByText("acme/backend");
-    const list = screen.getByText("acme/backend").closest('[role="group"]') as HTMLElement;
+    const list = screen
+      .getByText("acme/backend")
+      .closest('[role="group"]') as HTMLElement;
     // Code, tickets, docs, cloud, observability — then the next of each.
     // Each box is named by its row's title.
     const named = (box: HTMLElement) =>
-      document.getElementById(box.getAttribute("aria-labelledby") ?? "")?.textContent;
+      document.getElementById(box.getAttribute("aria-labelledby") ?? "")
+        ?.textContent;
     expect(within(list).getAllByRole("checkbox").map(named)).toEqual([
       "acme/backend",
       "OPS board",
@@ -211,7 +272,9 @@ describe("the new intention's context and scope", () => {
     ]);
     await user.click(screen.getByTestId("selectable-more"));
     expect(within(list).getAllByRole("checkbox")).toHaveLength(7);
-    expect(screen.getByTestId("selectable-more")).toHaveTextContent("Voir moins");
+    expect(screen.getByTestId("selectable-more")).toHaveTextContent(
+      "Voir moins",
+    );
   });
 
   it("says when none is connected, and leads to connecting one", async () => {
@@ -220,31 +283,54 @@ describe("the new intention's context and scope", () => {
 
     const empty = await screen.findByTestId("intention-no-sources");
     expect(empty).toHaveTextContent("Aucune source connectée");
-    expect(within(empty).getByRole("link", { name: "Connecter une source" })).toHaveAttribute(
-      "href",
-      "/sources",
+    expect(
+      within(empty).getByRole("link", { name: "Connecter une source" }),
+    ).toHaveAttribute("href", "/sources");
+
+    // Asked anyway: why nothing happens is said, not left silent (LEKA-445).
+    const user = userEvent.setup();
+    await user.type(
+      screen.getByTestId("intention-input"),
+      "Qui est responsable de la facturation ?",
     );
+    await user.click(screen.getByTestId("intention-submit"));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Aucune source connectée",
+    );
+    expect(intentionsApi.brief).not.toHaveBeenCalled();
+    window.sessionStorage.clear(); // the draft it kept, not the next test's
   });
 
   it("scopes to the environments and services the company model knows", async () => {
     const user = userEvent.setup();
     show();
 
-    const scope = screen.getByRole("heading", { name: "Périmètre de l'analyse" })
-      .parentElement?.parentElement as HTMLElement;
+    const scope = screen.getByRole("heading", {
+      name: "Périmètre de l'analyse",
+    }).parentElement?.parentElement as HTMLElement;
     // Production, once the model says there is one; every service until narrowed.
     expect(await within(scope).findByText("Production")).toBeInTheDocument();
     expect(scope).toHaveTextContent("Tous les services");
 
     await user.click(within(scope).getByRole("button", { name: "Modifier" }));
-    await user.click(within(scope).getByRole("combobox", { name: /Environnement/ }));
-    const environments = (await screen.findAllByRole("option")).map((option) => option.textContent);
-    expect(environments).toEqual(["Tous les environnements", "Production", "Staging"]);
+    await user.click(
+      within(scope).getByRole("combobox", { name: /Environnement/ }),
+    );
+    const environments = (await screen.findAllByRole("option")).map(
+      (option) => option.textContent,
+    );
+    expect(environments).toEqual([
+      "Tous les environnements",
+      "Production",
+      "Staging",
+    ]);
   });
 
   it("asks for the context the intention needs, and shows it", async () => {
     const { ApiError } = await import("@/lib/api");
-    intentionsApi.create.mockRejectedValueOnce(new ApiError(422, "/intentions", "Nothing."));
+    intentionsApi.create.mockRejectedValueOnce(
+      new ApiError(422, "/intentions", "Nothing."),
+    );
     intentionsApi.create.mockResolvedValueOnce(
       created({
         context_id: "c1",
@@ -276,7 +362,10 @@ describe("the new intention's context and scope", () => {
     await user.click(screen.getByTestId("intention-launch"));
     expect(await screen.findByTestId("intention-step-2")).toBeInTheDocument();
     // Kept: its analysis followed on its page.
-    expect(screen.getByTestId("intention-follow")).toHaveAttribute("href", "/intentions/i1");
+    expect(screen.getByTestId("intention-follow")).toHaveAttribute(
+      "href",
+      "/intentions/i1",
+    );
     expect(intentionsApi.create).toHaveBeenLastCalledWith(
       {
         text: "Pourquoi acme/backend est lent depuis hier ?",
@@ -311,12 +400,21 @@ describe("the new intention's context and scope", () => {
       ]),
     );
     intentionsApi.create.mockResolvedValueOnce(
-      created({ context_id: "c1", purpose: "x", elements: [], sources: [], intent: null }),
+      created({
+        context_id: "c1",
+        purpose: "x",
+        elements: [],
+        sources: [],
+        intent: null,
+      }),
     );
     const user = userEvent.setup();
     show();
     await screen.findByRole("checkbox", { name: "acme/backend" });
-    await user.type(screen.getByTestId("intention-input"), "Redémarre acme/backend maintenant");
+    await user.type(
+      screen.getByTestId("intention-input"),
+      "Redémarre acme/backend maintenant",
+    );
     await user.click(screen.getByTestId("intention-submit"));
 
     const question = await screen.findByTestId("brief-question");
@@ -324,25 +422,43 @@ describe("the new intention's context and scope", () => {
     expect(within(question).getByTestId("brief-why")).toHaveTextContent(
       "Pourquoi : Une action doit savoir où elle s'applique",
     );
-    expect(within(question).getByTestId("brief-unknown")).toHaveTextContent("Je ne sais pas");
+    expect(within(question).getByTestId("brief-unknown")).toHaveTextContent(
+      "Je ne sais pas",
+    );
     // Blocked until it is answered: nothing launched on a doubt.
     expect(screen.getByTestId("intention-launch")).toBeDisabled();
-    expect(screen.getByTestId("brief-decision")).toHaveTextContent("Répondez à la question");
+    expect(screen.getByTestId("brief-decision")).toHaveTextContent(
+      "Répondez à la question",
+    );
 
     await user.click(within(question).getByRole("button", { name: "staging" }));
     await waitFor(() =>
       expect(intentionsApi.brief).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          answers: [{ question: "missing_environment", value: "staging", unknown: false }],
+          answers: [
+            {
+              question: "missing_environment",
+              value: "staging",
+              unknown: false,
+            },
+          ],
         }),
       ),
     );
-    await waitFor(() => expect(screen.getByTestId("intention-launch")).toBeEnabled());
+    await waitFor(() =>
+      expect(screen.getByTestId("intention-launch")).toBeEnabled(),
+    );
     await user.click(screen.getByTestId("intention-launch"));
     await waitFor(() =>
       expect(intentionsApi.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          answers: [{ question: "missing_environment", value: "staging", unknown: false }],
+          answers: [
+            {
+              question: "missing_environment",
+              value: "staging",
+              unknown: false,
+            },
+          ],
         }),
         expect.any(String),
       ),
@@ -377,7 +493,10 @@ describe("the new intention's context and scope", () => {
     show();
     await screen.findByRole("checkbox", { name: "acme/backend" });
 
-    await user.type(screen.getByTestId("intention-input"), "Pourquoi acme/backend est lent ?");
+    await user.type(
+      screen.getByTestId("intention-input"),
+      "Pourquoi acme/backend est lent ?",
+    );
     await user.click(screen.getByTestId("intention-submit"));
     await user.click(await screen.findByTestId("intention-launch"));
     await user.click(await screen.findByRole("button", { name: "Modifier" }));
@@ -393,7 +512,9 @@ describe("the new intention's context and scope", () => {
     expect(intentionsApi.create).toHaveBeenCalledTimes(1);
     expect(intentionsApi.ask).toHaveBeenCalledWith(
       "i1",
-      expect.objectContaining({ text: "Qui est responsable de acme/backend ?" }),
+      expect.objectContaining({
+        text: "Qui est responsable de acme/backend ?",
+      }),
     );
   });
 });

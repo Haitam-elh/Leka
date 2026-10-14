@@ -217,7 +217,6 @@ export function IntentionForm({
 
   useUnsavedChangesGuard(form.formState.isDirty && assembled === null);
 
-
   const sources = useSources();
   const environment = useEnvironment();
   const sourceItems = useMemo(
@@ -242,7 +241,16 @@ export function IntentionForm({
 
   /** What LEKA makes of it before it is asked — nothing kept. */
   async function review(given: IntentionAnswer[] = answers) {
-    if (!(await form.trigger())) return;
+    if (!(await form.trigger())) {
+      // Nothing to read, no source field to show it on: said, not silent (LEKA-445).
+      if (sources.data && sourceItems.length === 0) {
+        form.setError("root", {
+          type: "client",
+          message: t.composer.noSources,
+        });
+      }
+      return;
+    }
     const ask = askOf(form.getValues());
     setReviewing(true);
     try {
@@ -260,18 +268,24 @@ export function IntentionForm({
   }
 
   function answer(given: IntentionAnswer) {
-    const next = [...answers.filter((a) => a.question !== given.question), given];
+    const next = [
+      ...answers.filter((a) => a.question !== given.question),
+      given,
+    ];
     setAnswers(next);
     void review(next);
   }
 
   // Changed since it was read: read again before it is launched.
   const watched = useWatch({ control: form.control }) as IntentionRequest;
-  const stale = preview !== null && readAs !== JSON.stringify(askOf({ ...form.getValues(), ...watched }));
+  const stale =
+    preview !== null &&
+    readAs !== JSON.stringify(askOf({ ...form.getValues(), ...watched }));
   const launchable =
     preview !== null &&
     !stale &&
-    (preview.brief.decision === "analyse" || preview.brief.decision === "continue");
+    (preview.brief.decision === "analyse" ||
+      preview.brief.decision === "continue");
 
   const scope = useMemo<ScopeOptions>(() => {
     const known = environment.data;
@@ -365,7 +379,9 @@ export function IntentionForm({
           onAttachmentsChange={setAttachments}
           onSubmit={() => void review()}
           submitting={reviewing}
-          submitLabel={preview ? t.intentions.brief.read : t.intentions.brief.review}
+          submitLabel={
+            preview ? t.intentions.brief.read : t.intentions.brief.review
+          }
           suggested={preview === null}
         />
         {reviewing && !preview ? (
@@ -374,7 +390,11 @@ export function IntentionForm({
           </p>
         ) : null}
         {preview ? (
-          <section className="space-y-4" data-testid="intention-review" aria-busy={reviewing}>
+          <section
+            className="space-y-4"
+            data-testid="intention-review"
+            aria-busy={reviewing}
+          >
             {stale ? (
               <p
                 role="status"
@@ -382,7 +402,12 @@ export function IntentionForm({
                 data-testid="intention-review-stale"
               >
                 {t.intentions.brief.stale}
-                <Button type="button" size="sm" variant="outline" onClick={() => void review()}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void review()}
+                >
                   {t.intentions.brief.read}
                 </Button>
               </p>
@@ -595,8 +620,13 @@ function ReadsCard({ sources }: { sources: IntentionPreview["sources"] }) {
   const t = useDictionary();
   const w = t.intentions.brief;
   return (
-    <section className="rounded-xl border border-shell-line bg-white p-4" data-testid="intention-reads">
-      <h2 className="mb-2 text-[0.875rem] font-semibold text-brand-navy">{w.reads}</h2>
+    <section
+      className="rounded-xl border border-shell-line bg-white p-4"
+      data-testid="intention-reads"
+    >
+      <h2 className="mb-2 text-[0.875rem] font-semibold text-brand-navy">
+        {w.reads}
+      </h2>
       {sources.length ? (
         <>
           <p className="mb-2 text-[0.8125rem] text-shell-muted">
@@ -608,7 +638,10 @@ function ReadsCard({ sources }: { sources: IntentionPreview["sources"] }) {
                 key={source.id}
                 className="flex items-center gap-1.5 rounded-md bg-shell-canvas px-2 py-1 text-xs text-brand-navy"
               >
-                <SourceLogo kind={source.kind as Source["type"]} className="size-3.5" />
+                <SourceLogo
+                  kind={source.kind as Source["type"]}
+                  className="size-3.5"
+                />
                 {source.name}
               </li>
             ))}
