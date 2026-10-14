@@ -169,7 +169,10 @@ beforeEach(() => {
 describe("the catalogue", () => {
   it("says each capability, with why one cannot run — the model once, above", async () => {
     show(<CatalogueScreen />);
-    const [owner, architect] = await screen.findAllByTestId("capability-card");
+    await screen.findAllByTestId("capability-card");
+    const card = (key: string) =>
+      screen.getAllByTestId("capability-card").find((c) => c.dataset.key === key) as HTMLElement;
+    const [owner, architect] = [card("ownership"), card("application-architecture")];
     // LEKA's own, in French.
     expect(owner).toHaveTextContent("Responsabilités");
     expect(owner).toHaveTextContent("Qui en est responsable");
@@ -196,6 +199,34 @@ describe("the catalogue", () => {
     expect(screen.getByTestId("catalogue-ask")).toHaveAttribute("href", "/intentions/new");
   });
 
+  it("shows one box per domain, its agents apart from LEKA's own capabilities", async () => {
+    // 2026-10-14: « une case avec les agents et capacités sur le code, pareil
+    // pour les autres » — never mixed.
+    const user = userEvent.setup();
+    show(<CatalogueScreen />);
+    await screen.findAllByTestId("capability-card");
+    const domains = screen.getAllByTestId("catalogue-domain");
+    expect(domains.map((d) => d.dataset.domain)).toEqual(["architecture", "knowledge"]);
+    const [architecture, knowledge] = domains;
+    expect(within(architecture).getByRole("heading", { level: 2 })).toHaveTextContent("Architecture");
+    expect(within(architecture).getByTestId("catalogue-domain-count")).toHaveTextContent("1 agent");
+    expect(
+      within(within(architecture).getByTestId("catalogue-domain-agents")).getByTestId("capability-card"),
+    ).toHaveAttribute("data-key", "application-architecture");
+    expect(within(architecture).queryByTestId("catalogue-domain-own")).not.toBeInTheDocument();
+    expect(within(knowledge).getByRole("heading", { level: 2 })).toHaveTextContent("Connaissance");
+    expect(
+      within(within(knowledge).getByTestId("catalogue-domain-own")).getByTestId("capability-card"),
+    ).toHaveAttribute("data-key", "ownership");
+    expect(within(knowledge).getByTestId("catalogue-domain-count")).toHaveTextContent("1 capacité");
+
+    // The agents only, then LEKA's own only.
+    await user.click(screen.getByTestId("catalogue-show-agents"));
+    expect(screen.getAllByTestId("capability-card").map((c) => c.dataset.kind)).toEqual(["agent"]);
+    await user.click(screen.getByTestId("catalogue-show-capabilities"));
+    expect(screen.getAllByTestId("capability-card").map((c) => c.dataset.key)).toEqual(["ownership"]);
+  });
+
   it("chooses by need and by words, and keeps one at hand", async () => {
     const user = userEvent.setup();
     show(<CatalogueScreen />);
@@ -210,7 +241,9 @@ describe("the catalogue", () => {
     await waitFor(() =>
       expect(api.list).toHaveBeenLastCalledWith(expect.objectContaining({ q: "archi" })),
     );
-    const [owner] = screen.getAllByTestId("capability-card");
+    const owner = screen
+      .getAllByTestId("capability-card")
+      .find((c) => c.dataset.key === "ownership") as HTMLElement;
     await user.click(within(owner).getByTestId("capability-favourite"));
     await waitFor(() => expect(api.favourite).toHaveBeenCalledWith("ownership", true));
   });
