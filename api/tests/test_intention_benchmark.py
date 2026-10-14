@@ -50,8 +50,8 @@ from leka.intentions import reading, understanding, writing
 from leka.intentions.analysis import Capability, Material, Output
 from leka.intentions.analyst import PLATFORM
 from leka.intentions.capabilities import CAPABILITIES
-from leka.intentions.proposal import RULES
 from leka.intentions.processing import analyse_intention
+from leka.intentions.proposal import RULES
 from leka.knowledge.registry import MODEL_VERSION
 from leka.platform import Workspace
 from tests.benchmark import grid
@@ -285,7 +285,16 @@ async def observe(client: AsyncClient, workspace_id: uuid.UUID, case: Case) -> O
     decisions = await client.get(f"{API}/{intention_id}/decisions")
     if analysis.status_code not in (200, 404) or decisions.status_code != 200:
         seen["crashed"] = f"read: {analysis.status_code} {decisions.status_code}"
-    seen["final"] = detail["status"]
+    # Answered, it awaits its asker's own decision — its agents, or by hand
+    # (2026-10-14): `answered`; a decision on actions to systems opened is
+    # what `awaiting_decision` says.
+    opened = list(decisions.json() if decisions.status_code == 200 else [])
+    seen["final"] = (
+        "answered"
+        if detail["status"] == "awaiting_decision"
+        and not [d for d in opened if d.get("status") != "superseded"]
+        else detail["status"]
+    )
     seen["readiness"] = (detail.get("readiness") or {}).get("status")
     seen = _read(detail["understanding"], detail["brief"], seen)
     seen.update(

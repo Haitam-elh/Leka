@@ -457,12 +457,15 @@ async def _analyse_intention(
             # proposed, never started: a person launches them at its
             # decision (2026-10-14). In a session of its own: whatever goes
             # wrong there leaves this one whole.
+            # An action blocked by its context is asked to be clarified
+            # first: nothing proposed yet.
+            blocked = ready is not None and ready.status == "blocked" and asked.acting
             try:
                 async with session_factory() as own:
                     mine = await IntentionRepository(own, workspace_id).intention(intention.id)
                     proposal = (
                         await propose(own, workspace_id, mine, language=asked.language, now=moment)
-                        if mine
+                        if mine and not blocked
                         else None
                     )
             except Exception:

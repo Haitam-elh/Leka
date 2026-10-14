@@ -9,7 +9,8 @@ What these protect:
 - An action asked is put to a decision once analysed: what it would do,
   on what, where, whether it can be undone, at which risk — production
   makes it at least medium — and how many must approve; linked to the
-  intention. A question asks for no decision.
+  intention. A question asks for no decision on actions: it awaits only
+  its own — its agents, or by hand (2026-10-14).
 - Approved by who may approve: the intention approved, by that person,
   with the decision in its history; a member may not approve.
 - Rejected, it says why: the intention rejected, nothing to approve after.
@@ -199,7 +200,8 @@ async def test_a_question_asks_for_no_decision(
     client: AsyncClient, model: dict[str, uuid.UUID], acme: dict[str, uuid.UUID]
 ) -> None:
     intention = await _asked(client, acme, "Qui est responsable de Billing API ?")
-    assert await _status(client, intention) == "completed"
+    # Its own decision only — its agents, or by hand — none on actions.
+    assert await _status(client, intention) == "awaiting_decision"
     assert await _decisions(client, intention) == []
 
 
@@ -314,7 +316,7 @@ async def test_a_question_partly_answered_is_said_partial_no_decision(
     """Informational: answered with what is in the way said — never gated."""
     question = "Qu'est-ce qui a changé sur Billing API cette semaine ?"
     intention = await _asked_without_changes(client, acme, question)
-    assert await _status(client, intention) == "completed"
+    assert await _status(client, intention) == "awaiting_decision"
     analysis = (await client.get(f"{API}/intentions/{intention['id']}/analysis")).json()
     assert analysis["status"] == "partial"
     assert await _decisions(client, intention) == []
