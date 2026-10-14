@@ -91,8 +91,18 @@ model with its id, its type and its line of text, **as data**.
 | `read_entity` | one thing by its id, and what it is tied to — only of its types | `workspace:read` |
 | `dependencies` | what one thing depends on (`depends_on`) or what depends on it (`used_by`), 1 to 3 steps — only of its types, the rest counted (LEKA-400) | `workspace:read` |
 | `what_happened` | incidents, deployments, changes, releases, merges around one thing, 1 to 30 days back — only of its types (LEKA-400) | `workspace:read` |
+| `read_content` | what one thing's records say — a page's text, a ticket's description, a README — its 4 latest, each cut at 6,000 characters; only of its types (2026-10-14) | `workspace:read` |
 | `list_files`, `read_file` | a GitHub repository's files, one file's text — the code-change agent's (§ 6 ter) | `workspace:read` |
 | `list_pull_requests`, `read_pull_request` | a GitHub repository's pull requests, one with its diff — the code review's (§ 6 quater) | `workspace:read` |
+
+**Rounds.** A run calls tools for 16 rounds at most, then it must answer:
+the last round offers none. An agent that reads a whole documentation
+asks for more in its file (`rounds:`, at most 40). The architect asks for
+30, and its instructions (§ 7.0) tell it to read: it searches the journey,
+reads the text of each page, document, ticket and repository that matters
+(`read_content`), follows the dependencies, and only then draws. Before,
+it drew from names alone: `read_entity` gives a thing's name and ties, not
+what its documents say.
 
 **An agent is offered only the tools its file declares** (`tools:`, LEKA-400)
 — every read-only one when it declares none; an unknown tool refuses the

@@ -2,7 +2,7 @@
 name: application-architecture
 title: Architecte applicatif
 description: Use when someone asks for the application architecture of a business journey on a perimeter — a deck with the business layer in ArchiMate 3.0.1, the application layer as sequence diagrams, the business rules, the RACI, the points to confirm and the sources, built only from the documentation, never invented. For any organisation.
-version: 19.0.0
+version: 19.1.0
 category: architecture
 entity_types: [business_process, application, service, document, person, team, knowledge_space, repository, project, issue, database, schema, data_object, infra_resource, environment]
 requires: ["confluence|microsoft_365|google_workspace|notion|guru|slab|github|gitlab|bitbucket|jira|linear|asana|clickup|monday|trello|postgresql|mysql|mariadb|sqlserver|oracle|mongodb|supabase"]
@@ -11,6 +11,7 @@ risk: medium
 outputs: document
 deliverables: [pptx, pdf]
 renders: architecture_deck
+rounds: 30
 inputs:
   - name: parcours
     type: text
@@ -369,6 +370,26 @@ Chaque élément orange est repris dans la slide « Points de contrôle » avec 
 ==
 7. EXPLOITATION DES SOURCES (CONFLUENCE / SHAREPOINT / DOCUMENTS)
 ==
+7.0 Dans LEKA : rassembler toute la documentation AVANT de dessiner
+  Les outils de LEKA remplacent les libellés indicatifs ci-dessous :
+  « search_entities » trouve, « read_content » LIT le texte d'une page, d'un
+  document, d'un ticket, d'un README — « read_entity » ne donne que le nom et
+  les liens —, « dependencies » suit les liens, « what_happened » dit ce qui a
+  changé.
+  Ne commence pas le deck avant d'avoir, dans cet ordre :
+  1. cherché le parcours, son périmètre et leurs synonymes (plusieurs
+     requêtes), puis chaque application, service, base et équipe trouvé ;
+  2. lu le contenu (« read_content ») de CHAQUE page, document, ticket et dépôt
+     pertinent — les dossiers d'architecture, SFG / SFD, spécifications
+     d'interfaces, README et docs d'un dépôt en premier ; au moins dix
+     lectures quand les sources en ont autant ;
+  3. suivi les dépendances de chaque application du parcours (« dependencies »,
+     dans les deux sens) et lu ce qu'elles touchent ;
+  4. regardé ce qui a changé récemment sur ces applications (« what_happened »).
+  Chaque élément du deck — un acteur, une application, un flux, une règle —
+  s'appuie sur ce que tu as LU ; ce que rien ne dit reste « À confirmer », et
+  chaque lecture figure dans la slide « Sources consultées et limites ».
+
 7.1 Ordre de recherche
   • Identifier le parcours et le périmètre ; trouver la clé d'espace correspondante dans la
     table {{ESPACES_CONFLUENCE}} (§7.2).

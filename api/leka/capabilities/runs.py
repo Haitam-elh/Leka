@@ -263,6 +263,36 @@ def _contexts(session: AsyncSession, workspace_id: uuid.UUID) -> ContextService:
     )
 
 
+# What read_content gives of one thing, at most: its latest records, the
+# start of each.
+MOST_RECORDS = 4
+RECORD_CHARS = 6_000
+
+
+def _contents(
+    session: AsyncSession, workspace_id: uuid.UUID
+) -> Callable[[uuid.UUID], Awaitable[list[dict[str, object]]]]:
+    """What one thing's records say — the records it was read from, the
+    latest first, the start of each: what read_content answers."""
+    repository = ContentRepository(session, workspace_id)
+
+    async def read(entity_id: uuid.UUID) -> list[dict[str, object]]:
+        rows = await repository.evidence_of(entity_id, limit=MOST_RECORDS, chars=RECORD_CHARS)
+        return [
+            {
+                "title": row.title,
+                "kind": row.kind,
+                "url": row.url,
+                "updated_at": row.updated_at,
+                "text": row.excerpt,
+                "gone": row.deleted_at is not None,
+            }
+            for row in rows
+        ]
+
+    return read
+
+
 async def _context(
     session: AsyncSession, run: AgentRun, definition: Definition
 ) -> AssembledContext | None:
@@ -437,6 +467,7 @@ async def _run(
         definition,
         GraphService(GraphRepository(session, workspace_id)),
         KnowledgeService(EntityRepository(session, workspace_id)),
+        content=_contents(session, workspace_id),
     )
     # What it reads of pull requests, kept with the run: its deliverable
     # shows its comments on the diff it read (review.py).
@@ -476,7 +507,7 @@ async def _run(
                 request,
                 offered_now,
                 replace(needs_of(definition), tools=bool(given)),
-                rounds=TOOL_ROUNDS,
+                rounds=definition.rounds or TOOL_ROUNDS,
                 conclude=True,
             ),
             timeout=budget,
