@@ -19,6 +19,7 @@ from __future__ import annotations
 import base64
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 
 import httpx
 
@@ -54,6 +55,31 @@ class PullRequest:
     url: str
     branch: str
     commit: str
+
+
+# Read of its pull requests, at most: how many listed, how many files of
+# one, how much of a file's diff, how much in all, how much of what it says.
+MAX_PULLS = 30
+MAX_PULL_FILES = 100
+MAX_PATCH_CHARS = 20_000
+MAX_PULL_CHARS = 120_000
+MAX_BODY = 4_000
+
+
+def _pull_brief(found: dict[str, Any]) -> dict[str, object]:
+    user = found.get("user")
+    return {
+        "number": int(found.get("number") or 0),
+        "title": str(found.get("title") or ""),
+        "state": str(found.get("state") or ""),
+        "merged": bool(found.get("merged_at")),
+        "draft": bool(found.get("draft")),
+        "author": str(user.get("login") or "") if isinstance(user, dict) else "",
+        "url": str(found.get("html_url") or ""),
+        "created_at": found.get("created_at"),
+        "updated_at": found.get("updated_at"),
+        "merged_at": found.get("merged_at"),
+    }
 
 
 class GitHubCode:
@@ -161,6 +187,69 @@ class GitHubCode:
             return base64.b64decode(str(found.get("content") or "")).decode("utf-8")
         except (ValueError, UnicodeDecodeError) as error:
             raise CodeRefusedError("binary", f"{path} n'est pas un fichier texte.") from error
+
+    # ── its pull requests, read (2026-10-14: the code review's deliverable) ──
+
+    async def pulls(self, repository: str, *, limit: int = 10) -> list[dict[str, object]]:
+        """Its latest pull requests, the latest updated first — open, merged
+        or closed."""
+        async with self._client() as client:
+            answer = await client.get(
+                f"/repos/{self._checked(repository)}/pulls",
+                params={
+                    "state": "all",
+                    "sort": "updated",
+                    "direction": "desc",
+                    "per_page": max(1, min(limit, MAX_PULLS)),
+                },
+            )
+        if answer.status_code != 200:
+            raise self._refused(answer, f"les pull requests de {repository}")
+        found = answer.json()
+        return [_pull_brief(each) for each in found if isinstance(each, dict)]
+
+    async def pull(self, repository: str, number: int) -> dict[str, object]:
+        """One pull request: what it says, and each file it changes with its
+        diff — cut to what a reader can take."""
+        name = self._checked(repository)
+        async with self._client() as client:
+            head = await client.get(f"/repos/{name}/pulls/{number}")
+            if head.status_code != 200:
+                raise self._refused(head, f"la pull request #{number} de {repository}")
+            listed = await client.get(
+                f"/repos/{name}/pulls/{number}/files", params={"per_page": MAX_PULL_FILES}
+            )
+        if listed.status_code != 200:
+            raise self._refused(listed, f"les fichiers de la pull request #{number}")
+        meta = head.json()
+        files: list[dict[str, object]] = []
+        room = MAX_PULL_CHARS
+        for each in listed.json():
+            if not isinstance(each, dict):
+                continue
+            patch = str(each.get("patch") or "")
+            kept = patch[: max(0, min(MAX_PATCH_CHARS, room))]
+            room -= len(kept)
+            files.append(
+                {
+                    "path": str(each.get("filename") or ""),
+                    "status": str(each.get("status") or "modified"),
+                    "additions": int(each.get("additions") or 0),
+                    "deletions": int(each.get("deletions") or 0),
+                    "patch": kept,
+                    "truncated": len(kept) < len(patch),
+                }
+            )
+        return {
+            **_pull_brief(meta),
+            "body": str(meta.get("body") or "")[:MAX_BODY],
+            "base": str((meta.get("base") or {}).get("ref") or ""),
+            "head": str((meta.get("head") or {}).get("ref") or ""),
+            "additions": int(meta.get("additions") or 0),
+            "deletions": int(meta.get("deletions") or 0),
+            "changed_files": int(meta.get("changed_files") or len(files)),
+            "files": files,
+        }
 
     # ── the one write: a pull request ────────────────────────────────────────
 

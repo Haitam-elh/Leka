@@ -117,6 +117,7 @@ from leka.capabilities.registry import (
     workflow_catalogue,
 )
 from leka.capabilities.repository import CapabilityRunRepository
+from leka.capabilities.review import review_of, without_block
 from leka.capabilities.router import ROUTING_VERSION, RouteQuery, Routing, route
 from leka.capabilities.runs import capability_resource, execute_run, queue_run, sweep_runs
 from leka.capabilities.runtime import (
@@ -163,6 +164,7 @@ from leka.capabilities.schemas import (
     CodeChangeDecision,
     CodeChangeFileRead,
     CodeChangeRead,
+    CodeReviewRead,
     DeliverableRead,
     LLMRunRead,
     ModelBreakdownRead,
@@ -302,6 +304,7 @@ __all__ = [
     "CodeChangeDecision",
     "CodeChangeFileRead",
     "CodeChangeRead",
+    "CodeReviewRead",
     "ContextItem",
     "ContextPack",
     "Contract",
@@ -438,6 +441,7 @@ __all__ = [
     "read_index",
     "register",
     "register_step",
+    "review_of",
     "route",
     "routing_read",
     "run_catalogue_sync",
@@ -453,5 +457,6 @@ __all__ = [
     "sync_catalogue",
     "tool_schema",
     "validated",
+    "without_block",
     "workflow_catalogue",
 ]

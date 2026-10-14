@@ -2,7 +2,7 @@
 name: code-review
 title: "Revue de code"
 description: "Use when someone asks for a review of a pull request or a recent change to a repository — what it touches, what it risks, who should look at it — from what the code hosting sources say."
-version: 1.2.0
+version: 1.3.0
 category: development
 entity_types: [repository, pull_request, commit, service, person, team, change, deployment, release, application, incident, business_capability, business_process]
 requires: ["github|gitlab|bitbucket"]
@@ -10,7 +10,7 @@ mode: read_only
 risk: low
 outputs: analysis
 deliverables: [markdown]
-tools: [search_entities, read_entity, what_happened]
+tools: [search_entities, read_entity, what_happened, list_pull_requests, read_pull_request]
 skills: [change-review, repository-profile]
 inputs:
   - name: changement
@@ -39,6 +39,14 @@ Use when someone asks for a review of a pull request or a recent change to a rep
 ## Ce qu'il regarde
 
 La pull request ou le dépôt demandé, ses commits récents (outil `what_happened`), les services qu'il porte, leurs responsables et relecteurs habituels.
+
+**Le diff, quand le dépôt est sur GitHub.** Liste ses pull requests
+(`list_pull_requests`, nom complet `owner/repo`) pour trouver celle qui est
+demandée — « la dernière » est la plus récemment mise à jour —, puis lis-la
+(`read_pull_request`) : sa description, chaque fichier et son diff. La revue
+porte alors sur les lignes elles-mêmes, pas seulement sur ce que les sources
+en disent. Un diff coupé (`truncated`) se dit : ce qui n'a pas été lu n'est
+pas jugé.
 
 Commence par le contexte fourni ; s'il ne suffit pas, cherche (`search_entities`),
 lis (`read_entity`), regarde ce qui s'est passé (`what_happened`).
@@ -89,8 +97,39 @@ Un document markdown, dans la langue de la demande :
 4. **Avis** — favorable, prudence (un constat élevé) ou à revoir (un constat
    critique). Un avis, jamais une décision : la pull request reste à ses relecteurs.
 5. **Qui devrait relire** — d'après les responsables et contributeurs connus.
-6. **Limites** — LEKA ne lit pas le diff ligne à ligne : ce qui ne peut pas être
-   jugé sans lui est dit, avec les constats de faible confiance.
+6. **Limites** — ce qui n'a pas pu être lu (un diff coupé, un dépôt hors
+   GitHub dont le diff n'est pas lisible ici) et ne peut donc pas être jugé,
+   avec les constats de faible confiance.
+
+**Puis, quand tu as lu le diff d'une pull request**, termine par un bloc
+`leka-review` : l'écran le montre sur le diff, chaque commentaire sur sa ligne.
+Seuls comptent les commentaires posés sur une ligne que le diff montre ; les
+autres sont écartés.
+
+```leka-review
+{"repository": "owner/repo", "number": 273, "verdict": "favorable",
+ "comments": [
+  {"path": "api/leka/x.py", "line": 42, "side": "new", "kind": "issue",
+   "severity": "eleve", "title": "En une ligne",
+   "comment": "Le constat, son scénario, ce qu'il cite.",
+   "suggestion": "le code proposé à la place, s'il y en a un"},
+  {"path": "web/y.tsx", "line": 10, "side": "new", "kind": "suggestion",
+   "title": "…", "comment": "…"},
+  {"path": "docs/z.md", "line": null, "side": "new", "kind": "good",
+   "title": "…", "comment": "…"}
+ ]}
+```
+
+- `repository` et `number` : la pull request lue avec `read_pull_request`.
+- `verdict` : `favorable`, `prudence` (un constat élevé) ou `a_revoir` (un critique).
+- `line` : le numéro dans le nouveau fichier (`side: "new"`, une ligne ajoutée
+  ou inchangée du diff) ou dans l'ancien (`side: "old"`, une ligne retirée) ;
+  `null` pour un commentaire sur tout le fichier.
+- `kind` : `issue` — ce qui ne va pas (avec `severity` : `critique`, `eleve`,
+  `moyen`, `faible`) ; `suggestion` — mieux faire, avec le code proposé dans
+  `suggestion` quand il y en a un ; `good` — ce qui est bien fait, à garder.
+- Les mêmes règles que le tableau : un commentaire est un constat de la revue,
+  rien de plus, rien d'inventé.
 
 ## Ce qu'il ne doit jamais faire
 
