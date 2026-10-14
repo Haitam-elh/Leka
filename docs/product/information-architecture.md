@@ -29,16 +29,9 @@ Intentions            Dites à LEKA ce que vous voulez accomplir.
                                                               proposals (LEKA-380) and the
                                                               conflicts (LEKA-382) waiting —
                                                               on the section, when folded
-Mon environnement     Le système vivant de votre entreprise.
-  Vue globale                                    /environment
-  Applications                                   /environment?tab=applications
-  Infrastructure                                 /environment?tab=infrastructure
-  Données                                        /environment?tab=data
-  Dépendances                                    /environment?tab=dependencies
-  Équipes                                        /environment?tab=organisation
-  Événements                                     /environment?tab=events
-  Domaines                                       /environment?tab=domains
-  Qualité                                        /environment?tab=quality
+Mon environnement     Le système vivant de votre entreprise.   /environment  — its name opens
+                                                              its Vue globale; its views are
+                                                              chosen on the page, top right
   Activité                                       /activity
 Capacités             Votre équipe technologique à la demande.
   Capacités disponibles                          /capabilities
@@ -103,7 +96,7 @@ has no entry that is "the one without a path of its own".
 | Intentions › Nouvelle intention | `/intentions/new` | `intention:create` | available |
 | Intentions › Mes intentions | `/intentions`, `/intentions/:id` | `intention:read` | available |
 | Intentions › À valider | `/approvals`, `/approvals/:id` | `intention:approve` | available |
-| Mon environnement › its 9 views | `/environment`, `/environment/graph`, `/environment/:type/:id` | `workspace:read` | available |
+| Mon environnement (its 9 views, chosen on the page) | `/environment`, `/environment/graph`, `/environment/:type/:id` | `workspace:read` | available |
 | Mon environnement › Activité | `/activity` | `workspace:read` | available |
 | Capacités › its 3 views | `/capabilities`, `/capabilities/:id` | `workspace:read` | available |
 | Administration › Sources | `/sources`, `/sources/:id` | `source:read` | available |
@@ -159,13 +152,22 @@ they are how LEKA does it, and show through the pillars.
 `web/config/navigation.test.ts` holds this: exactly three pillars, no
 technical word at the top level, every page still reachable.
 
-**F. A view of a page is a line, by its query.** « Applications » is
-`/environment?tab=applications`, not a page of its own: the eight views of
-Mon environnement are one screen with tabs (LEKA-369), and an address like
+**F. A view of a page is its query.** « Applications » is
+`/environment?tab=applications`, not a page of its own: the views of
+Mon environnement are one screen (LEKA-369), and an address like
 `/environment/applications` would collide with an entity's sheet,
 `/environment/:type/:id`. A route declares the views it has; the first is
 the address with no tab. The Capacités views are read by its catalogue
-(LEKA-393): `?tab=mine`, `?tab=configuration`.
+(LEKA-393): `?tab=mine`, `?tab=configuration` — each a line of the sidebar.
+
+**F bis. Mon environnement opens on its Vue globale (Haitam, 2026-10-14).**
+Its name in the sidebar opens `/environment` — the Vue globale — and
+unfolds it. Its other views are chosen on the page, in a menu at the top
+right: Vue globale, Applications, Infrastructure, Données, Dépendances,
+Équipes, Événements, Domaines, Qualité. Under it, the sidebar keeps
+Activité only. A view chosen on the page marks Mon environnement as the
+current page. The palette (⌘K) still finds each view by its name
+(`views:` in config/navigation.ts).
 
 **G. Sections fold, Intentions open.** A person opens and closes sections,
 and the choice is remembered on their browser. Intentions starts open — the

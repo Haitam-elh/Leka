@@ -3069,7 +3069,8 @@ const fr = {
     listView: "Liste",
     tabsLabel: "Vue de l'environnement",
     tabs: {
-      architecture: "Architecture",
+      // The first, the whole environment: what « Mon environnement » opens.
+      architecture: "Vue globale",
       applications: "Applications",
       infrastructure: "Infrastructure",
       data: "Données",
@@ -10230,7 +10231,7 @@ const en: Dictionary = {
     listView: "List",
     tabsLabel: "Environment view",
     tabs: {
-      architecture: "Architecture",
+      architecture: "Overall view",
       applications: "Applications",
       infrastructure: "Infrastructure",
       data: "Data",

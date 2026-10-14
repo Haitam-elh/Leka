@@ -110,6 +110,7 @@ describe("what the palette offers", () => {
 
     await user.type(screen.getByTestId("palette-input"), "environnement");
 
+    // Its views, chosen on its page, still found here (2026-10-14).
     const applications = screen.getByTestId("palette-environment-applications");
     expect(applications).toHaveTextContent("Mon environnement › Applications");
     await user.click(applications);

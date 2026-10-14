@@ -11,7 +11,7 @@
  * are announced; a member sees what a member may open.
  */
 
-import { render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -67,6 +67,8 @@ const { AppSidebar } = await import("@/components/shell/app-sidebar");
 const { ShellProvider } = await import("@/components/shell/shell-provider");
 
 const fr = DICTIONARIES.fr;
+/** Mon environnement's name, a link: its label and what it is for. */
+const ENVIRONMENT = `${fr.nav.environment}${fr.pillars.environment}`;
 
 async function renderSidebar(props: Partial<Parameters<typeof AppSidebar>[0]> = {}) {
   const rendered = render(
@@ -113,10 +115,12 @@ describe("the three pillars", () => {
       ["environment", "Mon environnement", "Le système vivant de votre entreprise."],
       ["capabilities", "Capacités", "Votre équipe technologique à la demande."],
     ]) {
-      const toggle = sectionToggle(id);
-      expect(toggle).toHaveTextContent(label);
-      expect(toggle).toHaveTextContent(sentence);
+      const section = screen.getByTestId(`nav-section-${id}`);
+      expect(section).toHaveTextContent(label);
+      expect(section).toHaveTextContent(sentence);
     }
+    // Mon environnement's name opens its overview (2026-10-14).
+    expect(screen.getByTestId("nav-environment-overview")).toHaveTextContent("Mon environnement");
   });
 
   it("starts with Intentions open, the rest closed — short enough to hold whole", async () => {
@@ -127,6 +131,8 @@ describe("the three pillars", () => {
       "Nouvelle intention",
       "Mes intentions",
       "À valider",
+      // Its name, a link to its overview, folded or not.
+      ENVIRONMENT,
     ]);
     for (const id of ["environment", "capabilities", "administration"]) {
       expect(sectionToggle(id)).toHaveAttribute("aria-expanded", "false");
@@ -146,15 +152,8 @@ describe("the three pillars", () => {
       "Nouvelle intention",
       "Mes intentions",
       "À valider",
-      "Vue globale",
-      "Applications",
-      "Infrastructure",
-      "Données",
-      "Dépendances",
-      "Équipes",
-      "Événements",
-      "Domaines",
-      "Qualité",
+      // Its views are chosen on its page (2026-10-14): under it, what happened.
+      ENVIRONMENT,
       "Activité",
       "Capacités disponibles",
       "Mes capacités",
@@ -167,14 +166,11 @@ describe("the three pillars", () => {
     ]);
   });
 
-  it("opens each view of « Mon environnement » by its address", async () => {
+  it("opens « Mon environnement » by its name, its views chosen on its page", async () => {
     await renderSidebar();
 
     expect(screen.getByTestId("nav-environment-overview")).toHaveAttribute("href", "/environment");
-    expect(screen.getByTestId("nav-environment-applications")).toHaveAttribute(
-      "href",
-      "/environment?tab=applications",
-    );
+    expect(screen.queryByTestId("nav-environment-applications")).not.toBeInTheDocument();
     expect(screen.getByTestId("nav-capabilities-mine")).toHaveAttribute(
       "href",
       "/capabilities?tab=mine",
@@ -286,14 +282,21 @@ describe("the current page", () => {
     expect(screen.getByTestId("nav-intentions")).not.toHaveAttribute("aria-current");
   });
 
-  it("is the view the address asks for", async () => {
+  it("is the view the address asks for — a view chosen on its page, its page's", async () => {
     pathname.value = "/environment";
     search.value = "tab=dependencies";
     await renderSidebar();
 
     const marked = within(navigation()).getAllByRole("link", { current: "page" });
     expect(marked).toHaveLength(1);
-    expect(marked[0]).toHaveAttribute("data-testid", "nav-environment-dependencies");
+    expect(marked[0]).toHaveAttribute("data-testid", "nav-environment-overview");
+
+    cleanup();
+    pathname.value = "/capabilities";
+    search.value = "tab=mine";
+    await renderSidebar();
+    const mine = within(navigation()).getAllByRole("link", { current: "page" });
+    expect(mine.map((link) => link.dataset.testid)).toEqual(["nav-capabilities-mine"]);
   });
 
   it("is the page a detail page belongs to", async () => {
@@ -396,10 +399,11 @@ describe("folding the sidebar", () => {
 
     const menu = await screen.findByRole("menu");
     expect(within(menu).getByText("Le système vivant de votre entreprise.")).toBeInTheDocument();
-    const data = within(menu).getByRole("menuitem", { name: "Données" });
-    expect(data).toHaveAttribute("href", "/environment?tab=data");
-    expect(data).toHaveAttribute("aria-current", "page");
-    expect(within(menu).getAllByRole("menuitem")).toHaveLength(10);
+    // Its overview first — a view chosen on it is its own (2026-10-14).
+    const overview = within(menu).getByRole("menuitem", { name: "Vue globale" });
+    expect(overview).toHaveAttribute("href", "/environment");
+    expect(overview).toHaveAttribute("aria-current", "page");
+    expect(within(menu).getAllByRole("menuitem")).toHaveLength(2);
     // What happened in the environment is one of its lines (2026-10-07).
     expect(within(menu).getByRole("menuitem", { name: "Activité" })).toHaveAttribute(
       "href",
@@ -438,7 +442,7 @@ describe("what a role may see", () => {
     // Reading the map and creating intentions is most of the value.
     expect(screen.getByTestId("nav-intention-new")).toBeInTheDocument();
     expect(screen.getByTestId("nav-intentions")).toBeInTheDocument();
-    expect(screen.getByTestId("nav-environment-applications")).toBeInTheDocument();
+    expect(screen.getByTestId("nav-environment-overview")).toBeInTheDocument();
     expect(screen.getByTestId("nav-capabilities-available")).toBeInTheDocument();
     expect(screen.getByTestId("nav-sources")).toBeInTheDocument();
   });

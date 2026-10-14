@@ -55,6 +55,73 @@ export function SidebarSection({
   // Folded, the section says what waits in it: its lines cannot.
   const waiting = open ? 0 : waitingIn(section, badges);
 
+  const home = section.home;
+  if (home) {
+    // Its name opens its page — and unfolds it; the chevron alone folds
+    // (2026-10-14).
+    const here = activeLeaf?.id === home.id;
+    return (
+      <div data-testid={`nav-section-${section.id}`} data-active={holds || undefined}>
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start rounded-lg transition-colors hover:bg-brand-violet-soft/60">
+          <Link
+            href={hrefOf(home)}
+            aria-current={here ? "page" : undefined}
+            data-testid={`nav-${home.id}`}
+            onClick={() => {
+              if (!open) onToggle();
+              onNavigate?.();
+            }}
+            className="grid grid-cols-[22px_minmax(0,1fr)] items-center gap-x-5 rounded-lg py-[10px] ps-4 text-start outline-none focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+          >
+            <Icon
+              className={cn(
+                "size-[22px] shrink-0",
+                holds ? "text-shell-nav-active" : pillar ? "text-shell-icon" : "text-shell-muted",
+              )}
+              aria-hidden="true"
+            />
+            <span
+              className={cn(
+                "text-[0.8125rem] leading-5 tracking-[-0.015em]",
+                pillar ? "font-semibold" : "font-medium",
+                holds ? "text-shell-nav-active" : pillar ? "text-shell-nav" : "text-shell-muted",
+              )}
+            >
+              {t.nav[section.labelKey]}
+            </span>
+            {section.hintKey ? (
+              <span className="col-start-2 mt-0.5 text-[0.6875rem] leading-4 text-shell-muted">
+                {t.pillars[section.hintKey]}
+              </span>
+            ) : null}
+          </Link>
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={open}
+            aria-controls={listId}
+            aria-label={t.nav[section.labelKey]}
+            data-testid={`nav-section-${section.id}-toggle`}
+            className="mt-[10px] me-1 rounded p-1 outline-none focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+          >
+            <ChevronDown
+              className={cn("size-3.5 shrink-0 text-shell-muted transition-transform", !open && "-rotate-90")}
+              aria-hidden="true"
+            />
+          </button>
+        </div>
+        <Lines
+          section={section}
+          listId={listId}
+          open={open}
+          activeLeaf={activeLeaf}
+          badges={badges}
+          onNavigate={onNavigate}
+        />
+      </div>
+    );
+  }
+
   return (
     <div data-testid={`nav-section-${section.id}`} data-active={holds || undefined}>
       <button
@@ -111,23 +178,44 @@ export function SidebarSection({
           </span>
         ) : null}
       </button>
-      <ul id={listId} hidden={!open} className="mt-0.5 space-y-0.5">
-        {section.children.map((child) => (
-          <li key={child.id}>
-            <SidebarNavItem
-              id={child.id}
-              label={t.nav[child.labelKey]}
-              href={hrefOf(child)}
-              active={activeLeaf?.id === child.id}
-              collapsed={false}
-              nested
-              badge={child.badgeKey ? badges?.[child.badgeKey] : undefined}
-              onNavigate={onNavigate}
-            />
-          </li>
-        ))}
-      </ul>
+      <Lines
+        section={section}
+        listId={listId}
+        open={open}
+        activeLeaf={activeLeaf}
+        badges={badges}
+        onNavigate={onNavigate}
+      />
     </div>
+  );
+}
+
+function Lines({
+  section,
+  listId,
+  open,
+  activeLeaf,
+  badges,
+  onNavigate,
+}: SectionProps & { listId: string; open: boolean }) {
+  const t = useDictionary();
+  return (
+    <ul id={listId} hidden={!open} className="mt-0.5 space-y-0.5">
+      {section.children.map((child) => (
+        <li key={child.id}>
+          <SidebarNavItem
+            id={child.id}
+            label={t.nav[child.labelKey]}
+            href={hrefOf(child)}
+            active={activeLeaf?.id === child.id}
+            collapsed={false}
+            nested
+            badge={child.badgeKey ? badges?.[child.badgeKey] : undefined}
+            onNavigate={onNavigate}
+          />
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -211,7 +299,7 @@ export function RailSection({
                   <span className="block font-normal text-shell-muted">{hint}</span>
                 ) : null}
               </MenuPrimitive.GroupLabel>
-              {section.children.map((child) => {
+              {[...(section.home ? [section.home] : []), ...section.children].map((child) => {
                 const current = activeLeaf?.id === child.id;
                 return (
                   // A link, not a button that navigates: it opens in a new

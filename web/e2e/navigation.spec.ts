@@ -119,35 +119,32 @@ test.describe("the information architecture", () => {
 });
 
 test.describe("the three pillars (LEKA-428)", () => {
-  test("opens each view of « Mon environnement » from the sidebar, by its address", async ({
+  test("opens « Mon environnement » on its overview, its views chosen top right, by their address", async ({
     page,
   }) => {
     await signIn(page);
 
-    // Closed until opened, or until you are in it.
-    await expect(page.getByTestId("nav-environment-applications")).toBeHidden();
-    await page.getByTestId("nav-section-environment-toggle").click();
-    await page.getByTestId("nav-environment-applications").click();
-
-    await expect(page).toHaveURL("http://localhost:3000/environment?tab=applications");
-    await expect(page.getByTestId("env-tab-applications")).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByTestId("nav-environment-applications")).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    // Its name opens its overview, and unfolds it: under it, Activité only
+    // (2026-10-14).
+    await page.getByTestId("nav-environment-overview").click();
+    await expect(page).toHaveURL("http://localhost:3000/environment");
+    await expect(page.getByTestId("env-view")).toHaveText("Vue globale");
+    await expect(page.getByTestId("nav-section-environment-toggle")).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByTestId("nav-activity")).toBeVisible();
+    await expect(page.getByTestId("nav-environment-applications")).toHaveCount(0);
+    await expect(page.getByTestId("nav-environment-overview")).toHaveAttribute("aria-current", "page");
     await expect(page.locator('a[aria-current="page"]')).toHaveCount(1);
 
-    // A tab chosen on the page moves the sidebar's mark with it.
-    await page.getByTestId("env-tab-domains").click();
-    await expect(page).toHaveURL("http://localhost:3000/environment?tab=domains");
-    await expect(page.getByTestId("nav-environment-domains")).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    // A view chosen top right: in the address, the sidebar still on its page.
+    await page.getByTestId("env-view").click();
+    await page.getByRole("option", { name: "Applications" }).click();
+    await expect(page).toHaveURL("http://localhost:3000/environment?tab=applications");
+    await expect(page.getByTestId("env-view")).toHaveText("Applications");
+    await expect(page.getByTestId("nav-environment-overview")).toHaveAttribute("aria-current", "page");
 
     // And the address is the view: reloaded, or sent, it opens there.
-    await page.reload();
-    await expect(page.getByTestId("env-tab-domains")).toHaveAttribute("aria-pressed", "true");
+    await page.goto("/environment?tab=domains");
+    await expect(page.getByTestId("env-view")).toHaveText("Domaines");
   });
 
   test("opens and closes a section, from the keyboard too, and remembers it", async ({ page }) => {
@@ -182,13 +179,13 @@ test.describe("the three pillars (LEKA-428)", () => {
     // A 13-inch laptop's window.
     await page.setViewportSize({ width: 1440, height: 789 });
     await signIn(page);
-    await page.goto("/environment?tab=domains");
+    await page.goto("/activity");
 
     await expect(page.getByTestId("nav-section-environment-toggle")).toHaveAttribute(
       "aria-expanded",
       "true",
     );
-    await expect(page.getByTestId("nav-environment-domains")).toBeInViewport();
+    await expect(page.getByTestId("nav-activity")).toBeInViewport();
 
     // Leaving it closes it again: nothing was chosen.
     await page.getByTestId("nav-approvals").click();
@@ -211,14 +208,14 @@ test.describe("the three pillars (LEKA-428)", () => {
 
     const menu = page.getByRole("menu");
     await expect(menu).toContainText("Le système vivant de votre entreprise.");
-    await expect(menu.getByRole("menuitem", { name: "Événements" })).toHaveAttribute(
+    // A view chosen on its page is its overview's (2026-10-14).
+    await expect(menu.getByRole("menuitem", { name: "Vue globale" })).toHaveAttribute(
       "aria-current",
       "page",
     );
-    await menu.getByRole("menuitem", { name: "Données" }).click();
+    await menu.getByRole("menuitem", { name: "Activité" }).click();
 
-    await expect(page).toHaveURL("http://localhost:3000/environment?tab=data");
-    await expect(page.getByTestId("env-tab-data")).toHaveAttribute("aria-pressed", "true");
+    await expect(page).toHaveURL("http://localhost:3000/activity");
     await expect(menu).toBeHidden();
   });
 });

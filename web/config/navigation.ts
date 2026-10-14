@@ -24,8 +24,9 @@
  * This file is the HIERARCHY. Which pages exist, their paths, who may open
  * them, their breadcrumb, stay config/routes.ts's: an entry here names the
  * route it opens (`routeId`) and, for a view of a page, the `query` that
- * opens that view — `/environment?tab=applications`. No route was added,
- * renamed or removed for it; every page keeps its address.
+ * opens that view. No route was added, renamed or removed for it; every
+ * page keeps its address. A section may have a `home`: the page its name
+ * opens — Mon environnement's overview, its views chosen on the page.
  *
  * No component names an entry, a label or a path: lib/navigation/tree.ts
  * reads this, the sidebar and the palette draw it.
@@ -65,6 +66,13 @@ export interface NavSection {
    * the page you are on is in them, so a 13-inch screen holds the whole
    * navigation. */
   defaultOpen?: boolean;
+  /** The page its name opens, besides opening it (2026-10-14: « quand je
+   * clique sur Mon environnement, je suis direct dans la vue globale »):
+   * the section's own page, not listed among its lines. */
+  home?: NavLeaf;
+  /** Its views chosen on its page, not drawn in the sidebar: the palette
+   * (⌘K) still finds them. */
+  views?: readonly NavLeaf[];
   children: readonly NavLeaf[];
 }
 
@@ -114,8 +122,11 @@ export const NAVIGATION: readonly NavGroup[] = [
         hintKey: "environment",
         icon: EnvironmentIcon,
         tier: "pillar",
-        children: [
-          leaf("environment-overview", "environmentOverview", "environment"),
+        // Its name opens its overview; its views — applications to quality
+        // — are chosen on the page, top right (2026-10-14, Haitam): the
+        // sidebar keeps what happened in it.
+        home: leaf("environment-overview", "environmentOverview", "environment"),
+        views: [
           environmentView("applications", "environmentApplications"),
           environmentView("infrastructure", "environmentInfrastructure"),
           environmentView("data", "environmentData"),
@@ -125,6 +136,8 @@ export const NAVIGATION: readonly NavGroup[] = [
           environmentView("domains", "environmentDomains"),
           // How far what LEKA knows can be trusted (LEKA-381).
           environmentView("quality", "environmentQuality"),
+        ],
+        children: [
           // What happened in it, and what LEKA did (LEKA-383).
           leaf("activity", "activity", "activity"),
         ],
