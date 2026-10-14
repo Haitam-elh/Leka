@@ -39,7 +39,7 @@ agents:
 
   - path: data/data-analysis/SKILL.md
     name: data-analysis
-    version: 1.1.0
+    version: 1.2.0
     status: active
 
   - path: development/build-fixer/SKILL.md
@@ -59,17 +59,17 @@ agents:
 
   - path: development/release-analysis/SKILL.md
     name: release-analysis
-    version: 1.1.0
+    version: 1.2.0
     status: active
 
   - path: development/test-analysis/SKILL.md
     name: test-analysis
-    version: 1.1.0
+    version: 1.2.0
     status: active
 
   - path: documentation/documentation-assistant/SKILL.md
     name: documentation-assistant
-    version: 1.1.0
+    version: 1.2.0
     status: active
 
   - path: drift/detect-undocumented-dependency/SKILL.md
@@ -89,12 +89,12 @@ agents:
 
   - path: infrastructure/infrastructure-analysis/SKILL.md
     name: infrastructure-analysis
-    version: 1.1.0
+    version: 1.2.0
     status: active
 
   - path: operations/debug-assistant/SKILL.md
     name: debug-assistant
-    version: 1.1.0
+    version: 1.2.0
     status: active
 
   - path: security/security-review/SKILL.md

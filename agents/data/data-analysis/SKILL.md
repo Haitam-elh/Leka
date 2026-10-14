@@ -2,7 +2,7 @@
 name: data-analysis
 title: "Analyse des données"
 description: "Use when someone asks about data — where it lives, which applications read or write it, who owns it, where it flows — from the databases and the company model."
-version: 1.1.0
+version: 1.2.0
 category: data
 entity_types: [database, schema, data_object, application, service, team, infra_resource]
 requires: ["postgresql|mysql|mariadb|sqlserver|oracle|mongodb|supabase"]
@@ -45,6 +45,32 @@ lis (`read_entity`), suis les dépendances (`dependencies`).
 Quand la demande ne dit pas sur quoi travailler et que le contexte ne le montre pas,
 dis-le et arrête-toi : ne devine pas.
 
+## Sa méthode
+
+Une donnée se juge à qui l'écrit, qui la lit, et à ce que coûterait de la
+changer. Avant d'écrire, dans cet ordre :
+
+1. **Qui écrit, qui lit.** Pour chaque objet de données, les applications qui
+   l'écrivent et celles qui le lisent ([id]). Plusieurs écrivains sur le même
+   objet est un constat : son intégrité dépend de leur accord. Un service qui
+   lit directement la base d'un autre est un couplage. Quand le sens — lecture
+   ou écriture — n'est pas connu, dis-le.
+2. **La structure, d'après ce qui est connu.** Seulement si les sources la
+   montrent : un objet critique sans clé ni contrainte, un montant sans type
+   décimal, une date sans fuseau horaire. Ce que la structure ne dit pas
+   n'est pas un défaut.
+3. **Les accès.** Des données sensibles ou partagées entre plusieurs clients,
+   lues par beaucoup d'applications, ou un même compte d'accès pour plusieurs
+   services : le moindre privilège n'est pas montré, c'est un constat.
+4. **Changer sans casser.** Quand la question porte sur un changement de
+   structure : tous les lecteurs et écrivains de l'objet doivent suivre.
+   Un changement sûr se fait en trois temps — ajouter le nouveau, faire
+   migrer chacun, retirer l'ancien quand plus personne ne s'en sert. Retirer
+   avant casse ses lecteurs ; une donnée réécrite ne revient pas.
+5. **Ce qui ne se voit pas.** Les index, les requêtes, les verrous et les
+   volumes ne sont pas dans le modèle : quand ils comptent, dis qu'ils
+   restent à vérifier par les responsables de la base.
+
 ## Ce qu'il produit
 
 Un document markdown, dans la langue de la demande :
@@ -53,7 +79,7 @@ Un document markdown, dans la langue de la demande :
 2. **Qui l'utilise** — applications et services, en lecture ou en écriture quand c'est connu.
 3. **D'où elle vient, où elle va** — son lignage.
 4. **Responsables** — et ce qui n'en a pas.
-5. **Limites** — LEKA ne lit pas le contenu des tables, seulement leur structure.
+5. **Limites** — LEKA ne lit pas le contenu des tables, seulement leur structure ; ni les index, les requêtes ou les volumes : ce qui reste à vérifier, et par qui.
 
 ## Ce qu'il ne doit jamais faire
 
@@ -67,3 +93,7 @@ Un document markdown, dans la langue de la demande :
 ## Ses compétences
 
 Il peut aussi appeler la compétence `data-landscape` de la bibliothèque LEKA (LEKA-401, docs/skills.md) : le paysage des données : les bases, ce qu'elles contiennent de sensible, qui les utilise, les tables qui portent des données personnelles ou des secrets. Chacune est une lecture vérifiée, faite avec les droits de la personne qui demande, et gardée. Il s'appuie sur leurs signaux (`signals`) et cite ce qu'elles ont lu ; ce qu'une compétence ne dit pas, il ne l'invente pas.
+
+<sub>Méthode adaptée de l'agent `database-reviewer` et du skill `database-migrations`
+d'[ECC](https://github.com/affaan-m/ECC) @ `b92f181` (MIT, © 2026 Affaan Mustafa), réécrite pour ce
+que LEKA voit. Voir `THIRD_PARTY_LICENSES.md`.</sub>

@@ -12,6 +12,10 @@
 # Values not decided yet are absent, never guessed: seats, sources and
 # workspaces per plan; specialist add-on and capacity-pack prices.
 #
+# Monitoring (LEKA-442, decided 2026-10-13, provisional): every plan sees its
+# environment's states, their freshness and coverage; proactive alerts —
+# in LEKA — from Starter, by e-mail too from Growth; Enterprise by contract.
+#
 # The AI credits a month are NOT here: they are the ones metering grants
 # (LEKA-430, LEKA_PLAN_CREDITS — 200, 2,000, 10,000, 40,000), read from it,
 # so what the page promises is what a workspace gets. Enterprise's are per
@@ -55,6 +59,8 @@ plans:
     own_llm: false
     launch_offer: false
     annual: false
+    # LEKA-442: the states, their freshness and coverage, seen; no proactive alerts.
+    monitoring: { proactive: false, provisional: true }
 
   - key: starter
     name: Starter
@@ -71,6 +77,7 @@ plans:
     own_llm: false
     launch_offer: true
     annual: true
+    monitoring: { proactive: true, alerts: [in_app], provisional: true }
 
   - key: growth
     name: Growth
@@ -88,6 +95,7 @@ plans:
     own_llm: false
     launch_offer: true
     annual: true
+    monitoring: { proactive: true, alerts: [in_app, email], provisional: true }
 
   - key: business
     name: Business
@@ -104,6 +112,7 @@ plans:
     own_llm: false
     launch_offer: true
     annual: true
+    monitoring: { proactive: true, alerts: [in_app, email], provisional: true }
 
   - key: enterprise
     name: Enterprise
@@ -121,6 +130,7 @@ plans:
     own_llm: true
     launch_offer: false
     annual: false
+    monitoring: { proactive: true, alerts: [in_app, email], contractual: true }
 
 # Specialist agents: optional, sold individually or in bundles — listed
 # only once available; never a purchase flow before.

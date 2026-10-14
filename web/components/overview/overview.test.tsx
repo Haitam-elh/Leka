@@ -1,5 +1,7 @@
 /**
- * The overview: the mockup's layout, the workspace's real figures.
+ * The overview: what needs someone first, the workspace's real figures
+ * (LEKA-442: a decision, something in trouble, a request under way; then
+ * what moved and whether what LEKA sees can be trusted).
  *
  * What these protect is the decision of 2026-09-25 — real data, or an
  * honest empty state, never the mockup's numbers. The mockup's "98 %",
@@ -59,6 +61,17 @@ vi.mock("@/lib/activity", async (original) => ({
     }),
   },
 }));
+
+const monitoring = vi.hoisted(() => ({ get: vi.fn() }));
+vi.mock("@/lib/twin", async (original) => ({
+  ...(await original<typeof import("@/lib/twin")>()),
+  monitoring,
+}));
+const underWay = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/intentions/api", async (original) => {
+  const real = await original<typeof import("@/lib/intentions/api")>();
+  return { ...real, intentions: { ...real.intentions, list: () => underWay() } };
+});
 
 vi.mock("@/lib/sources", async (original) => ({
   ...(await original<typeof import("@/lib/sources")>()),
@@ -179,20 +192,111 @@ function candidate(overrides: Partial<Candidate>): Candidate {
   };
 }
 
-beforeEach(() => {
-  environment.get.mockReset().mockResolvedValue({
-    services: 4,
-    services_operational: 3,
-    services_deduced: 2,
-    services_external: 1,
-    services_unknown: 0,
+const read = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+
+function twin(state: string, more: Record<string, unknown> = {}) {
+  return {
+    state,
+    basis: "none",
+    reason: "no_signal",
+    observed_at: read(7),
+    signal: [],
+    fresh: true,
+    was: null,
+    certainty: "confirmed",
+    incident: null,
+    ...more,
+  };
+}
+
+function node(name: string, state: string, more: Record<string, unknown> = {}) {
+  return {
+    id: name,
+    type: "service",
+    layer: "services",
+    name,
+    status: null,
+    entity_id: crypto.randomUUID(),
+    key: name,
+    detail: null,
+    count: 1,
+    environment: null,
+    team: null,
+    twin: twin(state, more),
+  };
+}
+
+function twinSource(name: string, state: string, category = "code") {
+  return {
+    id: crypto.randomUUID(),
+    kind: "github",
+    name,
+    category,
+    state,
+    last_synced_at: state === "never" ? null : read(7),
+    error: state === "error" ? "401 Unauthorized" : null,
+    webhooks: false,
+  };
+}
+
+/** A workspace partly connected: GitHub read, Runbooks failing, no
+ * monitoring tool — payment-api degraded by an incident, the rest silent. */
+function partlyConnected() {
+  const github = twinSource("acme/backend", "read");
+  const runbooks = twinSource("Runbooks space", "error", "docs");
+  return {
+    services: 3,
+    services_operational: 0,
+    services_deduced: 0,
+    services_external: 0,
+    services_unknown: 2,
     incidents_open: 1,
     services_impacted: 1,
-    attention: [
-      { kind: "open_incident", level: "high", count: 1, entity: null, detail: "Billing API" },
-      { kind: "unmonitored_services", level: "info", count: 2, entity: null, detail: null },
+    attention: [],
+    events: [],
+    nodes: [
+      node("auth-service", "not_covered", { reason: "no_monitoring_source" }),
+      node("payment-api", "degraded", {
+        basis: "measured",
+        reason: "incident_open",
+        signal: ["OPS board"],
+        incident: { id: "i1", key: "OPS-1841", name: "p99 above 2s", severity: "sev2" },
+      }),
+      node("user-service", "unknown"),
     ],
+    states: {
+      unavailable: 0,
+      degraded: 1,
+      stale: 0,
+      unknown: 1,
+      not_covered: 1,
+      operational: 0,
+    },
+    freshness: { last_read_at: read(7), every_minutes: 60, late: false, webhooks: false },
+    coverage: [
+      { part: "applications", covered: true, sources: [github.id] },
+      { part: "health", covered: false, sources: [] },
+    ],
+    sources: [github, runbooks],
+  };
+}
+
+beforeEach(() => {
+  environment.get.mockReset().mockResolvedValue(partlyConnected());
+  monitoring.get.mockReset().mockResolvedValue({
+    entitlement: {
+      plan: "free",
+      proactive: false,
+      alerts: [],
+      contractual: false,
+      provisional: true,
+      alerts_from: "starter",
+      email_from: "growth",
+    },
+    open: [],
+    ended: [],
   });
+  underWay.mockReset().mockResolvedValue({ data: [], next_cursor: null });
   proposed.mockReset().mockResolvedValue({ data: [], next_cursor: null });
   list.mockReset().mockResolvedValue({ data: [BACKEND, RUNBOOKS, PLATFORM] });
   events.mockReset().mockImplementation(async (id: string) => ({
@@ -206,11 +310,12 @@ beforeEach(() => {
 });
 
 describe("the overview", () => {
-  it("greets the person and says what their sources need", async () => {
+  it("greets the person and says what needs them", async () => {
     mount();
 
     expect(screen.getByRole("heading", { level: 1, name: "Bonjour Nora," })).toBeVisible();
-    expect(await screen.findByText("1 source demande votre attention.")).toBeVisible();
+    // What is in trouble first (LEKA-442), then the sources.
+    expect(await screen.findByText("1 élément est en difficulté.")).toBeVisible();
   });
 
   it("greets by the first name given at registration, not the address", async () => {
@@ -223,31 +328,107 @@ describe("the overview", () => {
       currentUser = { id: "u1", email: "nora@acme.example" };
     }
     // Let the page's own loading settle before the next test mounts.
-    expect(await screen.findByText("1 source demande votre attention.")).toBeVisible();
+    expect(await screen.findByText("1 élément est en difficulté.")).toBeVisible();
   });
 
-  it("counts the connected sources, and only them", async () => {
+  it("puts first what needs someone: a decision, what is wrong, a request under way", async () => {
     mount();
-
-    // backend (active) and Runbooks (on, in error) are connected; the draft is not.
-    expect(await screen.findByTestId("kpi-sources")).toHaveTextContent("2");
-    expect(screen.getByText("2 / 3 sources")).toBeVisible();
-  });
-
-  it("lists the real sources, what needs a look first", async () => {
-    mount();
-
-    const rows = await screen.findAllByTestId("source-row");
-    expect(rows.map((row) => within(row).getByRole("img").getAttribute("aria-label"))).toEqual([
-      "Confluence",
-      "GitHub",
-      "Slack",
+    const now = await screen.findByTestId("overview-now");
+    expect(within(now).getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
+      "À valider",
+      "Ce qui ne va pas",
+      "Mes intentions en cours",
     ]);
-    expect(within(rows[0]).getByText("Erreur")).toBeVisible();
-    expect(within(rows[1]).getByText("Synchronisé")).toBeVisible();
-    expect(within(rows[1]).getByText("Il y a 4 min")).toBeVisible();
-    expect(within(rows[2]).getByText("À configurer")).toBeVisible();
-    expect(within(rows[2]).getByText("Pas encore")).toBeVisible();
+    const context = screen.getByTestId("overview-context");
+    expect(within(context).getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
+      "Activité récente",
+      "Fraîcheur et couverture",
+      "Insights LEKA",
+    ]);
+  });
+
+  it("says what is wrong with how it is known, and what nothing says apart", async () => {
+    mount();
+    const trouble = await screen.findByTestId("overview-trouble");
+    const [row] = within(trouble).getAllByRole("listitem");
+    expect(row).toHaveAttribute("data-state", "degraded");
+    expect(row).toHaveTextContent("payment-api");
+    expect(row).toHaveTextContent("incident OPS-1841 ouvert · mesuré · par OPS board");
+    expect(within(row).getByRole("link", { name: "Analyser" })).toHaveAttribute(
+      "href",
+      `/intentions/new?q=${encodeURIComponent("Pourquoi payment-api est dégradé ?")}`,
+    );
+    // Silence is never health.
+    expect(screen.getByTestId("overview-silent")).toHaveTextContent(
+      "2 éléments n'ont aucun signal : leur état n'est pas connu — ce n'est pas « sain ».",
+    );
+    expect(await screen.findByText("1 élément est en difficulté.")).toBeVisible();
+  });
+
+  it("on Free, says the alerts are a paid plan's — never one simulated", async () => {
+    mount();
+    expect(await screen.findByTestId("overview-alerts-limit")).toHaveTextContent(
+      "Les alertes proactives sont incluses dès Starter.",
+    );
+    expect(screen.queryByTestId("overview-alerts")).not.toBeInTheDocument();
+  });
+
+  it("on a paid plan, says how many alerts are open", async () => {
+    monitoring.get.mockResolvedValue({
+      entitlement: {
+        plan: "growth",
+        proactive: true,
+        alerts: ["in_app", "email"],
+        contractual: false,
+        provisional: true,
+        alerts_from: "starter",
+        email_from: "growth",
+      },
+      open: [{ id: "a1" }, { id: "a2" }],
+      ended: [],
+    });
+    mount();
+    expect(await screen.findByTestId("overview-alerts")).toHaveTextContent("2 alertes ouvertes.");
+  });
+
+  it("says how fresh what LEKA sees is, what fails and what no source covers", async () => {
+    mount();
+    const card = await screen.findByTestId("overview-freshness");
+    expect(card).toHaveTextContent("Lu il y a 7 min");
+    expect(card).toHaveTextContent("Sources lues toutes les 60 min — pas en temps réel");
+    expect(card).toHaveTextContent("Runbooks space en échec");
+    expect(card).toHaveTextContent("Non couvert : État des services.");
+  });
+
+  it("an environment read and covered says so, nothing in trouble", async () => {
+    const all = partlyConnected();
+    environment.get.mockResolvedValue({
+      ...all,
+      nodes: [node("payment-api", "operational", { basis: "measured", reason: "monitored_quiet" })],
+      states: { ...all.states, degraded: 0, unknown: 0, not_covered: 0, operational: 1 },
+      coverage: all.coverage.map((c) => ({ ...c, covered: true })),
+      sources: [all.sources[0]],
+    });
+    mount();
+    expect(
+      await screen.findByText("Rien d'indisponible ni de dégradé selon les sources lues."),
+    ).toBeVisible();
+    expect(screen.queryByTestId("overview-silent")).not.toBeInTheDocument();
+    expect(screen.getByTestId("overview-freshness")).toHaveTextContent(
+      "Toutes les sources sont lues et chaque partie de l'environnement est couverte.",
+    );
+  });
+
+  it("lists the intentions under way, each leading to it", async () => {
+    underWay.mockResolvedValue({
+      data: [{ id: "i1", title: "Pourquoi payment-api est lente ?", status: "awaiting_decision" }],
+      next_cursor: null,
+    });
+    mount();
+    const list = await screen.findByTestId("overview-intentions");
+    const link = within(list).getByRole("link");
+    expect(link).toHaveAttribute("href", "/intentions/i1");
+    expect(link).toHaveTextContent("Pourquoi payment-api est lente ?");
   });
 
   it("tells what Activité tells, the same events worded the same way", async () => {
@@ -264,85 +445,12 @@ describe("the overview", () => {
 
   it("never shows the mockup's figures", async () => {
     mount();
-    await screen.findAllByTestId("source-row");
+    await screen.findByTestId("overview-trouble");
 
     for (const mocked of ["98 %", "47 / 48 services", "Payment API", "Rollback", "Confiance élevée"]) {
       expect(screen.queryByText(new RegExp(mocked))).not.toBeInTheDocument();
     }
     expect(screen.getByText("Rien à valider pour le moment.")).toBeVisible();
-  });
-
-  it("says the environment's state as enrichment made it", async () => {
-    mount();
-    expect(await screen.findByTestId("kpi-services")).toHaveTextContent("3");
-    const [services, attention, incidents] = screen.getAllByTestId("kpi-tile");
-    // Deduced from what runs them, said so; the external ones apart — as
-    // the architecture counts them.
-    expect(services).toHaveTextContent(
-      "sur 4 services · état déduit de leur hébergement, non mesuré · 1 externe à part",
-    );
-    // An incident is a point; services nothing measures are worth knowing,
-    // not an alarm.
-    expect(within(attention).getByTestId("kpi-attention")).toHaveTextContent("1");
-    expect(attention).toHaveTextContent("Billing API");
-    expect(within(incidents).getByTestId("kpi-incidents")).toHaveTextContent("1");
-    expect(incidents).toHaveTextContent("1 service touché");
-  });
-
-  it("says what is only worth knowing apart from what needs someone", async () => {
-    environment.get.mockResolvedValue({
-      services: 6,
-      services_operational: 6,
-      services_deduced: 6,
-      services_external: 1,
-      services_unknown: 0,
-      incidents_open: 0,
-      services_impacted: 0,
-      attention: [
-        { kind: "unmonitored_services", level: "info", count: 6, entity: null, detail: null },
-      ],
-    });
-    mount();
-    const [services, attention] = await screen.findAllByTestId("kpi-tile");
-    expect(within(services).getByTestId("kpi-services")).toHaveTextContent("6");
-    expect(within(attention).getByTestId("kpi-attention")).toHaveTextContent("0");
-    expect(attention).toHaveTextContent("Rien d'urgent · 6 services sans monitoring");
-  });
-
-  it("says a state nothing tells as unknown, never as zero", async () => {
-    environment.get.mockResolvedValue({
-      services: 3,
-      services_operational: 0,
-      services_deduced: 0,
-      services_external: 0,
-      services_unknown: 3,
-      incidents_open: 0,
-      services_impacted: 0,
-      attention: [],
-    });
-    mount();
-    const [services] = await screen.findAllByTestId("kpi-tile");
-    // Not « — »: that is « not loaded yet ».
-    expect(within(services).getByTestId("kpi-services")).toHaveTextContent("Pas encore mesuré");
-    expect(services).toHaveTextContent("sur 3 services · 3 d'état inconnu");
-  });
-
-  it("says a workspace with no service, and nothing open", async () => {
-    environment.get.mockResolvedValue({
-      services: 0,
-      services_operational: 0,
-      services_deduced: 0,
-      services_external: 0,
-      services_unknown: 0,
-      incidents_open: 0,
-      services_impacted: 0,
-      attention: [],
-    });
-    mount();
-    const [services, attention, incidents] = await screen.findAllByTestId("kpi-tile");
-    expect(services).toHaveTextContent("Aucun service déclaré par vos sources");
-    expect(attention).toHaveTextContent("Rien à signaler");
-    expect(incidents).toHaveTextContent("Aucun incident ouvert");
   });
 
   it("says so when the sources cannot be read", async () => {
@@ -354,8 +462,16 @@ describe("the overview", () => {
     ).toBeVisible();
   });
 
-  it("invites a first source when there is none", async () => {
+  it("invites a first source when there is none: nothing read, nothing in trouble", async () => {
     list.mockResolvedValue({ data: [] });
+    environment.get.mockResolvedValue({
+      ...partlyConnected(),
+      nodes: [],
+      states: {},
+      coverage: [],
+      sources: [],
+      freshness: { last_read_at: null, every_minutes: 60, late: false, webhooks: false },
+    });
     mount();
 
     expect(await screen.findByText("Connectez une première source pour commencer.")).toBeVisible();

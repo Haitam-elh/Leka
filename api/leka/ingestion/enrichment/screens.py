@@ -17,8 +17,9 @@ from collections import defaultdict
 from collections.abc import Collection, Iterable, Sequence
 from datetime import UTC, datetime, timedelta
 
-from leka.connectors import ConnectorCategory, manifests
-from leka.ingestion.enrichment import view
+from leka.connectors import ConnectorCategory, Source, manifests
+from leka.ingestion.enrichment import twin, view
+from leka.ingestion.enrichment.twin import IncidentSeen, SourceSeen, TwinState
 from leka.ingestion.enrichment.view import Link, Thing
 from leka.ingestion.models import ResolvedEntity
 from leka.ingestion.repository import EnrichmentRepository
@@ -37,6 +38,11 @@ from leka.ingestion.schemas import (
     SheetLinkRead,
     SheetPersonRead,
     SheetTeamRead,
+    TwinCoverageRead,
+    TwinFreshnessRead,
+    TwinIncidentRead,
+    TwinSourceRead,
+    TwinStateRead,
 )
 
 EVENTS = 6
@@ -172,6 +178,115 @@ async def _states(
     )
 
 
+# ── the Digital Twin (LEKA-442) ───────────────────────────────────────────────
+
+
+def sources_seen(rows: Iterable[Source]) -> list[SourceSeen]:
+    """The workspace's sources, each with its connector's category and
+    whether it receives what its system sends."""
+    manifest = {m.key.value: m for m in manifests()}
+    out: list[SourceSeen] = []
+    for row in rows:
+        kind = row.kind.value
+        found = manifest.get(kind)
+        error = row.last_error or {}
+        out.append(
+            SourceSeen(
+                id=row.id,
+                kind=kind,
+                name=row.name,
+                category=found.category.value if found else "custom",
+                status=row.status.value,
+                sync_status=row.sync_status.value,
+                health=row.health_status.value,
+                last_synced_at=row.last_synced_at,
+                error=str(error.get("message") or error.get("code") or "") or None,
+                webhooks=bool(found and found.receives),
+            )
+        )
+    return out
+
+
+async def twin_states(
+    repository: EnrichmentRepository, things: dict[uuid.UUID, Thing], now: datetime
+) -> tuple[dict[uuid.UUID, TwinState | None], list[SourceSeen], dict[uuid.UUID, set[uuid.UUID]]]:
+    """Each thing's state in the twin, from the sources that show it and
+    the open incidents on it — and the sources, and which show what."""
+    seen = sources_seen(await repository.workspace_sources())
+    by_id = {s.id: s for s in seen}
+    stateful = [t.id for t in things.values() if t.type in twin.HAS_STATE]
+    of = await repository.sources_of(stateful)
+    open_ids = list(await repository.open_incidents())
+    incidents = await _things(repository, ids=open_ids)
+    on: dict[uuid.UUID, list[IncidentSeen]] = defaultdict(list)
+    for from_id, to_id, _ in await repository.links_of(open_ids, ["affects"]):
+        incident = incidents.get(from_id)
+        if incident is None:
+            continue
+        severity = incident.attributes.get("severity") or incident.attributes.get("priority")
+        on[to_id].append(
+            IncidentSeen(
+                incident.id, incident.key, incident.name, str(severity) if severity else None
+            )
+        )
+    monitoring = any(s.connected and s.category == "observability" for s in seen)
+    states = {
+        thing_id: twin.state_of(
+            things[thing_id],
+            sources=[by_id[i] for i in sorted(of.get(thing_id, ()), key=str) if i in by_id],
+            incidents=on.get(thing_id, []),
+            monitoring_connected=monitoring,
+            now=now,
+        )
+        for thing_id in stateful
+    }
+    return states, seen, of
+
+
+async def twin_now(
+    repository: EnrichmentRepository, now: datetime
+) -> tuple[dict[uuid.UUID, Thing], dict[uuid.UUID, TwinState | None], list[SourceSeen]]:
+    """Every thing with a state, its state now, and the sources — what the
+    monitoring sweep watches (leka.monitoring)."""
+    things = await _things(repository, types=sorted(twin.HAS_STATE))
+    states, seen, _ = await twin_states(repository, things, now)
+    return things, states, seen
+
+
+def twin_read(found: TwinState | None) -> TwinStateRead | None:
+    if found is None:
+        return None
+    incident = found.incident
+    return TwinStateRead(
+        state=found.state,
+        basis=found.basis,
+        reason=found.reason,
+        observed_at=found.observed_at,
+        signal=list(found.signal),
+        fresh=found.fresh,
+        was=found.was,
+        certainty=found.certainty,
+        incident=TwinIncidentRead(
+            id=incident.id, key=incident.key, name=incident.name, severity=incident.severity
+        )
+        if incident is not None
+        else None,
+    )
+
+
+def source_read(source: SourceSeen, now: datetime) -> TwinSourceRead:
+    return TwinSourceRead(
+        id=source.id,
+        kind=source.kind,
+        name=source.name,
+        category=source.category,
+        state=source.state(now),
+        last_synced_at=source.last_synced_at,
+        error=source.error,
+        webhooks=source.webhooks,
+    )
+
+
 def external(thing: Thing) -> bool:
     """A service the company uses and does not run — an e-mail provider, a
     payment API: on the architecture's « Dépendances externes »."""
@@ -219,6 +334,13 @@ async def _events(
 async def environment(repository: EnrichmentRepository, *, now: datetime) -> EnvironmentRead:
     things = await _things(repository, types=view.MAP_TYPES)
     statuses, deduced = await _states(repository, things, now)
+    twins, seen, _ = await twin_states(repository, things, now)
+    # A provider's box: the worst of its resources' states.
+    boxes: dict[str, list[TwinState]] = defaultdict(list)
+    for thing in things.values():
+        found = twins.get(thing.id)
+        if thing.type == "infra_resource" and found is not None and (at := view.provider_of(thing)):
+            boxes[f"provider:{at[0]}:{at[1] or ''}"].append(found)
     links = [
         Link(a, b, kind) for a, b, kind in await repository.links_among(view.MAP_TYPES, MAP_LINKS)
     ]
@@ -255,6 +377,13 @@ async def environment(repository: EnrichmentRepository, *, now: datetime) -> Env
                 count=node.count,
                 environment=node.environment,
                 team=_ref(teams[node.team_id]) if node.team_id in teams else None,
+                twin=twin_read(
+                    twins.get(node.entity_id)
+                    if node.entity_id is not None
+                    else max(
+                        boxes.get(node.id, []), key=lambda f: twin.WORST[f.state], default=None
+                    )
+                ),
             )
             for node in nodes
         ],
@@ -274,6 +403,27 @@ async def environment(repository: EnrichmentRepository, *, now: datetime) -> Env
         changes_24h=len(changes),
         attention=await _attention(repository, things, statuses, open_incidents, deduced),
         events=await _events(repository, moved),
+        states=twin.counted(twins),
+        freshness=_freshness(seen, now),
+        coverage=[
+            TwinCoverageRead(
+                part=part.part,
+                covered=part.covered,
+                sources=[s.id for s in part.sources],
+            )
+            for part in twin.coverage(seen)
+        ],
+        sources=[source_read(s, now) for s in seen],
+    )
+
+
+def _freshness(seen: Sequence[SourceSeen], now: datetime) -> TwinFreshnessRead:
+    found = twin.freshness(seen, now)
+    return TwinFreshnessRead(
+        last_read_at=found.last_read_at,
+        every_minutes=int(found.every.total_seconds() // 60),
+        late=found.late,
+        webhooks=found.webhooks,
     )
 
 
@@ -375,6 +525,10 @@ async def sheet(
     ]
     others = await _things(repository, ids=[b if a == entity.id else a for a, b, _ in links])
     statuses, deduced = await _states(repository, {**others, this.id: this}, now)
+    twins, seen, of = await twin_states(repository, {this.id: this}, now)
+    shown_by = of.get(this.id, set())
+    if not shown_by:
+        shown_by = set((await repository.sources_of([this.id])).get(this.id, set()))
     edges = {(e.from_entity.id, e.to_entity.id, e.type): e for e in enriched.outgoing}
     edges |= {(e.from_entity.id, e.to_entity.id, e.type): e for e in enriched.incoming}
 
@@ -465,6 +619,8 @@ async def sheet(
         documents=sorted(documents, key=lambda d: d.name),
         attention=attention,
         source_kinds=sorted(this.kinds),
+        twin=twin_read(twins.get(this.id)),
+        sources=[source_read(s, now) for s in seen if s.id in shown_by],
     )
 
 

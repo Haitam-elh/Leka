@@ -47,3 +47,6 @@ Thumbs.db
 # Local object store (LEKA_OBJECT_STORE=local). Customer payloads —
 # never in Git, and never in a backup of this repository.
 var/
+
+# scripts/bench_agents.py — its answers, never committed
+bench-agents/

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -31,7 +32,13 @@ from leka.connectors import Source, SourceKind, SourceStatus
 from leka.core.security import hash_password
 from leka.db import session_factory, system_scope
 from leka.identity import User as Account
-from leka.ingestion import RESOLVER_VERSION, ResolutionDecision, ResolvedEntity
+from leka.ingestion import (
+    RESOLVER_VERSION,
+    EnrichedRelationship,
+    ResolutionDecision,
+    ResolvedEntity,
+    ResolvedKey,
+)
 from leka.intelligence.job import analyse_workspace
 from leka.knowledge import (
     MODEL_VERSION,
@@ -526,11 +533,53 @@ async def _build_demo_workspace() -> None:
                     names=[thing.name],
                     attributes=dict(thing.attributes),
                     confidence=thing.confidence,
-                    sources=1,
+                    sources=len(thing.provenance.get("sources", [])) or 1,
                     resolver_version=RESOLVER_VERSION,
                     resolved_at=NOW,
                 )
             )
+        await session.flush()
+        # The ties, as enrichment keeps them (LEKA-442): what the map draws,
+        # what an incident is on — the Digital Twin's links.
+        kept = {thing.id for thing in modelled if thing.lifecycle is not Lifecycle.REMOVED}
+        for tie in edges:
+            if tie.from_entity_id not in kept or tie.to_entity_id not in kept:
+                continue
+            session.add(
+                EnrichedRelationship(
+                    workspace_id=workspace.id,
+                    from_entity_id=tie.from_entity_id,
+                    to_entity_id=tie.to_entity_id,
+                    type=tie.type.value,
+                    origin="stated",
+                    rule="stated",
+                    confidence=tie.confidence,
+                    cross_source=False,
+                    sources=1,
+                    evidence="Stated by its source.",
+                    provenance=list(tie.provenance),
+                    enriched_at=NOW,
+                )
+            )
+        # Which source shows what, as resolution keeps it (LEKA-442): what the
+        # Digital Twin's states and their provenance are read from.
+        for thing in modelled:
+            if thing.lifecycle is Lifecycle.REMOVED:
+                continue
+            for seen in thing.provenance.get("sources", []):
+                session.add(
+                    ResolvedKey(
+                        workspace_id=workspace.id,
+                        entity_id=thing.id,
+                        source_id=uuid.UUID(seen["source_id"]),
+                        key=seen["key"],
+                        kind=seen["kind"] if seen["kind"] in ("key", "alias", "derived") else "key",
+                        name=thing.name,
+                        records=1,
+                        first_seen_at=thing.first_seen_at,
+                        last_seen_at=thing.last_seen_at,
+                    )
+                )
         # Built, as far as the model knows: what it holds was written as a
         # build writes it (LEKA-373 says a model never built is missing).
         session.add(

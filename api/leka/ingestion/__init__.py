@@ -7,8 +7,9 @@ about how the graph is queried or how answers are built.
 from leka.ingestion.enrichment import ENRICHER_VERSION
 from leka.ingestion.enrichment.screens import activity as entity_activity
 from leka.ingestion.enrichment.screens import environment as environment_screen
-from leka.ingestion.enrichment.screens import monitoring_kinds
+from leka.ingestion.enrichment.screens import monitoring_kinds, twin_now
 from leka.ingestion.enrichment.screens import sheet as entity_sheet
+from leka.ingestion.enrichment.twin import SourceSeen, TwinState
 from leka.ingestion.enrichment.view import Thing as EnvironmentThing
 from leka.ingestion.enrichment.view import deduced as environment_status_deduced
 from leka.ingestion.enrichment.view import provider_of
@@ -190,6 +191,7 @@ __all__ = [
     "SourceQuality",
     "SourceRecord",
     "SourceRecordRepository",
+    "SourceSeen",
     "SourceSync",
     "SourceSyncRead",
     "SourceSyncRepository",
@@ -204,6 +206,7 @@ __all__ = [
     "SyncRunStatus",
     "SyncSummary",
     "SyncTrigger",
+    "TwinState",
     "ValidatedRecordRow",
     "ValidationIssueCount",
     "ValidationRepository",
@@ -222,4 +225,5 @@ __all__ = [
     "provider_of",
     "retention_days",
     "set_protection_policy",
+    "twin_now",
 ]

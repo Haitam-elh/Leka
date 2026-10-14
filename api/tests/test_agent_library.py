@@ -27,7 +27,17 @@ from leka.capabilities.skills import agent_skill_tools
 from leka.capabilities.tools import NAMES
 from leka.knowledge import EntityType
 
-VERSIONS = {"architecture-analysis": "1.2.0", "code-review": "1.2.0", "security-review": "1.2.0"}
+VERSIONS = {
+    "architecture-analysis": "1.2.0",
+    "code-review": "1.2.0",
+    "data-analysis": "1.2.0",
+    "debug-assistant": "1.2.0",
+    "documentation-assistant": "1.2.0",
+    "infrastructure-analysis": "1.2.0",
+    "release-analysis": "1.2.0",
+    "security-review": "1.2.0",
+    "test-analysis": "1.2.0",
+}
 
 LIBRARY = {
     "architecture-analysis",
@@ -321,4 +331,112 @@ def test_the_architecture_analysis_reads_the_real_links() -> None:
     ):
         assert step in said, step
     assert "Une piste donne son compromis" in said
+    assert "affaan-m/ECC" in said
+
+
+def test_the_documentation_assistant_maps_what_a_reader_finds() -> None:
+    # LEKA-447: gstack's document-generate and document-release, ECC's ADRs
+    # and living docs, rewritten for what LEKA sees — a coverage map by the
+    # reader's need, the document against the model, one source per fact.
+    said = {d.key: d for d in catalogue()}["documentation-assistant"].instructions or ""
+    assert "## Sa méthode" in said
+    for step in (
+        "La carte de couverture",
+        "Le document contre le modèle",
+        "Un fait, une source",
+        "Les décisions",
+        "Le brouillon, un lecteur à la fois",
+    ):
+        assert step in said, step
+    assert "garrytan/gstack" in said and "affaan-m/ECC" in said
+
+
+def test_the_test_analysis_plans_by_behaviour() -> None:
+    # LEKA-447: ECC's pr-test-analyzer and test-collaboration, gstack's
+    # test-audit, rewritten for what LEKA sees — the behaviour, not the file;
+    # the right level; incidents as tests; what a green does not prove.
+    said = {d.key: d for d in catalogue()}["test-analysis"].instructions or ""
+    assert "## Sa méthode" in said
+    for step in (
+        "Le comportement, pas le fichier",
+        "Le bon niveau",
+        "Les incidents deviennent des tests",
+        "L'écart, classé",
+        "Ce qu'un vert ne prouve pas",
+    ):
+        assert step in said, step
+    assert "ne dis jamais qu'un test manque" in said
+    assert "affaan-m/ECC" in said and "garrytan/gstack" in said
+
+
+def test_the_debug_assistant_finds_the_root_cause_before_a_remedy() -> None:
+    # LEKA-447: gstack's investigate, rewritten for what LEKA sees — no
+    # remedy without a root cause, what changed, known patterns, what keeps
+    # coming back, three unsupported hypotheses and it stops.
+    said = {d.key: d for d in catalogue()}["debug-assistant"].instructions or ""
+    assert "## Sa méthode" in said
+    assert "Pas de remède sans cause racine" in said
+    for step in (
+        "Le symptôme, borné",
+        "Ce qui a changé",
+        "Les motifs connus",
+        "Ce qui revient",
+        "Chaque hypothèse, avec sa vérification",
+    ):
+        assert step in said, step
+    assert "Après trois hypothèses" in said
+    assert "garrytan/gstack" in said
+
+
+def test_the_release_analysis_caps_its_verdict() -> None:
+    # LEKA-447: ECC's deployment-patterns and production-audit, rewritten
+    # for what LEKA sees — what really ships, the risk angles, the way back,
+    # what came after, a verdict capped by what is missing.
+    said = {d.key: d for d in catalogue()}["release-analysis"].instructions or ""
+    assert "## Sa méthode" in said
+    for step in (
+        "Ce qui part vraiment",
+        "Les angles de risque",
+        "Le retour arrière",
+        "Après la mise en production",
+        "Le verdict, plafonné",
+    ):
+        assert step in said, step
+    assert "Une CI verte ne prouve pas" in said
+    assert "affaan-m/ECC" in said
+
+
+def test_the_infrastructure_analysis_finds_what_falls_together() -> None:
+    # LEKA-447: ECC's kubernetes-patterns reliability and security lists,
+    # rewritten at the level of the resources LEKA sees — environments kept
+    # apart, redundancy, least sharing, labelling, the unknown kept unknown.
+    said = {d.key: d for d in catalogue()}["infrastructure-analysis"].instructions or ""
+    assert "## Sa méthode" in said
+    for step in (
+        "Par environnement",
+        "La redondance des critiques",
+        "Le moindre partage",
+        "L'étiquetage",
+        "Ce que le modèle ne dit pas",
+    ):
+        assert step in said, step
+    assert "c'est inconnu, pas" in said
+    assert "affaan-m/ECC" in said
+
+
+def test_the_data_analysis_knows_who_writes_and_how_to_change() -> None:
+    # LEKA-447: ECC's database-reviewer and database-migrations, rewritten
+    # for the structure and lineage LEKA sees — writers and readers, the
+    # known structure, access, a change in three steps, the unseen said.
+    said = {d.key: d for d in catalogue()}["data-analysis"].instructions or ""
+    assert "## Sa méthode" in said
+    for step in (
+        "Qui écrit, qui lit",
+        "La structure, d'après ce qui est connu",
+        "Les accès",
+        "Changer sans casser",
+        "Ce qui ne se voit pas",
+    ):
+        assert step in said, step
+    assert "en trois temps" in said
     assert "affaan-m/ECC" in said
