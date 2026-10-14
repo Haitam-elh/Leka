@@ -99,13 +99,7 @@ test("a new account goes from its workspace to a first analysis", async ({
     .getByTestId("intention-input")
     .fill("Qui maintient globex/billing ?");
   await page.getByTestId("intention-submit").click();
-  await expect(page).toHaveURL(/\/intentions\/new\?q=/);
-  await expect(
-    page.getByRole("checkbox", { name: "globex/billing" }),
-  ).toBeChecked();
-  await page.getByTestId("intention-submit").click();
-  await page.getByTestId("intention-launch").click();
-  await page.getByTestId("intention-follow").click();
+  // Asked from the box itself (2026-10-14): its page opens on it.
   await expect(page).toHaveURL(/\/intentions\/[0-9a-f-]{36}$/);
   const id = page.url().split("/").pop() ?? "";
 

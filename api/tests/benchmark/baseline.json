@@ -695,7 +695,7 @@
    "standing": 1,
    "synthesis": 1
   },
-  "commit": "a05591b",
+  "commit": "47904e2",
   "company_model_version": 9,
   "dataset_sha256": "eaf82f7ba72d7667e2393128567291e4a65142a0fac4a91f0bb6b4c7117cbc12",
   "dataset_version": 3,
@@ -703,7 +703,7 @@
   "prompts": {
    "analyst": "a24ba68880bc243f",
    "dispatch": "d5224b880da0015c",
-   "reading": "a45041dec0ef5f6a",
+   "reading": "d86e769f887bc575",
    "synthesis": "74e3cefed3dd0cda"
   },
   "read_by": [
