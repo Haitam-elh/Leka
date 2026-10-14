@@ -247,9 +247,13 @@ def capabilities_of(
 
 
 def _cited(result: Result) -> list[str]:
-    """The evidence its findings and causes cite, in order, once."""
+    """The evidence its findings, its causes and its answer cite, in order,
+    once — an answer resting on files a model read rests on their sources
+    (2026-10-14: « 0 source à l'appui » with GitHub read)."""
     ids = [e for _, s in result.findings for e in s.evidence]
     ids += [e for _, c in result.causes for e in c.evidence]
+    if result.answer is not None:
+        ids += [e for p in result.answer.points for e in p.cites]
     return list(dict.fromkeys(ids))
 
 
@@ -272,7 +276,8 @@ def claims_of(result: Result, conflicts: Sequence[ExplainedConflict]) -> list[An
             code="sources",
             count=len(sources),
             holds=bool(sources),
-            definition="Distinct sources the evidence of its findings and causes was read from.",
+            definition="Distinct sources the evidence of its findings, causes and answer was "
+            "read from.",
             refs=list(sources),
         ),
         AnalysisClaim(

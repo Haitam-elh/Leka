@@ -50,6 +50,11 @@ vi.mock("@/lib/intentions/api", async (original) => ({
   intentions: api,
 }));
 const runs = vi.hoisted(() => ({ forIntention: vi.fn() }));
+const sourcesApi = vi.hoisted(() => ({ list: vi.fn() }));
+vi.mock("@/lib/sources", async (original) => ({
+  ...(await original<typeof import("@/lib/sources")>()),
+  sources: sourcesApi,
+}));
 vi.mock("@/lib/agent-runs", async (original) => ({
   ...(await original<typeof import("@/lib/agent-runs")>()),
   agentRuns: runs,
@@ -188,6 +193,12 @@ describe("the agents it takes, and the decision", () => {
     runs.forIntention.mockReset();
     push.mockReset();
     api.analysis.mockResolvedValue(analysis(proposal()));
+    sourcesApi.list.mockResolvedValue({
+      data: [
+        { id: "s-confluence", display_name: "Confluence LEKA", status: "active" },
+        { id: "s-github", display_name: "acme/backend", status: "active" },
+      ],
+    });
   });
 
   it("shows the plan and the agents it takes, each said, with the way to decide", async () => {
@@ -230,6 +241,8 @@ describe("the agents it takes, and the decision", () => {
     // The PDF the request asked for, ticked; the PowerPoint only if asked.
     expect(within(mine).getByTestId("decide-format-pdf")).toHaveAttribute("aria-checked", "true");
     await user.click(within(mine).getByTestId("decide-format-pptx"));
+    // Kept to Confluence alone.
+    await user.click(within(within(mine).getByTestId("decide-sources")).getByText("Confluence LEKA"));
     await user.click(launch);
 
     await waitFor(() => expect(api.launch).toHaveBeenCalled());
@@ -238,6 +251,7 @@ describe("the agents it takes, and the decision", () => {
         key: ARCHITECT.key,
         inputs: { parcours: "Paiement CB", perimetre: "Digital" },
         formats: ["pdf", "pptx"],
+        sources: ["s-confluence"],
       },
     ]);
     await waitFor(() => expect(push).toHaveBeenCalledWith(`/intentions/${ID}/actions`));

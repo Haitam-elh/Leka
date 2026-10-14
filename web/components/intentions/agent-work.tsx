@@ -49,7 +49,12 @@ export function AgentWork({ intentionId, live = false }: { intentionId: string; 
       aria-labelledby="agent-work-title"
       data-testid="agent-work"
     >
-      <h2 id="agent-work-title" className="sr-only">
+      {/* Who works on it, said apart from the skills its analysis used
+          (2026-10-14: « on ne comprend pas quel agent a travaillé »). */}
+      <h2
+        id="agent-work-title"
+        className="mb-3 text-xs font-semibold uppercase tracking-[0.06em] text-shell-muted"
+      >
         {w.title}
       </h2>
       <ul className="flex flex-col gap-4">

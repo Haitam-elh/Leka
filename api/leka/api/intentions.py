@@ -67,6 +67,7 @@ from leka.ingestion import ContentRepository, ResolutionRepository
 from leka.intelligence import IntelligenceRepository
 from leka.intentions import (
     Actor,
+    AgentsLaunchRequest,
     FeasibilityRead,
     IllegalTransitionError,
     Intention,
@@ -103,7 +104,6 @@ from leka.intentions import (
 from leka.intentions import agents as agent_steps
 from leka.intentions.brief import brief_of, tidy
 from leka.intentions.feasibility import Feasibility, feasibility_of
-from leka.intentions.schemas import AgentsLaunchRequest
 from leka.knowledge import GraphRepository, GraphService
 
 router = APIRouter(prefix="/intentions", tags=["intentions"])
@@ -609,7 +609,7 @@ async def launch_agents(
             session,
             principal.workspace_id,
             intention_id,
-            [agent_steps.Chosen(a.key, a.inputs, a.formats) for a in body.agents],
+            [agent_steps.Chosen(a.key, a.inputs, a.formats, a.sources) for a in body.agents],
             by=principal.user_id,
             steward=_steward(principal),
         )

@@ -27,6 +27,7 @@ import type {
 import { may } from "@/lib/intentions/journey";
 import { useDecide, useIntentionAnalysis } from "@/lib/intentions/queries";
 import { notify } from "@/lib/notify";
+import { useSources } from "@/lib/sources-queries";
 
 /**
  * What LEKA proposes to get a request done, and the person's decision
@@ -205,7 +206,13 @@ export function ProposalView({ intention }: { intention: IntentionDetail }) {
   );
 }
 
-type Choice = { on: boolean; inputs: Record<string, string>; formats: string[] };
+type Choice = {
+  on: boolean;
+  inputs: Record<string, string>;
+  formats: string[];
+  sources: string[];
+};
+type Readable = { id: string; name: string };
 
 function initial(agent: ProposedAgent): Choice {
   const inputs: Record<string, string> = {};
@@ -213,17 +220,19 @@ function initial(agent: ProposedAgent): Choice {
     const said = agent.inputs[field.name];
     if (typeof said === "string") inputs[field.name] = said;
   }
-  return { on: agent.available, inputs, formats: [...agent.asked] };
+  return { on: agent.available, inputs, formats: [...agent.asked], sources: [] };
 }
 
 function ChosenAgent({
   agent,
   choice,
   onChange,
+  readable,
 }: {
   agent: ProposedAgent;
   choice: Choice;
   onChange: (next: Choice) => void;
+  readable: Readable[];
 }) {
   const w = useDictionary().intentions.agents;
   const said = w.deliverables as Record<string, string>;
@@ -294,6 +303,32 @@ function ChosenAgent({
           <p className="text-xs text-shell-muted">{w.filesHint}</p>
         </fieldset>
       ) : null}
+      {/* Kept to some sources — « l'Architecte sur Confluence seul »
+          (2026-10-14): none ticked, every one. */}
+      {choice.on && readable.length > 1 ? (
+        <fieldset className="space-y-1.5 ps-6" data-testid="decide-sources">
+          <legend className="text-xs font-medium text-brand-navy">{w.sourcesTitle}</legend>
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+            {readable.map((source) => (
+              <label key={source.id} className="flex items-center gap-2 text-[0.8125rem] text-brand-navy">
+                <Checkbox
+                  checked={choice.sources.includes(source.id)}
+                  onCheckedChange={(on) =>
+                    onChange({
+                      ...choice,
+                      sources: on
+                        ? [...choice.sources, source.id]
+                        : choice.sources.filter((id) => id !== source.id),
+                    })
+                  }
+                />
+                {source.name}
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-shell-muted">{w.sourcesHint}</p>
+        </fieldset>
+      ) : null}
     </li>
   );
 }
@@ -312,6 +347,10 @@ export function AgentsDecision({ intention }: { intention: IntentionDetail }) {
   const rights = useRights(intention);
   const decide = useDecide(intention.id);
   const { proposal, loading } = useProposal(intention);
+  const sources = useSources();
+  const readable: Readable[] = (sources.data ?? [])
+    .filter((source) => source.status === "active" || source.status === "degraded")
+    .map((source) => ({ id: source.id, name: source.display_name }));
   const [choices, setChoices] = useState<Record<string, Choice>>({});
   useEffect(() => {
     if (!proposal) return;
@@ -347,7 +386,12 @@ export function AgentsDecision({ intention }: { intention: IntentionDetail }) {
       for (const [name, value] of Object.entries(choice.inputs)) {
         if (value.trim()) inputs[name] = value.trim();
       }
-      return { key: a.key, inputs, formats: choice.formats as AgentLaunch["formats"] };
+      return {
+        key: a.key,
+        inputs,
+        formats: choice.formats as AgentLaunch["formats"],
+        sources: choice.sources,
+      };
     });
     decide.launch.mutate(list, {
       onSuccess: () => {
@@ -404,6 +448,7 @@ export function AgentsDecision({ intention }: { intention: IntentionDetail }) {
                   agent={agent}
                   choice={choices[agent.key] ?? initial(agent)}
                   onChange={(next) => setChoices((all) => ({ ...all, [agent.key]: next }))}
+                  readable={readable}
                 />
               ))}
             </ul>

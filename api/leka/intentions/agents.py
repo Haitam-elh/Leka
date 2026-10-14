@@ -80,6 +80,8 @@ class Chosen:
     key: str
     inputs: Mapping[str, object] = field(default_factory=dict)
     formats: Sequence[str] = ()
+    # The only sources it reads; none: the intention's own, else every one.
+    sources: Sequence[uuid.UUID] = ()
 
 
 async def proposal_of(session: AsyncSession, intention: Intention) -> AgentProposalRead | None:
@@ -140,7 +142,9 @@ async def _start(
     why."""
     permissions = await permitted(session, workspace_id, by)
     catalogue = CatalogueService(session, workspace_id)
-    checked: list[tuple[str, dict[str, object], list[str], str, str]] = []
+    # Asked on some sources only: its agents read those, unless told others.
+    asked_on = [uuid.UUID(str(x)) for x in (intention.scope or {}).get("sources") or []]
+    checked: list[tuple[str, dict[str, object], list[str], str, list[uuid.UUID]]] = []
     for each in chosen:
         entry = await catalogue.entry(each.key, permissions=permissions, user_id=by)
         if entry is None:
@@ -153,7 +157,9 @@ async def _start(
         if missing:
             raise AgentsRefusedError("missing_inputs", agent=each.key, missing=missing)
         formats = [f for f in each.formats if f in CHOSEN]
-        checked.append((each.key, inputs, formats, entry.definition.risk, entry.definition.title))
+        checked.append(
+            (each.key, inputs, formats, entry.definition.risk, list(each.sources) or asked_on)
+        )
     if await _short(session, workspace_id, [c[0] for c in checked]):
         raise AgentsRefusedError("credits")
     seat = await MembershipRepository(session, workspace_id).get_for_user(by)
@@ -161,7 +167,7 @@ async def _start(
     controls = await AIControlService(session, workspace_id).active()
     runtime = AgentRuntime(session, workspace_id)
     started: list[AgentRun] = []
-    for key, inputs, formats, risk, _title in checked:
+    for key, inputs, formats, risk, sources in checked:
         held = holding(controls, key, risk, actor)
         try:
             run = await runtime.start(
@@ -173,6 +179,7 @@ async def _start(
                 context_id=intention.context_id,
                 held_by=held.name if held is not None else None,
                 formats=formats,
+                sources=sources,
             )
         except RunRefusedError as error:
             raise AgentsRefusedError("refused", agent=key, why=str(error)) from error
@@ -413,7 +420,12 @@ async def retry(
         workspace_id,
         intention,
         [
-            Chosen(r.key, dict(r.inputs), [str(f) for f in _list(r.detail, "formats")])
+            Chosen(
+                r.key,
+                dict(r.inputs),
+                [str(f) for f in _list(r.detail, "formats")],
+                [uuid.UUID(str(x)) for x in _list(r.detail, "sources")],
+            )
             for r in failed
         ],
         by=by,

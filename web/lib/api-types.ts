@@ -6643,6 +6643,11 @@ export interface components {
             };
             /** Formats */
             formats?: ("pdf" | "pptx")[];
+            /**
+             * Sources
+             * @description The only sources it reads — none: those the intention was asked on, else every one.
+             */
+            sources?: string[];
         };
         /**
          * AgentProposalRead

@@ -15,6 +15,8 @@ What these protect:
   with « Relancer », those that delivered kept.
 - « Je le fais moi-même »: done by its asker, the plan in hand; its agents
   still launchable after the fact.
+- Kept to some sources (« l'Architecte sur Confluence seul »): the run
+  says which, and sees nothing that came from no other.
 - Without a model: the catalogue's own discovery and a plan by goal — a
   migration's steps, the DNS TTL lowered before the switch.
 """
@@ -32,10 +34,11 @@ import httpx
 import pytest
 from httpx import AsyncClient
 from pydantic import SecretStr
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from leka.capabilities import AgentRun, Gateway
 from leka.capabilities.gateway import service
+from leka.capabilities.runs import outside_sources
 from leka.core.config import settings
 from leka.db import session_factory, workspace_scope
 from leka.intentions import agents as agents_module
@@ -426,6 +429,43 @@ async def test_only_its_asker_or_who_may_approve_decides(
     _as(identity, acme, "member")
     refused = await client.post(f"{API}/{intention['id']}/by-hand")
     assert refused.status_code == 403
+
+
+async def test_kept_to_some_sources_it_sees_nothing_that_came_from_no_other(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[tuple[uuid.UUID, str]],
+    gemini: Callable[..., Gemini],
+    started: list[uuid.UUID],
+) -> None:
+    await _ready(acme)
+    gemini()
+    _as(identity, acme, "member")
+    intention = await _proposed(client, acme)
+    with workspace_scope(acme["acme"]):
+        async with session_factory() as session:
+            entity, source = (
+                await session.execute(
+                    text(
+                        "SELECT id, provenance -> 'sources' -> 0 ->> 'source_id' FROM entities "
+                        "WHERE jsonb_array_length(provenance -> 'sources') > 0 LIMIT 1"
+                    )
+                )
+            ).one()
+            kept = await outside_sources(session, acme["acme"], [source])
+            elsewhere = await outside_sources(session, acme["acme"], [str(uuid.uuid4())])
+    assert entity not in kept
+    assert entity in elsewhere
+
+    launched = await client.post(
+        f"{API}/{intention['id']}/agents",
+        json={"agents": [{**LAUNCH["agents"][0], "sources": [source]}]},
+    )
+    assert launched.status_code == 200, launched.text
+    [run] = await _runs(acme["acme"])
+    assert run.detail["sources"] == [source]
 
 
 def test_without_a_model_a_plan_by_goal() -> None:

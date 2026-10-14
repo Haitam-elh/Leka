@@ -5926,7 +5926,7 @@ const fr = {
         "{count} {count|commentaire écarté|commentaires écartés} : hors des lignes du diff que l'agent a lu.",
     },
     agentWork: {
-      title: "Le travail de l'agent",
+      title: "Agents mobilisés",
       working: "{agent} travaille sur votre demande",
       done: "{agent} a terminé",
       delivered: "{agent} a terminé : vos fichiers sont prêts",
@@ -5981,6 +5981,8 @@ const fr = {
       stop: "Je m'arrête là",
       files: "Fichiers à produire",
       filesHint: "Seuls les fichiers cochés sont produits. Son rapport, toujours.",
+      sourcesTitle: "Sources qu'il lit",
+      sourcesHint: "Aucune cochée : toutes vos sources. Cochez-en pour le limiter, à Confluence seul par exemple.",
       complete: "À compléter",
       chooseOne: "Choisissez au moins un agent.",
       errors: {
@@ -13092,7 +13094,7 @@ const en: Dictionary = {
       dropped: "{count} {count|comment dropped|comments dropped}: off the lines of the diff the agent read.",
     },
     agentWork: {
-      title: "The agent's work",
+      title: "Agents at work",
       working: "{agent} is working on your request",
       done: "{agent} is done",
       delivered: "{agent} is done: your files are ready",
@@ -13147,6 +13149,8 @@ const en: Dictionary = {
       stop: "I'll stop here",
       files: "Files to produce",
       filesHint: "Only the files ticked are produced. Its report, always.",
+      sourcesTitle: "Sources it reads",
+      sourcesHint: "None ticked: every source. Tick some to keep it to them, Confluence alone for instance.",
       complete: "To complete",
       chooseOne: "Choose at least one agent.",
       errors: {

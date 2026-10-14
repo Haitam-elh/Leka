@@ -1070,6 +1070,12 @@ class AgentLaunch(BaseModel):
     key: str = Field(max_length=100)
     inputs: dict[str, str | bool] = Field(default_factory=dict)
     formats: list[Literal["pdf", "pptx"]] = Field(default_factory=list, max_length=2)
+    sources: list[uuid.UUID] = Field(
+        default_factory=list,
+        max_length=50,
+        description="The only sources it reads — none: those the intention was asked on, else "
+        "every one.",
+    )
 
 
 class AgentsLaunchRequest(BaseModel):
