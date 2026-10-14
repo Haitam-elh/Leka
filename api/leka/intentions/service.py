@@ -230,6 +230,7 @@ def journey_read(found: Journey) -> JourneyRead:
             "step": asdict(found.step),
             "late": found.late,
             "technical": found.technical,
+            "path": found.path,
         }
     )
 

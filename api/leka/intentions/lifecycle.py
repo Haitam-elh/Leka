@@ -13,6 +13,12 @@ move it, and who.
                              not understood enough; clarified by asking again)
     analysing ──▶ submitted ──▶ analysing   (LEKA-443: its analysis stopped by
                   a person — kept, ready to analyse — and resumed)
+    awaiting_decision ──▶ completed        (2026-10-14: « je le fais moi-même »:
+                          its plan in hand, nothing for LEKA to run)
+    awaiting_decision ──▶ approved ──▶ executing   (its agents launched by a
+                          person — never started by LEKA alone)
+    completed ──▶ approved  (an answer taken further: its agents launched
+                          after the fact)
     any state not closed ──▶ cancelled     (the asker withdraws it)
     failed ──▶ analysing | executing        (tried again)
     completed | rejected ──▶ analysing      (asked again)
@@ -114,6 +120,8 @@ TRANSITIONS: Mapping[IntentionStatus, tuple[Move, ...]] = {
         _move(S.APPROVED, "approved", P),
         _move(S.REJECTED, "rejected", P),
         _move(S.ANALYSING, "asked_again", P),
+        # Done by its asker, the plan in hand (2026-10-14).
+        _move(S.COMPLETED, "by_hand", P),
     ),
     S.APPROVED: (
         _move(S.SCHEDULED, "scheduled", P, SYS),
@@ -131,7 +139,11 @@ TRANSITIONS: Mapping[IntentionStatus, tuple[Move, ...]] = {
         _move(S.COMPLETED, "verified", SYS, P),
         _move(S.FAILED, "failed", SYS, P),
     ),
-    S.COMPLETED: (_move(S.ANALYSING, "asked_again", P),),
+    S.COMPLETED: (
+        _move(S.ANALYSING, "asked_again", P),
+        # Taken further: its agents launched after the fact (2026-10-14).
+        _move(S.APPROVED, "approved", P),
+    ),
     S.REJECTED: (_move(S.ANALYSING, "asked_again", P),),
     S.FAILED: (
         _move(S.ANALYSING, "retried", P, SYS),

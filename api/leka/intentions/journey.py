@@ -108,6 +108,11 @@ RETRY_ACTIONS = "retry_actions"  # POST …/plans, after a failure
 REPORT_OUTCOME = "report_outcome"  # POST …/verifications/{id}/report
 ARCHIVE = "archive"
 RESTORE = "restore"
+# The Décision step's two ways (2026-10-14): its agents launched by a
+# person, or the work done by its asker with the plan in hand.
+LAUNCH_AGENTS = "launch_agents"  # POST …/agents
+BY_HAND = "by_hand"  # POST …/by-hand
+RETRY_AGENTS = "retry_agents"  # POST …/agents/retry, after one failed
 
 CONTROLS = (
     ANSWER,
@@ -125,6 +130,9 @@ CONTROLS = (
     REPORT_OUTCOME,
     ARCHIVE,
     RESTORE,
+    LAUNCH_AGENTS,
+    BY_HAND,
+    RETRY_AGENTS,
 )
 
 # Who moves it on from here.
@@ -179,7 +187,8 @@ STEPS = ("intention", "analysis", "results", "decision", "action")
 class Step:
     """Where the five steps put it: the step it is at, the last it reached
     (what may be opened), whether that step is itself done, and the last it
-    goes through — a question ends at its results."""
+    goes through — the five, always (2026-10-14: « les 5 ronds doivent être
+    utilisés »); only a decision not to act ends at its decision."""
 
     at: str
     reached: int
@@ -204,6 +213,8 @@ class Journey:
     # The error as kept — its type — for whoever diagnoses it; never the
     # words a person reads.
     technical: str | None = None
+    # How it is carried out once decided: its agents, or by hand.
+    path: str | None = None
 
 
 def _analysis_reason(error: str | None) -> str:
@@ -234,43 +245,63 @@ def _action_reason(last: LastMove) -> str:
 
 
 def _from_actions(last: LastMove | None) -> bool:
-    """Whether its failure came from its actions or their outcome — the
-    analysis's carries its analysis's id."""
+    """Whether its failure came from its actions, its agents or their
+    outcome — the analysis's carries its analysis's id."""
     if last is None:
         return False
     detail = last.detail
     return "analysis_id" not in detail and (
-        "plan_id" in detail or "verification_id" in detail or last.from_status == S.VERIFYING
+        "plan_id" in detail
+        or "verification_id" in detail
+        or detail.get("path") == AGENTS
+        or last.from_status == S.VERIFYING
     )
+
+
+AGENTS, SELF = "agents", "self"
+
+
+def path_of(last: LastMove | None) -> str | None:
+    """How it is carried out, as the move that brought it there says: its
+    agents launched, or done by hand."""
+    if last is None:
+        return None
+    if last.name == "by_hand":
+        return SELF
+    said = last.detail.get("path")
+    return str(said) if said in (AGENTS, SELF) else None
 
 
 def step_of(status: IntentionStatus, acting: bool, last: LastMove | None = None) -> Step:
     """The five steps, as the lifecycle puts it — a cancelled one where it
-    was when withdrawn."""
-    ends = 4 if acting else 2
+    was when withdrawn. Every request goes through all five: its result,
+    then a decision — its agents, or by hand — then what is done
+    (2026-10-14)."""
     if status == S.CANCELLED:
         was = S(last.from_status) if last is not None and last.from_status else S.SUBMITTED
         if was == S.CANCELLED:
             was = S.SUBMITTED
         return step_of(was, acting)
     if status == S.NEEDS_CLARIFICATION:
-        return Step("intention", 0, last=ends)
+        return Step("intention", 0)
     if status in (S.SUBMITTED, S.ANALYSING):
-        return Step("analysis", 1, last=ends)
+        return Step("analysis", 1)
     if status == S.FAILED:
         if _from_actions(last):
-            return Step("action", 4, last=4)
-        return Step("analysis", 1, last=ends)
+            return Step("action", 4)
+        return Step("analysis", 1)
     if status == S.AWAITING_DECISION:
-        return Step("decision", 3, last=4)
+        return Step("decision", 3)
     if status == S.REJECTED:
         return Step("decision", 3, done=True, last=3)
     if status in (S.APPROVED, S.SCHEDULED, S.EXECUTING, S.VERIFYING):
-        return Step("action", 4, last=4)
-    # Completed: acted on and verified, or a question answered.
-    if acting:
-        return Step("action", 4, done=True, last=4)
-    return Step("results", 2, done=True, last=2)
+        return Step("action", 4)
+    # Completed. Answered before every request was decided: its result,
+    # its decision still open to take it further.
+    if last is not None and last.name == "answered":
+        return Step("results", 3, done=True)
+    # Verified, or done by hand with its plan.
+    return Step("action", 4, done=True)
 
 
 def _lifecycle_controls(status: IntentionStatus) -> set[str]:
@@ -299,6 +330,7 @@ def journey(facts: Facts, now: datetime) -> Journey:
     since = facts.changed_at
     step = step_of(status, facts.acting, last)
     allowed = _lifecycle_controls(status)
+    path = path_of(last)
 
     def said(
         state: JourneyState,
@@ -322,6 +354,7 @@ def journey(facts: Facts, now: datetime) -> Journey:
             step=step,
             late=late,
             technical=technical,
+            path=path,
         )
 
     analysis = facts.analysis
@@ -359,6 +392,17 @@ def journey(facts: Facts, now: datetime) -> Journey:
         late = now - since > QUEUE_PATIENCE
         return said(J.READY, "queued", "wait", LEKA, {ANALYSE_AGAIN}, late=late)
     if status == S.FAILED:
+        if last is not None and path == AGENTS and _from_actions(last):
+            # An agent failed, timed out or was stopped: said, and launched
+            # again by who asked (2026-10-14).
+            return said(
+                J.ACTION_FAILED,
+                "agent_failed",
+                "retry_agents",
+                ASKER,
+                {RETRY_AGENTS},
+                technical=str(last.detail.get("error") or "") or None,
+            )
         if last is not None and _from_actions(last):
             return said(
                 J.ACTION_FAILED,
@@ -383,12 +427,15 @@ def journey(facts: Facts, now: datetime) -> Journey:
         )
     if status == S.AWAITING_DECISION:
         partial = analysis is not None and analysis.status in ("partial", "inconclusive")
+        # Its agents, or by hand — and, when it asks to change systems, the
+        # decision on its actions (LEKA-390).
+        ways = {LAUNCH_AGENTS, BY_HAND}
         return said(
             J.DECISION_REQUIRED,
             "partial" if partial else None,
             "decide",
-            APPROVER,
-            {DECIDE, MODIFY_DECISION},
+            APPROVER if facts.acting else ASKER,
+            ways | ({DECIDE, MODIFY_DECISION} if facts.acting else set()),
         )
     if status == S.APPROVED:
         return said(J.APPROVED, None, "start_actions", APPROVER, {START_ACTIONS})
@@ -397,15 +444,21 @@ def journey(facts: Facts, now: datetime) -> Journey:
     if status == S.REJECTED:
         return said(J.REJECTED, "by_person", "ask_again", ASKER, {ARCHIVE})
     if status == S.EXECUTING:
+        if path == AGENTS:
+            return said(J.ACTION_RUNNING, "agents", "follow_agents", LEKA, set())
         return said(J.ACTION_RUNNING, None, "follow_actions", LEKA, {STOP_ACTIONS})
     if status == S.VERIFYING:
         return said(J.TO_VERIFY, None, "wait_verification", LEKA, {REPORT_OUTCOME})
-    # Completed.
+    # Completed: its agents may still be launched after the fact.
+    if last is not None and last.name == "by_hand":
+        return said(J.DONE, "by_hand", "nothing", None, {ARCHIVE, LAUNCH_AGENTS})
     if last is not None and last.name == "verified":
-        return said(J.DONE, None, "nothing", None, {ARCHIVE})
+        return said(J.DONE, None, "nothing", None, {ARCHIVE, LAUNCH_AGENTS})
     if analysis is not None and analysis.status in ("partial", "inconclusive"):
-        return said(J.ANALYSIS_PARTIAL, analysis.status, "read_result", ASKER, {ARCHIVE})
-    return said(J.RESULT_AVAILABLE, None, "read_result", ASKER, {ARCHIVE})
+        return said(
+            J.ANALYSIS_PARTIAL, analysis.status, "read_result", ASKER, {ARCHIVE, LAUNCH_AGENTS}
+        )
+    return said(J.RESULT_AVAILABLE, None, "read_result", ASKER, {ARCHIVE, LAUNCH_AGENTS})
 
 
 # ── the matrix ──────────────────────────────────────────────────────────────
@@ -449,7 +502,7 @@ MATRIX: tuple[Row, ...] = (
         J.ANALYSIS_PARTIAL,
         (S.COMPLETED,),
         ("answered",),
-        (ASK_AGAIN, ARCHIVE),
+        (ASK_AGAIN, ARCHIVE, LAUNCH_AGENTS),
         ("partial", "inconclusive"),
     ),
     Row(
@@ -459,12 +512,12 @@ MATRIX: tuple[Row, ...] = (
         (ANALYSE_AGAIN, ASK_AGAIN, CANCEL),
         ("interrupted", "crashed", "timed_out", "model", "context_blocked", "error"),
     ),
-    Row(J.RESULT_AVAILABLE, (S.COMPLETED,), ("answered",), (ASK_AGAIN, ARCHIVE)),
+    Row(J.RESULT_AVAILABLE, (S.COMPLETED,), ("answered",), (ASK_AGAIN, ARCHIVE, LAUNCH_AGENTS)),
     Row(
         J.DECISION_REQUIRED,
         (S.AWAITING_DECISION,),
         ("proposed",),
-        (DECIDE, MODIFY_DECISION, ASK_AGAIN, CANCEL),
+        (LAUNCH_AGENTS, BY_HAND, DECIDE, MODIFY_DECISION, ASK_AGAIN, CANCEL),
         ("partial",),
     ),
     Row(
@@ -475,16 +528,28 @@ MATRIX: tuple[Row, ...] = (
         ("scheduled",),
     ),
     Row(J.REJECTED, (S.REJECTED,), ("rejected",), (ASK_AGAIN, ARCHIVE), ("by_person",)),
-    Row(J.ACTION_RUNNING, (S.EXECUTING,), ("execution_started",), (STOP_ACTIONS,)),
+    Row(
+        J.ACTION_RUNNING,
+        (S.EXECUTING,),
+        ("execution_started",),
+        (STOP_ACTIONS,),
+        ("agents",),
+    ),
     Row(
         J.ACTION_FAILED,
         (S.FAILED,),
         ("failed",),
-        (RETRY_ACTIONS, ASK_AGAIN, CANCEL),
-        ("step_failed", "stopped", "conditions_changed", "expected_not_met"),
+        (RETRY_ACTIONS, RETRY_AGENTS, ASK_AGAIN, CANCEL),
+        ("step_failed", "stopped", "conditions_changed", "expected_not_met", "agent_failed"),
     ),
     Row(J.TO_VERIFY, (S.VERIFYING,), ("executed",), (REPORT_OUTCOME,)),
-    Row(J.DONE, (S.COMPLETED,), ("verified",), (ASK_AGAIN, ARCHIVE)),
+    Row(
+        J.DONE,
+        (S.COMPLETED,),
+        ("verified", "by_hand"),
+        (ASK_AGAIN, ARCHIVE, LAUNCH_AGENTS),
+        ("by_hand",),
+    ),
     Row(J.CANCELLED, (S.CANCELLED,), ("cancelled",), (ARCHIVE,), ("by_person",)),
     Row(J.SUPERSEDED, (), ("asked_again", "clarified"), ()),
 )

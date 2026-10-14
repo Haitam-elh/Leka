@@ -98,9 +98,9 @@ RUN_JOB = "leka.capabilities.runs.run_agent"
 # How long a run may take, all of it: its context, its tools, its model.
 RUN_BUDGET = 15 * 60.0
 # A run found running this long had its worker go away; one queued this
-# long, its job.
+# long, its job — said failed, never left « en cours » (2026-10-14).
 ABANDONED = timedelta(minutes=30)
-FORGOTTEN = timedelta(hours=6)
+FORGOTTEN = timedelta(minutes=45)
 # What an agent may write, at most: a deck's worth of markdown.
 MAX_TOKENS = 16_000
 # Rounds of tools an agent may take before it answers. Its last round is
@@ -554,9 +554,15 @@ async def _run(
                 comments=len(review["comments"]),
                 dropped=review["dropped"],
             )
-    if definition.renders is not None:
+    # Only the files a person asked for (2026-10-14: a PDF nobody asked for
+    # was drawn) — every one when the run says nothing of it.
+    asked = run.detail.get("formats")
+    wanted = None if not isinstance(asked, list) else [str(f) for f in asked]
+    if definition.renders is not None and (
+        definition.renders != "architecture_deck" or wanted != []
+    ):
         await session.commit()
-        drawn = await draw(session, run, definition, output)
+        drawn = await draw(session, run, definition, output, formats=wanted)
         if drawn.error is None:
             steps.add(drawn.step, **drawn.said())
         else:

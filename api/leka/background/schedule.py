@@ -129,7 +129,7 @@ SCHEDULE: tuple[Scheduled, ...] = (
     ),
     # The agent runs no worker will finish (LEKA-395): its worker went away,
     # its job was lost — failed, abandoned, said.
-    Scheduled("agent-runs-sweep", "leka.capabilities.runs.run_runs_sweep", cron="41 * * * *"),
+    Scheduled("agent-runs-sweep", "leka.capabilities.runs.run_runs_sweep", cron="*/10 * * * *"),
     # The workflow runs no worker will finish (LEKA-397): failed,
     # abandoned — retried, they go on from where they were.
     Scheduled(

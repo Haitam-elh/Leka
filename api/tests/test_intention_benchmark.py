@@ -50,7 +50,7 @@ from leka.intentions import reading, understanding, writing
 from leka.intentions.analysis import Capability, Material, Output
 from leka.intentions.analyst import PLATFORM
 from leka.intentions.capabilities import CAPABILITIES
-from leka.intentions.dispatch import RULES
+from leka.intentions.proposal import RULES
 from leka.intentions.processing import analyse_intention
 from leka.knowledge.registry import MODEL_VERSION
 from leka.platform import Workspace
@@ -114,7 +114,7 @@ def measured_on(dataset: grid.Dataset, read_by: set[str]) -> dict[str, Any]:
             "reading": _digest(reading.SYSTEM),
             "synthesis": _digest(writing.SYSTEM),
             "analyst": _digest(PLATFORM),
-            "dispatch": _digest(RULES),
+            "proposal": _digest(RULES),
         },
         "read_by": sorted(read_by),
         "commit": _commit(),
