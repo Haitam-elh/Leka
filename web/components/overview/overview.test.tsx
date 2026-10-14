@@ -19,6 +19,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Candidate } from "@/lib/enrichment";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import type { Source, SourceEvent } from "@/lib/sources";
+import { sampleJourney } from "@/lib/intentions/journey-sample";
 
 const list = vi.fn();
 const events = vi.fn();
@@ -419,9 +420,16 @@ describe("the overview", () => {
     );
   });
 
-  it("lists the intentions under way, each leading to it", async () => {
+  it("lists the intentions under way, each leading to it, in its journey's words", async () => {
     underWay.mockResolvedValue({
-      data: [{ id: "i1", title: "Pourquoi payment-api est lente ?", status: "awaiting_decision" }],
+      data: [
+        {
+          id: "i1",
+          title: "Pourquoi payment-api est lente ?",
+          status: "awaiting_decision",
+          journey: sampleJourney("awaiting_decision"),
+        },
+      ],
       next_cursor: null,
     });
     mount();
@@ -429,6 +437,8 @@ describe("the overview", () => {
     const link = within(list).getByRole("link");
     expect(link).toHaveAttribute("href", "/intentions/i1");
     expect(link).toHaveTextContent("Pourquoi payment-api est lente ?");
+    // The same state as on the list and its page (LEKA-443).
+    expect(within(link).getByTestId("intention-status")).toHaveTextContent("Décision requise");
   });
 
   it("tells what Activité tells, the same events worded the same way", async () => {

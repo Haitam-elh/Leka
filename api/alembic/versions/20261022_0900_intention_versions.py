@@ -1,7 +1,7 @@
 """An intention's versions, the request it came from, an analysis stopped.
 
 Revision ID: 6e1c9a4b7d20
-Revises: 8b3f1d6a2c47
+Revises: 3dee77e03bf8
 Created: 2026-10-22
 
 LEKA-443:
@@ -25,7 +25,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "6e1c9a4b7d20"
-down_revision: str | None = "8b3f1d6a2c47"
+down_revision: str | None = "3dee77e03bf8"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
