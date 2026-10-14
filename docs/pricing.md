@@ -180,6 +180,7 @@ The plan comes **only from a verified event**, never from the browser coming bac
 | Cancellation | At the **end of the period paid for**: the plan holds until then, then Free. No refund |
 | Failed renewal | Stripe retries (its Smart Retries) while the subscription is `past_due`, and the plan holds. Once Stripe gives up (`unpaid` or `canceled`), the workspace goes back to Free |
 | The launch offer | Once per workspace: a workspace that ever subscribed does not get it again |
+| Growth's trial and the launch offer | Stripe counts the coupon's 12 months from the subscription's start, the trial inside them; its invoices fall on day 14, then each month — twelve of them inside the 12 months, the thirteenth at the list price: **12 paid months at −30 %**, as the offer says. Nothing to change |
 | Growth's trial | Once per workspace, 14 days, a card required. At its end the subscription starts and the card is charged what was shown, unless cancelled before; cancelled before, nothing is charged and the workspace goes back to Free |
 | Renewal | Automatic, until cancelled, at the terms shown when bought |
 | Overage | Never. At the limit, runs pause until the next month or a higher plan (LEKA-430) |
@@ -212,5 +213,5 @@ The plan comes **only from a verified event**, never from the browser coming bac
 ### Not yet
 
 - **Agents and bundles**: not on sale until available, tested and priced with their margin shown.
-- **The launch offer during a trial**: Stripe counts the coupon's 12 months from the subscription's start, so the trial's 14 days are inside them — about 11.5 paid months discounted. To decide: keep it, or give the trial's subscriptions a 13-month coupon.
+
 - **Stripe Tax**: once the VAT treatment is decided.
