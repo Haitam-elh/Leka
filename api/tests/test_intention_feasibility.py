@@ -20,7 +20,6 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from leka.billing.catalogue import Bundle, Words
 from leka.billing.catalogue import catalogue as sold_now
 from leka.capabilities import find
 from leka.capabilities.definition import Lifecycle
@@ -109,63 +108,56 @@ def test_past_the_credits_a_plan_never_a_pack() -> None:
     assert (step.kind, step.detail["plan"], step.consent) == ("change_plan", "starter", True)
 
 
-def test_a_specialist_agent_is_in_beta_usable_never_sold_before_it_is_on_sale() -> None:
-    security = find("security-review")
-    assert security is not None
-    assert offer_of(security, sold_now()) == "beta"
-    architect = find("application-architecture")
-    assert architect is not None
-    # No plan includes an agent (LEKA-446): the architect too is in beta.
-    assert offer_of(architect, sold_now()) == "beta"
+def test_every_agent_is_on_sale_free_runs_none_owned_is_never_sold_again() -> None:
+    # 2026-10-14: on sale, from Starter.
+    for key in ("security-review", "application-architecture"):
+        found = find(key)
+        assert found is not None
+        assert offer_of(found, sold_now()) == "add_on"
+    # On Free: the plan that runs agents first, then the agent.
+    free = need(
+        "security-review", offer="add_on", available=False, reasons=({"code": "plan_required"},)
+    )
     verdict, path = path_of(
-        [ANALYSIS, need("security-review", offer="beta")],
-        month("free"),
+        [ANALYSIS, free], month("free"), None, sold_now(), CREDITS, expected="answer"
+    )
+    assert verdict == "prerequisites"
+    assert [(s.kind, s.detail.get("plan") or s.detail.get("agent"), s.consent) for s in path] == [
+        ("change_plan", "starter", True),
+        ("buy_add_on", "security-review", True),
+    ]
+    # Owned: nothing to buy.
+    mine = need("security-review", offer="add_on")
+    assert path_of(
+        [ANALYSIS, mine], month("growth"), None, sold_now(), CREDITS, expected="answer"
+    ) == (
+        "ready",
+        (),
+    )
+
+
+def test_specialist_agents_on_sale_a_bundle_when_it_costs_less_each_otherwise() -> None:
+    lacking = ({"code": "not_owned"},)
+    both = [
+        need("security-review", offer="add_on", available=False, reasons=lacking),
+        need("infrastructure-analysis", offer="add_on", available=False, reasons=lacking),
+        need("data-analysis", offer="add_on", available=False, reasons=lacking),
+    ]
+    verdict, path = path_of(both, month("growth"), None, sold_now(), CREDITS, expected="answer")
+    assert verdict == "prerequisites"
+    assert [(s.kind, s.detail.get("bundle"), s.consent) for s in path] == [
+        ("buy_bundle", "security-reliability", True)
+    ]
+    # One alone costs less than any bundle: that one.
+    verdict, path = path_of(
+        [need("code-review", offer="add_on", available=False, reasons=lacking)],
+        month("growth"),
         None,
         sold_now(),
         CREDITS,
         expected="answer",
     )
-    assert (verdict, path) == ("ready", ())
-
-
-def test_specialist_agents_on_sale_a_bundle_when_it_costs_less_each_otherwise() -> None:
-    on_sale = sold_now().model_copy(
-        update={
-            "add_ons": sold_now().add_ons.model_copy(
-                update={
-                    "available": True,
-                    "prices": {"security-review": 3900, "code-review": 3900},
-                    "bundles": (
-                        Bundle(
-                            key="engineering",
-                            name=Words(fr="Ingénierie", en="Engineering"),
-                            agents=("security-review", "code-review", "test-analysis"),
-                            monthly_price=6900,
-                        ),
-                    ),
-                }
-            )
-        }
-    )
-    security = find("security-review")
-    assert security is not None
-    assert offer_of(security, on_sale) == "add_on"
-    both = [need("security-review", offer="add_on"), need("code-review", offer="add_on")]
-    verdict, path = path_of(both, month("growth"), None, on_sale, CREDITS, expected="answer")
-    assert verdict == "prerequisites"
-    assert [(s.kind, s.detail.get("bundle"), s.consent) for s in path] == [
-        ("buy_bundle", "engineering", True)
-    ]
-    # One alone costs less than the bundle: that one.
-    verdict, path = path_of(
-        [need("security-review", offer="add_on")],
-        month("growth"),
-        None,
-        on_sale,
-        CREDITS,
-        expected="answer",
-    )
-    assert [(s.kind, s.detail.get("agent")) for s in path] == [("buy_add_on", "security-review")]
+    assert [(s.kind, s.detail.get("agent")) for s in path] == [("buy_add_on", "code-review")]
 
 
 def test_what_nothing_leka_has_makes_is_said_impossible() -> None:

@@ -24,9 +24,11 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { cn } from "cn";
+
+import { AgentPrice, Bundles, Owned } from "@/components/capabilities/offers";
 
 import { IconTile, type TileTone } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
@@ -54,6 +56,7 @@ import {
   useCapabilityChange,
   useCatalogueSummary,
 } from "@/lib/capabilities-queries";
+import { useAddOns } from "@/lib/billing-queries";
 import { type Dictionary, fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import { notify } from "@/lib/notify";
@@ -196,6 +199,9 @@ function Trend({ now, before, goodWhenDown = false }: { now: number; before: num
 const WIDE = ["no_model", "no_runtime"] as const;
 type Wide = (typeof WIDE)[number];
 
+/** What it pays for (2026-10-14): said by an agent's price, not twice. */
+const PAID = new Set(["plan_required", "not_owned"]);
+
 function isWide(reason: CapabilityReason): boolean {
   return (WIDE as readonly string[]).includes(reason.code);
 }
@@ -211,8 +217,9 @@ function Availability({ capability }: { capability: Capability }) {
       </Pill>
     );
   }
-  // What holds every capability back is said once, above the list.
-  const own = capability.reasons.filter((reason) => !isWide(reason));
+  // What holds every capability back is said once, above the list; what
+  // it pays for, by its price (offers.tsx).
+  const own = capability.reasons.filter((reason) => !isWide(reason) && !PAID.has(reason.code));
   if (!own.length) {
     return (
       <Pill tone="neutral">
@@ -297,6 +304,7 @@ function Row({ capability }: { capability: Capability }) {
           ) : (
             <Availability capability={capability} />
           )}
+          {agent ? <AgentPrice agentKey={capability.key} /> : null}
         </div>
       </div>
       <Favourite capability={capability} />
@@ -527,11 +535,13 @@ function Domains({
   goal,
   shown,
   empty,
+  keep = () => true,
 }: {
   list: ReturnType<typeof useCapabilities>;
   goal: string | null;
   shown: Shown;
   empty: string;
+  keep?: (capability: Capability) => boolean;
 }) {
   const t = useDictionary();
   if (list.isError) {
@@ -547,6 +557,7 @@ function Domains({
   if (!list.data) return <div className="h-80 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />;
   const kept = list.data.filter(
     (capability) =>
+      keep(capability) &&
       (!goal || capability.goals.includes(goal)) &&
       (shown === "all" || (shown === "agents") === (capability.kind === "agent")),
   );
@@ -806,6 +817,21 @@ function Configuration() {
   );
 }
 
+/** Back from Stripe's page: said once — owned when Stripe says it is paid. */
+function useBoughtSaid() {
+  const t = useDictionary();
+  const router = useRouter();
+  const pathname = usePathname() ?? routes.capabilities();
+  const search = useSearchParams();
+  const bought = search?.get("bought");
+  useEffect(() => {
+    if (!bought) return;
+    if (bought === "cancelled") notify.info({ title: t.catalogue.offers.cancelled });
+    else notify.success({ title: t.catalogue.offers.bought });
+    router.replace(pathname, { scroll: false });
+  }, [bought, pathname, router, t]);
+}
+
 export function CatalogueScreen() {
   const t = useDictionary();
   const w = t.catalogue;
@@ -815,8 +841,15 @@ export function CatalogueScreen() {
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<NonNullable<CatalogueQuery["sort"]>>("relevant");
   const [goal, setGoal] = useState<string | null>(null);
-  const list = useCapabilities({ view: view === "mine" ? "mine" : "all", q, sort });
+  // « Mes capacités » (2026-10-14: « l'onglet ne sert strictement à rien »):
+  // what this workspace owns — LEKA's own, and the agents it bought.
+  const list = useCapabilities({ view: "all", q, sort });
+  const offers = useAddOns();
+  const owned = (capability: Capability) =>
+    capability.kind !== "agent" ||
+    Boolean(offers.data?.agents.find((a) => a.key === capability.key)?.owned);
   const empty = view === "mine" && shown === "all" && !q && !goal ? w.mineEmpty : w.empty;
+  useBoughtSaid();
 
   return (
     <PageContainer>
@@ -868,7 +901,15 @@ export function CatalogueScreen() {
             sort={sort}
             setSort={setSort}
           />
-          <Domains list={list} goal={goal} shown={shown} empty={empty} />
+          {view === "mine" ? <Owned /> : null}
+          <Domains
+            list={list}
+            goal={goal}
+            shown={shown}
+            empty={empty}
+            keep={view === "mine" ? owned : undefined}
+          />
+          {view === "available" && shown !== "capabilities" ? <Bundles /> : null}
           {/* What ran this week, under what there is — nothing ran, nothing
               said. */}
           {summary.data?.runs ? (

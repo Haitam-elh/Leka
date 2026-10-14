@@ -74,7 +74,20 @@ def test_the_catalogue_lekas_ships_is_whole() -> None:
     assert all(c.provisional and not c.contractual for c in allowances.values())
     assert (offer.annual_discount_percent, offer.launch_offer.percent) == (20, 30)
     assert (offer.launch_offer.months, offer.launch_offer.intervals) == (12, ("month",))
-    assert offer.add_ons.available is False and offer.add_ons.prices == {}
+    # On sale since 2026-10-14, from Starter: each agent at its tier's price
+    # (to validate), the bundles cheaper than their agents alone — never at
+    # a loss.
+    sold = offer.add_ons
+    assert (sold.available, sold.provisional, sold.minimum_plan) == (True, True, "starter")
+    assert sold.tiers == {"standard": 900, "specialized": 1500, "expert": 2500}
+    assert sold.prices["application-architecture"] == 2500
+    assert sold.prices["code-review"] == 900
+    for bundle in sold.bundles:
+        alone = sum(sold.prices[a] for a in bundle.agents)
+        assert alone * 0.73 <= bundle.monthly_price < alone, bundle.key
+    # Each plan's quotas, to validate; Enterprise's by contract.
+    assert [p.quotas.sources for p in offer.plans] == [3, 5, 15, 30, None]
+    assert offer.plan("enterprise").quotas.contractual is True
     # The AI capacity is the plan's: nothing sells it apart.
     assert _raw()["capacity"] == {"automatic_overage": False}
 
@@ -195,7 +208,7 @@ async def test_anyone_reads_the_pricing_as_checkout_charges_it(
         False,
     )
     assert said["launch_offer"]["stacks_with_annual"] is False
-    assert said["add_ons_available"] is False
+    assert said["add_ons_available"] is True
     assert said["automatic_overage"] is False
     # Nothing that sells AI capacity, nor an agent in a plan.
     assert not {"capacity_any_time", "capacity_packs_available", "core_agents"} & set(said)

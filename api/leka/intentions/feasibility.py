@@ -10,7 +10,8 @@ connected, who asks — and, when it cannot, the least it takes to.
                          beta         an agent while it is not on sale:
                                       usable, its future price said
                                       (decided 2026-10-13)
-                         add_on       an agent on sale: bought
+                         add_on       an agent on sale — every one since
+                                      2026-10-14: bought, from Starter
                          planned      not ready yet: never offered as usable
                        and, usable or not here, why: a source to connect, a
                        language model, a permission, turned off
@@ -222,7 +223,27 @@ def path_of(
                 steps.append(Step(fix, {"capability": n.key, **reason}))
     if makes and all(n.offer == "planned" for n in makes):
         return "impossible", (Step("rephrase", {"expected": expected, "planned": True}),)
-    add_ons = sorted({n.key for n in used if n.offer == "add_on"})
+
+    # What it pays for (2026-10-14): a plan that runs agents first, then
+    # those it does not own — never one it already has.
+    def paid(n: Needed) -> set[str]:
+        return {str(r.get("code")) for r in n.reasons} & {"plan_required", "not_owned"}
+
+    if any("plan_required" in paid(n) for n in used):
+        least = sold.add_ons.minimum_plan
+        steps.append(
+            Step(
+                "change_plan",
+                {
+                    "plan": least,
+                    "monthly_price": sold.plan(least).monthly_price,
+                    "credits": plan_credits.get(least),
+                    "why": "agents",
+                },
+                consent=True,
+            )
+        )
+    add_ons = sorted({n.key for n in used if n.offer == "add_on" and paid(n)})
     if add_ons:
         steps += _bought(add_ons, sold)
     short = month.state == "exhausted" or (estimate is not None and month.remaining < estimate)

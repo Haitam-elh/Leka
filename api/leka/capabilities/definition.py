@@ -311,6 +311,9 @@ class Situation:
     # process without it says no_runtime.
     runtime: bool = False
     permissions: frozenset[str] = frozenset()
+    # Why an agent may not run in this workspace by what it pays for
+    # (2026-10-14): plan_required, not_owned — None when it may.
+    owned: str | None = None
 
 
 @dataclass(frozen=True)
@@ -359,6 +362,8 @@ def availability(
         reasons.append(Reason("no_runtime"))
     if d.permission not in situation.permissions:
         reasons.append(Reason("not_permitted", {"permission": d.permission}))
+    if d.kind is Kind.AGENT and situation.owned:
+        reasons.append(Reason(situation.owned))
     return Availability(not reasons, tuple(reasons), tuple(notes))
 
 

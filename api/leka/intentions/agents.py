@@ -33,6 +33,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from leka.billing import AddOnCheckout
 from leka.capabilities import (
     AgentRun,
     AgentRuntime,
@@ -46,12 +47,17 @@ from leka.governance import Actor as AIActor
 from leka.governance import AIControlService, ai_event, holding
 from leka.intentions.decisions import DecisionStatus
 from leka.intentions.journey import AGENTS, SELF
-from leka.intentions.lifecycle import Actor, IntentionStatus, move
+from leka.intentions.lifecycle import Actor, IllegalTransitionError, IntentionStatus, move
 from leka.intentions.models import Intention, IntentionAnalysis, IntentionDecision, IntentionEvent
 from leka.intentions.proposal import CHOSEN, inputs_of
 from leka.intentions.repository import IntentionRepository
 from leka.intentions.schemas import AgentProposalRead
-from leka.intentions.service import IntentionArchivedError, IntentionService, _yours
+from leka.intentions.service import (
+    IntentionArchivedError,
+    IntentionService,
+    NotYoursError,
+    _yours,
+)
 from leka.platform import MembershipRepository
 
 logger = structlog.get_logger(__name__)
@@ -143,7 +149,7 @@ async def _start(
     permissions = await permitted(session, workspace_id, by)
     catalogue = CatalogueService(session, workspace_id)
     # Asked on some sources only: its agents read those, unless told others.
-    asked_on = [uuid.UUID(str(x)) for x in (intention.scope or {}).get("sources") or []]
+    asked_on = [uuid.UUID(str(x)) for x in _list(intention.scope, "sources")]
     checked: list[tuple[str, dict[str, object], list[str], str, list[uuid.UUID]]] = []
     for each in chosen:
         entry = await catalogue.entry(each.key, permissions=permissions, user_id=by)
@@ -471,3 +477,48 @@ async def settle_executing(*, limit: int = 100) -> int:
     if moved:
         logger.info("intention_agents_settled", moved=moved)
     return moved
+
+
+async def launch_bought(workspace_id: uuid.UUID, checkout_id: uuid.UUID) -> dict[str, object]:
+    """Once an agent or a bundle bought from an intention's decision is paid:
+    the agents its buyer chose there, launched for them — « au retour du
+    paiement, l'intention est relancée automatiquement » (2026-10-14)."""
+    with workspace_scope(workspace_id):
+        async with session_factory() as session:
+            row = await session.get(AddOnCheckout, checkout_id)
+            if row is None or row.intention_id is None or row.requested_by is None:
+                return {"status": "gone"}
+            chosen = [
+                Chosen(
+                    str(each.get("key")),
+                    dict(each.get("inputs") or {}),
+                    [str(f) for f in each.get("formats") or []],
+                    [uuid.UUID(str(x)) for x in each.get("sources") or []],
+                )
+                for each in row.launch
+                if isinstance(each, dict) and each.get("key")
+            ]
+            try:
+                launched = await launch(
+                    session, workspace_id, row.intention_id, chosen, by=row.requested_by
+                )
+            except (AgentsRefusedError, IllegalTransitionError, NotYoursError) as error:
+                logger.info(
+                    "intention_bought_launch_refused",
+                    intention=str(row.intention_id),
+                    why=type(error).__name__,
+                )
+                return {"status": "refused"}
+            if launched is None:
+                return {"status": "gone"}
+            _, runs = launched
+            await session.commit()
+    await queue_all(workspace_id, runs)
+    return {"status": "launched", "runs": len(runs)}
+
+
+def run_bought_launch(workspace_id: str, checkout_id: str) -> dict[str, object]:
+    """Entry point for the job runner, which is synchronous."""
+    import asyncio
+
+    return asyncio.run(launch_bought(uuid.UUID(workspace_id), uuid.UUID(checkout_id)))

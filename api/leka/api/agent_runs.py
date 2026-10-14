@@ -124,6 +124,12 @@ def _missing() -> ApiError:
 def _refused(error: RunRefusedError) -> ApiError:
     refusal = error.refusal
     code, kind, message = REFUSED[refusal.code]
+    said = {str(r["code"]) for r in refusal.reasons}
+    # What it pays for, said as such: the screens offer what it takes.
+    if "plan_required" in said:
+        kind, message = ErrorCode.PLAN_REQUIRED, "Agents run from the Starter plan."
+    elif "not_owned" in said:
+        kind, message = ErrorCode.AGENT_NOT_OWNED, "This agent is not bought here."
     details = [
         FieldError(field=f"inputs.{r['name']}", message=str(r["code"]))
         if refusal.code == "invalid_input"

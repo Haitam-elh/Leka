@@ -10,6 +10,14 @@ delivery repeated, or replayed, is never applied twice. LEKA's own record:
 which workspace it was about is `for_workspace_id`, not the isolation
 column (an event can be about no workspace LEKA knows).
 
+`agent_entitlements` (2026-10-14): the agents a workspace may run — one
+bought alone, a bundle, or every one LEKA granted it (its team's, for
+tests). Ended, never deleted: who had what, when, is kept.
+
+`add_on_checkouts`: a Checkout LEKA opened for an agent or a bundle — and,
+when it was opened from an intention's decision, the agents to launch once
+it is paid.
+
 `site_events`: what visitors of the pricing page chose and clicked — a plan
 selected, the billing interval switched, a call to action — for LEKA's own
 analytics. The product's, no customer's: no workspace, no person, no
@@ -108,3 +116,43 @@ class StripeEvent(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     outcome: Mapped[str] = mapped_column(String(10), nullable=False)
     detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class AgentEntitlement(Base, WorkspaceScopedMixin):
+    __tablename__ = "agent_entitlements"
+    __table_args__ = (
+        CheckConstraint("kind IN ('agent', 'bundle', 'all')", name="kind"),
+        CheckConstraint("origin IN ('purchase', 'grant')", name="origin"),
+        CheckConstraint("status IN ('active', 'ended')", name="status"),
+        Index("ix_agent_entitlements_workspace_status", "workspace_id", "status"),
+    )
+
+    # An agent's key, a bundle's, or « * » for every one.
+    key: Mapped[str] = mapped_column(String(100), nullable=False)
+    kind: Mapped[str] = mapped_column(String(10), nullable=False)
+    origin: Mapped[str] = mapped_column(String(10), nullable=False)
+    status: Mapped[str] = mapped_column(String(10), nullable=False, server_default="active")
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Who: a person's id, an operator's name, Stripe.
+    by_whom: Mapped[str] = mapped_column(String(120), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AddOnCheckout(Base, WorkspaceScopedMixin):
+    __tablename__ = "add_on_checkouts"
+    __table_args__ = (
+        UniqueConstraint("stripe_session_id", name="uq_add_on_checkouts_session"),
+        CheckConstraint("kind IN ('agent', 'bundle')", name="kind"),
+        CheckConstraint("status IN ('open', 'paid', 'expired')", name="status"),
+    )
+
+    stripe_session_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    kind: Mapped[str] = mapped_column(String(10), nullable=False)
+    key: Mapped[str] = mapped_column(String(100), nullable=False)
+    status: Mapped[str] = mapped_column(String(10), nullable=False, server_default="open")
+    requested_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    # Opened from an intention's decision: launched once paid.
+    intention_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    launch: Mapped[list[object]] = mapped_column(JSONB, nullable=False, server_default="[]")
