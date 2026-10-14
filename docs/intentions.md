@@ -41,7 +41,7 @@ submitted ──▶ analysing ──▶ awaiting_decision ──▶ approved ─
 
 | State | Means | Reached by |
 | --- | --- | --- |
-| `submitted` | asked: its words and scope kept, nothing read yet | creating it |
+| `submitted` | asked: its words and scope kept, nothing being read — before its analysis starts, or stopped by a person (LEKA-443) | creating it; a person stopping its analysis |
 | `needs_clarification` | not understood enough to go on: what LEKA would ask is said (LEKA-385, § 9) | LEKA |
 | `analysing` | its context assembled, LEKA analysing it (LEKA-387, 388) | LEKA, once its context is assembled; a person asking again |
 | `awaiting_decision` | findings and recommendations ready: a person decides (LEKA-389, 390) | LEKA |
@@ -64,6 +64,8 @@ with the actors it allows and its name in the history:
 | analysing | awaiting_decision · completed · failed | `proposed` · `answered` · `failed` | LEKA |
 | analysing | analysing | `asked_again` | a person |
 | analysing | needs_clarification | `clarification_asked` — asked again, still not understood | LEKA |
+| analysing | submitted | `stopped` — its analysis stopped (LEKA-443) | a person |
+| submitted | analysing | `resumed` (LEKA-443) | a person |
 | awaiting_decision | approved · rejected · analysing | `approved` · `rejected` · `asked_again` | a person |
 | approved | scheduled · executing | `scheduled` · `execution_started` | a person, LEKA |
 | scheduled | executing · approved | `execution_started` · `unscheduled` | a person, LEKA · a person |
@@ -88,6 +90,158 @@ with the actors it allows and its name in the history:
 
 A move the lifecycle does not allow is `IllegalTransitionError` — 409 from
 the API — and changes nothing.
+
+## 2 bis. Its journey: one state, the same on every screen (LEKA-443)
+
+The lifecycle (§ 2) is what is kept. The **journey** is what a person reads.
+The API derives it once, from what was kept (`leka/intentions/journey.py`,
+pure), and serves it on every intention (`IntentionRead.journey`):
+
+- `state`: one of the states below;
+- `reason`: why it is there, as a code the screens put in words;
+- `since`: since when;
+- `next` and `by`: what comes next, and who does it (the asker, someone who
+  may approve, or LEKA);
+- `controls`: what a person may do now. Each route checks it again;
+- `step`: where the five steps put it;
+- `late`: past what it should take;
+- `technical`: the error as kept, for whoever diagnoses it — never the
+  words a person reads first.
+
+It is read from three things:
+- the lifecycle state;
+- the move that brought it there (its name, its actor, its detail);
+- its latest analysis.
+
+**No screen derives a state of its own.** The list, the panel beside it,
+its page, its steps, the overview all draw `journey`.
+
+### The matrix
+
+| State (words on screen) | Read from | Reached by | What a person may do | Reasons and errors | Next, by whom |
+| --- | --- | --- | --- | --- | --- |
+| `draft` — Brouillon | nothing kept: the composer's words, in this browser (sessionStorage) | typing | ask it | — | ask it — the asker |
+| `needs_clarification` — Clarification requise | `needs_clarification` | `clarification_asked` | answer, ask again, cancel | `unclear`, `context_blocked` | answer LEKA's questions — the asker |
+| `ready` — Prête à analyser | `analysing` with no analysis of this attempt started; or `submitted`, stopped by a person | `asked_again`, `clarified`, `retried`, `resumed`; `stopped` | analyse now (queued); resume (stopped); ask again; stop (queued); cancel | `queued` (late after 5 min), `stopped` | wait — LEKA; resume — the asker |
+| `analysing` — Analyse en cours | `analysing`, an analysis of this attempt running | `analysis_started`, and the moves above once it starts | stop, ask again, cancel; analyse again once late | late after 10 min | wait — LEKA |
+| `analysis_partial` — Analyse partielle | `completed` (a question), its analysis `partial` or `inconclusive` | `answered` | ask again, archive | `partial`, `inconclusive` | read the result — the asker |
+| `analysis_failed` — Analyse échouée | `failed`, from its analysis | `failed` | analyse again, ask again, cancel | `interrupted`, `crashed`, `timed_out`, `model`, `context_blocked`, `error` | analyse again — the asker |
+| `result_available` — Résultat disponible | `completed` (a question), its analysis complete | `answered` | ask again, archive | — | read the result — the asker |
+| `decision_required` — Décision requise | `awaiting_decision` | `proposed` | decide, change the decision, ask again, cancel | `partial`: proposed on a partial analysis | decide — who may approve |
+| `approved` — Approuvée | `approved`, `scheduled` | `approved`, `scheduled`, `unscheduled` | start the actions, unschedule, cancel | `scheduled` | start the actions — who may approve; wait for its time — LEKA |
+| `rejected` — Rejetée | `rejected` | `rejected` | ask again, archive | `by_person` | ask again — the asker |
+| `action_running` — Action en cours | `executing` | `execution_started` | stop the actions | — | follow it; a step may wait for a person — LEKA |
+| `action_failed` — Action échouée | `failed`, from its actions or their outcome | `failed` | retry the actions, ask again, cancel | `step_failed`, `stopped`, `conditions_changed`, `expected_not_met` | retry — who may approve |
+| `to_verify` — Résultat à vérifier | `verifying` | `executed` | conclude the check | — | LEKA checks; a person may conclude |
+| `done` — Terminée | `completed`, acted on and verified | `verified` | ask again, archive | — | nothing |
+| `cancelled` — Annulée | `cancelled` | `cancelled` | archive | `by_person` | nothing |
+| `superseded` — Remplacée par une version plus récente | an analysis or a decision of an earlier version, never an intention | `asked_again`, `clarified` | — | — | — |
+
+Archived, an intention keeps its state and may only be restored.
+
+`tests/test_intention_journey.py` holds this table to the lifecycle:
+- every lifecycle state is read by a row, and every move reaches one;
+- a state never offers a control its row does not list;
+- a control is never one the lifecycle would refuse.
+
+### The rules
+
+**Nothing is left running without a way out.**
+- Queued, it may be asked for now. Five minutes on, it is said late. The
+  sweep (every 15 minutes) runs what no job did.
+- An analysis that raises is said failed (`crashed`, its type kept): never
+  left running.
+- An analysis running past 10 minutes is said `interrupted` by the sweep.
+  Its intention fails, and can be analysed again. No analysis takes that
+  long: a capability has 15 s, the model 60 s.
+- A plan step running past 10 minutes is said `interrupted` by the plans'
+  sweep (every 5 minutes): its worker died during the call. What the system
+  did is said unknown, to be checked before retrying. The action failed,
+  never left running.
+- A step waiting on a person says so. A verification ends at its deadline.
+
+**« Arrêter l'analyse »** (mockup 03) moves `analysing → submitted` by a
+person (`stopped`), and back by `resumed`.
+- The analysis running is said `stopped`. What it finds is kept, never its
+  result.
+- Stopped twice, the same.
+- Cancelling stays final, and separate.
+
+**Versions.** `intention.version` is 1 as asked, one more each time its
+words, scope or answers are asked again.
+- Each analysis keeps the version it read (`intention_version`) and says
+  whether it is `current`. Stopped, or of an earlier version, it is not.
+- A screen never shows a non-current analysis as its result, its evidence
+  or its impact: it says « remplacée par une version plus récente », or
+  « arrêtée ».
+- The history gives each moment its version (`TimelineItem.version`) and
+  groups them, the earlier said replaced.
+
+**Retries never do anything twice.**
+
+| Sent again | Is |
+| --- | --- |
+| `POST /intentions` with the same `Idempotency-Key` (the composer sends one per request as it stands) | the intention it made — held by a lock, so two at once are one |
+| `POST …/ask`, the same words, scope and answers, while it is analysed | the same: no new version, nothing analysed twice |
+| `POST …/analyse` while one is on its way | `queued: false`: the same job (its concurrency key) |
+| `POST …/cancel`, `POST …/stop` | the same |
+| `POST …/plan` while a plan is on its way | 409 `already_planned` |
+| a vote twice | refused by the decision's rules (§ 13) |
+
+**Errors say what happened and what next.**
+- The reason code is put in words: « L'analyse s'est interrompue : le moteur
+  d'analyse ne répondait plus. »
+- The next step says who: « À vous · Relancez l'analyse. »
+- The technical code is folded under « Détails techniques », with the
+  version.
+
+**The screens reflect the API, never a progress of their own.**
+- The page and the list are read again every few seconds while LEKA works
+  (`by: leka`).
+- The five steps are `journey.step`.
+- A plan's buttons are its `controls` (start, schedule, cancel, unschedule,
+  stop, confirm a step, plan again): the rules its routes apply, said once
+  (`plan_controls`).
+- A run is « Exécuté · à vérifier » until its outcome is verified.
+- What is selected and not yet approved is never said running: no plan
+  exists before the decision.
+
+### Tested across screens
+
+The ticket's cases. Each one compares what the API says with what every
+screen concerned shows.
+
+| Case | Where |
+| --- | --- |
+| The same intention on the list, its panel, its page, its results, its history | `e2e/intention-journey.spec.ts`; `test_intention_journey_api.py` (list = page at each step); `journey.test.tsx` |
+| Changed after an analysis finished | `e2e/intention-journey.spec.ts`; `test_intention_journey_api.py` (versions, `current`, timeline) |
+| Stopped or cancelled while analysed | `e2e/intention-journey.spec.ts`; `test_intention_journey_api.py` (stopped mid-run, result kept, resumed); `test_intentions_api.py` (cancelled twice) |
+| A source failing during a multi-source analysis | `test_intention_journey_api.py` (partial, on the list as on its page); `test_intention_explain.py` (LEKA-441) |
+| Several recommendations, part approved, refused | `test_intention_journey_actions_api.py` (selected = planned = running; refused, nothing planned) |
+| A run failed, timed out, retried, verified | `test_intention_journey_actions_api.py` (a person's failure, a timeout, two retries, to verify, concluded short) |
+| A page refreshed, or come back to, while actions run | `e2e/intention-journey.spec.ts`; `test_intention_journey_actions_api.py` (read twice: still running) |
+| Nothing left running | `test_intention_journey_api.py` (an analysis that raises, one past its deadline); `test_intention_journey_actions_api.py` (a step past its deadline) |
+
+### Defects found, and fixed
+
+Each one was reproduced before it was fixed. The tests above now protect
+it.
+
+| # | Defect | Reproduced by | Fixed by |
+| --- | --- | --- | --- |
+| 1 | An analysis whose worker died, or that raised, stayed `running` forever. The sweep never ran it again: an analysis existed for that version. The intention stayed « En analyse » for good. | An exception after the analysis is recorded (e.g. in its explanation), or a worker killed mid-analysis | the crash guard; the sweep interrupts what runs past 10 minutes |
+| 2 | A plan step whose worker died during the call stayed `running` forever. « Arrêter » waited for it, so the plan never finished. | A step marked running, its job gone | `interrupt_overdue_steps` in the plans' sweep |
+| 3 | Asked again, Preuves and the decision's side showed the previous version's evidence and impact as current | Ask a question, analyse it, ask again with new words, open Preuves | `current` on each analysis; the screens draw only a current one |
+| 4 | Queued with nothing running, the pill said « En analyse » | Ask with no worker running | the `ready` state, reason `queued`, said late after 5 minutes |
+| 5 | A run said « Exécuté » while its outcome was still being verified | Confirm a person's step: the plan said « Exécuté », the intention « En vérification » | « Exécuté · à vérifier » and the `to_verify` state |
+| 6 | « En échec » was the same word for an analysis that failed and an action that failed. The list and its panel never said why. | Fail an analysis, then fail a run | `analysis_failed` and `action_failed`, each with its reason; the panel says why |
+| 7 | The same request sent twice made two intentions | `POST /intentions` twice — a double click, a retry after a network timeout | `Idempotency-Key` |
+| 8 | The same words asked again twice made two versions and two analyses | `POST …/ask` twice with the same body while analysed | asked again identically while analysed: the same |
+| 9 | Cancelling twice answered 409, and an error was shown although it was cancelled | A retried cancel | cancelling twice is the same |
+| 10 | No way to stop an analysis (mockup 03's « Arrêter l'analyse ») but cancelling the intention for good | — | stop and resume |
+| 11 | « Prochaines étapes » listed lifecycle states — « Annulée », « En analyse » — as if they were next steps | Open any intention's Vue d'ensemble | the journey's next step, and who |
+| 12 | Its history mixed its versions: version 1's analysis and version 2's, unmarked | Ask again after an analysis, open Historique | versions grouped, the earlier said replaced |
+| 13 | A plan's buttons were decided by the screen, from statuses of its own reading | — | the plan's `controls`, from the API |
 
 ## 3. Its history, audited
 
@@ -1555,6 +1709,9 @@ No model, or no agent offered: nothing is started, and the analysis answers as b
   links checked, twice the same, the context kept; decisions, actions,
   outcomes linked in code; the history refused an UPDATE, allowed `by`
   forgotten; another workspace's 404.
+- LEKA-443: its journey — the matrix held to the lifecycle, the same state
+  on every screen, versions apart, stopped and resumed, retries that do
+  nothing twice, nothing left running — § 2 bis.
 - LEKA-439: the brief, its questions and answers, what it takes — § 9 bis.
 - LEKA-440: the whole engine, measured on a versioned set of cases against
   a reference — a regression, or a critical failure it does not know,
