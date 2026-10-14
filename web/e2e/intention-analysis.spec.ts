@@ -57,8 +57,8 @@ test.describe("Intention analysis", () => {
       "auth-service appartient à Thomas Berger.",
     );
     await expect(page.getByText("Recommandations de LEKA")).toHaveCount(0);
-    // Answered: its result available, by LEKA (LEKA-443).
-    await expect(page.getByTestId("intention-status")).toContainText("Résultat disponible");
+    // Answered, then its decision: its agents, or by hand (2026-10-14).
+    await expect(page.getByTestId("intention-status")).toContainText("Décision requise");
 
     // Its evidence: the record that says who owns it, and where from.
     await page.getByTestId("tab-evidence").click();

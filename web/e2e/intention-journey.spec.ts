@@ -67,14 +67,15 @@ test.describe("An intention's journey", () => {
     expect(await everywhere(page, id)).toBe("ready");
 
     analyse(id);
-    expect(await everywhere(page, id)).toBe("result_available");
+    expect(await everywhere(page, id)).toBe("decision_required");
     await page.goto(`/intentions/${id}/results`);
     await expect(page.getByTestId("analysis-summary")).toBeVisible();
     await page.goto(`/intentions/${id}/history`);
     await expect(page.getByTestId("intention-event").last()).toBeVisible();
+    // Answered, then decided — its agents, or by hand (2026-10-14).
     await expect(page.getByTestId("intention-status")).toHaveAttribute(
       "data-state",
-      "result_available",
+      "decision_required",
     );
   });
 
@@ -107,7 +108,7 @@ test.describe("An intention's journey", () => {
     ]);
 
     analyse(id);
-    expect(await everywhere(page, id)).toBe("result_available");
+    expect(await everywhere(page, id)).toBe("decision_required");
     await page.goto(`/intentions/${id}/results`);
     await expect(page.getByTestId("analysis-not-current")).toHaveCount(0);
   });
@@ -131,7 +132,7 @@ test.describe("An intention's journey", () => {
     await page.getByTestId("journey-resume").click();
     await expect(page.getByTestId("journey-note")).toHaveAttribute("data-reason", "queued");
     analyse(id);
-    expect(await everywhere(page, id)).toBe("result_available");
+    expect(await everywhere(page, id)).toBe("decision_required");
   });
 
   test("read again while its actions run: still running, never done", async ({ page }) => {
