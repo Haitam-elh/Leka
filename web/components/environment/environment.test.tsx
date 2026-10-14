@@ -21,6 +21,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ARCHITECTURE, NOTHING } from "@/components/environment/architecture.test-data";
 import { ApiError } from "@/lib/api";
 import type { EntityActivity, EntitySheet, Environment } from "@/lib/environment";
+import { DICTIONARIES } from "@/lib/i18n/dictionaries";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import type { LandscapeView, ViewName } from "@/lib/knowledge-graph";
 import { makeQueryClient } from "@/lib/query";
@@ -404,12 +405,19 @@ beforeEach(() => {
   graphApi.architecture.mockResolvedValue(ARCHITECTURE);
 });
 
+/** Its views, chosen top right (2026-10-14): the menu opened, one picked. */
+const VIEW = DICTIONARIES.fr.environment.tabs;
+async function pick(user: ReturnType<typeof userEvent.setup>, tab: keyof typeof VIEW) {
+  await user.click(screen.getByTestId("env-view"));
+  await user.click(await screen.findByRole("option", { name: VIEW[tab] }));
+}
+
 describe("Mon environnement", () => {
   it("opens on the architecture, its figures the API's", async () => {
     mount(<EnvironmentScreen />);
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Mon environnement");
-    expect(screen.getByTestId("env-tab-architecture")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("env-view")).toHaveTextContent(VIEW.architecture);
     const services = within(screen.getByTestId("arch-figure-services"));
     expect(await services.findByText("4")).toBeInTheDocument();
     expect(await screen.findByTestId("arch-column-services")).toBeInTheDocument();
@@ -433,15 +441,15 @@ describe("Mon environnement", () => {
     query.set("tab=infrastructure");
     mount(<EnvironmentScreen />);
 
-    expect(screen.getByTestId("env-tab-infrastructure")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("env-view")).toHaveTextContent(VIEW.infrastructure);
     expect(graphApi.view).toHaveBeenCalledWith("infrastructure");
 
-    await user.click(screen.getByTestId("env-tab-domains"));
+    await pick(user, "domains");
     expect(replace).toHaveBeenLastCalledWith("/environment?tab=domains", { scroll: false });
-    expect(screen.getByTestId("env-tab-domains")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("env-view")).toHaveTextContent(VIEW.domains);
 
     // The first tab is the address with no tab at all.
-    await user.click(screen.getByTestId("env-tab-architecture"));
+    await pick(user, "architecture");
     expect(replace).toHaveBeenLastCalledWith("/environment", { scroll: false });
   });
 
@@ -449,14 +457,14 @@ describe("Mon environnement", () => {
     query.set("tab=nonsense");
     mount(<EnvironmentScreen />);
 
-    expect(screen.getByTestId("env-tab-architecture")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("env-view")).toHaveTextContent(VIEW.architecture);
   });
 
   it("puts each thing in its layer on the other tabs, with its state in words", async () => {
     const user = userEvent.setup();
     mount(<EnvironmentScreen />);
 
-    await user.click(screen.getByTestId("env-tab-applications"));
+    await pick(user, "applications");
     const services = await screen.findByTestId("layer-services");
     expect(graphApi.view).toHaveBeenCalledWith("applications");
     const payment = within(services).getByRole("link", { name: /Payment API/ });
@@ -476,7 +484,7 @@ describe("Mon environnement", () => {
     const user = userEvent.setup();
     mount(<EnvironmentScreen />);
 
-    await user.click(screen.getByTestId("env-tab-infrastructure"));
+    await pick(user, "infrastructure");
     const resources = await screen.findByTestId("layer-resources");
     expect(graphApi.view).toHaveBeenCalledWith("infrastructure");
     expect(screen.queryByTestId("layer-services")).not.toBeInTheDocument();
@@ -488,7 +496,7 @@ describe("Mon environnement", () => {
     ).toBeInTheDocument();
 
     // The business domains are rows of the model, empty until declared.
-    await user.click(screen.getByTestId("env-tab-domains"));
+    await pick(user, "domains");
     const capabilities = await screen.findByTestId("layer-capabilities");
     expect(within(capabilities).getByText("0 capacité")).toBeInTheDocument();
     expect(within(capabilities).getByText(/Déclarez vos capacités métier/)).toBeInTheDocument();
@@ -499,7 +507,7 @@ describe("Mon environnement", () => {
     expect(applications.getByText(/sur lesquels s'appuient vos capacités/)).toBeInTheDocument();
     expect(applications.queryByText(/Connectez GitHub/)).not.toBeInTheDocument();
 
-    await user.click(screen.getByTestId("env-tab-applications"));
+    await pick(user, "applications");
     await screen.findByTestId("layer-services");
     await user.click(screen.getByRole("button", { name: "Liste" }));
     const table = screen.getByRole("table", { name: "Les éléments de votre environnement" });
@@ -510,7 +518,7 @@ describe("Mon environnement", () => {
   it("says under the map how well its kinds are known, and which sources it comes from", async () => {
     const user = userEvent.setup();
     mount(<EnvironmentScreen />);
-    await user.click(screen.getByTestId("env-tab-applications"));
+    await pick(user, "applications");
 
     const coverage = await screen.findByTestId("coverage");
     // Over every one of its kinds, not only those drawn — and it says so.
@@ -534,7 +542,7 @@ describe("Mon environnement", () => {
   it("says on Événements what needs attention and what moved", async () => {
     const user = userEvent.setup();
     mount(<EnvironmentScreen />);
-    await user.click(screen.getByTestId("env-tab-events"));
+    await pick(user, "events");
 
     const [incident, unmonitored] = await screen.findAllByTestId("attention-row");
     expect(incident).toHaveTextContent("Latence élevée sur Payment API");

@@ -32,7 +32,6 @@ describe("where a line goes", () => {
 
   it("and, for a view of a page, the view it asks for", () => {
     expect(hrefOf(leaf("environment-applications"))).toBe("/environment?tab=applications");
-    expect(hrefOf(leaf("environment-organisation"))).toBe("/environment?tab=organisation");
     expect(hrefOf(leaf("capabilities-mine"))).toBe("/capabilities?tab=mine");
   });
 });
@@ -44,7 +43,11 @@ describe("what a person is offered", () => {
       "intention-new",
       "intentions",
       "approvals",
+      // Mon environnement: its name opens its overview; under it, what
+      // happened; its views, chosen on the page, found by the palette
+      // (2026-10-14).
       "environment-overview",
+      "activity",
       "environment-applications",
       "environment-infrastructure",
       "environment-data",
@@ -53,7 +56,6 @@ describe("what a person is offered", () => {
       "environment-events",
       "environment-domains",
       "environment-quality",
-      "activity",
       "capabilities-available",
       "capabilities-mine",
       "capabilities-configuration",
@@ -74,7 +76,7 @@ describe("what a person is offered", () => {
     }
     // The product is theirs.
     expect(offered).toContain("intention-new");
-    expect(offered).toContain("environment-applications");
+    expect(offered).toContain("environment-overview");
     expect(offered).toContain("sources");
   });
 
@@ -109,13 +111,8 @@ describe("where a person is", () => {
   });
 
   it("is the line of the view the address asks for", () => {
-    expect(at("/environment", "tab=applications")).toEqual([
-      "environment-applications",
-      "environment",
-    ]);
-    expect(at("/environment", new URLSearchParams("tab=events&x=1")).at(0)).toBe(
-      "environment-events",
-    );
+    // A view chosen on the page is the page's: Mon environnement's.
+    expect(at("/environment", "tab=applications")).toEqual(["environment-overview", "environment"]);
     expect(at("/capabilities", "tab=configuration")).toEqual([
       "capabilities-configuration",
       "capabilities",

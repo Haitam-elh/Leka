@@ -40,12 +40,16 @@ export interface PlacedLeaf {
   section?: NavSection;
 }
 
-function flatten(groups: readonly NavGroup[]): PlacedLeaf[] {
+function flatten(groups: readonly NavGroup[], withViews = false): PlacedLeaf[] {
   return groups.flatMap((group) =>
     group.nodes.flatMap((node): PlacedLeaf[] =>
       node.kind === "leaf"
         ? [{ leaf: node }]
-        : node.children.map((child) => ({ leaf: child, section: node })),
+        : [
+            ...(node.home ? [node.home] : []),
+            ...node.children,
+            ...(withViews ? (node.views ?? []) : []),
+          ].map((child) => ({ leaf: child, section: node })),
     ),
   );
 }
@@ -62,7 +66,8 @@ export function hrefOf(leaf: NavLeaf): string {
 
 /** Every line, with the section it is in — what the palette lists. */
 export function navLeaves(groups: readonly NavGroup[] = NAVIGATION): PlacedLeaf[] {
-  return flatten(groups);
+  // The palette finds a section's views too: chosen on its page, not drawn.
+  return flatten(groups, true);
 }
 
 /** What a person may be offered: the lines they may open, the sections
@@ -77,7 +82,9 @@ export function visibleNavigation(permissions: readonly string[]): NavGroup[] {
     nodes: group.nodes.flatMap((node): NavNode[] => {
       if (node.kind === "leaf") return opens(node) ? [node] : [];
       const children = node.children.filter(opens);
-      return children.length > 0 ? [{ ...node, children }] : [];
+      const home = node.home && opens(node.home) ? node.home : undefined;
+      const views = (node.views ?? []).filter(opens);
+      return children.length > 0 || home ? [{ ...node, home, views, children }] : [];
     }),
   })).filter((group) => group.nodes.length > 0);
 }
