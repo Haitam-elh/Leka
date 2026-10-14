@@ -13,7 +13,7 @@ Si tu veux qu'on développe, on développe. Si tu veux qu'on teste, on teste. »
 
 | Screen | Address | What is on it |
 |---|---|---|
-| Home | `/v2` | LEKA's logo, tied by a line to each source it reads (a source that needs a look is drawn so); one bar; under it, the person's active agents as chips — a click puts `/architecte` first in the request — and « Voir tous ». |
+| Home | `/v2` | LEKA's logo, tied by a line to each source it reads (a source that needs a look is drawn so); one bar; under it, the person's active agents as chips — six at most; a click puts `/architecte` first in the request — and « Voir tous ». The agent a request names this way is the one proposed, first, whatever a model would have chosen (`named` in `api/leka/intentions/proposal.py`); a word two agents share names neither. |
 | Agents and bundles | `/v2/agents` | Lot 2's catalogue: each agent with its price, status and purchase; the bundles. Its « Demander » goes back to the home's bar. |
 
 Around them:
