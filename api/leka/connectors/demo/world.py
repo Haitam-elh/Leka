@@ -514,7 +514,9 @@ def _jira(at: _Clock) -> Said:
             "status": {"name": status_name, "statusCategory": {"key": status_category}},
             "priority": {"name": "High" if kind in ("Incident", "Bug") else "Medium"},
             "labels": labels,
-            "components": [{"name": "nova-checkout-api" if "paiement" in labels else "nova-catalog-api"}],
+            "components": [
+                {"name": "nova-checkout-api" if "paiement" in labels else "nova-catalog-api"}
+            ],
             "created": at.ago(days=days),
             "updated": at.ago(days=min(days, 0.2)),
             "assignee": _person(who),
@@ -616,7 +618,9 @@ def _datadog(at: _Clock) -> Said:
                     "customer_impact_scope": "6 % des paiements par carte échouent sur la boutique.",
                     "created": at.ago(hours=19),
                     "modified": at.ago(hours=1),
-                    "fields": {"services": {"type": "autocomplete", "value": ["nova-checkout-api"]}},
+                    "fields": {
+                        "services": {"type": "autocomplete", "value": ["nova-checkout-api"]}
+                    },
                 },
                 "people": {
                     "commander_user": {"name": PEOPLE["lea"][2], "email": PEOPLE["lea"][3]},
@@ -648,14 +652,22 @@ def _datadog(at: _Clock) -> Said:
         )
     )
     for service, team, display, kind, languages, depends, tier in (
-        ("nova-checkout-api", "paiements", "Nova Checkout API", "web", ["python"], ["nova-catalog-api"], "1"),
-        ("nova-catalog-api", "catalogue", "Nova Catalog API", "web", ["go"], [], "2"),
+        (
+            "nova-checkout-api",
+            "paiements",
+            "Nova Checkout API",
+            "api",
+            ["Python"],
+            ["nova-catalog-api"],
+            "1",
+        ),
+        ("nova-catalog-api", "catalogue", "Nova Catalog API", "api", ["Go"], [], "2"),
         (
             "nova-storefront",
             "plateforme",
-            "Storefront",
+            "Nova Storefront",
             "web",
-            ["typescript"],
+            ["TypeScript"],
             ["nova-checkout-api", "nova-catalog-api"],
             "1",
         ),

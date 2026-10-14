@@ -60,6 +60,9 @@ workspace holding none of it, another member unable to enter it.
 
 ## Not yet
 
+- Datadog's monitors are read but not modelled — « no mapping for alerts
+  yet », as for a customer's: the incident and the deploy event are.
+
 - A person's name is one entity per tool that names them differently
   (Jira's account, GitHub's login and address): « Léa Martin » may show
   twice, as it would for a customer.
