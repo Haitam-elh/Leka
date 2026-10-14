@@ -107,6 +107,8 @@ test("a new account goes from its workspace to a first analysis", async ({
 
   // A first analysis worth reading: who, from the records that say so.
   await page.goto(`/intentions/${id}/results`);
+  // Under its answer, folded (2026-10-14): opened, what it found.
+  await page.getByTestId("analysis-detail").locator("summary").click();
   await expect(
     page.getByText("globex/billing est maintenu par Sara K.").first(),
   ).toBeVisible();
