@@ -137,7 +137,7 @@ def test_every_agent_is_on_sale_free_runs_none_owned_is_never_sold_again() -> No
 
 
 def test_specialist_agents_on_sale_a_bundle_when_it_costs_less_each_otherwise() -> None:
-    lacking = ({"code": "not_owned"},)
+    lacking: tuple[dict[str, object], ...] = ({"code": "not_owned"},)
     both = [
         need("security-review", offer="add_on", available=False, reasons=lacking),
         need("infrastructure-analysis", offer="add_on", available=False, reasons=lacking),
