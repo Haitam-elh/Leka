@@ -71,6 +71,28 @@ test.describe("The new interface", () => {
     await expect(page.getByTestId("v2-said")).toContainText(asked);
   });
 
+  test("an agent named by its chip is proposed under the bar, launched by a person only", async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.goto("/v2");
+    // As the chip writes it: « /architecte », then the request.
+    await page
+      .getByTestId("v2-ask")
+      .fill(`/architecte Construis l'architecture du parcours paiement, en PDF (${Date.now()})`);
+    await page.getByTestId("v2-ask").press("Enter");
+    await expect(page).toHaveURL(/\/v2\?i=[0-9a-f-]{36}$/);
+    const id = new URL(page.url()).searchParams.get("i") ?? "";
+
+    analyse(id);
+
+    // Named, proposed — whatever the model chose; nothing started.
+    const agent = page.getByTestId("decide-agent").filter({ hasText: "Architecte applicatif" });
+    await expect(agent).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("decide-launch")).toBeVisible();
+    await expect(page.getByTestId("v2-thread")).toHaveAttribute("data-state", "decision_required");
+  });
+
   test("its second screen: the agents and their bundles, priced", async ({ page }) => {
     await signIn(page);
     await page.goto("/v2");

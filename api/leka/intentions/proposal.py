@@ -25,6 +25,8 @@ the work needs: what it takes is said, never hidden.
 from __future__ import annotations
 
 import json
+import re
+import unicodedata
 import uuid
 from collections.abc import Collection, Mapping, Sequence
 from datetime import UTC, datetime
@@ -268,6 +270,35 @@ INFORMATIVE = frozenset(
 )
 
 
+def _plain(words: str) -> str:
+    """« Architecte applicatif » → « architecte-applicatif »: as the new
+    home's chips write an agent's name (web/components/v2/home.tsx)."""
+    bare = "".join(c for c in unicodedata.normalize("NFD", words) if not unicodedata.combining(c))
+    return re.sub(r"[^a-z0-9]+", "-", bare.lower()).strip("-")
+
+
+def named(text: str, entries: Sequence[Any]) -> str | None:
+    """The agent a request names first, by its « /mot » (2026-10-14: a chip
+    of the new home puts « /architecte » first in the bar) — its first word,
+    its whole name or its key. One agent, or none: a word two agents share
+    names neither."""
+    found = re.match(r"\s*/(\S+)", text)
+    if found is None:
+        return None
+    word = found.group(1).lower()
+    keys = [
+        e.definition.key
+        for e in entries
+        if word
+        in (
+            _plain(e.definition.title.split()[0]) if e.definition.title.split() else "",
+            _plain(e.definition.title),
+            e.definition.key,
+        )
+    ]
+    return keys[0] if len(keys) == 1 else None
+
+
 def plan_by_rules(goal: str, language: str | None, agents: Sequence[str]) -> list[PlanStepRead]:
     lang = "en" if (language or "fr").startswith("en") else "fr"
     steps = PLANS.get(goal, {}).get(lang) or (
@@ -310,6 +341,9 @@ async def propose(
         if e.definition.kind is Kind.AGENT and e.enabled
     ]
     by_key = {e.definition.key: e for e in entries}
+    # Named by the person — « /architecte … »: proposed, whatever a model or
+    # the catalogue would have chosen; still launched by a person only.
+    asked = named(intention.text, entries)
     said: Proposed | None = None
     if entries:
         runtime = LLMRuntime(session, workspace_id)
@@ -338,8 +372,14 @@ async def propose(
             if done.ok and done.value is not None:
                 said = done.value
     if said is not None:
-        chosen = [c for c in said.agents if c.key in by_key][:MOST_AGENTS]
-        costs = await run_costs(session, [c.key for c in chosen], now=moment)
+        chosen = [c for c in said.agents if c.key in by_key]
+        # The one the person named comes first: as the model read it when it
+        # chose it too — its inputs from the request's words — else alone.
+        chosen = sorted(chosen, key=lambda c: c.key != asked)[:MOST_AGENTS]
+        alone = asked is not None and asked not in {c.key for c in chosen}
+        costs = await run_costs(
+            session, [c.key for c in chosen] + ([asked] if alone and asked else []), now=moment
+        )
         agents = [
             agent_read(
                 by_key[c.key],
@@ -350,6 +390,17 @@ async def propose(
             )
             for c in chosen
         ]
+        if alone and asked is not None:
+            agents = [
+                agent_read(
+                    by_key[asked],
+                    why="",
+                    said_inputs={},
+                    formats=asked_formats(intention.text, CHOSEN),
+                    cost=costs.get(asked),
+                ),
+                *agents[: MOST_AGENTS - 1],
+            ]
         keys = {a.key for a in agents}
         steps = [
             PlanStepRead(
@@ -364,7 +415,10 @@ async def propose(
             steps = plan_by_rules(goal, language, [a.key for a in agents])
         logger.info("intention_proposed", intention=str(intention.id), agents=sorted(keys))
         return AgentProposalRead(
-            agents=agents, steps=steps, informative=said.informative, by="model"
+            agents=agents,
+            steps=steps,
+            informative=said.informative and asked is None,
+            by="model",
         )
     # No model, or nothing usable from it: the catalogue's own discovery.
     found = discover(
@@ -377,6 +431,8 @@ async def propose(
         {e.definition.key: e.availability for e in entries},
     )
     picked = [m.definition.key for m in found if m.score >= 3][:1]
+    if asked is not None:
+        picked = [asked, *(key for key in picked if key != asked)]
     costs = await run_costs(session, picked, now=moment)
     agents = [
         agent_read(

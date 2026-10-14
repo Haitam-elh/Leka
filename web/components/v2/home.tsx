@@ -269,12 +269,16 @@ export function slashes(titles: readonly string[]): string[] {
   );
 }
 
+const MOST_CHIPS = 6;
+
 function AgentChips({ onPick }: { onPick: (slash: string) => void }) {
   const t = useDictionary();
   const w = t.v2;
   const offers = useAddOns();
-  const mine = (offers.data?.agents ?? []).filter((agent) => agent.owned);
-  const said = slashes(mine.map((agent) => agent.title));
+  const owned = (offers.data?.agents ?? []).filter((agent) => agent.owned);
+  // Few buttons (2026-10-14): the first ones; the others behind « Voir tous ».
+  const mine = owned.slice(0, MOST_CHIPS);
+  const said = slashes(owned.map((agent) => agent.title));
   if (!offers.data) return <div className="mt-4 h-8" aria-hidden="true" />;
   return (
     <div className="mt-4 flex w-full flex-wrap items-center justify-center gap-2" data-testid="v2-agents">

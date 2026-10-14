@@ -19,6 +19,8 @@ What these protect:
   says which, and sees nothing that came from no other.
 - Without a model: the catalogue's own discovery and a plan by goal — a
   migration's steps, the DNS TTL lowered before the switch.
+- An agent the person names by its « /mot » (the new home's chips) is
+  proposed whatever the model chose — still launched by a person only.
 """
 
 # ruff: noqa: F811 — the fixtures of test_sources_api are imported to be requested by name.
@@ -44,7 +46,7 @@ from leka.db import session_factory, workspace_scope
 from leka.intentions import agents as agents_module
 from leka.intentions import feasibility as feasibility_module
 from leka.intentions.processing import analyse_pending
-from leka.intentions.proposal import plan_by_rules
+from leka.intentions.proposal import named, plan_by_rules
 from tests.conftest import FakeIdentity
 from tests.test_agent_runs_api import _ready
 from tests.test_context_engine import model
@@ -478,3 +480,46 @@ def test_without_a_model_a_plan_by_goal() -> None:
     english = plan_by_rules("explain_cause", "en", [])
     assert english[0].title == "Gather what changed"
     assert all(s.agent is None for s in english)
+
+
+async def test_an_agent_named_by_its_slash_word_is_proposed_whatever_the_model_chose(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[tuple[uuid.UUID, str]],
+    gemini: Callable[..., Gemini],
+    started: list[uuid.UUID],
+) -> None:
+    await _ready(acme)
+    gemini(
+        {"agents": [], "steps": [{"title": "Lire la réponse", "detail": ""}], "informative": True}
+    )
+    _as(identity, acme, "member")
+    intention = await _ask(client, f"/architecte {ASKED}")
+    await _analysed(acme, intention)
+
+    proposal = (await _get(client, f"/{intention['id']}/analysis"))["result"]["proposal"]
+    [agent] = proposal["agents"]
+    assert (agent["key"], agent["asked"]) == (ARCHITECT, ["pdf"])
+    # Named, it is work to do — not a question answered.
+    assert proposal["informative"] is False
+    # Proposed, never started: a person launches it.
+    assert started == []
+
+
+def test_a_slash_word_names_one_agent_or_none() -> None:
+    def entry(key: str, title: str) -> SimpleNamespace:
+        return SimpleNamespace(definition=SimpleNamespace(key=key, title=title))
+
+    entries = [
+        entry(ARCHITECT, "Architecte applicatif"),
+        entry("code-review", "Revue de code"),
+        entry("security-review", "Revue de sécurité"),
+    ]
+    assert named("/architecte construis le parcours", entries) == ARCHITECT
+    assert named("  /code-review ce diff", entries) == "code-review"
+    assert named("/revue-de-securite du module", entries) == "security-review"
+    # A word two agents share names neither; no slash, no name.
+    assert named("/revue du module", entries) is None
+    assert named("architecte du parcours", entries) is None

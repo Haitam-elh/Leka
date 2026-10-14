@@ -188,6 +188,15 @@ describe("the home's bar", () => {
     expect(screen.getByTestId("v2-see-all")).toHaveAttribute("href", "/v2/agents");
   });
 
+  it("shows six of them at most, the others behind « Voir tous »", () => {
+    offers.value = ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf", "Hotel"].map(
+      (title) => ({ key: title.toLowerCase(), title, summary: "", owned: true }),
+    );
+    show(<Home />);
+    expect(screen.getAllByTestId("v2-agent-chip")).toHaveLength(6);
+    expect(screen.getByTestId("v2-see-all")).toBeVisible();
+  });
+
   it("says when no agent is active, « Voir tous » still there", () => {
     show(<Home />);
     expect(screen.getByTestId("v2-agents")).toHaveTextContent("Aucun agent actif pour l'instant.");
