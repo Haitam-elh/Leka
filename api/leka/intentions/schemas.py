@@ -273,6 +273,11 @@ class Understanding(BaseModel):
     read_by: UnderstoodBy | None = Field(
         default=None, description="Who read it; none: LEKA's rules, before LEKA-394."
     )
+    off_topic: bool = Field(
+        default=False,
+        description="Nothing about the company's technology — a recipe, the weather: LEKA "
+        "answers about its stack only, and says so (2026-10-14).",
+    )
 
 
 class ReadinessIssue(BaseModel):
@@ -456,7 +461,7 @@ class IntentionEventRead(BaseModel):
 Slot = Literal["goal", "target", "scope", "expected", "constraints"]
 SlotState = Literal["known", "assumed", "missing", "unknown"]
 SlotNeed = Literal["blocking", "useful", "optional"]
-BriefDecision = Literal["analyse", "clarify", "continue", "block"]
+BriefDecision = Literal["analyse", "clarify", "continue", "block", "off_topic"]
 Expected = Literal["answer", "document", "plan", "action"]
 
 

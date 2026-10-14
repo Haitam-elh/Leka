@@ -92,6 +92,11 @@ class NothingToStartError(ValueError):
     search: nothing is kept."""
 
 
+class OffTopicError(ValueError):
+    """Nothing about the company's technology — a recipe, the weather: LEKA
+    answers about its stack only, and nothing is kept (2026-10-14)."""
+
+
 class IntentionArchivedError(ValueError):
     """An archived intention does not move until it is restored."""
 
@@ -423,6 +428,8 @@ class IntentionService:
             await self._understand(asked.text, await self._contexts.plan_intent(asked), at=at),
             given,
         )
+        if understood.off_topic:
+            raise OffTopicError
         context = await self._contexts.assemble_intent(refined(asked, understood), by=by)
         if context is None:
             raise NothingToStartError
@@ -488,6 +495,8 @@ class IntentionService:
             await self._understand(asked.text, await self._contexts.plan_intent(asked), at=at),
             given,
         )
+        if understood.off_topic:
+            raise OffTopicError
         scoped = refined(asked, understood)
         context: AssembledContext | None
         if intention.context_id is not None:

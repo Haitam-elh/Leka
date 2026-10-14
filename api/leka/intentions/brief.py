@@ -46,6 +46,7 @@ from leka.intentions.schemas import (
     ActionRead,
     AmbiguityKind,
     AmbiguityRead,
+    BriefDecision,
     BriefQuestionRead,
     BriefSlotRead,
     Goal,
@@ -385,7 +386,11 @@ def brief_of(
     acts = acting(understanding)
     stuck = [q for q in questions if q.blocking and q.answer is not None and q.answer.unknown]
     open_ = [q for q in questions if q.blocking and (q.answer is None or not q.answer.unknown)]
-    if acts and stuck:
+    decision: BriefDecision
+    if understanding.off_topic:
+        # Not about technology: nothing to ask, nothing to analyse — said.
+        decision = "off_topic"
+    elif acts and stuck:
         decision = "block"
     elif open_:
         decision = "clarify"
