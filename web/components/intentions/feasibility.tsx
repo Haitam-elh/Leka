@@ -20,6 +20,7 @@ import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import type { Feasibility, PathStep } from "@/lib/intentions/api";
 import { useIntentionFeasibility } from "@/lib/intentions/queries";
+import { useAddOns, useBuy } from "@/lib/billing-queries";
 import { notify } from "@/lib/notify";
 import { usePayment } from "@/lib/subscription-queries";
 
@@ -30,9 +31,11 @@ import { usePayment } from "@/lib/subscription-queries";
  * what it should cost; then the verdict and the least it takes, cheapest
  * first: what to connect or allow, or the cheapest plan that is enough.
  * Never a promise the plan or the credits would break: what cannot run is
- * said so. Nothing is bought here without a yes: changing plan asks first,
- * says the price and what changes, then opens the secure payment page — and
- * only someone who may pay for the workspace sees the button.
+ * said so. Nothing is bought here without a yes: changing plan, an agent
+ * or a bundle asks first, says in full what is paid — the price excl. VAT,
+ * the launch offer and what it renews at, monthly, the agents a plan
+ * includes (LEKA-462) — then opens the secure payment page; and only
+ * someone who may pay for the workspace sees the button.
  */
 
 /** A source kind's name — its own word when LEKA has no mark for it. */
@@ -46,7 +49,13 @@ function sourceNameOf(kind: string): string {
 
 const OFFER_TONES = { included: "success", beta: "violet", add_on: "warning", planned: "neutral" } as const;
 
-export function FeasibilityPanel({ feasibility }: { feasibility: Feasibility }) {
+export function FeasibilityPanel({
+  feasibility,
+  intentionId,
+}: {
+  feasibility: Feasibility;
+  intentionId?: string;
+}) {
   const t = useDictionary();
   const w = t.intentions.feasibility;
   const { format: locale } = useLocale();
@@ -71,7 +80,7 @@ export function FeasibilityPanel({ feasibility }: { feasibility: Feasibility }) 
         {feasibility.path.length ? (
           <ol className="flex flex-col gap-2" data-testid="feasibility-path">
             {feasibility.path.map((step, index) => (
-              <StepItem key={`${step.kind}-${index}`} step={step} />
+              <StepItem key={`${step.kind}-${index}`} step={step} intentionId={intentionId} />
             ))}
           </ol>
         ) : null}
@@ -121,12 +130,14 @@ export function FeasibilityPanel({ feasibility }: { feasibility: Feasibility }) 
   );
 }
 
-function StepItem({ step }: { step: PathStep }) {
+function StepItem({ step, intentionId }: { step: PathStep; intentionId?: string }) {
   const t = useDictionary();
   const w = t.intentions.feasibility;
   const { format: locale } = useLocale();
   const confirm = useConfirm();
   const { checkout } = usePayment();
+  const buy = useBuy();
+  const sold = useAddOns().data;
   const permissions = usePermissions() ?? [];
   const pays = permissions.includes("workspace:update");
   const detail = step.detail as Record<string, unknown>;
@@ -139,33 +150,70 @@ function StepItem({ step }: { step: PathStep }) {
   const sources = Array.isArray(detail.sources)
     ? detail.sources.map((kind) => sourceNameOf(String(kind))).join(t.catalogue.or)
     : "";
+  const agentName = (key: unknown) =>
+    sold?.agents.find((a) => a.key === key)?.title ?? String(key ?? "");
+  const found = sold?.bundles.find((b) => b.key === detail.bundle);
+  const bundleName = found
+    ? locale.startsWith("en")
+      ? found.name.en
+      : found.name.fr
+    : String(detail.bundle ?? "");
   const said = fill((w.steps as Record<string, string>)[step.kind] ?? step.kind, {
     sources,
     capability: String(detail.capability ?? ""),
     credits: String(detail.credits ?? ""),
     price: money(detail.price ?? detail.monthly_price),
-    agent: String(detail.agent ?? ""),
-    bundle: String(detail.bundle ?? ""),
+    agent: agentName(detail.agent),
+    bundle: bundleName,
     plan: planName,
   });
 
   async function changePlan() {
     const launch =
       typeof detail.launch_percent === "number"
-        ? ` ${fill(w.launch, { percent: String(detail.launch_percent), months: String(detail.launch_months ?? "") })}`
+        ? ` ${fill(w.launch, {
+            percent: String(detail.launch_percent),
+            months: String(detail.launch_months ?? ""),
+            launchPrice: money(detail.launch_price),
+            price: money(detail.then_price ?? detail.monthly_price),
+          })}`
         : "";
+    const includes = Array.isArray(detail.includes) && detail.includes.length
+      ? ` ${fill(w.includesAgents, { agents: detail.includes.map(agentName).join(", ") })}`
+      : "";
     const ok = await confirm({
       title: fill(w.confirmTitle, { plan: planName }),
       description:
         fill(w.confirmBody, {
           price: money(detail.monthly_price),
           credits: String(detail.credits ?? ""),
-        }) + launch,
+        }) +
+        launch +
+        includes +
+        (detail.renews ? ` ${w.renews}` : ""),
       confirmLabel: w.confirm,
     });
     if (!ok) return;
     checkout.mutate(
       { plan, interval: "month" },
+      {
+        onError: (error) =>
+          notify.error({ title: error instanceof ApiError ? error.message : String(error) }),
+      },
+    );
+  }
+
+  async function addOn() {
+    const kind = step.kind === "buy_bundle" ? "bundle" : "agent";
+    const key = String(kind === "bundle" ? detail.bundle : detail.agent);
+    const ok = await confirm({
+      title: fill(w.buyTitle, { name: kind === "bundle" ? bundleName : agentName(key) }),
+      description: fill(w.buyBody, { price: money(detail.monthly_price) }),
+      confirmLabel: w.confirm,
+    });
+    if (!ok) return;
+    buy.mutate(
+      { kind, key, intention_id: intentionId ?? null },
       {
         onError: (error) =>
           notify.error({ title: error instanceof ApiError ? error.message : String(error) }),
@@ -196,6 +244,19 @@ function StepItem({ step }: { step: PathStep }) {
         {fill(w.steps.change_plan, { plan: planName, price: money(detail.monthly_price) })}
       </Button>
     );
+  else if ((step.kind === "buy_add_on" || step.kind === "buy_bundle") && pays)
+    action = (
+      <Button
+        type="button"
+        size="sm"
+        disabled={buy.isPending}
+        onClick={() => void addOn()}
+        data-testid="feasibility-buy"
+      >
+        {said}
+      </Button>
+    );
+  const paid = step.kind === "change_plan" || step.kind === "buy_add_on" || step.kind === "buy_bundle";
   return (
     <li
       className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-shell-line px-3 py-2 text-[0.8125rem] text-brand-navy"
@@ -203,7 +264,7 @@ function StepItem({ step }: { step: PathStep }) {
       data-kind={step.kind}
     >
       <span className="min-w-0 flex-1">{said}</span>
-      {action ?? (step.kind === "change_plan" ? <span className="text-xs text-shell-muted">{t.intentions.feasibility.steps.ask_admin}</span> : null)}
+      {action ?? (paid ? <span className="text-xs text-shell-muted">{t.intentions.feasibility.steps.ask_admin}</span> : null)}
     </li>
   );
 }
@@ -211,5 +272,5 @@ function StepItem({ step }: { step: PathStep }) {
 /** What it takes to carry an intention through here, once read (LEKA-439). */
 export function FeasibilityCard({ intentionId }: { intentionId: string }) {
   const found = useIntentionFeasibility(intentionId);
-  return found.data ? <FeasibilityPanel feasibility={found.data} /> : null;
+  return found.data ? <FeasibilityPanel feasibility={found.data} intentionId={intentionId} /> : null;
 }

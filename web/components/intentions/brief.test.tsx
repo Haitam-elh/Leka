@@ -38,6 +38,20 @@ vi.mock("@/lib/subscription", async (original) => ({
   ...(await original<typeof import("@/lib/subscription")>()),
   subscription: { ...payment, read: vi.fn(), pricing: vi.fn() },
 }));
+const sold = vi.hoisted(() => ({
+  addOns: vi.fn(async () => ({
+    agents: [
+      { key: "security-review", title: "Revue de sécurité" },
+      { key: "code-review", title: "Revue de code" },
+    ],
+    bundles: [],
+  })),
+  buy: vi.fn(),
+}));
+vi.mock("@/lib/billing", async (original) => ({
+  ...(await original<typeof import("@/lib/billing")>()),
+  billing: sold,
+}));
 vi.mock("@/lib/notify", () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 const { BriefView } = await import("@/components/intentions/brief");
@@ -340,6 +354,10 @@ describe("what it takes", () => {
                 credits: 2000,
                 launch_percent: 20,
                 launch_months: 12,
+                launch_price: 4720,
+                then_price: 5900,
+                renews: true,
+                includes: ["code-review"],
               },
               consent: true,
             },
@@ -352,11 +370,56 @@ describe("what it takes", () => {
     expect(dialog).toHaveTextContent("Passer à Starter ?");
     expect(dialog).toHaveTextContent("59,00");
     expect(dialog).toHaveTextContent("2000 par mois");
-    expect(dialog).toHaveTextContent("−20 % les 12 premiers mois");
+    expect(dialog).toHaveTextContent("47,20 € par mois les 12 premiers mois (−20 %), puis 59,00 €");
+    expect(dialog).toHaveTextContent("Agents inclus : Revue de code.");
+    expect(dialog).toHaveTextContent("Renouvellement automatique chaque mois");
     // Nothing paid until said yes.
     expect(payment.checkout).not.toHaveBeenCalled();
     await user.click(within(dialog).getByRole("button", { name: "Continuer vers le paiement" }));
     await waitFor(() => expect(payment.checkout).toHaveBeenCalledWith("starter", "month"));
+    vi.unstubAllGlobals();
+  });
+
+  it("asks before adding an agent — its price, its renewal — then pays for this intention", async () => {
+    sold.buy.mockResolvedValue({ url: "https://checkout.example/a" });
+    const assign = vi.fn();
+    vi.stubGlobal("location", { ...window.location, assign });
+    const user = userEvent.setup();
+    show(
+      <FeasibilityPanel
+        intentionId="i-1"
+        feasibility={feasibility({
+          verdict: "prerequisites",
+          path: [
+            {
+              kind: "buy_add_on",
+              detail: { agent: "security-review", monthly_price: 2500, renews: true },
+              consent: true,
+            },
+          ],
+        })}
+      />,
+    );
+    await user.click(await screen.findByRole("button", { name: /Revue de sécurité/ }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("Ajouter « Revue de sécurité » ?");
+    expect(dialog).toHaveTextContent("25,00 € par mois, hors taxes, renouvelé automatiquement");
+    // Refused: nothing bought.
+    await user.click(within(dialog).getByRole("button", { name: "Annuler" }));
+    expect(sold.buy).not.toHaveBeenCalled();
+    await user.click(screen.getByTestId("feasibility-buy"));
+    await user.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", {
+        name: "Continuer vers le paiement",
+      }),
+    );
+    await waitFor(() =>
+      expect(sold.buy).toHaveBeenCalledWith({
+        kind: "agent",
+        key: "security-review",
+        intention_id: "i-1",
+      }),
+    );
     vi.unstubAllGlobals();
   });
 
