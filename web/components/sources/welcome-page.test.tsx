@@ -16,6 +16,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import { makeQueryClient } from "@/lib/query";
 import type { CatalogEntry, Source } from "@/lib/sources";
+import { InDemoContext } from "@/components/demo/in-demo";
 
 const api = {
   catalog: vi.fn(),
@@ -154,6 +155,35 @@ describe("choosing the tools", () => {
     await userEvent.click(github);
     expect(github).toHaveAttribute("aria-pressed", "false");
     expect(connect).toBeDisabled();
+  });
+});
+
+describe("where to start (LEKA-451)", () => {
+  it("offers its own tools or the demonstration, of the same weight", async () => {
+    renderPage();
+
+    const start = await screen.findByTestId("welcome-start");
+    expect(within(start).getByRole("heading", { name: "Par où commencer ?" })).toBeVisible();
+    expect(within(start).getByRole("link", { name: /Connecter une source/ })).toHaveAttribute(
+      "href",
+      "#welcome-tools",
+    );
+    expect(within(start).getByRole("button", { name: "Explorer la démo" })).toBeVisible();
+  });
+
+  it("offers no demonstration inside the demonstration", async () => {
+    render(
+      <QueryClientProvider client={makeQueryClient()}>
+        <LocaleProvider>
+          <InDemoContext.Provider value>
+            <WelcomePage />
+          </InDemoContext.Provider>
+        </LocaleProvider>
+      </QueryClientProvider>,
+    );
+
+    await screen.findByRole("heading", { name: "Développement" });
+    expect(screen.queryByTestId("welcome-start")).toBeNull();
   });
 });
 

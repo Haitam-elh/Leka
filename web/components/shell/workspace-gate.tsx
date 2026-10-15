@@ -121,7 +121,8 @@ function OpenOne({ memberships }: { memberships: readonly WorkspaceMembership[] 
     <section className="rounded-xl border border-shell-line bg-white p-6">
       <h1 className="text-xl font-semibold text-brand-navy">{t.shell.firstWorkspace.yours}</h1>
       <ul className="mt-4 space-y-2">
-        {memberships.map((membership) => (
+        {/* One's own first; a demonstration last (LEKA-449). */}
+        {[...memberships].sort((a, b) => Number(!!a.demo) - Number(!!b.demo)).map((membership) => (
           <li key={membership.id} className="flex items-center justify-between gap-4">
             <span className="truncate text-sm font-medium text-shell-nav">{membership.name}</span>
             <Button

@@ -37,7 +37,7 @@ async function said(page: Page, id: string): Promise<{ state: string; reason: st
   return journey;
 }
 
-/** Its state on its page, the list, the panel beside it — each the API's. */
+/** Its state on its page and in the history — each the API's. */
 async function everywhere(page: Page, id: string): Promise<string> {
   const { state } = await said(page, id);
   await page.goto(`/intentions/${id}`);
@@ -48,12 +48,6 @@ async function everywhere(page: Page, id: string): Promise<string> {
     has: page.locator(`a[href="/intentions/${id}"]`),
   });
   await expect(row.getByTestId("intention-status")).toHaveAttribute("data-state", state);
-  // The panel beside the list shows the latest: this one, just asked.
-  const preview = page.getByTestId("intention-preview");
-  if (await preview.isVisible()) {
-    await row.getByRole("link").click();
-    await expect(preview.getByTestId("intention-status")).toHaveAttribute("data-state", state);
-  }
   return state;
 }
 
@@ -67,14 +61,15 @@ test.describe("An intention's journey", () => {
     expect(await everywhere(page, id)).toBe("ready");
 
     analyse(id);
-    expect(await everywhere(page, id)).toBe("result_available");
+    expect(await everywhere(page, id)).toBe("decision_required");
     await page.goto(`/intentions/${id}/results`);
     await expect(page.getByTestId("analysis-summary")).toBeVisible();
     await page.goto(`/intentions/${id}/history`);
     await expect(page.getByTestId("intention-event").last()).toBeVisible();
+    // Answered, then decided — its agents, or by hand (2026-10-14).
     await expect(page.getByTestId("intention-status")).toHaveAttribute(
       "data-state",
-      "result_available",
+      "decision_required",
     );
   });
 
@@ -107,7 +102,7 @@ test.describe("An intention's journey", () => {
     ]);
 
     analyse(id);
-    expect(await everywhere(page, id)).toBe("result_available");
+    expect(await everywhere(page, id)).toBe("decision_required");
     await page.goto(`/intentions/${id}/results`);
     await expect(page.getByTestId("analysis-not-current")).toHaveCount(0);
   });
@@ -131,7 +126,7 @@ test.describe("An intention's journey", () => {
     await page.getByTestId("journey-resume").click();
     await expect(page.getByTestId("journey-note")).toHaveAttribute("data-reason", "queued");
     analyse(id);
-    expect(await everywhere(page, id)).toBe("result_available");
+    expect(await everywhere(page, id)).toBe("decision_required");
   });
 
   test("read again while its actions run: still running, never done", async ({ page }) => {

@@ -424,6 +424,7 @@ async def _me(
                 name=workspace.name,
                 slug=workspace.slug,
                 role=membership.role.value,
+                demo=workspace.demo,
             )
             for workspace, membership in pairs
         ],

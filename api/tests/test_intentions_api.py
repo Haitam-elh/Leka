@@ -158,6 +158,7 @@ async def test_its_status_is_kept_and_queried(
         "scheduled": 0,
         "finished": 1,
         "archived": 0,
+        "statuses": {"analysing": 2, "cancelled": 1},
     }
     assert (await _get(client, "/counts", mine="true"))["all"] == 2
 
@@ -197,7 +198,8 @@ async def test_the_lifecycle_from_analysis_to_verified_each_move_in_its_history(
     done = await _get(client, f"/{intention['id']}")
     assert (done["status"], done["phase"]) == ("completed", "finished")
     assert done["summary"] == "A deployment yesterday slowed Billing API."
-    assert done["moves"] == ["analysing"]
+    # Done, its agents still launchable after the fact (2026-10-14).
+    assert done["moves"] == ["analysing", "approved"]
     moves = [e for e in await _history(client, intention["id"]) if e["kind"] == "moved"]
     assert [(e["from_status"], e["to_status"], e["actor"], e["name"]) for e in moves] == [
         ("submitted", "analysing", "system", "analysis_started"),

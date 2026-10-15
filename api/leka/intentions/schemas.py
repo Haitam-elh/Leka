@@ -355,6 +355,10 @@ JourneyControl = Literal[
     "report_outcome",
     "archive",
     "restore",
+    # The Décision step's two ways (2026-10-14): its agents, or by hand.
+    "launch_agents",
+    "by_hand",
+    "retry_agents",
 ]
 
 
@@ -394,6 +398,11 @@ class JourneyRead(BaseModel):
     technical: str | None = Field(
         description="The error as kept, for whoever diagnoses it — never the words a person reads."
     )
+    path: Literal["agents", "self"] | None = Field(
+        default=None,
+        description="How it is carried out once decided: by LEKA's agents, or by its asker "
+        "with the plan in hand (2026-10-14).",
+    )
 
 
 class IntentionRead(BaseModel):
@@ -422,6 +431,12 @@ class IntentionRead(BaseModel):
         "(LEKA-443)."
     )
     journey: JourneyRead
+    # The history's columns (LEKA-457): filled for a list, empty elsewhere.
+    agents: list[str] = Field(default_factory=list, description="Its agents' keys, as they ran.")
+    sources: list[str] = Field(
+        default_factory=list,
+        description="The kinds of the sources it was asked about or its analyses cite.",
+    )
 
 
 class IntentionLinkRead(BaseModel):
@@ -688,6 +703,8 @@ class IntentionCounts(BaseModel):
     scheduled: int
     finished: int
     archived: int
+    # By state, not archived (LEKA-457): the history's own tabs.
+    statuses: dict[str, int] = Field(default_factory=dict)
 
 
 # ── its analysis (LEKA-388) ──────────────────────────────────────────────────
@@ -995,6 +1012,84 @@ class AnalysisExplanation(BaseModel):
     context_version: int | None = Field(description="The version of its context it read.")
 
 
+class AgentFieldRead(BaseModel):
+    """One input an agent takes, for a person to complete it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    type: str
+    required: bool
+    description: str
+    choices: list[str] = Field(default_factory=list)
+
+
+class ProposedAgentRead(BaseModel):
+    """An agent the work needs (proposal.py): who, why here, what it would
+    deliver and from what — and whether it can run here, said why not."""
+
+    model_config = ConfigDict(frozen=True)
+
+    key: str
+    title: str
+    summary: str = Field(description="Its role, in a sentence.")
+    category: str
+    why: str = Field(description="Why it helps with this request, in its language.")
+    deliverables: list[str] = Field(
+        description="What a run of it delivers: its report, then what LEKA draws (pdf, pptx, diff)."
+    )
+    asked: list[str] = Field(description="The files the request asks for: drawn when launched.")
+    inputs: dict[str, str | bool] = Field(description="Its inputs, from the request's words.")
+    missing: list[str] = Field(description="The required inputs the request does not give.")
+    fields: list[AgentFieldRead] = Field(
+        default_factory=list, description="Every input it takes, for a person to complete."
+    )
+    credits: float | None = Field(
+        description="What a run of it has cost here, in credits — none before a few runs."
+    )
+    available: bool
+    reasons: list[str] = Field(description="Why it cannot run here: missing_source, plan…")
+
+
+class PlanStepRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    title: str
+    detail: str = ""
+    agent: str | None = Field(default=None, description="The agent that would do it, if one.")
+
+
+class AgentProposalRead(BaseModel):
+    """What LEKA proposes to get it done (2026-10-14): the agents its work
+    needs and the plan, step by step — launched only by a person."""
+
+    model_config = ConfigDict(frozen=True)
+
+    agents: list[ProposedAgentRead]
+    steps: list[PlanStepRead]
+    informative: bool = Field(description="It only asks to know: nothing to produce or change.")
+    by: Literal["model", "rules"]
+
+
+class AgentLaunch(BaseModel):
+    """An agent a person launches from the Décision step: its inputs as they
+    completed them, the files they want drawn."""
+
+    key: str = Field(max_length=100)
+    inputs: dict[str, str | bool] = Field(default_factory=dict)
+    formats: list[Literal["pdf", "pptx"]] = Field(default_factory=list, max_length=2)
+    sources: list[uuid.UUID] = Field(
+        default_factory=list,
+        max_length=50,
+        description="The only sources it reads — none: those the intention was asked on, else "
+        "every one.",
+    )
+
+
+class AgentsLaunchRequest(BaseModel):
+    agents: list[AgentLaunch] = Field(min_length=1, max_length=3)
+
+
 class IntentionAnalysisResult(BaseModel):
     """What the analysis came to, for the decision interface (LEKA-389)."""
 
@@ -1022,6 +1117,10 @@ class IntentionAnalysisResult(BaseModel):
     explanation: AnalysisExplanation | None = Field(
         default=None,
         description="On what it rests (LEKA-441); none on an analysis made before.",
+    )
+    proposal: AgentProposalRead | None = Field(
+        default=None,
+        description="The agents its work needs and the plan (2026-10-14); none before.",
     )
 
 

@@ -12,8 +12,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, cast, func, or_, select
+from sqlalchemy.dialects.postgresql import JSONPATH
 
+from leka.capabilities import AgentRun
+from leka.connectors import Source
 from leka.db import WorkspaceScopedRepository
 from leka.intentions.lifecycle import PHASES
 from leka.intentions.models import Intention, IntentionAnalysis, IntentionEvent, IntentionLink
@@ -23,12 +26,20 @@ from leka.intentions.models import Intention, IntentionAnalysis, IntentionEvent,
 class IntentionFilters:
     # active, scheduled, finished — or archived; none: every one not archived.
     phase: str | None = None
-    status: str | None = None
+    # One of these states (LEKA-457: a tab may hold several).
+    status: tuple[str, ...] = ()
     created_by: uuid.UUID | None = None
     # These words in its title or its text.
     words: str | None = None
     # Linked to this thing: a context, a finding, an entity.
     linked: uuid.UUID | None = None
+    # An agent run for it, by its key (LEKA-457).
+    agent: str | None = None
+    # A source it was asked about, or its analyses cite.
+    source: uuid.UUID | None = None
+    # Asked in [since, until).
+    since: datetime | None = None
+    until: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -65,8 +76,8 @@ class IntentionRepository(WorkspaceScopedRepository):
                 statement = statement.where(
                     Intention.status.in_([status.value for status in states])
                 )
-        if f.status is not None:
-            statement = statement.where(Intention.status == f.status)
+        if f.status:
+            statement = statement.where(Intention.status.in_(f.status))
         if f.created_by is not None:
             statement = statement.where(Intention.created_by == f.created_by)
         if f.words:
@@ -83,7 +94,82 @@ class IntentionRepository(WorkspaceScopedRepository):
                     )
                 )
             )
+        if f.agent is not None:
+            statement = statement.where(
+                Intention.id.in_(
+                    select(AgentRun.intention_id).where(
+                        AgentRun.workspace_id == self.workspace_id, AgentRun.key == f.agent
+                    )
+                )
+            )
+        if f.source is not None:
+            source = str(f.source)
+            cited = select(IntentionAnalysis.intention_id).where(
+                IntentionAnalysis.workspace_id == self.workspace_id,
+                func.jsonb_path_exists(
+                    IntentionAnalysis.result,
+                    cast("$.evidence[*].sources[*] ? (@.id == $id)", JSONPATH),
+                    func.jsonb_build_object("id", source),
+                ),
+            )
+            statement = statement.where(
+                or_(Intention.scope["sources"].contains([source]), Intention.id.in_(cited))
+            )
+        if f.since is not None:
+            statement = statement.where(Intention.created_at >= f.since)
+        if f.until is not None:
+            statement = statement.where(Intention.created_at < f.until)
         return statement
+
+    async def used(
+        self, intentions: Sequence[Intention]
+    ) -> tuple[dict[uuid.UUID, list[str]], dict[uuid.UUID, list[str]]]:
+        """What each ran and read (LEKA-457): its agents' keys; the kinds of
+        the sources it was asked about or its analyses cite."""
+        ids = [i.id for i in intentions]
+        agents: dict[uuid.UUID, list[str]] = {i: [] for i in ids}
+        sources: dict[uuid.UUID, set[str]] = {i: set() for i in ids}
+        if not ids:
+            return agents, {}
+        ran = await self._session.execute(
+            select(AgentRun.intention_id, AgentRun.key)
+            .where(AgentRun.workspace_id == self.workspace_id, AgentRun.intention_id.in_(ids))
+            .distinct()
+            .order_by(AgentRun.key)
+        )
+        for intention_id, key in ran.tuples():
+            if intention_id is not None:
+                agents[intention_id].append(key)
+        cited = await self._session.execute(
+            select(
+                IntentionAnalysis.intention_id,
+                func.jsonb_path_query(
+                    IntentionAnalysis.result,
+                    cast("$.evidence[*].sources[*].kind", JSONPATH),
+                ).op("->>")(0),
+            )
+            .where(
+                IntentionAnalysis.workspace_id == self.workspace_id,
+                IntentionAnalysis.intention_id.in_(ids),
+            )
+            .distinct()
+        )
+        for intention_id, kind in cited.tuples():
+            if kind:
+                sources[intention_id].add(kind)
+        asked: dict[uuid.UUID, list[uuid.UUID]] = {}
+        for i in intentions:
+            said = (i.scope or {}).get("sources")
+            for source in said if isinstance(said, list) else ():
+                asked.setdefault(uuid.UUID(str(source)), []).append(i.id)
+        if asked:
+            kinds = await self._session.execute(
+                select(Source.id, Source.kind).where(Source.id.in_(list(asked)))
+            )
+            for source_id, kind in kinds.tuples():
+                for intention_id in asked[source_id]:
+                    sources[intention_id].add(str(kind))
+        return agents, {i: sorted(found) for i, found in sources.items()}
 
     async def counts(self, *, created_by: uuid.UUID | None = None) -> dict[str, int]:
         """How many by status, not archived — and how many archived."""

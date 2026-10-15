@@ -294,6 +294,11 @@ async def _apply(
     kind = str(event.get("type"))
     data: dict[str, Any] = (event.get("data") or {}).get("object") or {}
     made = _moment(event.get("created")) or datetime.now(UTC)
+    # An agent's or a bundle's (2026-10-14): its own, never the plan's.
+    from leka.billing.add_ons import apply_add_on, marked
+
+    if marked(data) is not None:
+        return await apply_add_on(session, workspace_id, kind, data, made=made)
     account = await account_of(session, workspace_id)
     if kind == "checkout.session.completed":
         if data.get("mode") == "subscription" and data.get("subscription"):
@@ -377,6 +382,10 @@ async def receive(
                 row.outcome = "ignored" if said in ("ignored", "stale", "not_paid") else "applied"
                 row.detail = {"said": said}
             await session.commit()
+            if kind == "checkout.session.completed" and said.startswith("add_on:"):
+                from leka.billing.add_ons import launch_bought
+
+                await launch_bought(session, workspace_id, str(data.get("id") or ""))
     logger.info("stripe_event_applied", stripe_event=event_id, type=kind, said=said)
     return said
 

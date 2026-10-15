@@ -41,6 +41,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.background import JobQueue, enqueue_job
@@ -98,9 +99,9 @@ RUN_JOB = "leka.capabilities.runs.run_agent"
 # How long a run may take, all of it: its context, its tools, its model.
 RUN_BUDGET = 15 * 60.0
 # A run found running this long had its worker go away; one queued this
-# long, its job.
+# long, its job — said failed, never left « en cours » (2026-10-14).
 ABANDONED = timedelta(minutes=30)
-FORGOTTEN = timedelta(hours=6)
+FORGOTTEN = timedelta(minutes=45)
 # What an agent may write, at most: a deck's worth of markdown.
 MAX_TOKENS = 16_000
 # Rounds of tools an agent may take before it answers. Its last round is
@@ -332,8 +333,14 @@ async def execute_run(
             steps.add("started")
             await session.commit()
             # What the person who asked may not see, it does not either
-            # (LEKA-402).
+            # (LEKA-402) — nor, kept to some sources, what came from none of
+            # them (2026-10-14).
             hidden = await hidden_on_behalf(session, workspace_id, run.requested_by)
+            kept = run.detail.get("sources")
+            if isinstance(kept, list) and kept:
+                hidden = hidden | await outside_sources(
+                    session, workspace_id, [str(s) for s in kept]
+                )
             try:
                 with hidden_entities(hidden):
                     return await _run(session, run, steps, tools, budget)
@@ -554,9 +561,15 @@ async def _run(
                 comments=len(review["comments"]),
                 dropped=review["dropped"],
             )
-    if definition.renders is not None:
+    # Only the files a person asked for (2026-10-14: a PDF nobody asked for
+    # was drawn) — every one when the run says nothing of it.
+    asked = run.detail.get("formats")
+    wanted = None if not isinstance(asked, list) else [str(f) for f in asked]
+    if definition.renders is not None and (
+        definition.renders != "architecture_deck" or wanted != []
+    ):
         await session.commit()
-        drawn = await draw(session, run, definition, output)
+        drawn = await draw(session, run, definition, output, formats=wanted)
         if drawn.error is None:
             steps.add(drawn.step, **drawn.said())
         else:
@@ -581,6 +594,28 @@ async def _run(
     status = "succeeded" if ended else "cancelled"
     logger.info("agent_run_ended", run=str(run.id), key=run.key, status=status)
     return {"status": status}
+
+
+async def outside_sources(
+    session: AsyncSession, workspace_id: uuid.UUID, sources: Sequence[str]
+) -> frozenset[uuid.UUID]:
+    """The things of the company model no source among these showed."""
+    rows = await session.execute(
+        text(
+            """
+            SELECT e.id FROM entities e
+             WHERE e.workspace_id = :workspace
+               AND NOT EXISTS (
+                   SELECT 1 FROM jsonb_array_elements(
+                       COALESCE(e.provenance -> 'sources', '[]'::jsonb)
+                   ) AS s
+                    WHERE s ->> 'source_id' = ANY(:sources)
+               )
+            """
+        ),
+        {"workspace": workspace_id, "sources": list(sources)},
+    )
+    return frozenset(rows.scalars().all())
 
 
 def run_agent(workspace_id: str, run_id: str) -> dict[str, object]:

@@ -137,6 +137,23 @@ WRITE_PERMISSIONS: frozenset[Permission] = frozenset(
     }
 )
 
+# Refused in a demonstration workspace (LEKA-449), whoever asks: what would
+# reach a real system (a source, an endpoint of its actions, its own model,
+# a payment, an invitation by e-mail) or end it as a customer's would. Its
+# questions, analyses, decisions and plans run: there is nothing outside
+# them to touch.
+DEMO_REFUSED: frozenset[Permission] = frozenset(
+    {
+        Permission.WORKSPACE_UPDATE,
+        Permission.WORKSPACE_DELETE,
+        Permission.WORKSPACE_TRANSFER,
+        Permission.MEMBER_INVITE,
+        Permission.MEMBER_UPDATE_ROLE,
+        Permission.MEMBER_REMOVE,
+        Permission.SOURCE_MANAGE,
+    }
+)
+
 
 class Principal(BaseModel):
     """Who is making this request, in which workspace, with what role.
@@ -156,6 +173,8 @@ class Principal(BaseModel):
     workspace_id: uuid.UUID
     role: Role
     workspace_status: WorkspaceStatus
+    # A demonstration (LEKA-449): what would reach outside it is refused.
+    workspace_demo: bool = False
     # A role of the workspace's own (LEKA-403): its key, and what it grants —
     # its base role's permissions, with what it adds and less what it takes
     # away. None: the base role's, as the matrix says.

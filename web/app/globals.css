@@ -208,11 +208,12 @@
   --activity-alert: #f5a03a;
   --activity-incident: #ec4b4b;
 
-  /* Measured on the same screen: 222px and 64px at its 1536px width. */
-  --shell-sidebar-width: 14rem;   /* 224px */
-  --shell-sidebar-rail: 4rem;     /* icons only, between 1024 and 1279px */
-  --shell-header-height: 4rem;    /* 64px */
-  --shell-content-max: 90rem;     /* 1440px of content, then centred */
+  /* The sprint's mockups (LEKA-455), at their 1536px: a 68px header, the
+     content edge to edge under it, 32px in — its edges the header's. */
+  --shell-sidebar-width: 14rem;   /* 224px: the drawer that holds every page */
+  --shell-sidebar-rail: 4rem;
+  --shell-header-height: 4.25rem; /* 68px */
+  --shell-content-max: 96rem;     /* 1536px, then centred */
 
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);

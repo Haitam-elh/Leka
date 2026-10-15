@@ -352,7 +352,7 @@
     'pricing.capacity.p1': { en: `Every plan includes AI credits each month: they cover the agents' work (architectures, analyses, answers to your intentions). A credit is not a token, and not every run uses the same amount.` },
     'pricing.capacity.p2': { en: `You see at any time what you have used and what is left, with a warning before the limit. AI capacity is not sold separately: at the limit, new runs pause until next month, or until you move to a higher plan. Nothing is charged without your consent.` },
     'pricing.addons.h': { en: `The agents` },
-    'pricing.addons.p': { en: `No agent is included in a plan. The Application Architect, QA, security review, incident investigation, code review and the other agents will be offered individually or in bundles. They are not on sale yet: talk to our team.` },
+    'pricing.addons.p': { en: `No agent is included in a plan: each agent is bought on its own, from €9 to €25 a month by its level (Standard, Specialised, Expert), or in a bundle, up to 25% cheaper. Agents are available from the Starter plan; their work uses your plan's AI credits.` },
     'pricing.llm.h': { en: `Your language model` },
     'pricing.llm.p': { en: `LEKA provides and manages the language model on Free, Starter, Growth and Business. Connecting your own model is reserved for Enterprise.` },
     'pricing.terms.vat': { en: `Prices in euros, excluding VAT.` },

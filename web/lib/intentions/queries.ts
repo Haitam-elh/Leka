@@ -2,11 +2,14 @@
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { agentRunKeys } from "@/lib/agent-runs-queries";
 import { ApiError } from "@/lib/api";
 import {
+  type AgentLaunch,
   type IntentionAnalysisRead,
   type IntentionAnswer,
   type IntentionDetail,
+  type IntentionFilters,
   type IntentionPhase,
   intentions,
 } from "@/lib/intentions/api";
@@ -14,7 +17,8 @@ import { working } from "@/lib/intentions/journey";
 
 export const intentionKeys = {
   all: ["intentions"] as const,
-  list: (phase: IntentionPhase | null, q: string) => ["intentions", "list", phase, q] as const,
+  list: (phase: IntentionPhase | null, q: string, filters: IntentionFilters = {}) =>
+    ["intentions", "list", phase, q, filters] as const,
   counts: ["intentions", "counts"] as const,
   one: (id: string) => ["intentions", "one", id] as const,
   history: (id: string) => ["intentions", "history", id] as const,
@@ -29,10 +33,15 @@ const WHILE_RUNNING = 4_000;
 
 /** A list of them, a page at a time: by phase — none, every one not
  * archived — and words. */
-export function useIntentions(phase: IntentionPhase | null, q: string) {
+export function useIntentions(
+  phase: IntentionPhase | null,
+  q: string,
+  filters: IntentionFilters = {},
+  limit = 20,
+) {
   return useInfiniteQuery({
-    queryKey: intentionKeys.list(phase, q),
-    queryFn: ({ pageParam }) => intentions.list({ phase, q, cursor: pageParam }),
+    queryKey: [...intentionKeys.list(phase, q, filters), limit],
+    queryFn: ({ pageParam }) => intentions.list({ phase, q, filters, cursor: pageParam, limit }),
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.next_cursor,
     // A row LEKA works on moves by itself: read again, as its page is.
@@ -166,4 +175,23 @@ export function useAnswer(id: string) {
       void client.invalidateQueries({ queryKey: intentionKeys.counts });
     },
   });
+}
+
+/** The Décision step's two ways, and « Relancer » (2026-10-14): the
+ * intention as it now stands, its agents read again. */
+export function useDecide(id: string) {
+  const client = useQueryClient();
+  const settled = (updated: IntentionDetail) => {
+    client.setQueryData(intentionKeys.one(id), updated);
+    void client.invalidateQueries({ queryKey: intentionKeys.all });
+    void client.invalidateQueries({ queryKey: agentRunKeys.intention(id) });
+  };
+  return {
+    launch: useMutation({
+      mutationFn: (agents: AgentLaunch[]) => intentions.launch(id, agents),
+      onSuccess: settled,
+    }),
+    byHand: useMutation({ mutationFn: () => intentions.byHand(id), onSuccess: settled }),
+    retry: useMutation({ mutationFn: () => intentions.retryAgents(id), onSuccess: settled }),
+  };
 }

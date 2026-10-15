@@ -267,6 +267,8 @@ class WorkspaceMembershipRead(BaseModel):
     name: str
     slug: str
     role: str
+    # A demonstration, its data fictive (LEKA-449).
+    demo: bool = False
 
 
 class MeResponse(BaseModel):

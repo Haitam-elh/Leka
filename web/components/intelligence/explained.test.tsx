@@ -140,6 +140,28 @@ describe("an analysis, explained (LEKA-441)", () => {
     expect(screen.getByTestId("analysis-limits")).toHaveTextContent("Runbooks space est en échec");
   });
 
+  it("offers the sources when one that may hold the answer was never read (LEKA-448)", () => {
+    const { unmount } = show(<AnalysisView analysis={analysis()} />);
+    expect(screen.queryByRole("link", { name: "Voir les sources" })).toBeNull();
+    unmount();
+    show(
+      <AnalysisView
+        analysis={analysis(
+          {},
+          {
+            limits: ["Acme GitHub est connectée mais pas encore lue : la réponse peut être incomplète."],
+            unread: true,
+          },
+        )}
+      />,
+    );
+    const limits = screen.getByTestId("analysis-limits");
+    expect(within(limits).getByRole("link", { name: "Voir les sources" })).toHaveAttribute(
+      "href",
+      "/sources",
+    );
+  });
+
   it("says what did not answer and what that leaves unknown", () => {
     show(
       <AnalysisView

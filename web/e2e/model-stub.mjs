@@ -12,6 +12,8 @@
  *              other spec expects
  *   points     the synthesis: the first finding, cited by its id
  *   things     descriptions: each from its first fact
+ *   steps      what LEKA proposes (2026-10-14): for a question, no agent,
+ *              a plan in three steps, informative
  *   else       a plain « OK »
  *
  * No dependency: node:http.
@@ -55,6 +57,20 @@ function descriptionsOf(task) {
   };
 }
 
+function proposalOf(task) {
+  const text = String(task?.request ?? "");
+  const question = /\?\s*(\(|$)/.test(text);
+  return {
+    agents: [],
+    steps: [
+      { title: "Lire ce que LEKA a trouvé", detail: "La réponse et ses preuves." },
+      { title: "Vérifier auprès de l'équipe", detail: "Ce que disent les sources est à jour." },
+      { title: "Mettre à jour la documentation", detail: "Si quelque chose a changé." },
+    ],
+    informative: question,
+  };
+}
+
 function answer(body) {
   const properties = body?.generationConfig?.responseJsonSchema?.properties ?? {};
   let said = {};
@@ -67,6 +83,7 @@ function answer(body) {
   if ("restated" in properties) return JSON.stringify(readingOf(task));
   if ("points" in properties) return JSON.stringify(synthesisOf(task));
   if ("things" in properties) return JSON.stringify(descriptionsOf(task));
+  if ("steps" in properties) return JSON.stringify(proposalOf(task));
   return "OK";
 }
 

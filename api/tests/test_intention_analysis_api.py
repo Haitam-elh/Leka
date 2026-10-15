@@ -7,9 +7,10 @@ Billing platform. Nora's member asks; the admin may approve.
 
 What these protect:
 - Representative intentions execute end to end: « Qui est responsable de
-  Billing API ? » answered — its owner, the record that says so —
-  completed; « Qu'est-ce qui dépend de Billing API ? » — Checkout, Shop,
-  Invoicing, high; « Redémarre Billing API » awaits a person's decision,
+  Billing API ? » answered — its owner, the record that says so — then
+  awaiting its decision: its agents, or by hand (2026-10-14);
+  « Qu'est-ce qui dépend de Billing API ? » — Checkout, Shop, Invoicing,
+  high; « Redémarre Billing API » awaits a person's decision,
   what it reaches said — orchestrated (LEKA-399): it reads who owns it,
   handed on by the capability that found it, and says whom to tell.
 - Evidence keeps its provenance: the source, its kind and name, the record.
@@ -134,16 +135,18 @@ async def test_an_owner_question_is_answered_with_the_record_that_says_so(
     assert said["origin"] == "stated"
     assert said["params"] == {"from": "Billing API", "to": "Payments"}
 
-    # A question answered: completed, its summary said.
+    # A question answered, its summary said — then its decision: its agents,
+    # or by hand (2026-10-14: every request goes through its five steps).
     after = await _get(client, f"/{intention['id']}")
     assert (after["status"], after["summary"]) == (
-        "completed",
+        "awaiting_decision",
         "Billing API is owned by Payments.",
     )
+    assert {"launch_agents", "by_hand"} <= set(after["journey"]["controls"])
     history = await _get(client, f"/{intention['id']}/history")
     moved = history[-1]
     assert (moved["name"], moved["actor"], moved["detail"]["status"]) == (
-        "answered",
+        "proposed",
         "system",
         "complete",
     )
@@ -218,7 +221,7 @@ async def test_a_question_its_context_cannot_ground_is_answered_what_is_missing_
     analysis = await _get(client, f"/{intention['id']}/analysis")
     assert analysis["readiness"] == "limited"
     assert analysis["steps"]
-    assert (await _get(client, f"/{intention['id']}"))["status"] == "completed"
+    assert (await _get(client, f"/{intention['id']}"))["status"] == "awaiting_decision"
 
 
 async def test_a_migration_to_assess_is_analysed_never_asked_to_be_clarified(
@@ -320,7 +323,7 @@ async def test_a_capability_that_fails_or_times_out_is_said_the_others_go_on(
         "capability.timed_out",
     }
     # Partial is still an answer.
-    assert (await _get(client, f"/{intention['id']}"))["status"] == "completed"
+    assert (await _get(client, f"/{intention['id']}"))["status"] == "awaiting_decision"
 
 
 async def test_nothing_that_ran_fails_it_and_analysed_again_it_is_retried(
@@ -418,7 +421,7 @@ async def test_a_late_analysis_of_an_old_context_version_is_superseded_and_swept
     monkeypatch.setattr(processing, "_material", reading)
     swept = await analyse_pending()
     assert swept["analysed"] == 1
-    assert (await _get(client, f"/{intention['id']}"))["status"] == "completed"
+    assert (await _get(client, f"/{intention['id']}"))["status"] == "awaiting_decision"
     analyses = await _get(client, f"/{intention['id']}/analyses")
     assert [item["context_version"] for item in analyses] == [reasked["version"], old_version]
     assert analyses[0]["status"] == "complete"
@@ -495,9 +498,9 @@ async def test_asked_again_it_is_queued_and_the_sweep_runs_what_waits(
     # No worker took them: the sweep does.
     swept = await analyse_pending()
     assert swept["analysed"] >= 1
-    assert (await _get(client, f"/{intention['id']}"))["status"] == "completed"
+    assert (await _get(client, f"/{intention['id']}"))["status"] == "awaiting_decision"
     again = await analyse_pending()
-    assert again == {"analysed": 0, "blocked": 0, "failed": 0, "interrupted": 0}
+    assert again == {"analysed": 0, "blocked": 0, "failed": 0, "interrupted": 0, "settled": 0}
 
 
 async def test_a_member_reads_another_workspace_sees_nothing(

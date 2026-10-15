@@ -1,6 +1,6 @@
 # Intention engine benchmark — report
 
-Dataset v3 (`eaf82f7ba72d`) · understanding v5 · brief v1 · read by rules · commit `47904e2`
+Dataset v4 (`9395fa0a808d`) · understanding v5 · brief v1 · read by rules · commit `3527c86`
 
 **71 / 71 cases** pass every check · **658 / 658 checks** · **0 critical failure(s)**
 

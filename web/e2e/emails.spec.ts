@@ -57,7 +57,7 @@ test("a new account is confirmed from its email, then signs in", async ({ page }
   await page.getByRole("button", { name: "Créer l'espace" }).click();
   await expect(page).toHaveURL(/\/welcome$/);
   await expect(page.getByRole("heading", { name: "Bienvenue sur LEKA" })).toBeVisible();
-  await expect(page.getByTestId("nav-overview")).toBeVisible();
+  await expect(page.getByTestId("home-logo")).toBeVisible();
 
   // The tools chosen open the wizard at their connection, one by one.
   await page.getByRole("button", { name: /^GitHub/ }).click();

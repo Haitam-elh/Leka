@@ -71,6 +71,20 @@ class Monitoring(_Model):
         return self
 
 
+class Quotas(_Model):
+    """What a plan holds (2026-10-14 — to validate): people, sources
+    connected, standard analyses a month, alert rules, recurring workflows.
+    None: no limit said; `contractual`: per contract."""
+
+    users: int | None = Field(default=None, ge=0)
+    sources: int | None = Field(default=None, ge=0)
+    analyses: int | None = Field(default=None, ge=0)
+    alert_rules: int | None = Field(default=None, ge=0)
+    workflows: int | None = Field(default=None, ge=0)
+    provisional: bool = False
+    contractual: bool = False
+
+
 class Plan(_Model):
     key: Literal["free", "starter", "growth", "business", "enterprise"]
     name: str
@@ -89,6 +103,7 @@ class Plan(_Model):
     monitoring: Monitoring = Monitoring(proactive=False)
     # Days free before the first charge, a card required; None: none.
     trial_days: int | None = Field(default=None, gt=0)
+    quotas: Quotas = Quotas()
 
     @model_validator(mode="after")
     def _coherent(self) -> Plan:
@@ -122,18 +137,56 @@ class Bundle(_Model):
 
     key: str
     name: Words
+    value: Words | None = None
     agents: tuple[str, ...] = Field(min_length=2)
     monthly_price: int = Field(gt=0)
 
 
+Tier = Literal["standard", "specialized", "expert"]
+
+
 class AddOns(_Model):
-    """Every agent: none in a plan — offered only once available."""
+    """Every agent: none in a plan — each sold alone, at its tier's price,
+    or in a bundle (2026-10-14)."""
 
     available: bool
-    agents: tuple[str, ...]
-    # Each agent's monthly price, once decided: absent, never guessed.
-    prices: dict[str, int] = Field(default_factory=dict)
+    # Prices a launch hypothesis: to validate, said so where shown.
+    provisional: bool = False
+    # The least plan that runs an agent: Free runs none.
+    minimum_plan: Literal["starter", "growth", "business", "enterprise"] = "starter"
+    # A tier's monthly price, cents.
+    tiers: dict[Tier, int] = Field(default_factory=dict)
+    # Each agent sold, and its tier.
+    agents: dict[str, Tier]
     bundles: tuple[Bundle, ...] = ()
+
+    @property
+    def prices(self) -> dict[str, int]:
+        """Each agent's monthly price, cents."""
+        return {key: self.tiers[tier] for key, tier in self.agents.items() if tier in self.tiers}
+
+    def bundle(self, key: str) -> Bundle | None:
+        return next((b for b in self.bundles if b.key == key), None)
+
+    @model_validator(mode="after")
+    def _priced(self) -> AddOns:
+        for tier in set(self.agents.values()):
+            if tier not in self.tiers:
+                msg = f"tier {tier} has no price"
+                raise ValueError(msg)
+        for bundle in self.bundles:
+            unknown = [a for a in bundle.agents if a not in self.agents]
+            if unknown:
+                msg = f"bundle {bundle.key}: agents not sold {unknown}"
+                raise ValueError(msg)
+            alone = sum(self.prices[a] for a in bundle.agents)
+            if bundle.monthly_price >= alone:
+                msg = f"bundle {bundle.key}: no cheaper than its agents alone"
+                raise ValueError(msg)
+            if bundle.monthly_price < alone * 0.73:
+                msg = f"bundle {bundle.key}: more than 27 % off — never at a loss"
+                raise ValueError(msg)
+        return self
 
 
 class Capacity(_Model):
@@ -308,7 +361,9 @@ __all__ = [
     "Interval",
     "LaunchOffer",
     "Plan",
+    "Quotas",
     "Quote",
+    "Tier",
     "Words",
     "catalogue",
     "load",

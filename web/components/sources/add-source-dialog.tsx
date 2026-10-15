@@ -435,7 +435,15 @@ function SettingsStep({
       ),
       credentials: defaultsOf(secretFields),
     },
-    onSubmit: async (values) => onSaved(await save.mutateAsync(values)),
+    onSubmit: async (values) => {
+      try {
+        onSaved(await save.mutateAsync(values));
+      } catch (error) {
+        // The plan's limit (LEKA-463), said in the person's language.
+        if (!(error instanceof ApiError && error.code === "plan_limit")) throw error;
+        form.setError("root", { type: "server", message: t.billing.planLimit.sources });
+      }
+    },
   });
   const chosen = (useWatch({ control: form.control, name: "config" }) ?? {}) as Record<
     string,

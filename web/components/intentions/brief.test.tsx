@@ -338,7 +338,7 @@ describe("what it takes", () => {
                 plan: "starter",
                 monthly_price: 5900,
                 credits: 2000,
-                launch_percent: 30,
+                launch_percent: 20,
                 launch_months: 12,
               },
               consent: true,
@@ -352,7 +352,7 @@ describe("what it takes", () => {
     expect(dialog).toHaveTextContent("Passer à Starter ?");
     expect(dialog).toHaveTextContent("59,00");
     expect(dialog).toHaveTextContent("2000 par mois");
-    expect(dialog).toHaveTextContent("−30 % les 12 premiers mois");
+    expect(dialog).toHaveTextContent("−20 % les 12 premiers mois");
     // Nothing paid until said yes.
     expect(payment.checkout).not.toHaveBeenCalled();
     await user.click(within(dialog).getByRole("button", { name: "Continuer vers le paiement" }));

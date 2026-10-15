@@ -26,9 +26,11 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 from leka.intentions.analysis import (
+    Answer,
     Asked,
     Cause,
     Evidence,
+    Point,
     Result,
     SourceRef,
     Statement,
@@ -335,6 +337,28 @@ def test_a_figure_nothing_counts_is_not_said() -> None:
     )
     _, counted = explained(stated)
     assert claim(counted, "impacted_users") == 2400
+
+
+def test_an_answer_resting_on_what_a_model_read_counts_its_sources() -> None:
+    # 2026-10-14: « 0 source à l'appui » — GitHub read by the analyst, its
+    # files cited by the answer, nothing found by the rules.
+    read = evidence("e:file", GITHUB)
+    bare = replace(result(), findings=(), evidence=(read,))
+    _, nothing = explained(bare)
+    assert claim(nothing, "sources") == 0
+    answered = replace(
+        bare,
+        answer=Answer(
+            text="auth-service is maintained by Sara.",
+            points=(Point("CODEOWNERS names her.", ("e:file",)),),
+            caveats=(),
+            provider="google",
+            model="gemini",
+            version="1",
+        ),
+    )
+    _, said = explained(answered)
+    assert claim(said, "sources") == 1
 
 
 def test_an_analysis_that_could_not_run_has_no_confidence() -> None:

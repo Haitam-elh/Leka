@@ -71,9 +71,9 @@ test.describe("Intentions", () => {
     await expect(events).toHaveCount(4);
     await expect(events.nth(3)).toContainText("Raison : une question en double");
 
-    // In Mes intentions, among the finished.
+    // In the history, among the finished.
     await page.goto("/intentions");
-    await page.getByTestId("intentions-tab-finished").click();
+    await page.getByTestId("intentions-tab-done").click();
     const row = page.getByTestId("intention-row").filter({ hasText: asked });
     await expect(row).toBeVisible();
     await expect(row.getByTestId("intention-status")).toContainText("Annulée");

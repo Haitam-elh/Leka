@@ -43,7 +43,7 @@ const PLAIN: Record<IntentionStatus, Said> = {
     reason: null,
     next: "decide",
     by: "approver",
-    controls: ["ask_again", "cancel", "decide", "modify_decision"],
+    controls: ["ask_again", "cancel", "decide", "modify_decision", "launch_agents", "by_hand"],
     step: { at: "decision", reached: 3, done: false, last: 4 },
   },
   approved: {
@@ -83,8 +83,8 @@ const PLAIN: Record<IntentionStatus, Said> = {
     reason: null,
     next: "read_result",
     by: "asker",
-    controls: ["ask_again", "archive"],
-    step: { at: "results", reached: 2, done: true, last: 2 },
+    controls: ["ask_again", "archive", "launch_agents"],
+    step: { at: "results", reached: 3, done: true, last: 4 },
   },
   rejected: {
     state: "rejected",

@@ -13,6 +13,7 @@ from fastapi import APIRouter
 from leka.api import (
     access,
     actions,
+    add_ons,
     agent_runs,
     ai_governance,
     audit,
@@ -23,6 +24,7 @@ from leka.api import (
     connectors,
     context,
     decisions,
+    demo,
     enrichment,
     governance,
     graph,
@@ -55,6 +57,7 @@ api_router.include_router(background.router)
 # this should see the shape of the product.
 api_router.include_router(identity.router)
 api_router.include_router(platform.router)
+api_router.include_router(demo.router)
 api_router.include_router(governance.router)
 api_router.include_router(access.router)
 api_router.include_router(ai_governance.router)
@@ -96,5 +99,6 @@ api_router.include_router(billing.router)
 api_router.include_router(pricing.router)
 # Paying for it: Stripe Checkout, the portal, Stripe's verified events.
 api_router.include_router(subscriptions.router)
+api_router.include_router(add_ons.router)
 
 __all__ = ["api_router"]

@@ -11,8 +11,8 @@ What these protect:
   breaks a rule — the launch offer on yearly billing, own model below
   Enterprise, two recommended plans, a trial on a plan not bought online —
   is refused when read.
-- What a plan costs: the list price monthly; 30% off the first 12 months
-  on monthly billing (the launch offer); 20% off billed yearly — never
+- What a plan costs: the list price monthly; 20% off the first 12 months
+  on monthly billing (the launch offer); 30% off billed yearly — never
   both; whole cents, the same on the page and at checkout. Not eligible, or
   the offer closed: the list price. Growth's trial: the first charge 14 days
   after, of what the period costs; not eligible, charged the day bought.
@@ -72,9 +72,22 @@ def test_the_catalogue_lekas_ships_is_whole() -> None:
     assert (enterprise.self_service, enterprise.ai_credits_per_month.contractual) == (False, True)
     allowances = {p.key: p.ai_credits_per_month for p in offer.plans if p.key != "enterprise"}
     assert all(c.provisional and not c.contractual for c in allowances.values())
-    assert (offer.annual_discount_percent, offer.launch_offer.percent) == (20, 30)
+    assert (offer.annual_discount_percent, offer.launch_offer.percent) == (30, 20)
     assert (offer.launch_offer.months, offer.launch_offer.intervals) == (12, ("month",))
-    assert offer.add_ons.available is False and offer.add_ons.prices == {}
+    # On sale since 2026-10-14, from Starter: each agent at its tier's price
+    # (to validate), the bundles cheaper than their agents alone — never at
+    # a loss.
+    sold = offer.add_ons
+    assert (sold.available, sold.provisional, sold.minimum_plan) == (True, True, "starter")
+    assert sold.tiers == {"standard": 900, "specialized": 1500, "expert": 2500}
+    assert sold.prices["application-architecture"] == 2500
+    assert sold.prices["code-review"] == 900
+    for bundle in sold.bundles:
+        alone = sum(sold.prices[a] for a in bundle.agents)
+        assert alone * 0.73 <= bundle.monthly_price < alone, bundle.key
+    # Each plan's quotas, to validate; Enterprise's by contract.
+    assert [p.quotas.sources for p in offer.plans] == [3, 5, 15, 30, None]
+    assert offer.plan("enterprise").quotas.contractual is True
     # The AI capacity is the plan's: nothing sells it apart.
     assert _raw()["capacity"] == {"automatic_overage": False}
 
@@ -107,9 +120,9 @@ def test_a_catalogue_that_breaks_a_rule_is_refused(tmp_path: Path, change: Any, 
 @pytest.mark.parametrize(
     ("plan", "launch_monthly", "annual_monthly", "annual_charged"),
     [
-        ("starter", 4130, 4720, 56640),
-        ("growth", 12530, 14320, 171840),
-        ("business", 41930, 47920, 575040),
+        ("starter", 4720, 4130, 49560),
+        ("growth", 14320, 12530, 150360),
+        ("business", 47920, 41930, 503160),
     ],
 )
 def test_the_launch_offer_or_the_annual_discount_never_both(
@@ -120,7 +133,7 @@ def test_the_launch_offer_or_the_annual_discount_never_both(
     monthly = quote(chosen, "month", offer, today=TODAY)
     assert (monthly.discount, monthly.percent, monthly.monthly, monthly.charged) == (
         "launch",
-        30,
+        20,
         launch_monthly,
         launch_monthly,
     )
@@ -128,11 +141,11 @@ def test_the_launch_offer_or_the_annual_discount_never_both(
     yearly = quote(chosen, "year", offer, today=TODAY)
     assert (yearly.discount, yearly.percent, yearly.monthly, yearly.charged) == (
         "annual",
-        20,
+        30,
         annual_monthly,
         annual_charged,
     )
-    # Never stacked: a year is 20% off, never 30% then 20%.
+    # Never stacked: a year is 30% off, never 20% then 30%.
     assert yearly.for_months is None
     # Not eligible: the list price.
     plain = quote(chosen, "month", offer, today=TODAY, launch=False)
@@ -143,11 +156,11 @@ def test_growth_s_trial_says_when_and_what_is_first_charged() -> None:
     offer = catalogue()
     growth = offer.plan("growth")
     monthly = quote(growth, "month", offer, today=TODAY)
-    # 14 days free, then the launch price — the 30% for 12 months.
+    # 14 days free, then the launch price — the 20% for 12 months.
     assert (monthly.trial_days, monthly.first_charge_on) == (14, date(2026, 10, 31))
-    assert (monthly.charged, monthly.then_monthly) == (12530, 17900)
+    assert (monthly.charged, monthly.then_monthly) == (14320, 17900)
     yearly = quote(growth, "year", offer, today=TODAY)
-    assert (yearly.first_charge_on, yearly.charged) == (date(2026, 10, 31), 171840)
+    assert (yearly.first_charge_on, yearly.charged) == (date(2026, 10, 31), 150360)
     # Had once already: charged the day it is bought.
     again = quote(growth, "month", offer, today=TODAY, trial=False)
     assert (again.trial_days, again.first_charge_on) == (None, None)
@@ -185,8 +198,8 @@ async def test_anyone_reads_the_pricing_as_checkout_charges_it(
     growth = next(p for p in said["plans"] if p["key"] == "growth")
     assert growth["recommended"] is True
     assert [(q["interval"], q["discount"], q["charged"]) for q in growth["quotes"]] == [
-        ("month", "launch", 12530),
-        ("year", "annual", 171840),
+        ("month", "launch", 14320),
+        ("year", "annual", 150360),
     ]
     enterprise = next(p for p in said["plans"] if p["key"] == "enterprise")
     assert (enterprise["quotes"], enterprise["own_llm"], enterprise["self_service"]) == (
@@ -195,7 +208,7 @@ async def test_anyone_reads_the_pricing_as_checkout_charges_it(
         False,
     )
     assert said["launch_offer"]["stacks_with_annual"] is False
-    assert said["add_ons_available"] is False
+    assert said["add_ons_available"] is True
     assert said["automatic_overage"] is False
     # Nothing that sells AI capacity, nor an agent in a plan.
     assert not {"capacity_any_time", "capacity_packs_available", "core_agents"} & set(said)

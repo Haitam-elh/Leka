@@ -67,6 +67,16 @@ class ErrorCode(enum.StrEnum):
     # ── Intentions ───────────────────────────────────────────────────────
     # Nothing about the company's technology (2026-10-14).
     OFF_TOPIC = "off_topic"
+    # Its agents not launched (2026-10-14): which, and why, in the message;
+    # the code says what to do about it.
+    AGENT_UNAVAILABLE = "agent_unavailable"
+    AGENT_INPUTS_MISSING = "agent_inputs_missing"
+    AGENT_NOT_PROPOSED = "agent_not_proposed"
+    CREDITS_SHORT = "credits_short"
+    # What it pays for (2026-10-14): Free runs no agent; others, those
+    # bought. The screens offer the plan, or the agent and its bundles.
+    PLAN_REQUIRED = "plan_required"
+    AGENT_NOT_OWNED = "agent_not_owned"
 
     # ── Authentication (LEKA-330, spelling preserved) ────────────────────
     INVALID_CREDENTIALS = "invalid_credentials"
@@ -79,6 +89,11 @@ class ErrorCode(enum.StrEnum):
     # Closing an account that is the last owner of a workspace others use.
     LAST_OWNER = "last_owner"
     CSRF_FAILED = "csrf_failed"
+
+    # ── Billing ──────────────────────────────────────────────────────────
+    # One user or source more than the plan allows (LEKA-463): a higher plan
+    # is named in the message.
+    PLAN_LIMIT = "plan_limit"
 
 
 # What a 500 says out loud. Fixed, and deliberately uninformative: whoever

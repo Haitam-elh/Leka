@@ -58,7 +58,7 @@ from leka.capabilities import (
     SkillRuntime,
     permitted,
 )
-from leka.connectors import Source, SourceRepository
+from leka.connectors import Source, SourceRepository, manifests
 from leka.context import AssembledContext, ContextRepository, ContextService
 from leka.db import hidden_entities, session_factory, system_scope, workspace_scope
 from leka.governance import hidden_on_behalf
@@ -78,6 +78,7 @@ from leka.intentions.analysis import (
     StepOutcome,
     Subject,
     assemble,
+    relevant,
     strength_of,
 )
 from leka.intentions.analysis import (
@@ -88,7 +89,6 @@ from leka.intentions.analyst import answer as analyst_answer
 from leka.intentions.approval import DecisionService
 from leka.intentions.capabilities import CAPABILITIES
 from leka.intentions.decisions import Target
-from leka.intentions.dispatch import dispatch
 from leka.intentions.explain import ContextRead, SourceState, explain
 from leka.intentions.grounding import side
 from leka.intentions.journey import ANALYSIS_DEADLINE
@@ -97,10 +97,12 @@ from leka.intentions.lifecycle import IntentionStatus as S
 from leka.intentions.models import Intention, IntentionAnalysis
 from leka.intentions.orchestration import plan as orchestrate
 from leka.intentions.orchestration import run as run_plan
+from leka.intentions.proposal import propose, proposed_said
 from leka.intentions.reads import in_environment, learned_between
 from leka.intentions.recommend import as_mapping, recommend
 from leka.intentions.repository import IntentionRepository
 from leka.intentions.schemas import (
+    AgentProposalRead,
     ContextReadiness,
     IntentionAnalysisResult,
     Understanding,
@@ -181,10 +183,15 @@ def run_pending_analyses() -> dict[str, int]:
 
 
 async def analyse_pending(*, limit: int = 100) -> dict[str, int]:
-    """The analyses past their deadline said interrupted (LEKA-443); then
-    every intention analysing whose context version has no analysis on its
-    way or done, analysed now. Idempotent."""
+    """The analyses past their deadline said interrupted (LEKA-443); the
+    intentions whose agents all ended, settled (2026-10-14); then every
+    intention analysing whose context version has no analysis on its way or
+    done, analysed now. Idempotent."""
     interrupted = await interrupt_overdue(limit=limit)
+    # Looked up when used: agents.py stands on this module's service.
+    from leka.intentions.agents import settle_executing
+
+    settled = await settle_executing(limit=limit)
     with system_scope():
         async with session_factory() as session:
             # A blocked analysis is not one: questions judged blocked before
@@ -218,7 +225,13 @@ async def analyse_pending(*, limit: int = 100) -> dict[str, int]:
                 .limit(limit)
             )
             pending = rows.tuples().all()
-    done = {"analysed": 0, "blocked": 0, "failed": 0, "interrupted": interrupted}
+    done = {
+        "analysed": 0,
+        "blocked": 0,
+        "failed": 0,
+        "interrupted": interrupted,
+        "settled": settled,
+    }
     for workspace_id, intention_id in pending:
         outcome = await analyse_intention(workspace_id, intention_id, trigger="sweep")
         status = str(outcome.get("status"))
@@ -441,23 +454,28 @@ async def _analyse_intention(
             # And answers them in their language (identity.spoken_language).
             asked = replace(asked, language=await spoken_language(session, asker, workspace_id))
             context_id = intention.context_id
-            # The agent that does what it asks, started for them (dispatch.py)
-            # — once. Its work is the answer's first word. In a session of
-            # its own: whatever goes wrong there leaves this one whole.
+            # The agents its work needs and the plan (proposal.py) —
+            # proposed, never started: a person launches them at its
+            # decision (2026-10-14). In a session of its own: whatever goes
+            # wrong there leaves this one whole.
+            # An action blocked by its context is asked to be clarified
+            # first: nothing proposed yet.
+            blocked = ready is not None and ready.status == "blocked" and asked.acting
             try:
                 async with session_factory() as own:
                     mine = await IntentionRepository(own, workspace_id).intention(intention.id)
-                    handed = await dispatch(own, workspace_id, mine) if mine else None
+                    proposal = (
+                        await propose(own, workspace_id, mine, language=asked.language, now=moment)
+                        if mine and not blocked
+                        else None
+                    )
             except Exception:
                 logger.warning(
-                    "intention_dispatch_failed", intention=str(intention.id), exc_info=True
+                    "intention_proposal_failed", intention=str(intention.id), exc_info=True
                 )
-                handed = None
-            if handed is not None and handed.run_id is not None:
-                asked = replace(asked, handed=handed.said())
-                if ready is not None and ready.status == "blocked":
-                    # An agent is at work on it: nothing to clarify first.
-                    ready = ready.model_copy(update={"status": "limited"})
+                proposal = None
+            if proposal is not None:
+                asked = replace(asked, proposed=proposed_said(proposal))
             version = ready.version if ready is not None else None
             row = IntentionAnalysis(
                 workspace_id=workspace_id,
@@ -578,6 +596,7 @@ async def _analyse_intention(
                 readiness=ready.status if ready is not None else "limited",
                 now=moment,
                 background=frozenset(c.name for c in rules if c.always),
+                kinds=relevant(rules),
             )
             return await _finish(
                 workspace_id,
@@ -589,6 +608,7 @@ async def _analyse_intention(
                 context_id,
                 moment,
                 orchestrated=the_plan.said(),
+                proposal=proposal,
             )
         except Exception as error:
             # Whatever went wrong, never left running: said failed — its
@@ -929,6 +949,7 @@ async def _explained(
     readiness: str,
     now: datetime,
     background: frozenset[str],
+    kinds: frozenset[str] | None = None,
 ) -> Result:
     """The result with what it rests on — held to it (explain.py)."""
     ids = [s.source_id for s in context.sources] if context is not None else []
@@ -946,19 +967,24 @@ async def _explained(
             )
             for row in rows
         }
-    # Connected, never read: it may hold the answer — said as a limit (LEKA-444).
+    # Connected, never read: it may hold the answer — said as a limit
+    # (LEKA-444), when it is of a kind the answer reads (LEKA-448).
     with workspace_scope(workspace_id):
         async with session_factory() as session:
-            unread = (
-                await session.scalars(
-                    select(Source.name).where(
-                        Source.workspace_id == workspace_id,
-                        Source.status.in_(("active", "degraded", "error")),
-                        Source.last_synced_at.is_(None),
-                        Source.id.not_in(ids),
-                    )
+            never = await session.execute(
+                select(Source.name, Source.kind).where(
+                    Source.workspace_id == workspace_id,
+                    Source.status.in_(("active", "degraded", "error")),
+                    Source.last_synced_at.is_(None),
+                    Source.id.not_in(ids),
                 )
-            ).all()
+            )
+    category = {m.key.value: m.category.value for m in manifests()}
+    unread = [
+        name
+        for name, kind in never.tuples().all()
+        if kinds is None or category.get(str(kind), "custom") in kinds
+    ]
     read = (
         ContextRead(
             version=context.version,
@@ -994,10 +1020,11 @@ async def _finish(
     moment: datetime,
     *,
     orchestrated: Mapping[str, object] | None = None,
+    proposal: AgentProposalRead | None = None,
 ) -> dict[str, object]:
-    """The result kept, with how its capabilities were orchestrated; the
-    findings it rests on linked; the intention moved — unless it moved on
-    meanwhile."""
+    """The result kept, with how its capabilities were orchestrated and what
+    LEKA proposes to get it done; the findings it rests on linked; the
+    intention moved to its decision — unless it moved on meanwhile."""
     async with session_factory() as session:
         repository = IntentionRepository(session, workspace_id)
         row = await session.get(IntentionAnalysis, analysis_id)
@@ -1022,7 +1049,9 @@ async def _finish(
         ]
         if orchestrated is not None:
             row.detail = {**row.detail, "orchestration": dict(orchestrated)}
-        row.result = result_of(result)
+        row.result = result_of(result) | (
+            {"proposal": proposal.model_dump(mode="json")} if proposal is not None else {}
+        )
         # Stopped by a person, or said interrupted while it ran (LEKA-443):
         # what it came to is kept, as what it was — never the intention's.
         ended = row.status if row.status != "running" else None
@@ -1076,9 +1105,11 @@ async def _finish(
                     await service.link(
                         intention_id, "finding", evidence.ref_id, actor=Actor.SYSTEM, now=moment
                     )
+            # Every request is decided (2026-10-14): its agents launched, or
+            # done by hand — and, when it changes systems, its actions.
             await service.move(
                 intention_id,
-                S.AWAITING_DECISION if asked.acting else S.COMPLETED,
+                S.AWAITING_DECISION,
                 actor=Actor.SYSTEM,
                 detail=detail,
                 summary=summary,

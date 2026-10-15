@@ -3,7 +3,7 @@ import { expect, type Page, test } from "@playwright/test";
 
 import { openContextTab } from "./context-tab";
 import { openIncidentAnalysis } from "./incident";
-import { signIn } from "./sign-in";
+import { openNavigation, signIn } from "./sign-in";
 
 /**
  * The accessibility review of LEKA-343, as far as a machine can take it.
@@ -89,22 +89,11 @@ test.describe("what a screen opens", () => {
   test("the navigation, every section open", async ({ page }) => {
     await signIn(page);
     await page.goto("/environment?tab=applications");
+    await openNavigation(page);
     await page.getByTestId("nav-section-capabilities-toggle").click();
     await page.getByTestId("nav-section-administration-toggle").click();
     await expect(page.getByTestId("nav-capabilities-mine")).toBeVisible();
     await expect(page.getByTestId("nav-sources")).toBeVisible();
-
-    await expectNoViolations(page);
-  });
-
-  test("the rail, a section's menu open", async ({ page }) => {
-    await page.setViewportSize({ width: 1100, height: 800 });
-    await signIn(page);
-    await page.getByTestId("nav-section-capabilities-toggle").click();
-    await expect(page.getByRole("menu")).toBeVisible();
-    // The icon's name, shown on hover, gives way to the menu: once it has
-    // faded, what is on screen is the menu — inside the navigation.
-    await expect(page.locator('[data-slot="tooltip-content"]')).toHaveCount(0);
 
     await expectNoViolations(page);
   });

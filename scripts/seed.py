@@ -28,9 +28,11 @@ from typing import Any
 
 from sqlalchemy import delete, select
 
+from leka.billing import AgentEntitlement
 from leka.connectors import Source, SourceKind, SourceStatus
 from leka.core.security import hash_password
 from leka.db import session_factory, system_scope
+from leka.governance import set_plan
 from leka.identity import User as Account
 from leka.ingestion import (
     RESOLVER_VERSION,
@@ -179,7 +181,22 @@ async def _build_demo_workspace() -> None:
         session.add(account)
         await session.flush()
         session.add(Membership(workspace_id=workspace.id, user_id=account.id, role=Role.OWNER))
+        # LEKA's own demo: every agent, as its team's workspaces (2026-10-14).
+        session.add(
+            AgentEntitlement(
+                workspace_id=workspace.id,
+                key="*",
+                kind="all",
+                origin="grant",
+                status="active",
+                by_whom="seed",
+                reason="LEKA's demo workspace: every agent",
+                started_at=NOW,
+            )
+        )
         await session.flush()
+        # Twelve sources: more than Free allows (LEKA-463).
+        await set_plan(session, workspace.id, "business", by="seed", reason="the demo company")
 
         sources: dict[str, Source] = {}
         for kind, name, status in SOURCES:

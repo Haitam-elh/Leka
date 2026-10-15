@@ -72,12 +72,18 @@ class AgentRuntime:
         intention_id: uuid.UUID | None = None,
         context_id: uuid.UUID | None = None,
         held_by: str | None = None,
+        formats: Sequence[str] | None = None,
+        sources: Sequence[uuid.UUID] | None = None,
         now: datetime | None = None,
     ) -> AgentRun:
         """Kept queued — RunRefusedError when it cannot run here, by this
         person, with this. The caller commits, then queues it (queue_run).
         Held by an approval control (`held_by`, its name — LEKA-406), it
-        waits instead: approve() queues it."""
+        waits instead: approve() queues it. `formats`: the files a person
+        asked to have drawn (pdf, pptx) — none drawn but those; not given,
+        every one it draws (2026-10-14). `sources`: the only sources it reads
+        — what came from no other is all it sees (2026-10-14: « l'Architecte
+        sur Confluence seul »)."""
         entry = await self._catalogue.entry(key, permissions=permissions, user_id=by)
         refused = refusal_of(entry, inputs)
         if refused is not None:
@@ -104,6 +110,8 @@ class AgentRuntime:
             detail={
                 **({"pending": list(pending)} if pending else {}),
                 **({"held_by": held_by} if held_by else {}),
+                **({"formats": list(formats)} if formats is not None else {}),
+                **({"sources": [str(s) for s in sources]} if sources else {}),
             },
             tool_calls=0,
             queued_at=moment,
