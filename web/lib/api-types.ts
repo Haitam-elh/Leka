@@ -430,6 +430,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/demo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Demo
+         * @description My demonstration, made when I have none — `fresh`: the one before
+         *     erased, a new one made — and the session moved into it.
+         */
+        post: operations["open_demo_api_v1_demo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/members": {
         parameters: {
             query?: never;
@@ -12149,6 +12170,15 @@ export interface components {
              */
             gone: number;
         };
+        /** DemoRead */
+        DemoRead: {
+            workspace: components["schemas"]["WorkspaceSummary"];
+            /**
+             * Created
+             * @description Made now: its sources are being read.
+             */
+            created: boolean;
+        };
         /**
          * Dependencies
          * @description What an entity depends on, transitively — or what depends on it:
@@ -22894,6 +22924,11 @@ export interface components {
             slug: string;
             /** Role */
             role: string;
+            /**
+             * Demo
+             * @default false
+             */
+            demo: boolean;
         };
         /**
          * WorkspaceModelRead
@@ -22985,6 +23020,11 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Demo
+             * @default false
+             */
+            demo: boolean;
         };
         /**
          * WorkspaceStatus
@@ -23012,6 +23052,11 @@ export interface components {
             slug: string;
             status: components["schemas"]["WorkspaceStatus"];
             role: components["schemas"]["Role"];
+            /**
+             * Demo
+             * @default false
+             */
+            demo: boolean;
         };
         /**
          * WorkspaceUpdate
@@ -25194,6 +25239,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspaceSummary"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    open_demo_api_v1_demo_post: {
+        parameters: {
+            query?: {
+                fresh?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DemoRead"];
                 };
             };
             /** @description The request could not be understood. */

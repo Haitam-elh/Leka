@@ -39,7 +39,7 @@ vi.mock("@/lib/workspace", () => ({
 const { WorkspaceGate } = await import("@/components/shell/workspace-gate");
 
 function signedIn(
-  workspaces: { id: string; name: string; slug: string; role: string }[],
+  workspaces: { id: string; name: string; slug: string; role: string; demo?: boolean }[],
   open: string | null = null,
 ) {
   return {
@@ -119,5 +119,18 @@ describe("the workspace gate", () => {
     expect(enter).toHaveBeenCalledWith("w1");
     expect(push).toHaveBeenCalledWith("/overview");
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it("offers one's own workspace first, a demonstration last (LEKA-449)", () => {
+    state = signedIn([
+      { id: "d", name: "Nova Retail (démo)", slug: "nova", role: "owner", demo: true },
+      { id: "w1", name: "LEKA", slug: "leka", role: "member" },
+    ]);
+
+    mount();
+
+    const names = screen.getAllByRole("listitem").map((item) => item.textContent);
+    expect(names[0]).toContain("LEKA");
+    expect(names[1]).toContain("Nova Retail (démo)");
   });
 });

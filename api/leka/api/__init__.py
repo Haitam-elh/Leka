@@ -24,6 +24,7 @@ from leka.api import (
     connectors,
     context,
     decisions,
+    demo,
     enrichment,
     governance,
     graph,
@@ -56,6 +57,7 @@ api_router.include_router(background.router)
 # this should see the shape of the product.
 api_router.include_router(identity.router)
 api_router.include_router(platform.router)
+api_router.include_router(demo.router)
 api_router.include_router(governance.router)
 api_router.include_router(access.router)
 api_router.include_router(ai_governance.router)

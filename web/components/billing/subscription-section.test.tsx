@@ -40,7 +40,7 @@ const quote = (plan: string, interval: "month" | "year", list: number, monthly: 
   interval,
   list_monthly: list,
   discount,
-  percent: discount === "launch" ? 30 : discount === "annual" ? 20 : 0,
+  percent: discount === "launch" ? 20 : discount === "annual" ? 30 : 0,
   monthly,
   charged,
   for_months: discount === "launch" ? 12 : null,
@@ -64,8 +64,8 @@ const plan = (key: string, name: string, list: number, credits: number | null, r
         ? [quote(key, "month", 0, 0, 0, null)]
         : []
       : [
-          quote(key, "month", list, Math.round(list * 0.7), Math.round(list * 0.7), "launch"),
-          quote(key, "year", list, Math.round(list * 0.8), Math.round(list * 0.8) * 12, "annual"),
+          quote(key, "month", list, Math.round(list * 0.8), Math.round(list * 0.8), "launch"),
+          quote(key, "year", list, Math.round(list * 0.7), Math.round(list * 0.7) * 12, "annual"),
         ],
   ai_credits_per_month: credits,
   ai_credits_provisional: true,
@@ -78,8 +78,8 @@ const plan = (key: string, name: string, list: number, credits: number | null, r
 const PRICING = {
   version: "2026-10-10",
   currency: "EUR",
-  annual_discount_percent: 20,
-  launch_offer: { percent: 30, months: 12, open: true, ends_on: null, stacks_with_annual: false },
+  annual_discount_percent: 30,
+  launch_offer: { percent: 20, months: 12, open: true, ends_on: null, stacks_with_annual: false },
   plans: [
     plan("free", "Free", 0, 100),
     plan("starter", "Starter", 5900, 500),
@@ -143,18 +143,18 @@ describe("your plan", () => {
     show();
     const growth = await screen.findByText("Growth").then((el) => el.closest("li") as HTMLElement);
     expect(screen.getAllByTestId("billing-plan").map((li) => li.dataset.plan)).toEqual(["starter", "growth", "business"]);
-    expect(growth).toHaveTextContent("125,30");
+    expect(growth).toHaveTextContent("143,20");
     expect(growth).toHaveTextContent("pendant 12 mois, puis 179");
     // Its trial, said before paying: how much, when, then each month.
     expect(within(growth).getByTestId("billing-trial")).toHaveTextContent(
-      "Essai de 14 jours, carte requise : premier paiement de 125,30 € le 31 octobre 2026, puis chaque mois.",
+      "Essai de 14 jours, carte requise : premier paiement de 143,20 € le 31 octobre 2026, puis chaque mois.",
     );
     expect(growth).toHaveTextContent("(valeur de lancement)");
     const starter = screen.getAllByTestId("billing-plan")[0];
     expect(within(starter).queryByTestId("billing-trial")).toBeNull();
     await user.click(screen.getByRole("radio", { name: /Annuelle/ }));
-    expect(growth).toHaveTextContent("143,20");
-    expect(growth).toHaveTextContent("1 718,40");
+    expect(growth).toHaveTextContent("125,30");
+    expect(growth).toHaveTextContent("1 503,60");
     await user.click(within(growth).getByRole("button", { name: "Choisir Growth" }));
     await waitFor(() => expect(api.checkout).toHaveBeenCalledWith("growth", "year"));
     await waitFor(() => expect(assign).toHaveBeenCalledWith("https://checkout.stripe.test/cs_1"));

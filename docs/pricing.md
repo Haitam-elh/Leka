@@ -26,8 +26,8 @@ are told in advance. They are never shown as a cost-validated guarantee.
 | --- | --- | --- | --- | --- | --- |
 | For | trying LEKA on a first scope | a small engineering team wanting a clear view of its systems | teams running their systems with LEKA every day | organisations with several teams and scopes | large organisations, their security requirements, their own model |
 | List price, a month excl. VAT | €0 | €59 | **€179** — recommended | €599 | per contract |
-| Launch offer, monthly billing | — | €41.30 for 12 months, then €59 | €125.30 for 12 months, then €179 | €419.30 for 12 months, then €599 | — |
-| Billed yearly (−20 %) | — | €47.20 a month, €566.40 a year | €143.20 a month, €1,718.40 a year | €479.20 a month, €5,750.40 a year | — |
+| Launch offer, monthly billing (−20 %) | — | €47.20 for 12 months, then €59 | €143.20 for 12 months, then €179 | €479.20 for 12 months, then €599 | — |
+| Billed yearly (−30 %) | — | €41.30 a month, €495.60 a year | €125.30 a month, €1,503.60 a year | €419.30 a month, €5,031.60 a year | — |
 | AI credits a month | 200 *(provisional)* | 2,000 *(provisional)* | 10,000 *(provisional)* | 40,000 *(provisional)* | by contract |
 | Trial | — | — | **14 days, card required** | — | — |
 | Language model | managed by LEKA | managed by LEKA | managed by LEKA | managed by LEKA | managed by LEKA, **or the customer's own** |
@@ -89,9 +89,9 @@ Each is added to the catalogue when decided, and the page shows it with nothing 
 
 | Interval | Discount | Charged |
 | --- | --- | --- |
-| month | the launch offer, **30 % for 12 months**, when the plan has it, the offer is open (`ends_on`) and the customer is eligible | the discounted price each month for 12 months, then the list price |
+| month | the launch offer, **20 % for 12 months**, when the plan has it, the offer is open (`ends_on`) and the customer is eligible | the discounted price each month for 12 months, then the list price |
 | month | none (not eligible, or the offer closed) | the list price |
-| year | **20 %**, never the launch offer as well | 12 × the discounted monthly price, once a year |
+| year | **30 %**, never the launch offer as well | 12 × the discounted monthly price, once a year |
 
 **With Growth's trial** (`trial_days: 14`), the quote also says `trial_days` and `first_charge_on`: the day `charged` is first charged — today + 14 days — unless cancelled before. A workspace that has subscribed once gets no trial: charged the day it buys.
 
@@ -108,7 +108,7 @@ Each is added to the catalogue when decided, and the page shows it with nothing 
 
 **What it shows**:
 - the five plans, Growth highlighted as recommended;
-- a monthly/yearly selector that shows the 20 %;
+- a monthly/yearly selector that shows the 30 %;
 - the launch offer and its terms;
 - AI capacity, Growth's trial and its terms, the agents (none included) and the own-model option, in plain words;
 - prices excluding VAT;
@@ -165,9 +165,9 @@ Enterprise's booking page: `LEKA_SALES_BOOKING_URL` in `production.env` (https),
 
 | Plan | Net price | Ceiling, a month |
 | --- | --- | --- |
-| Starter | €41.30 | €8.26 |
-| Growth | €125.30 | €25.06 |
-| Business | €419.30 | €83.86 |
+| Starter | €47.20 | €9.44 |
+| Growth | €143.20 | €28.64 |
+| Business | €479.20 | €95.84 |
 
 Free cannot reach a margin at €0. It is held by its 200-credit cap, abuse and rate limits, and its measured cost per active workspace (LEKA-430).
 
@@ -182,7 +182,7 @@ Self-service plans are paid through **Stripe**, with no SDK:
 
 | | |
 | --- | --- |
-| **The catalogue in Stripe** | `python -m leka.billing.cli stripe-sync` creates what is missing (`leka/billing/sync.py`): each plan a product (`leka_core_<plan>`), each price a Stripe price found by its **lookup key** (`leka_core_<plan>_<interval>_<cents>`, e.g. `leka_core_growth_year_171840`), the launch offer a coupon (`leka_launch_30_12m`: 30 %, 12 months, on the plans' products), and the customer portal's settings. Prices are amounts excluding VAT (`tax_behavior: exclusive`). No price id is configured: a price changed in the catalogue is a new Stripe price, found by its new key. Run it once per environment, then after each catalogue change |
+| **The catalogue in Stripe** | `python -m leka.billing.cli stripe-sync` creates what is missing (`leka/billing/sync.py`): each plan a product (`leka_core_<plan>`), each price a Stripe price found by its **lookup key** (`leka_core_<plan>_<interval>_<cents>`, e.g. `leka_core_growth_year_150360`), the launch offer a coupon (`leka_launch_20_12m`: 20 %, 12 months, on the plans' products), and the customer portal's settings. Prices are amounts excluding VAT (`tax_behavior: exclusive`). No price id is configured: a price changed in the catalogue is a new Stripe price, found by its new key. Run it once per environment, then after each catalogue change |
 | **Checkout** | `POST /billing/checkout {plan, interval}` (`workspace:update`) opens Stripe Checkout for Starter, Growth or Business. It charges the price found by its key, so it charges what the page shows. The launch coupon is added **only** for monthly billing, while the offer is open, on a workspace that never subscribed. A year gets the annual discount alone, and no promotion codes are accepted. Growth, for a workspace that never subscribed, gets its trial: `trial_period_days: 14`, the card always taken (`payment_method_collection: always`), and a trial without a card ends rather than converts. A workspace already subscribed is sent to the portal (409) |
 | **The portal** | `POST /billing/portal`: Stripe's customer portal, to change the card, see invoices, change plan or cancel |
 | **The webhook** | `POST /billing/stripe/webhook`, public. It is believed only when its `Stripe-Signature` holds (HMAC-SHA256, 5 minutes of tolerance); otherwise it gets a 400. Each event is kept once by its id (`stripe_events`), so a repeated delivery changes nothing. When applying it fails, the event is not kept and Stripe delivers it again |
@@ -207,7 +207,7 @@ The plan comes **only from a verified event**, never from the browser coming bac
 | Cancellation | At the **end of the period paid for**: the plan holds until then, then Free. No refund |
 | Failed renewal | Stripe retries (its Smart Retries) while the subscription is `past_due`, and the plan holds. Once Stripe gives up (`unpaid` or `canceled`), the workspace goes back to Free |
 | The launch offer | Once per workspace: a workspace that ever subscribed does not get it again |
-| Growth's trial and the launch offer | Stripe counts the coupon's 12 months from the subscription's start, the trial inside them; its invoices fall on day 14, then each month — twelve of them inside the 12 months, the thirteenth at the list price: **12 paid months at −30 %**, as the offer says. Nothing to change |
+| Growth's trial and the launch offer | Stripe counts the coupon's 12 months from the subscription's start, the trial inside them; its invoices fall on day 14, then each month — twelve of them inside the 12 months, the thirteenth at the list price: **12 paid months at −20 %**, as the offer says. Nothing to change |
 | Growth's trial | Once per workspace, 14 days, a card required. At its end the subscription starts and the card is charged what was shown, unless cancelled before; cancelled before, nothing is charged and the workspace goes back to Free |
 | Renewal | Automatic, until cancelled, at the terms shown when bought |
 | Overage | Never. At the limit, runs pause until the next month or a higher plan (LEKA-430) |

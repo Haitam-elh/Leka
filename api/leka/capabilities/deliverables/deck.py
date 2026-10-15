@@ -44,7 +44,7 @@ class BusinessLayer(_Model):
     actor: str = Field(description="« Client », « Conseiller », ou « Client ? » si incertain.")
     trigger: str = Field(description="L'événement déclencheur, ex. « Choisit de payer par CB ».")
     process_name: str = Field(description="Le nom du processus source.")
-    channel: str = Field(description="Le canal, ex. « Espace Client TR ».")
+    channel: str = Field(description="Le canal, ex. « Espace Client ».")
     groupings: list[Grouping] = Field(default_factory=list)
 
 
@@ -70,8 +70,8 @@ class Rule(_Model):
 class Column(_Model):
     """A brick of the application layer, as a sequence diagram column."""
 
-    name: str = Field(description="Le nom de la brique, ex. « OCTOPUS ».")
-    subtitle: str = Field(default="", description="Précision, ex. « middleware CLIP / INES ».")
+    name: str = Field(description="Le nom de la brique, ex. « NEXUS ».")
+    subtitle: str = Field(default="", description="Précision, ex. « middleware d'échanges ».")
     missing: bool = Field(default=False, description="Brique non documentée : en-tête orange.")
 
 
@@ -79,7 +79,7 @@ class Call(_Model):
     """A service box: where it is called, and what."""
 
     column: str = Field(description="Le nom exact d'une colonne du process.")
-    label: str = Field(description="Le service, ex. « ws_lireCompteClient (solde) ».")
+    label: str = Field(description="Le service, ex. « ws_lireSolde (solde) ».")
     missing: bool = Field(default=False, description="Non documenté : boîte orange « … ? ».")
 
 
@@ -99,7 +99,7 @@ class ProcessView(_Model):
 
     letter: str
     label: str
-    front: str = Field(description="L'en-tête du canal Front, ex. « DIGITAL EC PASSERELLE ».")
+    front: str = Field(description="L'en-tête du canal Front, ex. « DIGITAL ESPACE CLIENT ».")
     front_label: str = Field(default="FRONT", description="Le libellé du bloc Front.")
     channel_label: str = Field(default="", description="Le canal sous l'en-tête Front.")
     columns: list[Column] = Field(default_factory=list)
@@ -163,7 +163,7 @@ class ArchitectureDeck(_Model):
     )
     perimetre: str = Field(
         description="« Périmètre <domaine> - <canaux / variantes> », ex. « Périmètre Digital - "
-        "Espace Client TR »."
+        "Espace Client »."
     )
     business: BusinessLayer
     overview: Overview = Field(default_factory=Overview)
