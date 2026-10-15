@@ -29,6 +29,7 @@ from leka.billing import (
     AddOnsRead,
     AgentOfferRead,
     BillingUnavailableError,
+    BundleMemberRead,
     BundleOfferRead,
     CheckoutRefusedError,
     EntitlementRead,
@@ -63,7 +64,7 @@ async def read_add_ons(principal: Reader, session: SessionDep) -> AddOnsRead:
     has = await owned(session, principal.workspace_id)
     prices = sold.prices
     agents = []
-    for key, tier in sold.agents.items():
+    for key, agent in sold.agents.items():
         definition = find(key)
         if definition is None:
             continue
@@ -73,16 +74,28 @@ async def read_add_ons(principal: Reader, session: SessionDep) -> AddOnsRead:
                 title=definition.title,
                 summary=definition.summary,
                 category=definition.category,
-                tier=tier,
+                tier=agent.tier,
                 monthly_price=prices[key],
-                owned=has.every or key in has.agents,
+                owned=has.every or key in has.agents or key in has.included,
                 why=has.why(key),
                 bundles=[b.key for b in sold.bundles if key in b.agents],
+                reference=sold.reference[agent.reference].name if agent.reference else None,
+                included=key in has.included,
             )
         )
     bundles = []
     for bundle in sold.bundles:
-        alone = sum(prices[a] for a in bundle.agents)
+        members = []
+        for member in bundle.members:
+            ref = sold.reference[member]
+            members.append(
+                BundleMemberRead(
+                    key=member,
+                    name=ref.name,
+                    agent=sold.runtime_of(member),
+                    monthly_price=sold.tiers.get(ref.tier) if ref.tier else None,
+                )
+            )
         bundles.append(
             BundleOfferRead(
                 key=bundle.key,
@@ -90,9 +103,11 @@ async def read_add_ons(principal: Reader, session: SessionDep) -> AddOnsRead:
                 value=bundle.value,
                 agents=list(bundle.agents),
                 monthly_price=bundle.monthly_price,
-                alone_price=alone,
-                discount_percent=round(100 * (1 - bundle.monthly_price / alone)),
+                alone_price=bundle.alone_price,
+                discount_percent=bundle.savings_percent,
                 owned=has.every or bundle.key in has.bundles,
+                sellable=bundle.sellable,
+                members=members,
             )
         )
     return AddOnsRead(
@@ -138,12 +153,19 @@ async def read_entitlements(principal: Reader, session: SessionDep) -> list[Enti
 async def buy_add_on(
     body: AddOnCheckoutCreate, principal: Payer, session: SessionDep
 ) -> PortalRead:
+    sold = catalogue().add_ons
+    listed = sold.bundle(body.key) if body.kind == "bundle" else None
+    if listed is not None and not listed.sellable:
+        # In the catalogue, not on sale: some of its agents are not built
+        # (LEKA-454) — said as such, never a checkout.
+        raise _refused(
+            CheckoutRefusedError("not_sold", "Some of this bundle's agents are not built yet.")
+        )
     found = add_on(body.kind, body.key)
     if found is None:
         raise ApiError(
             status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such agent or bundle on sale."
         )
-    sold = catalogue().add_ons
     bundle = sold.bundle(body.key) if body.kind == "bundle" else None
     name = f"LEKA — {bundle.name.fr}" if bundle is not None else f"LEKA — {_title(body.key)}"
     try:

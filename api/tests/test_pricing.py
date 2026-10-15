@@ -63,8 +63,18 @@ def test_the_catalogue_lekas_ships_is_whole() -> None:
     assert [p.key for p in offer.plans if p.recommended] == ["growth"]
     assert [p.key for p in offer.plans if p.trial_days] == ["growth"]
     assert offer.plan("growth").trial_days == 14
-    # No agent in a plan: the architect and QA are add-ons like the others.
-    assert {"application-architecture", "test-analysis"} <= set(offer.add_ons.agents)
+    # LEKA's own capabilities are every plan's; each plan includes some of
+    # the registry's agents, every plan above it too (Karim, 2026-10-15).
+    sold_ = offer.add_ons
+    assert {"application-architecture", "test-analysis"} <= set(sold_.agents)
+    assert sold_.included_in("free") == frozenset()
+    assert sold_.included_in("starter") == {
+        "code-review",
+        "test-analysis",
+        "documentation-assistant",
+    }
+    assert len(sold_.included_in("growth")) == 8
+    assert sold_.included_in("business") == set(sold_.agents) == sold_.included_in("enterprise")
     assert "core_agents" not in _raw()
     assert [p.key for p in offer.plans if p.own_llm] == ["enterprise"]
     assert all(p.managed_llm for p in offer.plans)
@@ -82,9 +92,23 @@ def test_the_catalogue_lekas_ships_is_whole() -> None:
     assert sold.tiers == {"standard": 900, "specialized": 1500, "expert": 2500}
     assert sold.prices["application-architecture"] == 2500
     assert sold.prices["code-review"] == 900
-    for bundle in sold.bundles:
-        alone = sum(sold.prices[a] for a in bundle.agents)
-        assert alone * 0.73 <= bundle.monthly_price < alone, bundle.key
+    # The reference's bundles, at its prices (LEKA-454), none sold: each names
+    # agents not built yet. Their saving computed, shown only when it can be.
+    assert {b.key: b.monthly_price for b in sold.bundles} == {
+        "engineering": 5900,
+        "ship-safe": 7900,
+        "incident-response": 8900,
+        "security-reliability": 6900,
+        "frontend-craft": 2900,
+    }
+    assert not any(b.sellable for b in sold.bundles)
+    assert {b.key: b.savings_percent for b in sold.bundles} == {
+        "engineering": 35,
+        "ship-safe": None,
+        "incident-response": None,
+        "security-reliability": None,
+        "frontend-craft": 40,
+    }
     # Each plan's quotas, to validate; Enterprise's by contract.
     assert [p.quotas.sources for p in offer.plans] == [3, 5, 15, 30, None]
     assert offer.plan("enterprise").quotas.contractual is True
@@ -103,6 +127,13 @@ def test_the_catalogue_lekas_ships_is_whole() -> None:
         (lambda c: c["plans"][4].update(self_service=True), "has a price"),
         (lambda c: c["plans"][0].update(trial_days=14), "a trial needs"),
         (lambda c: c["capacity"].update(packs=[]), "Extra inputs"),
+        (
+            lambda c: c["add_ons"]["bundles"][0].update(monthly_price=9900),
+            "no cheaper than its agents alone",
+        ),
+        (lambda c: c["add_ons"]["bundles"][0]["members"].append("ghost"), "not in the reference"),
+        (lambda c: c["add_ons"].update(included={"growth": ["ghost"]}), "not in the registry"),
+        (lambda c: c["add_ons"]["agents"]["code-review"].update(reference="ghost"), "ghost"),
     ],
 )
 def test_a_catalogue_that_breaks_a_rule_is_refused(tmp_path: Path, change: Any, said: str) -> None:

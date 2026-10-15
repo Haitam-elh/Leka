@@ -132,60 +132,142 @@ class LaunchOffer(_Model):
     ends_on: date | None = None
 
 
+Tier = Literal["standard", "specialized", "expert"]
+PlanKey = Literal["free", "starter", "growth", "business", "enterprise"]
+
+
+class SoldAgent(_Model):
+    """An agent of the registry, on sale (LEKA-454): its tier, and the name
+    the marketplace reference gives it — none when the reference has no
+    equivalent, its price then a hypothesis to validate."""
+
+    tier: Tier
+    reference: str | None = None
+
+
+class ReferenceAgent(_Model):
+    """An agent of the marketplace reference (« Agents & Bundles », 14
+    October): what it is called and costs there. A reference is not a
+    proof: one no agent of the registry stands for is never sold, never
+    shown available."""
+
+    name: str
+    category: str
+    # None: named only by a bundle, priced nowhere — to arbitrate.
+    tier: Tier | None = None
+
+
 class Bundle(_Model):
-    """Specialist agents sold together (LEKA-439): cheaper than each alone."""
+    """Agents sold together, as the reference composes them: sold only when
+    every one of them is (LEKA-454: « ne pas créer d'agent fantôme »)."""
 
     key: str
     name: Words
     value: Words | None = None
-    agents: tuple[str, ...] = Field(min_length=2)
+    # As the reference names them (its keys).
+    members: tuple[str, ...] = Field(min_length=2)
     monthly_price: int = Field(gt=0)
+    # Resolved when the catalogue is read: the registry's agents among its
+    # members, those no agent stands for, and its members' prices alone —
+    # None when one has no price: no saving shown that cannot be shown.
+    agents: tuple[str, ...] = ()
+    missing: tuple[str, ...] = ()
+    alone_price: int | None = None
 
+    @property
+    def sellable(self) -> bool:
+        return not self.missing
 
-Tier = Literal["standard", "specialized", "expert"]
+    @property
+    def savings_percent(self) -> int | None:
+        if self.alone_price is None or self.monthly_price >= self.alone_price:
+            return None
+        return round(100 * (1 - self.monthly_price / self.alone_price))
 
 
 class AddOns(_Model):
-    """Every agent: none in a plan — each sold alone, at its tier's price,
-    or in a bundle (2026-10-14)."""
+    """The agents (LEKA-454): LEKA's own capabilities are every plan's — its
+    fundamental agents —, a plan may include some of the registry's agents,
+    and every other is a monthly option, sold alone at its tier's price or
+    in a bundle — once on sale, from the least plan."""
 
     available: bool
     # Prices a launch hypothesis: to validate, said so where shown.
     provisional: bool = False
-    # The least plan that runs an agent: Free runs none.
+    # The least plan that buys or runs an option: Free runs none.
     minimum_plan: Literal["starter", "growth", "business", "enterprise"] = "starter"
     # A tier's monthly price, cents.
     tiers: dict[Tier, int] = Field(default_factory=dict)
-    # Each agent sold, and its tier.
-    agents: dict[str, Tier]
+    # Each registry agent sold, its tier and its reference name.
+    agents: dict[str, SoldAgent]
+    # Included in a plan, without an option: the registry's agents each
+    # plan runs as part of it.
+    included: dict[PlanKey, tuple[str, ...]] = Field(default_factory=dict)
+    # The marketplace reference, every agent it names.
+    reference: dict[str, ReferenceAgent] = Field(default_factory=dict)
     bundles: tuple[Bundle, ...] = ()
 
     @property
     def prices(self) -> dict[str, int]:
         """Each agent's monthly price, cents."""
-        return {key: self.tiers[tier] for key, tier in self.agents.items() if tier in self.tiers}
+        return {
+            key: self.tiers[agent.tier]
+            for key, agent in self.agents.items()
+            if agent.tier in self.tiers
+        }
+
+    def runtime_of(self, reference: str) -> str | None:
+        """The registry's agent a reference agent is."""
+        return next((key for key, a in self.agents.items() if a.reference == reference), None)
 
     def bundle(self, key: str) -> Bundle | None:
         return next((b for b in self.bundles if b.key == key), None)
 
+    def included_in(self, plan: str) -> frozenset[str]:
+        """The agents a plan runs as part of it — and every plan above it."""
+        order = ("free", "starter", "growth", "business", "enterprise")
+        if plan not in order:
+            return frozenset()
+        upto = order[: order.index(plan) + 1]
+        return frozenset(k for p, keys in self.included.items() if p in upto for k in keys)
+
     @model_validator(mode="after")
     def _priced(self) -> AddOns:
-        for tier in set(self.agents.values()):
-            if tier not in self.tiers:
-                msg = f"tier {tier} has no price"
+        for agent in self.agents.values():
+            if agent.tier not in self.tiers:
+                msg = f"tier {agent.tier} has no price"
                 raise ValueError(msg)
-        for bundle in self.bundles:
-            unknown = [a for a in bundle.agents if a not in self.agents]
+            if agent.reference is not None and agent.reference not in self.reference:
+                msg = f"reference {agent.reference} is not in the reference"
+                raise ValueError(msg)
+        for plan, keys in self.included.items():
+            unknown = [k for k in keys if k not in self.agents]
             if unknown:
-                msg = f"bundle {bundle.key}: agents not sold {unknown}"
+                msg = f"plan {plan} includes agents not in the registry's: {unknown}"
                 raise ValueError(msg)
-            alone = sum(self.prices[a] for a in bundle.agents)
-            if bundle.monthly_price >= alone:
+        resolved = []
+        for bundle in self.bundles:
+            unknown = [m for m in bundle.members if m not in self.reference]
+            if unknown:
+                msg = f"bundle {bundle.key}: members not in the reference {unknown}"
+                raise ValueError(msg)
+            agents = tuple(a for m in bundle.members if (a := self.runtime_of(m)) is not None)
+            missing = tuple(m for m in bundle.members if self.runtime_of(m) is None)
+            tiers = [self.reference[m].tier for m in bundle.members]
+            alone = (
+                sum(self.tiers[t] for t in tiers if t is not None)
+                if all(t is not None and t in self.tiers for t in tiers)
+                else None
+            )
+            if alone is not None and bundle.monthly_price >= alone:
                 msg = f"bundle {bundle.key}: no cheaper than its agents alone"
                 raise ValueError(msg)
-            if bundle.monthly_price < alone * 0.73:
-                msg = f"bundle {bundle.key}: more than 27 % off — never at a loss"
-                raise ValueError(msg)
+            resolved.append(
+                bundle.model_copy(
+                    update={"agents": agents, "missing": missing, "alone_price": alone}
+                )
+            )
+        object.__setattr__(self, "bundles", tuple(resolved))
         return self
 
 
@@ -236,8 +318,9 @@ def load(path: Path = CATALOGUE_FILE) -> Catalogue:
 
 @cache
 def catalogue() -> Catalogue:
-    """The catalogue LEKA ships — read once, checked when read."""
-    return load()
+    """The catalogue LEKA ships — read once, checked when read (its file
+    looked up when read: a test gives its own, then clears the cache)."""
+    return load(CATALOGUE_FILE)
 
 
 # ── what a plan costs ───────────────────────────────────────────────────────

@@ -87,6 +87,30 @@ function addOns(owned: boolean, plan = "starter") {
         alone_price: 6400,
         discount_percent: 23,
         owned,
+        sellable: true,
+        members: [
+          {
+            key: "architect",
+            name: "Architect",
+            agent: "application-architecture",
+            monthly_price: 2500,
+          },
+        ],
+      },
+      {
+        key: "engineering",
+        name: { fr: "Engineering", en: "Engineering" },
+        value: null,
+        agents: ["application-architecture"],
+        monthly_price: 5900,
+        alone_price: null,
+        discount_percent: null,
+        owned: false,
+        sellable: false,
+        members: [
+          { key: "architect", name: "Architect", agent: "application-architecture", monthly_price: 2500 },
+          { key: "migration-planner", name: "Migration Planner", agent: null, monthly_price: null },
+        ],
       },
     ],
   };
@@ -324,10 +348,16 @@ describe("the catalogue", () => {
     const price = await screen.findByTestId("agent-price");
     expect(price).toHaveTextContent("25 € / mois");
     expect(price).toHaveTextContent("Expert");
-    const bundle = await screen.findByTestId("bundle");
+    const [bundle, soon] = await screen.findAllByTestId("bundle");
     expect(bundle).toHaveTextContent("Architecture");
     expect(bundle).toHaveTextContent("49 €");
     expect(bundle).toHaveTextContent("−23 %");
+    // A bundle naming an agent not built: not sold, no saving it cannot show
+    // (LEKA-454).
+    expect(soon).toHaveTextContent("Migration Planner· en préparation");
+    expect(within(soon).getByTestId("bundle-soon")).toBeVisible();
+    expect(within(soon).queryByTestId("bundle-buy")).not.toBeInTheDocument();
+    expect(soon).not.toHaveTextContent("%");
     await user.click(within(price).getByTestId("agent-buy"));
     await waitFor(() =>
       expect(sold.buy).toHaveBeenCalledWith({ kind: "agent", key: "application-architecture" }),

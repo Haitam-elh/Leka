@@ -43,7 +43,8 @@ test.describe("Capabilities", () => {
     // Its price, owned here — LEKA's demo runs every agent (2026-10-14) —
     // and the bundles under the domains.
     await expect(architect.getByTestId("agent-price")).toContainText("25 € / mois");
-    await expect(architect.getByTestId("agent-price")).toContainText("Actif");
+    // The demo's plan includes it (Karim's matrix, LEKA-454).
+    await expect(architect.getByTestId("agent-price")).toContainText("Inclus dans votre plan");
     await expect(page.getByTestId("bundle")).toHaveCount(5);
 
     // Its words find it.

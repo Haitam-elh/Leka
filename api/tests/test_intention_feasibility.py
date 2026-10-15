@@ -136,7 +136,7 @@ def test_every_agent_is_on_sale_free_runs_none_owned_is_never_sold_again() -> No
     )
 
 
-def test_specialist_agents_on_sale_a_bundle_when_it_costs_less_each_otherwise() -> None:
+def test_specialist_agents_on_sale_each_while_no_bundle_holding_them_is_sold() -> None:
     lacking: tuple[dict[str, object], ...] = ({"code": "not_owned"},)
     both = [
         need("security-review", offer="add_on", available=False, reasons=lacking),
@@ -145,8 +145,12 @@ def test_specialist_agents_on_sale_a_bundle_when_it_costs_less_each_otherwise() 
     ]
     verdict, path = path_of(both, month("growth"), None, sold_now(), CREDITS, expected="answer")
     assert verdict == "prerequisites"
-    assert [(s.kind, s.detail.get("bundle"), s.consent) for s in path] == [
-        ("buy_bundle", "security-reliability", True)
+    # Security & Reliability names agents not built yet: not sold, never
+    # offered (LEKA-454) — each agent alone.
+    assert sorted((s.kind, s.detail.get("agent"), s.consent) for s in path) == [
+        ("buy_add_on", "data-analysis", True),
+        ("buy_add_on", "infrastructure-analysis", True),
+        ("buy_add_on", "security-review", True),
     ]
     # One alone costs less than any bundle: that one.
     verdict, path = path_of(

@@ -280,7 +280,7 @@ def _bought(add_ons: Sequence[str], sold: Catalogue) -> list[Step]:
     alone = sum(sold.add_ons.prices.get(key, 0) for key in add_ons)
     priced = all(key in sold.add_ons.prices for key in add_ons)
     bundles = sorted(
-        (b for b in sold.add_ons.bundles if wanted <= set(b.agents)),
+        (b for b in sold.add_ons.bundles if b.sellable and wanted <= set(b.agents)),
         key=lambda b: b.monthly_price,
     )
     if bundles and (not priced or bundles[0].monthly_price < alone):
