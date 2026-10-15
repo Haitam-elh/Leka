@@ -107,9 +107,14 @@ async def test_the_list_and_its_page_say_the_same_state_and_versions_are_kept_ap
 
     await _analysed(acme, intention["id"])
     said = await _same(client, intention["id"])
-    assert (said["state"], said["next"]) == ("result_available", "read_result")
-    assert (said["step"]["at"], said["step"]["done"], said["step"]["last"]) == ("results", True, 2)
-    assert "ask_again" in said["controls"]
+    # Answered, then decided: its agents, or by hand (2026-10-14).
+    assert (said["state"], said["next"]) == ("decision_required", "choose")
+    assert (said["step"]["at"], said["step"]["done"], said["step"]["last"]) == (
+        "decision",
+        False,
+        4,
+    )
+    assert {"ask_again", "launch_agents", "by_hand"} <= set(said["controls"])
 
     # Changed after its analysis finished: version 2, the earlier analysis
     # kept but never its result.
@@ -134,7 +139,7 @@ async def test_the_list_and_its_page_say_the_same_state_and_versions_are_kept_ap
         (2, 2, True),
         (1, 1, False),
     ]
-    assert (await _same(client, intention["id"]))["state"] == "result_available"
+    assert (await _same(client, intention["id"]))["state"] == "decision_required"
     # Its story says which version each moment belongs to.
     story = await _get(client, f"/{intention['id']}/timeline")
     versions = {(i["kind"], i["detail"].get("number")): i["version"] for i in story}
@@ -235,7 +240,7 @@ async def test_stopped_while_it_runs_it_is_ready_what_it_found_kept_and_resumed(
         ("complete", True),
         ("stopped", False),
     ]
-    assert (await _same(client, intention["id"]))["state"] == "result_available"
+    assert (await _same(client, intention["id"]))["state"] == "decision_required"
 
 
 async def test_an_analysis_that_raises_is_failed_never_left_running(
@@ -341,6 +346,7 @@ async def test_a_question_answered_while_a_capability_failed_is_said_partial_eve
     ]
     await _analysed(acme, intention["id"], capabilities=broken)
     said = await _same(client, intention["id"])
-    assert (said["state"], said["reason"]) == ("analysis_partial", "partial")
+    # Partial, said at its decision (2026-10-14: every request is decided).
+    assert (said["state"], said["reason"]) == ("decision_required", "partial")
     [analysis] = await _get(client, f"/{intention['id']}/analyses")
     assert (analysis["status"], analysis["current"]) == ("partial", True)

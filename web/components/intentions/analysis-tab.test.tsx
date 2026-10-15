@@ -278,15 +278,19 @@ describe("an intention's analysis", () => {
     expect(scope).toHaveTextContent("PériodePar défaut pour ce type de demande");
   });
 
-  it("says a question answered needs no decision nor action", async () => {
+  it("takes a question answered through its five steps — never « Non nécessaire »", async () => {
+    // 2026-10-14: « les 5 ronds doivent être utilisés ».
     show();
     await screen.findByTestId("analysis-head");
     for (const step of ["decision", "action"]) {
       const said = screen.getByTestId(`intention-step-${step}`);
-      expect(said).toHaveAttribute("data-state", "skipped");
-      expect(said).toHaveTextContent("Non nécessaire");
-      expect(within(said).queryByRole("link")).not.toBeInTheDocument();
+      expect(said).not.toHaveAttribute("data-state", "skipped");
+      expect(said).not.toHaveTextContent("Non nécessaire");
     }
+    // Its decision opens: its agents, or by hand.
+    expect(
+      within(screen.getByTestId("intention-step-decision")).getByRole("link"),
+    ).toHaveAttribute("href", `/intentions/${ID}/decision`);
     expect(screen.getByTestId("intention-step-results")).toHaveAttribute("data-state", "done");
   });
 

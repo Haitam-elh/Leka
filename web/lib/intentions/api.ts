@@ -84,6 +84,12 @@ export type PathStep = components["schemas"]["PathStepRead"];
 /** An intention asked, with what its asker answered. */
 export type AskWithAnswers = IntentAsk & { answers?: IntentionAnswer[] };
 
+/** What LEKA proposes to get it done (2026-10-14): the agents, the plan. */
+export type AgentProposal = components["schemas"]["AgentProposalRead"];
+export type ProposedAgent = components["schemas"]["ProposedAgentRead"];
+export type PlanStep = components["schemas"]["PlanStepRead"];
+export type AgentLaunch = components["schemas"]["AgentLaunch"];
+
 export interface IntentionPage {
   data: Intention[];
   next_cursor: string | null;
@@ -160,6 +166,17 @@ export const intentions = {
     }),
   /** What it takes to carry it through here, now. */
   feasibility: (id: string) => apiFetch<Feasibility>(`${BASE}/${id}/feasibility`),
+  /** « Lancer avec ces agents » (2026-10-14): those chosen, started on it. */
+  launch: (id: string, agents: AgentLaunch[]) =>
+    apiFetch<IntentionDetail>(`${BASE}/${id}/agents`, {
+      method: "POST",
+      body: JSON.stringify({ agents }),
+    }),
+  /** « Je le fais moi-même »: done by its asker, the plan in hand. */
+  byHand: (id: string) => apiFetch<IntentionDetail>(`${BASE}/${id}/by-hand`, { method: "POST" }),
+  /** « Relancer »: its agents that failed, launched again. */
+  retryAgents: (id: string) =>
+    apiFetch<IntentionDetail>(`${BASE}/${id}/agents/retry`, { method: "POST" }),
 };
 
 export function submitIntention(ask: AskWithAnswers, key?: string): Promise<IntentionCreated> {

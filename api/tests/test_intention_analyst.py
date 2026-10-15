@@ -107,10 +107,10 @@ class Analyst:
         if "restated" in schema["properties"]:
             self.asked.append("reading")
             return _said([{"text": json.dumps(READING)}])
-        if "missing" in schema["properties"]:
-            # Which agent does the work (dispatch.py): none, for a question.
+        if "steps" in schema["properties"]:
+            # What LEKA proposes (proposal.py): no agent, for a question.
             self.asked.append("choosing")
-            return _said([{"text": json.dumps({"agent": None})}])
+            return _said([{"text": json.dumps({"agents": [], "steps": [], "informative": True})}])
         task = json.loads(body["contents"][0]["parts"][0]["text"])["task"]
         if "tools" not in body:
             self.asked.append("writing")

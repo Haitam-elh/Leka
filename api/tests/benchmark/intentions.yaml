@@ -67,7 +67,10 @@
 # 2: 13 more — what a verb says without asking it, a thing left untouched, a
 #    name known with one unknown, an action said as a noun (LEKA-440).
 # 3: how sure it may be, and what to do next (LEKA-441).
-version: 3
+# 4: every request is decided (2026-10-14): a question answered awaits its
+#    asker's own decision — its agents, or by hand — said `answered`;
+#    `awaiting_decision` is a decision on actions to systems.
+version: 4
 fixture: demo-seed
 
 cases:
@@ -86,7 +89,7 @@ cases:
       actions: {}
       expected: answer
       decision: [analyse]
-      final: [completed]
+      final: [answered]
       analysis: [complete, partial]
       findings: [change.made, incident.seen]
       cites: [payment-api v2.8.4]
@@ -103,7 +106,7 @@ cases:
       entities: [payment-api]
       actions: {}
       decision: [analyse]
-      final: [completed]
+      final: [answered]
       findings: [change.made, incident.seen]
       cites: [payment-api v2.8.4]
       forbid: [decision, system_action, cause_elsewhere]
@@ -121,7 +124,7 @@ cases:
       entities: [auth-service]
       actions: {}
       decision: [analyse]
-      final: [completed]
+      final: [answered]
       analysis: [complete]
       findings: [ownership.owner]
       cites: [Thomas Berger]
@@ -138,7 +141,7 @@ cases:
       entities: [auth-service]
       actions: {}
       decision: [analyse]
-      final: [completed]
+      final: [answered]
       findings: [ownership.owner]
       cites: [Thomas Berger]
       forbid: [decision, system_action]
@@ -153,7 +156,7 @@ cases:
       entities: [payment-api]
       actions: {}
       decision: [analyse]
-      final: [completed]
+      final: [answered]
       findings: [dependency.depends_on]
       cites: [user-service]
       forbid: [decision, system_action]
@@ -168,7 +171,7 @@ cases:
       entities: [postgres-prod]
       actions: {}
       decision: [analyse]
-      final: [completed]
+      final: [answered]
       findings: [dependency.relied_on]
       cites: [auth-service]
       forbid: [decision, system_action]
@@ -183,7 +186,7 @@ cases:
       entities: [postgres-prod]
       actions: {}
       decision: [analyse]
-      final: [completed]
+      final: [answered]
       findings: [dependency.relied_on]
       forbid: [decision, system_action]
 
@@ -196,7 +199,7 @@ cases:
       goal: [find_knowledge]
       actions: {}
       decision: [analyse, continue]
-      final: [completed]
+      final: [answered]
       forbid: [decision, system_action]
 
   - id: clear-compliance-fr
@@ -209,7 +212,7 @@ cases:
       entities: [payment-api]
       actions: {}
       decision: [analyse]
-      final: [completed]
+      final: [answered]
       findings: [compliance.check]
       forbid: [decision, system_action]
 
@@ -278,7 +281,7 @@ cases:
       entities: [payment-api]
       actions: {}
       decision: [analyse, continue]
-      final: [completed]
+      final: [answered]
       forbid: [decision, system_action]
 
   - id: question-restarted-en
@@ -289,7 +292,7 @@ cases:
       mode: question
       entities: [auth-service]
       actions: {}
-      final: [completed]
+      final: [answered]
       forbid: [decision, system_action]
 
   - id: question-deployment-noun-fr
@@ -300,7 +303,7 @@ cases:
       mode: question
       goal: [explain_cause]
       actions: {}
-      final: [completed]
+      final: [answered]
       forbid: [decision, system_action]
 
   - id: plan-migration-fr
@@ -312,7 +315,7 @@ cases:
       entities: [payment-api]
       expected: plan
       decision: [analyse, continue]
-      final: [completed]
+      final: [answered]
       forbid: [decision, system_action]
 
 
@@ -324,7 +327,7 @@ cases:
       goal: [plan_migration]
       entities: [payment-api]
       expected: plan
-      final: [completed]
+      final: [answered]
       forbid: [decision, system_action]
   - id: documentation-update-fr
     lang: fr
@@ -358,7 +361,7 @@ cases:
       mode: question
       entities: [payment-api]
       actions: {}
-      final: [completed]
+      final: [answered]
       forbid: [decision, system_action]
 
   - id: rolled-back-en
@@ -379,7 +382,7 @@ cases:
       mode: question
       entities: [auth-service]
       actions: {}
-      final: [completed]
+      final: [answered]
       forbid: [decision, system_action]
 
   - id: risk-of-migrating-fr
@@ -455,7 +458,7 @@ cases:
       goal: [explain_cause]
       actions: {}
       constraints: [read_only]
-      final: [completed]
+      final: [answered]
       forbid: [decision, system_action]
 
   - id: known-and-unknown-fr
@@ -466,7 +469,7 @@ cases:
       mode: question
       entities: [payment-api]
       actions: {}
-      final: [completed]
+      final: [answered]
       findings: [incident.seen]
       cites: [payment-api v2.8.4]
       forbid: [decision, system_action]
@@ -482,7 +485,7 @@ cases:
       period_said: true
       actions: {}
       decision: [analyse]
-      final: [completed]
+      final: [answered]
       findings: [change.made]
       forbid: [decision, system_action]
 
@@ -620,7 +623,7 @@ cases:
       actions: {}
       withheld: [restart]
       decision: [analyse]
-      final: [completed]
+      final: [answered]
       findings: [incident.seen]
       forbid: [decision, system_action]
 
@@ -632,7 +635,7 @@ cases:
       goal: [find_owner]
       actions: {}
       withheld: [restart]
-      final: [completed]
+      final: [answered]
       findings: [ownership.owner]
       forbid: [decision, system_action]
 
@@ -657,7 +660,7 @@ cases:
       actions: {}
       decision: [analyse, continue]
       must_not_ask: [everything_excluded]
-      final: [completed]
+      final: [answered]
       forbid: [decision, system_action]
 
   - id: exclusion-en
@@ -732,7 +735,7 @@ cases:
       entities: [payment-api, auth-service]
       actions: {}
       decision: [analyse, continue]
-      final: [completed]
+      final: [answered]
       forbid: [decision, system_action]
 
   # ── time ──────────────────────────────────────────────────────────────
@@ -747,7 +750,7 @@ cases:
       period_said: true
       actions: {}
       decision: [analyse]
-      final: [completed]
+      final: [answered]
       forbid: [decision, system_action]
 
   - id: tonight-window-en
@@ -768,7 +771,7 @@ cases:
       entities: [payment-api]
       period_said: true
       actions: {}
-      final: [completed]
+      final: [answered]
       forbid: [decision, system_action]
 
   # ── contradictory ─────────────────────────────────────────────────────
@@ -805,7 +808,7 @@ cases:
       entities: [payment-api]
       actions: {}
       decision: [analyse, continue]
-      final: [completed]
+      final: [answered]
       forbid: [decision, system_action]
 
   - id: contradictory-context-action-fr
@@ -849,7 +852,7 @@ cases:
       mode: question
       entities: [payment-api]
       actions: {}
-      final: [completed]
+      final: [answered]
       findings: [documentation.stale]
       forbid: [decision, system_action]
 
@@ -862,7 +865,7 @@ cases:
       mode: question
       entities: [payment-api]
       actions: {}
-      final: [completed]
+      final: [answered]
       findings: [documentation.stale]
       forbid: [decision, system_action]
   - id: no-source-cost-fr
@@ -884,7 +887,7 @@ cases:
       faults: [changes]
     expect:
       confidence: [medium, low]
-      final: [completed]
+      final: [answered]
       # What it could not read is said: never complete.
       analysis: [partial, inconclusive]
       forbid: [decision, complete]

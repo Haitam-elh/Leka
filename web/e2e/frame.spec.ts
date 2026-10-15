@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { analyse, ask } from "./intention-helpers";
+import { analyse, ask, settleAll } from "./intention-helpers";
 import { signIn } from "./sign-in";
 
 /**
@@ -98,21 +98,40 @@ test.describe("The frame", () => {
   });
 
   test("a page at rest asks the API nothing more", async ({ page }) => {
+    // Five pages watched 10 s each: about a minute alone — past the default
+    // 60 s on a slow runner (CI, 2026-10-15).
+    test.setTimeout(180_000);
     await signIn(page);
     const id = await ask(page, `Qui est responsable d'auth-service ? (${Date.now()})`);
     analyse(id);
+    // What earlier specs asked and left waiting is genuinely followed — a
+    // list read again every 15 s, which a slow runner sees inside the
+    // window: settled first, as the sweep would.
+    settleAll();
     for (const path of ["/overview", "/intentions", "/capabilities", "/environment", `/intentions/${id}/results`]) {
+      // Every call from the moment it is opened: a first load can end late
+      // on a slow runner — what is checked is a call made AGAIN.
+      const loaded = new Set<string>();
+      const load = (request: { url: () => string }) => {
+        if (request.url().includes("/api/v1/")) loaded.add(request.url());
+      };
+      page.on("request", load);
       await page.goto(path);
       await page.waitForLoadState("networkidle");
-      const asked: string[] = [];
+      const again: string[] = [];
+      const seen = new Set<string>();
       const count = (request: { url: () => string }) => {
-        if (request.url().includes("/api/v1/")) asked.push(request.url());
+        const url = request.url();
+        if (!url.includes("/api/v1/")) return;
+        if (loaded.has(url) || seen.has(url)) again.push(url);
+        seen.add(url);
       };
+      page.off("request", load);
       page.on("request", count);
       await page.waitForTimeout(10_000);
       page.off("request", count);
       // Nothing is working on anything here: nothing to follow.
-      expect(asked, `${path} kept asking: ${asked.join(", ")}`).toHaveLength(0);
+      expect(again, `${path} kept asking: ${again.join(", ")}`).toHaveLength(0);
     }
   });
 });

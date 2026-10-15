@@ -92,10 +92,10 @@ class Gemini:
         if "restated" in schema["properties"]:
             self.asked.append("reading")
             return _gemini(self.reading)
-        if "missing" in schema["properties"]:
-            # Which agent does the work (dispatch.py): none, for a question.
+        if "steps" in schema["properties"]:
+            # What LEKA proposes (proposal.py): no agent, for a question.
             self.asked.append("choosing")
-            return _gemini({"agent": None})
+            return _gemini({"agents": [], "steps": [], "informative": True})
         self.asked.append("writing")
         # The runtime says the task and its LEKA context apart (LEKA-429).
         said = json.loads(body["contents"][0]["parts"][0]["text"])
@@ -382,8 +382,10 @@ async def test_a_model_saying_to_act_sets_nothing_in_motion(
     )
     await _analysed(acme, intention)
     seen = await _get(client, f"/{intention['id']}")
-    # A question answered: completed, nobody asked to decide anything.
-    assert seen["status"] == "completed"
+    # A question answered: nobody asked to decide on any action — only its
+    # own decision, its agents or by hand (2026-10-14).
+    assert seen["status"] == "awaiting_decision"
+    assert "decide" not in seen["journey"]["controls"]
     with workspace_scope(acme["acme"]):
         async with session_factory() as session:
             ident = uuid.UUID(intention["id"])
