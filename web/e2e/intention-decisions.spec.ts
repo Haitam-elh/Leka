@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
-import { analyse, ask } from "./intention-helpers";
+import { analyse, ask, openStep } from "./intention-helpers";
 import { signIn } from "./sign-in";
 
 /**
@@ -55,16 +55,16 @@ test.describe("Intention decisions", () => {
     await expect(panel).toHaveCount(0);
 
     // Approved, it is at its action; what was decided, step 4.
-    await page.goto(`/intentions/${id}`);
+    await page.goto(`/intentions/${id}/overview`);
     await expect(page.getByTestId("intention-step-action")).toHaveAttribute("data-state", "current");
-    await page.getByTestId("tab-decision").click();
+    await openStep(page, "decision");
     await expect(page.getByTestId("intention-status")).toContainText("Approuvée");
     const decision = page.getByTestId("decision");
     await expect(decision.getByTestId("decision-status")).toHaveText("Validée");
     await expect(decision.getByTestId("decision-vote")).toContainText("Validée par vous");
     await expect(decision.getByTestId("decision-actions")).toHaveCount(0);
 
-    await page.getByTestId("tab-history").click();
+    await openStep(page, "history");
     // What happened to the intention itself (its whole story: LEKA-392).
     await page.getByTestId("timeline-category-intention").click();
     await expect(page.getByTestId("intention-event").last()).toContainText("Approuvée");

@@ -72,11 +72,20 @@ export async function ask(page: Page, words: string): Promise<string> {
   return page.url().split("/").pop() ?? "";
 }
 
-/** Asked, analysed, approved from its page (LEKA-390): its id. */
+/** One of its steps' views (LEKA-458): from a step's own tabs, or from its
+ * page's « Détails techniques ». */
+export async function openStep(page: Page, view: string): Promise<void> {
+  const link = page.getByTestId(`tab-${view}`).first();
+  if (!(await link.isVisible())) await page.getByTestId("detail-tab-technical").click();
+  await page.getByTestId(`tab-${view}`).first().click();
+  await expect(page).toHaveURL(new RegExp(`/${view}$`));
+}
+
+/** Asked, analysed, approved from its decision (LEKA-390): its id. */
 export async function approved(page: Page): Promise<string> {
   const id = await ask(page, `Redémarre auth-service en production (${Date.now()})`);
   analyse(id);
-  await page.goto(`/intentions/${id}`);
+  await page.goto(`/intentions/${id}/decision`);
   await page.getByTestId("decision").getByTestId("decision-approve").click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Valider" }).click();
   await expect(page.getByTestId("intention-status")).toContainText("Approuvée");

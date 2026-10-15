@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { approved } from "./intention-helpers";
+import { approved, openStep } from "./intention-helpers";
 import { signIn } from "./sign-in";
 
 /**
@@ -20,7 +20,7 @@ test.describe("Intention actions", () => {
     await signIn(page);
     await approved(page);
 
-    await page.getByTestId("tab-actions").click();
+    await openStep(page, "actions");
     await expect(page).toHaveURL(/\/actions$/);
     await page.getByTestId("plan-prepare-button").click();
     const step = page.getByTestId("plan-step");
@@ -52,7 +52,7 @@ test.describe("Intention actions", () => {
   test("scheduled, then called off — approved again", async ({ page }) => {
     await signIn(page);
     await approved(page);
-    await page.getByTestId("tab-actions").click();
+    await openStep(page, "actions");
     await page.getByTestId("plan-prepare-button").click();
     await expect(page.getByTestId("plan-status")).toHaveText("Prêt");
 

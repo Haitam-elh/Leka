@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 
+import { openStep } from "./intention-helpers";
 import { signIn } from "./sign-in";
 
 /**
@@ -36,7 +37,11 @@ test.describe("Intentions", () => {
     // Kept: followed from Mes intentions.
     await page.getByTestId("intention-follow").click();
     await expect(page).toHaveURL(/\/intentions\/[0-9a-f-]{36}$/);
-    // Opened at the step it is at (mockup 03): what was asked, above it.
+    // Its page (LEKA-458): what was asked, LEKA reading.
+    await expect(page.getByTestId("detail-request")).toContainText(asked);
+    await expect(page.getByTestId("detail-leka")).toContainText("LEKA lit vos sources");
+    // The step it is at, its own view (mockup 03): what was asked, above it.
+    await openStep(page, "analysis");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Analyse en cours");
     await expect(page.getByTestId("intention-step-badge")).toHaveText("Étape 2 sur 5");
     await expect(page.getByTestId("intention-step-analysis")).toHaveAttribute(
@@ -46,12 +51,12 @@ test.describe("Intentions", () => {
     await expect(page.getByTestId("intention-status")).toContainText("Prête à analyser");
     await expect(page.getByTestId("intention-text")).toContainText(asked);
     // Step 1: what it is, and the context linked to it.
-    await page.getByTestId("tab-overview").click();
+    await openStep(page, "overview");
     await expect(page).toHaveURL(/\/overview$/);
     await expect(page.getByTestId("intention-link").first()).toContainText("v1");
 
     // Its history: asked, its context linked, LEKA analysing.
-    await page.getByTestId("tab-history").click();
+    await openStep(page, "history");
     await expect(page).toHaveURL(/\/history$/);
     // What happened to the intention itself (its whole story: LEKA-392).
     await page.getByTestId("timeline-category-intention").click();
@@ -108,9 +113,9 @@ test.describe("Intentions", () => {
     await expect(page.getByTestId("intention-step-2")).toBeVisible();
 
     await page.getByTestId("intention-follow").click();
+    // Its answer kept with it, on its first step.
+    await openStep(page, "overview");
     await expect(page.getByTestId("intention-status")).toContainText("Prête à analyser");
-    // Its answer kept with it.
-    await page.getByTestId("tab-overview").click();
     await expect(page.getByTestId("brief-answers")).toContainText("payment-api");
   });
 
@@ -134,7 +139,7 @@ test.describe("Intentions", () => {
     await question.getByTestId("brief-words").fill("payment-api");
     await question.getByTestId("brief-send").click();
     await expect(page.getByTestId("intention-status")).toContainText("Prête à analyser");
-    await page.getByTestId("tab-history").click();
+    await openStep(page, "history");
     await page.getByTestId("timeline-category-intention").click();
     await expect(page.getByTestId("intention-event").last()).toContainText("Précisée");
   });

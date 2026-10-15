@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
-import { approved } from "./intention-helpers";
+import { approved, openStep } from "./intention-helpers";
 import { signIn } from "./sign-in";
 
 /**
@@ -20,7 +20,7 @@ import { signIn } from "./sign-in";
 /** Prepared from the tab Actions: the plan ready, what it expects said. */
 async function prepared(page: Page) {
   await approved(page);
-  await page.getByTestId("tab-actions").click();
+  await openStep(page, "actions");
   await page.getByTestId("plan-prepare-button").click();
   await expect(page.getByTestId("plan-status")).toHaveText("Prêt");
   const expected = page.getByTestId("expectations");

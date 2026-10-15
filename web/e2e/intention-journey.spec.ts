@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
-import { analyse, approved, ask } from "./intention-helpers";
+import { analyse, approved, ask, openStep } from "./intention-helpers";
 import { signIn } from "./sign-in";
 
 /**
@@ -40,7 +40,8 @@ async function said(page: Page, id: string): Promise<{ state: string; reason: st
 /** Its state on its page, the list, the panel beside it — each the API's. */
 async function everywhere(page: Page, id: string): Promise<string> {
   const { state } = await said(page, id);
-  await page.goto(`/intentions/${id}`);
+  // Its first step's view: where it stands said above every step.
+  await page.goto(`/intentions/${id}/overview`);
   await expect(page.getByTestId("intention-status")).toHaveAttribute("data-state", state);
   await expect(page.getByTestId("journey-note")).toHaveAttribute("data-state", state);
   await page.goto("/intentions");
@@ -128,7 +129,7 @@ test.describe("An intention's journey", () => {
     await page.goto(`/intentions/${id}/history`);
     await expect(page.getByTestId("intention-event").last()).toContainText("Analyse arrêtée");
 
-    await page.goto(`/intentions/${id}`);
+    await page.goto(`/intentions/${id}/overview`);
     await page.getByTestId("journey-resume").click();
     await expect(page.getByTestId("journey-note")).toHaveAttribute("data-reason", "queued");
     analyse(id);
@@ -138,7 +139,7 @@ test.describe("An intention's journey", () => {
   test("read again while its actions run: still running, never done", async ({ page }) => {
     await signIn(page);
     const id = await approved(page);
-    await page.getByTestId("tab-actions").click();
+    await openStep(page, "actions");
     await page.getByTestId("plan-prepare-button").click();
     await page.getByTestId("plan-start").click();
     await page.getByRole("alertdialog").getByRole("button", { name: "Lancer maintenant" }).click();
