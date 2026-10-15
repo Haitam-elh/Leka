@@ -244,7 +244,12 @@ async def _apply_subscription(
     status = str(subscription.get("status") or "")
     plan, interval = _plan_of(subscription)
     paying = status in PAYING and plan is not None
-    account.stripe_subscription_id = str(subscription.get("id") or "") or None
+    said = str(subscription.get("id") or "") or None
+    # A subscription never paid — a declined checkout's, expired a day later —
+    # changes nothing: not the plan, not the one paid for.
+    if not paying and said != account.stripe_subscription_id:
+        return "ignored"
+    account.stripe_subscription_id = said
     account.stripe_customer_id = (
         account.stripe_customer_id or str(subscription.get("customer") or "") or None
     )
