@@ -61,6 +61,19 @@ vi.mock("@/lib/outcomes", async (original) => ({
   outcomes: told,
 }));
 
+// The history's filters read the agents and the sources (LEKA-457).
+vi.mock("@/lib/capabilities-queries", () => ({
+  useCapabilities: () => ({
+    data: [
+      { key: "architect", title: "Architecte", kind: "agent" },
+      { key: "sql", title: "SQL", kind: "rules" },
+    ],
+  }),
+}));
+vi.mock("@/lib/sources-queries", () => ({
+  useSources: () => ({ data: [{ id: "s-1", display_name: "acme/backend" }] }),
+}));
+
 const { IntentionsList } = await import("@/components/intentions/intentions-list");
 const { IntentionScreen } = await import("@/components/intentions/intention-screen");
 const { ApiError } = await import("@/lib/api");
@@ -161,7 +174,7 @@ describe("Mes intentions", () => {
     expect(within(row).getByTestId("intention-status")).toHaveTextContent("Analyse en cours");
     expect(within(row).getByTestId("intention-status")).toHaveAttribute("data-state", "analysing");
     expect(within(row).getByRole("link")).toHaveAttribute("href", `/intentions/${ID}`);
-    expect(api.list).toHaveBeenLastCalledWith({ phase: null, q: "", cursor: null });
+    expect(api.list).toHaveBeenLastCalledWith({ phase: null, q: "", filters: {}, cursor: null });
   });
 
   it("counts each phase as the API does, and asks it again by phase", async () => {
@@ -173,8 +186,32 @@ describe("Mes intentions", () => {
     );
     expect(screen.getByTestId("intentions-tab-archived")).toHaveTextContent("Archivées4");
     await user.click(screen.getByTestId("intentions-tab-finished"));
-    expect(api.list).toHaveBeenLastCalledWith({ phase: "finished", q: "", cursor: null });
+    expect(api.list).toHaveBeenLastCalledWith({ phase: "finished", q: "", filters: {}, cursor: null });
     expect(screen.getByTestId("intentions-tab-finished")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("filters by agent, source and period, and sorts, as the API does (LEKA-457)", async () => {
+    const user = userEvent.setup();
+    show(<IntentionsList />);
+    await screen.findAllByTestId("intention-row");
+    const agent = screen.getByTestId("intentions-filter-agent");
+    // Agents only: a rule is not one.
+    expect(within(agent).getAllByRole("option").map((o) => o.textContent)).toEqual([
+      "Tous les agents",
+      "Architecte",
+    ]);
+    await user.selectOptions(agent, "architect");
+    await user.selectOptions(screen.getByTestId("intentions-filter-source"), "s-1");
+    await user.selectOptions(screen.getByTestId("intentions-filter-period"), "30");
+    await user.selectOptions(screen.getByTestId("intentions-sort"), "oldest");
+    await waitFor(() =>
+      expect(api.list).toHaveBeenLastCalledWith({
+        phase: null,
+        q: "",
+        filters: { agent: "architect", source: "s-1", days: 30, sort: "oldest" },
+        cursor: null,
+      }),
+    );
   });
 
   it("says when nothing was asked yet, and the way to ask", async () => {

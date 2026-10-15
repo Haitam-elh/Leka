@@ -91,6 +91,15 @@ export interface IntentionPage {
 
 const BASE = "/intentions";
 
+/** The history's filters (LEKA-457); none set: every one, the latest changed first. */
+export type IntentionFilters = {
+  agent?: string;
+  source?: string;
+  /** Asked in the last so many days. */
+  days?: number;
+  sort?: "updated" | "newest" | "oldest";
+};
+
 export const intentions = {
   /** Asked: kept, its context assembled — 422 when nothing can start it.
    * Sent again with the same key — a click twice, a request retried after
@@ -112,17 +121,26 @@ export const intentions = {
   list: ({
     phase,
     q,
+    filters = {},
     cursor,
     limit = 20,
   }: {
     phase?: IntentionPhase | null;
     q?: string;
+    filters?: IntentionFilters;
     cursor?: string | null;
     limit?: number;
   }) => {
     const query = new URLSearchParams({ limit: String(limit) });
     if (phase) query.set("phase", phase);
     if (q) query.set("q", q);
+    if (filters.agent) query.set("agent", filters.agent);
+    if (filters.source) query.set("source", filters.source);
+    if (filters.days) query.set("since", new Date(Date.now() - filters.days * 86_400_000).toISOString());
+    if (filters.sort === "newest" || filters.sort === "oldest") {
+      query.set("sort", "created_at");
+      query.set("order", filters.sort === "oldest" ? "asc" : "desc");
+    }
     if (cursor) query.set("cursor", cursor);
     return apiFetch<IntentionPage>(`${BASE}?${query.toString()}`);
   },

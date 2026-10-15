@@ -12,8 +12,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, cast, func, or_, select
+from sqlalchemy.dialects.postgresql import JSONPATH
 
+from leka.capabilities import AgentRun
 from leka.db import WorkspaceScopedRepository
 from leka.intentions.lifecycle import PHASES
 from leka.intentions.models import Intention, IntentionAnalysis, IntentionEvent, IntentionLink
@@ -29,6 +31,13 @@ class IntentionFilters:
     words: str | None = None
     # Linked to this thing: a context, a finding, an entity.
     linked: uuid.UUID | None = None
+    # An agent run for it, by its key (LEKA-457).
+    agent: str | None = None
+    # A source it was asked about, or its analyses cite.
+    source: uuid.UUID | None = None
+    # Asked in [since, until).
+    since: datetime | None = None
+    until: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -83,6 +92,31 @@ class IntentionRepository(WorkspaceScopedRepository):
                     )
                 )
             )
+        if f.agent is not None:
+            statement = statement.where(
+                Intention.id.in_(
+                    select(AgentRun.intention_id).where(
+                        AgentRun.workspace_id == self.workspace_id, AgentRun.key == f.agent
+                    )
+                )
+            )
+        if f.source is not None:
+            source = str(f.source)
+            cited = select(IntentionAnalysis.intention_id).where(
+                IntentionAnalysis.workspace_id == self.workspace_id,
+                func.jsonb_path_exists(
+                    IntentionAnalysis.result,
+                    cast("$.evidence[*].sources[*] ? (@.id == $id)", JSONPATH),
+                    func.jsonb_build_object("id", source),
+                ),
+            )
+            statement = statement.where(
+                or_(Intention.scope["sources"].contains([source]), Intention.id.in_(cited))
+            )
+        if f.since is not None:
+            statement = statement.where(Intention.created_at >= f.since)
+        if f.until is not None:
+            statement = statement.where(Intention.created_at < f.until)
         return statement
 
     async def counts(self, *, created_by: uuid.UUID | None = None) -> dict[str, int]:
