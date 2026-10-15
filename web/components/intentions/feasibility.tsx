@@ -2,6 +2,7 @@
 
 import { ArrowRight, Gauge, Route } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 
 import { cn } from "cn";
 
@@ -14,6 +15,7 @@ import { usePermissions } from "@/components/shell/shell-provider";
 import { sourceTitle } from "@/components/sources/source-logo";
 import type { SourceKind } from "@/lib/sources";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { routes } from "@/config/routes";
 import { ApiError } from "@/lib/api";
 import { fill } from "@/lib/i18n/dictionaries";
@@ -35,7 +37,8 @@ import { usePayment } from "@/lib/subscription-queries";
  * or a bundle asks first, says in full what is paid — the price excl. VAT,
  * the launch offer and what it renews at, monthly, the agents a plan
  * includes (LEKA-462) — then opens the secure payment page; and only
- * someone who may pay for the workspace sees the button.
+ * someone who may pay for the workspace sees the button. Each paid step
+ * may be left out; the total of what is kept is said again (LEKA-462).
  */
 
 /** A source kind's name — its own word when LEKA has no mark for it. */
@@ -45,6 +48,24 @@ function sourceNameOf(kind: string): string {
   } catch {
     return kind;
   }
+}
+
+const PAID = new Set(["change_plan", "buy_add_on", "buy_bundle"]);
+
+/** What the paid steps kept cost a month, excl. VAT: during the launch offer, then after it. */
+export function totalOf(path: PathStep[]): { now: number; then: number; months: number | null } {
+  let now = 0;
+  let then = 0;
+  let months: number | null = null;
+  for (const step of path) {
+    const detail = step.detail as Record<string, unknown>;
+    const price = typeof detail.monthly_price === "number" ? detail.monthly_price : 0;
+    const launch = typeof detail.launch_price === "number" ? detail.launch_price : null;
+    now += launch ?? price;
+    then += typeof detail.then_price === "number" ? detail.then_price : price;
+    if (launch !== null && typeof detail.launch_months === "number") months = detail.launch_months;
+  }
+  return { now, then, months };
 }
 
 const OFFER_TONES = { included: "success", beta: "violet", add_on: "warning", planned: "neutral" } as const;
@@ -62,6 +83,11 @@ export function FeasibilityPanel({
   const shown = feasibility.needed.filter((n) => n.selected || n.essential || !n.available);
   const credits = feasibility.credits;
   const number = (value: number) => new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(value);
+  const money = (cents: number) =>
+    new Intl.NumberFormat(locale, { style: "currency", currency: "EUR" }).format(cents / 100);
+  const [left, setLeft] = useState<number[]>([]);
+  const paid = feasibility.path.some((step) => PAID.has(step.kind));
+  const total = totalOf(feasibility.path.filter((step, index) => PAID.has(step.kind) && !left.includes(index)));
   return (
     <Card
       title={w.title}
@@ -80,9 +106,25 @@ export function FeasibilityPanel({
         {feasibility.path.length ? (
           <ol className="flex flex-col gap-2" data-testid="feasibility-path">
             {feasibility.path.map((step, index) => (
-              <StepItem key={`${step.kind}-${index}`} step={step} intentionId={intentionId} />
+              <StepItem
+                key={`${step.kind}-${index}`}
+                step={step}
+                intentionId={intentionId}
+                kept={PAID.has(step.kind) ? !left.includes(index) : undefined}
+                onKept={(kept) =>
+                  setLeft((was) => (kept ? was.filter((i) => i !== index) : [...was, index]))
+                }
+              />
             ))}
           </ol>
+        ) : null}
+        {paid ? (
+          <p className="text-[0.8125rem] font-medium text-brand-navy" data-testid="feasibility-total" aria-live="polite">
+            {fill(w.total, { price: money(total.now) })}
+            {total.months !== null && total.then !== total.now
+              ? ` ${fill(w.totalThen, { months: String(total.months), price: money(total.then) })}`
+              : ""}
+          </p>
         ) : null}
         <ul className="divide-y divide-shell-line/70" data-testid="feasibility-needed">
           {shown.map((n) => (
@@ -130,7 +172,18 @@ export function FeasibilityPanel({
   );
 }
 
-function StepItem({ step, intentionId }: { step: PathStep; intentionId?: string }) {
+function StepItem({
+  step,
+  intentionId,
+  kept,
+  onKept,
+}: {
+  step: PathStep;
+  intentionId?: string;
+  /** A paid step: kept in the total, or left out; undefined otherwise. */
+  kept?: boolean;
+  onKept: (kept: boolean) => void;
+}) {
   const t = useDictionary();
   const w = t.intentions.feasibility;
   const { format: locale } = useLocale();
@@ -256,15 +309,28 @@ function StepItem({ step, intentionId }: { step: PathStep; intentionId?: string 
         {said}
       </Button>
     );
-  const paid = step.kind === "change_plan" || step.kind === "buy_add_on" || step.kind === "buy_bundle";
+  const paid = kept !== undefined;
   return (
     <li
-      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-shell-line px-3 py-2 text-[0.8125rem] text-brand-navy"
+      className={cn(
+        "flex flex-wrap items-center justify-between gap-2 rounded-lg border border-shell-line px-3 py-2 text-[0.8125rem] text-brand-navy",
+        kept === false && "opacity-60",
+      )}
       data-testid="feasibility-step"
       data-kind={step.kind}
     >
-      <span className="min-w-0 flex-1">{said}</span>
-      {action ?? (paid ? <span className="text-xs text-shell-muted">{t.intentions.feasibility.steps.ask_admin}</span> : null)}
+      {paid ? (
+        <Checkbox
+          checked={kept}
+          onCheckedChange={(on) => onKept(Boolean(on))}
+          aria-label={fill(w.keep, { step: said })}
+          data-testid="feasibility-keep"
+        />
+      ) : null}
+      <span className={cn("min-w-0 flex-1", kept === false && "line-through")}>{said}</span>
+      {kept === false
+        ? null
+        : (action ?? (paid ? <span className="text-xs text-shell-muted">{t.intentions.feasibility.steps.ask_admin}</span> : null))}
     </li>
   );
 }

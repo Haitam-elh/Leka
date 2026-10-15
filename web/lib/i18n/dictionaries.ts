@@ -6675,6 +6675,9 @@ const fr = {
       renews:
         "Renouvellement automatique chaque mois, résiliable à tout moment.",
       includesAgents: "Agents inclus : {agents}.",
+      keep: "Retenir : {step}",
+      total: "Total retenu : {price} par mois, hors taxes.",
+      totalThen: "Les {months} premiers mois, puis {price} par mois.",
       buyTitle: "Ajouter « {name} » ?",
       buyBody:
         "{price} par mois, hors taxes, renouvelé automatiquement chaque mois, résiliable à tout moment. L'accès est ouvert dès que Stripe confirme le paiement. Vous serez redirigé vers la page de paiement sécurisée : rien n'est payé sans votre validation.",
@@ -13998,6 +14001,9 @@ const en: Dictionary = {
         "Launch offer: {launchPrice} a month for the first {months} months (−{percent}%), then {price} a month.",
       renews: "Renews automatically every month, cancel any time.",
       includesAgents: "Agents included: {agents}.",
+      keep: "Keep: {step}",
+      total: "Total kept: {price} a month, excluding tax.",
+      totalThen: "For the first {months} months, then {price} a month.",
       buyTitle: "Add « {name} »?",
       buyBody:
         "{price} a month, excluding tax, renewed automatically every month, cancel any time. Access opens once Stripe confirms the payment. You will go to the secure payment page: nothing is paid without your approval.",
