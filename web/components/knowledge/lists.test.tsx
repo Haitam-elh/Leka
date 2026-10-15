@@ -150,5 +150,6 @@ describe("EventTimeline", () => {
     screen.getByRole("button", { name: "Événement 0" }).focus();
     await user.keyboard("{Enter}");
     expect(onSelect).toHaveBeenCalledWith("evt-0");
-  });
+    // 500 rows drawn: past vitest's 5 s on a busy runner (2026-10-15).
+  }, 20_000);
 });

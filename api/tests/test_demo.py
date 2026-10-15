@@ -162,7 +162,10 @@ async def test_nova_retail_is_read_with_no_request_leaving_and_a_question_answer
 
     names = await _names(demo)
     # One each, its code, its catalogue and its monitors saying the same service.
-    assert {"nova-checkout-api", "nova-catalog-api", "nova-storefront"} <= names["service"], names
+    # Named as the most trusted source says it (« Nova Checkout API »): the
+    # same service whatever the case or the spaces.
+    services = {"-".join(n.lower().split()) for n in names["service"]}
+    assert {"nova-checkout-api", "nova-catalog-api", "nova-storefront"} <= services, names
     assert any("Paiements refusés" in n for n in names.get("incident", set())), names
     assert names.get("deployment"), names
 
