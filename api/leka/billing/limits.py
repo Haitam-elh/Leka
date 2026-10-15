@@ -16,9 +16,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.billing.catalogue import catalogue
-from leka.connectors.models import Source
+from leka.connectors import Source
 from leka.governance.plans import plan_of
-from leka.platform.models import Invitation, InvitationStatus, Membership
+from leka.platform import Invitation, InvitationStatus, Membership
 
 Limited = Literal["users", "sources"]
 
