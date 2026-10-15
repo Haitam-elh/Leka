@@ -976,6 +976,14 @@ const fr = {
   },
   /** Facturation (mockup 16): the consumption, counted. */
   billing: {
+    // A user or a source more than the plan allows (LEKA-463).
+    planLimit: {
+      users:
+        "Votre formule ne permet pas un utilisateur de plus. Passez à une formule supérieure pour inviter quelqu'un d'autre.",
+      sources:
+        "Votre formule ne permet pas une source de plus. Passez à une formule supérieure depuis Facturation pour en connecter une autre.",
+      see: "Voir les formules",
+    },
     subscription: {
       title: "Votre formule",
       notAvailable: "Le paiement en ligne n'est pas encore ouvert.",
@@ -8364,6 +8372,12 @@ const en: Dictionary = {
     waitingDecision: "The run is prepared once the decision is approved.",
   },
   billing: {
+    planLimit: {
+      users: "Your plan does not allow one more user. Move to a higher plan to invite someone else.",
+      sources:
+        "Your plan does not allow one more source. Move to a higher plan from Billing to connect another one.",
+      see: "See the plans",
+    },
     subscription: {
       title: "Your plan",
       notAvailable: "Online payment is not open yet.",

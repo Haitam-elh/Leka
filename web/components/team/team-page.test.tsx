@@ -34,7 +34,8 @@ const api = vi.hoisted(() => ({
 }));
 const notices = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }));
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/team" }));
+const push = vi.hoisted(() => vi.fn());
+vi.mock("next/navigation", () => ({ usePathname: () => "/team", useRouter: () => ({ push }) }));
 vi.mock("@/lib/team", async (original) => ({
   ...(await original<typeof import("@/lib/team")>()),
   team: api,
@@ -160,6 +161,24 @@ describe("the team", () => {
       title: "Invitation envoyée à karim@leka.example.",
     });
     expect(await screen.findByTestId("invite-link")).toHaveTextContent("/invitations/tok%20en");
+  });
+
+  it("at the plan's limit, says so and offers the plans (LEKA-463)", async () => {
+    api.invite.mockRejectedValue(
+      new ApiError(403, "/members/invite", "The Free plan allows 1 users.", "plan_limit"),
+    );
+    const user = userEvent.setup();
+    show();
+    await user.click(await screen.findByTestId("team-invite-open"));
+    await user.type(screen.getByTestId("invite-email"), "karim@leka.example");
+    await user.click(screen.getByTestId("invite-send"));
+    await waitFor(() => expect(notices.error).toHaveBeenCalled());
+    const [{ title, action }] = notices.error.mock.calls[0];
+    expect(title).toBe(
+      "Votre formule ne permet pas un utilisateur de plus. Passez à une formule supérieure pour inviter quelqu'un d'autre.",
+    );
+    action.onClick();
+    expect(push).toHaveBeenCalledWith("/billing");
   });
 
   it("changes a role, removes only once asked, says the last owner", async () => {
