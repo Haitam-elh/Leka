@@ -338,6 +338,14 @@ async def intentions(
     linked: Annotated[
         uuid.UUID | None, Query(description="Linked to this context, finding or entity.")
     ] = None,
+    agent: Annotated[
+        str | None, Query(max_length=100, description="An agent ran for it: its key.")
+    ] = None,
+    source: Annotated[
+        uuid.UUID | None, Query(description="Asked about this source, or its analyses cite it.")
+    ] = None,
+    since: Annotated[datetime | None, Query(description="Asked at or after.")] = None,
+    until: Annotated[datetime | None, Query(description="Asked before.")] = None,
 ) -> PageEnvelope[IntentionRead]:
     """The intentions, the latest changed first (`sort=updated_at`) or the
     latest asked (`sort=created_at`)."""
@@ -348,6 +356,10 @@ async def intentions(
             created_by=principal.user_id if mine else None,
             words=q,
             linked=linked,
+            agent=agent,
+            source=source,
+            since=since,
+            until=until,
         )
     )
     result = await serve_page(

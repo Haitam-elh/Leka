@@ -19,9 +19,11 @@ import { Input } from "@/components/ui/input";
 import { routes } from "@/config/routes";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
-import type { Intention, IntentionPhase, IntentionStatus } from "@/lib/intentions/api";
+import { useCapabilities } from "@/lib/capabilities-queries";
+import type { Intention, IntentionFilters, IntentionPhase, IntentionStatus } from "@/lib/intentions/api";
 import { type Journey, journeyWhy } from "@/lib/intentions/journey";
 import { useIntention, useIntentionCounts, useIntentions } from "@/lib/intentions/queries";
+import { useSources } from "@/lib/sources-queries";
 
 /**
  * Mes intentions (LEKA-384, mockup 07): what was asked of LEKA, the latest
@@ -168,12 +170,91 @@ function Preview({ id, chosen }: { id: string; chosen: boolean }) {
   );
 }
 
+const SELECT =
+  "h-9 rounded-md border border-shell-line bg-white px-2 text-[0.8125rem] text-brand-navy outline-none focus-visible:ring-2 focus-visible:ring-brand-violet/40";
+const PERIODS = [7, 30, 90] as const;
+
+/** By agent, source, period, and the order (LEKA-457): what the API filters, nothing here. */
+function Filters({
+  value,
+  onChange,
+}: {
+  value: IntentionFilters;
+  onChange: (next: IntentionFilters) => void;
+}) {
+  const w = useDictionary().intentions.filters;
+  const agents = (useCapabilities({}).data ?? []).filter((c) => c.kind === "agent");
+  const sources = useSources().data ?? [];
+  const set = (patch: IntentionFilters) => onChange({ ...value, ...patch });
+  return (
+    <div className="mb-4 flex flex-wrap gap-2" data-testid="intentions-filters">
+      <select
+        aria-label={w.agent}
+        value={value.agent ?? ""}
+        onChange={(e) => set({ agent: e.target.value || undefined })}
+        className={SELECT}
+        data-testid="intentions-filter-agent"
+      >
+        <option value="">{w.anyAgent}</option>
+        {agents.map((agent) => (
+          <option key={agent.key} value={agent.key}>
+            {agent.title}
+          </option>
+        ))}
+      </select>
+      <select
+        aria-label={w.source}
+        value={value.source ?? ""}
+        onChange={(e) => set({ source: e.target.value || undefined })}
+        className={SELECT}
+        data-testid="intentions-filter-source"
+      >
+        <option value="">{w.anySource}</option>
+        {sources.map((source) => (
+          <option key={source.id} value={source.id}>
+            {source.display_name}
+          </option>
+        ))}
+      </select>
+      <select
+        aria-label={w.period}
+        value={value.days ?? ""}
+        onChange={(e) => set({ days: Number(e.target.value) || undefined })}
+        className={SELECT}
+        data-testid="intentions-filter-period"
+      >
+        <option value="">{w.periods.all}</option>
+        {PERIODS.map((days) => (
+          <option key={days} value={days}>
+            {w.periods[days]}
+          </option>
+        ))}
+      </select>
+      <select
+        aria-label={w.sort}
+        value={value.sort ?? "updated"}
+        onChange={(e) => set({ sort: e.target.value as IntentionFilters["sort"] })}
+        className={SELECT}
+        data-testid="intentions-sort"
+      >
+        {(["updated", "newest", "oldest"] as const).map((sort) => (
+          <option key={sort} value={sort}>
+            {w.sorts[sort]}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 export function IntentionsList() {
   const t = useDictionary();
   const w = t.intentions;
   const [phase, setPhase] = useState<IntentionPhase | null>(null);
   const [q, setQ] = useState("");
-  const list = useIntentions(phase, q.trim());
+  const [filters, setFilters] = useState<IntentionFilters>({});
+  const list = useIntentions(phase, q.trim(), filters);
+  const filtered = Boolean(filters.agent || filters.source || filters.days);
   const counts = useIntentionCounts();
   const rows = list.data?.pages.flatMap((page) => page.data) ?? [];
   // The one shown beside the list: the one chosen, else the latest.
@@ -191,7 +272,7 @@ export function IntentionsList() {
     body = <ErrorState error={list.error} onRetry={() => void list.refetch()} />;
   } else if (list.isPending) {
     body = <div className="h-64 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />;
-  } else if (rows.length === 0 && phase === null && !q) {
+  } else if (rows.length === 0 && phase === null && !q && !filtered) {
     // Nothing asked yet: what asking does, and the way to it (LEKA-438).
     body = (
       <StatePanel
@@ -307,6 +388,7 @@ export function IntentionsList() {
           />
         </label>
       </div>
+      <Filters value={filters} onChange={setFilters} />
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:items-start">
         <section className="overflow-hidden rounded-xl border border-shell-line bg-white">{body}</section>
         {previewed ? (

@@ -9,6 +9,7 @@ import {
   type IntentionAnalysisRead,
   type IntentionAnswer,
   type IntentionDetail,
+  type IntentionFilters,
   type IntentionPhase,
   intentions,
 } from "@/lib/intentions/api";
@@ -16,7 +17,8 @@ import { working } from "@/lib/intentions/journey";
 
 export const intentionKeys = {
   all: ["intentions"] as const,
-  list: (phase: IntentionPhase | null, q: string) => ["intentions", "list", phase, q] as const,
+  list: (phase: IntentionPhase | null, q: string, filters: IntentionFilters = {}) =>
+    ["intentions", "list", phase, q, filters] as const,
   counts: ["intentions", "counts"] as const,
   one: (id: string) => ["intentions", "one", id] as const,
   history: (id: string) => ["intentions", "history", id] as const,
@@ -31,10 +33,10 @@ const WHILE_RUNNING = 4_000;
 
 /** A list of them, a page at a time: by phase — none, every one not
  * archived — and words. */
-export function useIntentions(phase: IntentionPhase | null, q: string) {
+export function useIntentions(phase: IntentionPhase | null, q: string, filters: IntentionFilters = {}) {
   return useInfiniteQuery({
-    queryKey: intentionKeys.list(phase, q),
-    queryFn: ({ pageParam }) => intentions.list({ phase, q, cursor: pageParam }),
+    queryKey: intentionKeys.list(phase, q, filters),
+    queryFn: ({ pageParam }) => intentions.list({ phase, q, filters, cursor: pageParam }),
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.next_cursor,
     // A row LEKA works on moves by itself: read again, as its page is.
