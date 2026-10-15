@@ -75,7 +75,7 @@ test.describe("The frame", () => {
     await expect(strip).toBeVisible();
   });
 
-  test("Capacités: each domain's box right under the one before, in two columns", async ({ page }) => {
+  test("Capacités: each domain's box right under the one before, in four columns (LEKA-460)", async ({ page }) => {
     await signIn(page);
     await page.goto("/capabilities");
     await expect(page.getByTestId("catalogue-domain").nth(2)).toBeVisible();
@@ -87,7 +87,7 @@ test.describe("The frame", () => {
     );
     const columns = new Map<number, { top: number; bottom: number }[]>();
     for (const box of boxes) columns.set(box.left, [...(columns.get(box.left) ?? []), box]);
-    expect(columns.size).toBe(2);
+    expect(columns.size).toBe(4);
     for (const column of columns.values()) {
       column.sort((a, b) => a.top - b.top);
       for (let i = 1; i < column.length; i++) {

@@ -1711,15 +1711,35 @@ const fr = {
   },
   /** LEKA's capabilities (LEKA-393, mockup 13). */
   catalogue: {
-    title: "Les capacités de LEKA",
+    title: "Agents et bundles LEKA",
     views: {
       available: "Disponibles",
       mine: "Mes capacités",
       configuration: "Configuration",
     },
     subtitle:
-      "Des agents spécialisés pour comprendre, analyser et agir sur votre environnement.",
+      "Des agents IA spécialisés pour comprendre, décider et agir sur votre environnement.",
+    subtitleMore:
+      "Choisissez les agents dont vous avez besoin ou un bundle pour encore plus de valeur.",
     ask: "Demander une capacité",
+    /** The four figures beside the title (LEKA-460) — counted, never said ahead. */
+    stats: {
+      agents: "{count|agent spécialisé|agents spécialisés}",
+      agentsLead: "Couvrent votre cycle de vie technique",
+      bundles: "{count|bundle thématique|bundles thématiques}",
+      upTo: "Jusqu'à {percent} % d'économie",
+      soon: "Bientôt disponibles",
+      fit: "Adapté",
+      fitLabel: "à vos besoins",
+      fitLead: "Recommandations personnalisées",
+      safe: "Sécurisé",
+      safeLead: "Contrôles, permissions et validation avant action",
+    },
+    allAgents: "Tous les agents LEKA",
+    allAgentsLead:
+      "Chaque agent peut être acheté individuellement. Les prix sont mensuels, en euros, hors TVA.",
+    compare: "Voir la comparaison des offres",
+    allTiers: "Tous les niveaux",
     /** Said once, above the list: what keeps many from running here. */
     wide: {
       no_model:
@@ -1729,7 +1749,7 @@ const fr = {
       configure: "Configurer un modèle",
     },
     need: "Que voulez-vous faire ?",
-    allNeeds: "Tout",
+    allNeeds: "Tous les besoins",
     /** One box per domain, its agents apart from LEKA's own capabilities
      * (2026-10-14). */
     domains: {
@@ -1833,8 +1853,13 @@ const fr = {
       buy: "Acheter",
       fromPlan: "À partir du plan {plan}",
       askAdmin: "Demandez à un administrateur de votre espace de l'acheter.",
-      bundlesTitle: "Bundles",
-      bundlesLead: "Des agents réunis pour un besoin, moins chers qu'achetés un par un.",
+      bundlesTitle: "Bundles LEKA",
+      bundlesLead:
+        "Des ensembles d'agents pour couvrir vos besoins les plus fréquents, à un prix avantageux.",
+      upTo: "Jusqu'à {percent} % d'économie",
+      upToLead: "par rapport à l'achat des agents individuellement",
+      agentsIn: "{count} {count|agent inclus|agents inclus}",
+      soon: "Bientôt disponible",
       save: "−{percent} %",
       choose: "Choisir ce bundle",
       ownedTitle: "Ce que votre espace possède",
@@ -9157,15 +9182,32 @@ const en: Dictionary = {
     },
   },
   catalogue: {
-    title: "LEKA's capabilities",
+    title: "LEKA agents and bundles",
     views: {
       available: "Available",
       mine: "My capabilities",
       configuration: "Configuration",
     },
     subtitle:
-      "Specialised agents to understand, analyse and act on your environment.",
+      "Specialised AI agents to understand, decide and act on your environment.",
+    subtitleMore: "Choose the agents you need, or a bundle for even more value.",
     ask: "Ask for a capability",
+    stats: {
+      agents: "{count|specialised agent|specialised agents}",
+      agentsLead: "Across your technical lifecycle",
+      bundles: "{count|themed bundle|themed bundles}",
+      upTo: "Up to {percent}% saved",
+      soon: "Coming soon",
+      fit: "Fitted",
+      fitLabel: "to your needs",
+      fitLead: "Personalised recommendations",
+      safe: "Secure",
+      safeLead: "Checks, permissions and approval before action",
+    },
+    allAgents: "All LEKA agents",
+    allAgentsLead: "Each agent can be bought on its own. Prices are monthly, in euros, excluding VAT.",
+    compare: "Compare the plans",
+    allTiers: "All levels",
     /** Said once, above the list: what keeps many from running here. */
     wide: {
       no_model:
@@ -9175,7 +9217,7 @@ const en: Dictionary = {
       configure: "Configure a model",
     },
     need: "What do you want to do?",
-    allNeeds: "Everything",
+    allNeeds: "Every need",
     domains: {
       development: "Code & development",
       architecture: "Architecture",
@@ -9271,8 +9313,12 @@ const en: Dictionary = {
       buy: "Buy",
       fromPlan: "From the {plan} plan",
       askAdmin: "Ask an administrator of your workspace to buy it.",
-      bundlesTitle: "Bundles",
-      bundlesLead: "Agents together for one need, cheaper than bought one by one.",
+      bundlesTitle: "LEKA bundles",
+      bundlesLead: "Sets of agents for your most frequent needs, at a better price.",
+      upTo: "Up to {percent}% saved",
+      upToLead: "compared with buying the agents one by one",
+      agentsIn: "{count} {count|agent included|agents included}",
+      soon: "Coming soon",
       save: "−{percent} %",
       choose: "Choose this bundle",
       ownedTitle: "What your workspace owns",
