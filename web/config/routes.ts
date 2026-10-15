@@ -113,6 +113,8 @@ export const ENVIRONMENT_VIEWS = [
   "events",
   "domains",
   "quality",
+  "sources",
+  "configuration",
 ] as const;
 
 /** And of Capacités: the sidebar opens them already; the catalogue, when

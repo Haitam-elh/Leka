@@ -133,7 +133,7 @@ test.describe("the three pillars (LEKA-428)", () => {
     await openNavigation(page);
     await page.getByTestId("nav-environment-overview").click();
     await expect(page).toHaveURL("http://localhost:3000/environment");
-    await expect(page.getByTestId("env-view")).toContainText("Vue globale");
+    await expect(page.getByRole("tab", { name: "Vue d'ensemble" })).toHaveAttribute("aria-selected", "true");
     await openNavigation(page);
     await expect(page.getByTestId("nav-section-environment-toggle")).toHaveAttribute("aria-expanded", "true");
     await expect(page.getByTestId("nav-activity")).toBeVisible();
@@ -142,18 +142,18 @@ test.describe("the three pillars (LEKA-428)", () => {
     await expect(page.getByRole("navigation", { name: "Navigation principale" }).locator('a[aria-current="page"]')).toHaveCount(1);
     await page.keyboard.press("Escape");
 
-    // A view chosen top right: in the address, the menu still on its page.
-    await page.getByTestId("env-view").click();
-    await page.getByRole("option", { name: "Applications" }).click();
+    // A view chosen on the page (LEKA-459: its tabs): in the address, the
+    // menu still on its page.
+    await page.getByRole("tab", { name: "Services" }).click();
     await expect(page).toHaveURL("http://localhost:3000/environment?tab=applications");
-    await expect(page.getByTestId("env-view")).toContainText("Applications");
+    await expect(page.getByRole("tab", { name: "Services" })).toHaveAttribute("aria-selected", "true");
     await openNavigation(page);
     await expect(page.getByTestId("nav-environment-overview")).toHaveAttribute("aria-current", "page");
     await page.keyboard.press("Escape");
 
     // And the address is the view: reloaded, or sent, it opens there.
     await page.goto("/environment?tab=domains");
-    await expect(page.getByTestId("env-view")).toContainText("Domaines");
+    await expect(page.getByTestId("env-more")).toContainText("Domaines");
   });
 
   test("opens and closes a section, from the keyboard too, and remembers it", async ({ page }) => {

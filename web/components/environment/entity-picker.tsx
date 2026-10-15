@@ -30,11 +30,14 @@ export function EntityPicker({
   placeholder,
   onPick,
   testId,
+  hideLabel = false,
 }: {
   label: string;
   placeholder: string;
   onPick: (hit: SearchHit) => void;
   testId?: string;
+  /** The label read aloud only, where the placeholder says it on screen. */
+  hideLabel?: boolean;
 }) {
   const t = useDictionary();
   const id = useId();
@@ -55,7 +58,10 @@ export function EntityPicker({
 
   return (
     <div className="relative min-w-0 flex-1" data-testid={testId}>
-      <label htmlFor={id} className="mb-1 block text-xs font-medium text-shell-muted">
+      <label
+        htmlFor={id}
+        className={hideLabel ? "sr-only" : "mb-1 block text-xs font-medium text-shell-muted"}
+      >
         {label}
       </label>
       <div className="flex items-center gap-2 rounded-lg border border-shell-line bg-white px-3 focus-within:ring-3 focus-within:ring-brand-violet/40">

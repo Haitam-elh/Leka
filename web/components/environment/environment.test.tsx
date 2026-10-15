@@ -179,8 +179,8 @@ const ENVIRONMENT: Environment = {
 };
 
 const SOURCES = [
-  { id: "s1", type: "github", display_name: "acme/backend", status: "active" },
-  { id: "s2", type: "datadog", display_name: "acme-eu", status: "draft" },
+  { id: "s1", type: "github", display_name: "acme/backend", status: "active", capabilities: [] },
+  { id: "s2", type: "datadog", display_name: "acme-eu", status: "draft", capabilities: [] },
 ] as unknown as Source[];
 
 const layer = (name: string, types: string[], total = 0) => ({
@@ -405,11 +405,21 @@ beforeEach(() => {
   graphApi.architecture.mockResolvedValue(ARCHITECTURE);
 });
 
-/** Its views, chosen top right (2026-10-14): the menu opened, one picked. */
+/** Its views (LEKA-459): the mockup's as tabs, the others in a menu after them. */
 const VIEW = DICTIONARIES.fr.environment.tabs;
+const MORE = ["infrastructure", "data", "domains", "quality"];
 async function pick(user: ReturnType<typeof userEvent.setup>, tab: keyof typeof VIEW) {
-  await user.click(screen.getByTestId("env-view"));
-  await user.click(await screen.findByRole("option", { name: VIEW[tab] }));
+  if (MORE.includes(tab)) {
+    await user.click(screen.getByTestId("env-more"));
+    await user.click(await screen.findByRole("option", { name: VIEW[tab] }));
+  } else {
+    await user.click(screen.getByRole("tab", { name: VIEW[tab] }));
+  }
+}
+/** The view shown: its tab selected, or the menu naming it. */
+function expectView(tab: keyof typeof VIEW) {
+  if (MORE.includes(tab)) expect(screen.getByTestId("env-more")).toHaveTextContent(VIEW[tab]);
+  else expect(screen.getByRole("tab", { name: VIEW[tab] })).toHaveAttribute("aria-selected", "true");
 }
 
 describe("Mon environnement", () => {
@@ -417,19 +427,22 @@ describe("Mon environnement", () => {
     mount(<EnvironmentScreen />);
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Mon environnement");
-    expect(screen.getByTestId("env-view")).toHaveTextContent(VIEW.architecture);
+    expectView("architecture");
     const services = within(screen.getByTestId("arch-figure-services"));
     expect(await services.findByText("4")).toBeInTheDocument();
     expect(await screen.findByTestId("arch-column-services")).toBeInTheDocument();
     // The overview's: a column's first cards, no flows.
     expect(graphApi.architecture).toHaveBeenCalledWith(null, false);
     expect(graphApi.view).not.toHaveBeenCalled();
-    // Under it, what moved and what needs a look (LEKA-438) — no more widgets.
-    expect(await screen.findAllByText("Latence élevée sur Payment API")).toHaveLength(2);
+    // Under it, the mockup's foot (LEKA-459): the overall state, the
+    // sources, the alerts, what moved — what needs a look is on Incidents.
+    expect(await screen.findAllByText("Latence élevée sur Payment API")).toHaveLength(1);
+    expect(screen.getByRole("heading", { name: "État global" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Événements récents" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Points d'attention" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Points d'attention" })).not.toBeInTheDocument();
     expect(screen.queryByText("Top dépendances")).not.toBeInTheDocument();
-    // The detailed map is a page of its own.
+    // The way back home, and the detailed map, a page of its own.
+    expect(screen.getByRole("link", { name: /Retour à l'accueil/ })).toHaveAttribute("href", "/overview");
     expect(screen.getByRole("link", { name: /Voir la cartographie détaillée/ })).toHaveAttribute(
       "href",
       "/environment/graph",
@@ -441,23 +454,40 @@ describe("Mon environnement", () => {
     query.set("tab=infrastructure");
     mount(<EnvironmentScreen />);
 
-    expect(screen.getByTestId("env-view")).toHaveTextContent(VIEW.infrastructure);
+    expectView("infrastructure");
     expect(graphApi.view).toHaveBeenCalledWith("infrastructure");
 
     await pick(user, "domains");
     expect(replace).toHaveBeenLastCalledWith("/environment?tab=domains", { scroll: false });
-    expect(screen.getByTestId("env-view")).toHaveTextContent(VIEW.domains);
+    expectView("domains");
 
     // The first tab is the address with no tab at all.
     await pick(user, "architecture");
     expect(replace).toHaveBeenLastCalledWith("/environment", { scroll: false });
   });
 
+  it("holds the sources and what configures them as views of its own (LEKA-459)", async () => {
+    const user = userEvent.setup();
+    query.set("tab=sources");
+    mount(<EnvironmentScreen />);
+
+    expectView("sources");
+    // The sources' own page, inside: its figures and its list.
+    expect(await screen.findByText("Synchronisations en cours")).toBeInTheDocument();
+    await pick(user, "configuration");
+    expect(replace).toHaveBeenLastCalledWith("/environment?tab=configuration", { scroll: false });
+  });
+
+  it("offers to connect a source only to who may", async () => {
+    mount(<EnvironmentScreen />);
+    expect(screen.queryByTestId("env-connect")).not.toBeInTheDocument();
+  });
+
   it("opens on the architecture when the address names no tab it has", async () => {
     query.set("tab=nonsense");
     mount(<EnvironmentScreen />);
 
-    expect(screen.getByTestId("env-view")).toHaveTextContent(VIEW.architecture);
+    expectView("architecture");
   });
 
   it("puts each thing in its layer on the other tabs, with its state in words", async () => {
