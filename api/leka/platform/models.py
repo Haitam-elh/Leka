@@ -16,7 +16,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -103,6 +103,11 @@ class Workspace(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     deletion_requested_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+
+    # A demonstration (LEKA-449): fictive data its own connectors replay, no
+    # call to any outside system, nothing of a customer's. Set when LEKA
+    # makes it, never by a request.
+    demo: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
 
     # Workspace-level configuration: retention, default environment, display
     # preferences. JSONB because this list will grow with the product, and a

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { DemoBanner } from "@/components/demo/demo";
 import { entityHref, typeLabel } from "@/components/environment/parts";
 import { AppHeader } from "@/components/shell/app-header";
 import { LanguageNotice } from "@/components/language/account-language";
@@ -174,6 +175,8 @@ export function AppShell({
               reader navigating by region will find it. */}
           <div className="sticky top-0 z-10">
             <OfflineBanner />
+            {/* In a demonstration: fictive, reaching nothing — said, with the way out. */}
+            {state.status === "ready" && <DemoBanner />}
             {/* An account with no language yet: the one found, kept or changed. */}
             {state.status === "ready" && <LanguageNotice />}
           </div>

@@ -128,6 +128,7 @@ async def list_my_workspaces(
                 slug=workspace.slug,
                 status=workspace.status,
                 role=roles[workspace.id],
+                demo=workspace.demo,
             )
             for workspace in result.items
         ],
@@ -226,6 +227,7 @@ async def switch_workspace(
         slug=workspace.slug,
         status=workspace.status,
         role=membership.role,
+        demo=workspace.demo,
     )
 
 
