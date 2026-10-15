@@ -40,6 +40,24 @@ export function analyse(intentionId: string): void {
   );
 }
 
+/** Everything LEKA still works on, run now as the job runner's sweep would:
+ * what other specs asked and left waiting, analysed or settled — the
+ * workspace at rest. */
+export function settleAll(): void {
+  execFileSync(
+    pythonExecutable(),
+    [
+      "-c",
+      [
+        "import asyncio",
+        "from leka.intentions.processing import analyse_pending",
+        "print(asyncio.run(analyse_pending()))",
+      ].join("\n"),
+    ],
+    { cwd: path.join(repositoryRoot(), "api"), stdio: "inherit", env: { ...process.env, ...MODEL_ENV } },
+  );
+}
+
 /** Asked from the composer, followed to its page: its id. */
 export async function ask(page: Page, words: string): Promise<string> {
   await page.goto("/intentions/new");
