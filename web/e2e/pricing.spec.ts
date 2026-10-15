@@ -31,17 +31,17 @@ test("the plans, monthly with the launch offer, yearly with the annual discount"
   await expect(growth).toContainText("Recommandé");
 
   // Monthly: the launch offer, its terms said.
-  await expect(growth.locator(".plan__amount")).toHaveText("125,30 €");
+  await expect(growth.locator(".plan__amount")).toHaveText("143,20 €");
   await expect(growth).toContainText("au lieu de 179 €");
   await expect(growth).toContainText("pendant 12 mois, puis 179 €");
   await expect(page.locator("#launchNote")).toBeVisible();
-  await expect(page.locator("#launchTerms")).toContainText("Non cumulable avec la remise annuelle de 20 %");
+  await expect(page.locator("#launchTerms")).toContainText("Non cumulable avec la remise annuelle de 30 %");
 
-  // Yearly: 20 % off, never the launch offer as well.
+  // Yearly: 30 % off, never the launch offer as well.
   await page.getByRole("radio", { name: /Annuel/ }).click();
   await expect(page.getByRole("radio", { name: /Annuel/ })).toHaveAttribute("aria-checked", "true");
-  await expect(growth.locator(".plan__amount")).toHaveText("143,20 €");
-  await expect(growth).toContainText("1 718,40 €");
+  await expect(growth.locator(".plan__amount")).toHaveText("125,30 €");
+  await expect(growth).toContainText("1 503,60 €");
   await expect(growth).not.toContainText("pendant 12 mois");
   await expect(page.locator("#launchNote")).toBeHidden();
 
