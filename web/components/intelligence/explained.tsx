@@ -14,6 +14,7 @@ import {
   Trash2,
   TriangleAlert,
 } from "lucide-react";
+import Link from "next/link";
 import { useId } from "react";
 
 import { cn } from "cn";
@@ -22,6 +23,7 @@ import type { TileTone } from "@/components/environment/parts";
 import { ConfidenceBadge } from "@/components/intelligence/confidence";
 import { Pill } from "@/components/intelligence/pill";
 import { IntelligenceSection } from "@/components/intelligence/section";
+import { routes } from "@/config/routes";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 import type { Explanation, SourceState } from "@/lib/intelligence";
@@ -252,6 +254,16 @@ export function AnalysisLimits({
                   {limit}
                 </li>
               ))}
+              {explanation.unread ? (
+                <li className="pl-6">
+                  <Link
+                    href={routes.sources()}
+                    className="font-medium text-brand-violet underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40 focus-visible:outline-none"
+                  >
+                    {w.seeSources}
+                  </Link>
+                </li>
+              ) : null}
             </ul>
           ) : null}
           {stale.length ? (

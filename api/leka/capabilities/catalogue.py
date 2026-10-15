@@ -31,6 +31,7 @@ import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from leka.billing import owned
 from leka.capabilities.definition import (
     Availability,
     Definition,
@@ -310,6 +311,7 @@ class CatalogueService:
         gateway: Gateway | None = None,
     ) -> None:
         self._session = session
+        self._workspace_id = workspace_id
         self._history = CatalogueRepository(session)
         self._workspace = WorkspaceCatalogueRepository(session, workspace_id)
         self._definitions = definitions
@@ -338,6 +340,9 @@ class CatalogueService:
         settings = await self._workspace.settings()
         connected = frozenset(await self._workspace.connected())
         favourites = await self._workspace.favourites(user_id) if user_id else set()
+        # What it pays for (2026-10-14): Free runs no agent; others, those
+        # bought alone or in a bundle.
+        paid = await owned(self._session, self._workspace_id)
         found: list[Entry] = []
         for standing in await self.standings():
             key = standing.definition.key
@@ -351,6 +356,7 @@ class CatalogueService:
                 # Agents run (LEKA-395): runs.py.
                 runtime=True,
                 permissions=permissions,
+                owned=paid.why(key),
             )
             found.append(
                 Entry(

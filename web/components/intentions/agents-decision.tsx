@@ -1,14 +1,25 @@
 "use client";
 
-import { Bot, Check, ClipboardCopy, Download, ListChecks, Rocket, UserRound } from "lucide-react";
+import {
+  Bot,
+  Check,
+  ClipboardCopy,
+  Download,
+  ListChecks,
+  Lock,
+  Rocket,
+  UserRound,
+} from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
 import { cn } from "cn";
 
 import { Card, IconTile } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
+import { usePermissions } from "@/components/shell/shell-provider";
 import { AgentWork } from "@/components/intentions/agent-work";
 import { useRights } from "@/components/intentions/journey";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -17,7 +28,7 @@ import { Input } from "@/components/ui/input";
 import { routes } from "@/config/routes";
 import { ApiError } from "@/lib/api";
 import { fill } from "@/lib/i18n/dictionaries";
-import { useDictionary } from "@/lib/i18n/locale-provider";
+import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import type {
   AgentLaunch,
   AgentProposal,
@@ -25,7 +36,9 @@ import type {
   ProposedAgent,
 } from "@/lib/intentions/api";
 import { may } from "@/lib/intentions/journey";
-import { useDecide, useIntentionAnalysis } from "@/lib/intentions/queries";
+import { euros } from "@/lib/billing";
+import { useAddOns, useBuy } from "@/lib/billing-queries";
+import { useDecide, useIntentionAnalysis, intentionKeys } from "@/lib/intentions/queries";
 import { notify } from "@/lib/notify";
 import { useSources } from "@/lib/sources-queries";
 
@@ -223,16 +236,97 @@ function initial(agent: ProposedAgent): Choice {
   return { on: agent.available, inputs, formats: [...agent.asked], sources: [] };
 }
 
+/** What it pays for (2026-10-14): the plan first on Free; else the agent —
+ * or a bundle with it — bought, then everything chosen launched once paid. */
+const PAID = new Set(["plan_required", "not_owned"]);
+
+function Unlock({
+  agent,
+  intentionId,
+  launch,
+}: {
+  agent: ProposedAgent;
+  intentionId: string;
+  launch: () => AgentLaunch[];
+}) {
+  const t = useDictionary();
+  const w = t.intentions.agents;
+  const { format, locale } = useLocale();
+  const offers = useAddOns();
+  const buy = useBuy();
+  const payer = usePermissions()?.includes("workspace:update") ?? false;
+  const offer = offers.data?.agents.find((a) => a.key === agent.key);
+  if (!offer || !offers.data) return null;
+  if (agent.reasons.includes("plan_required")) {
+    return (
+      <p className="flex flex-wrap items-center gap-2 text-xs text-brand-navy" data-testid="decide-unlock">
+        <Lock className="size-3.5 text-state-warning" aria-hidden="true" />
+        {w.planFirst}
+        <Link href={routes.billing()} className="font-medium text-brand-violet hover:underline">
+          {w.seePlans}
+        </Link>
+      </p>
+    );
+  }
+  const bundles = offers.data.bundles.filter((b) => offer.bundles.includes(b.key) && !b.owned);
+  const start = (kind: "agent" | "bundle", key: string) =>
+    buy.mutate(
+      { kind, key, intention_id: intentionId, launch: launch() },
+      { onError: (error) => notify.error({ title: launchError(t, error) }) },
+    );
+  return (
+    <div className="space-y-1.5 ps-6" data-testid="decide-unlock">
+      <p className="flex flex-wrap items-center gap-2 text-xs text-brand-navy">
+        <Lock className="size-3.5 text-state-warning" aria-hidden="true" />
+        {fill(w.toUnlock, { price: euros(offer.monthly_price, format) })}
+      </p>
+      {payer ? (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            size="sm"
+            disabled={buy.isPending}
+            onClick={() => start("agent", agent.key)}
+            data-testid="decide-unlock-agent"
+          >
+            {w.unlockAndRun}
+          </Button>
+          {bundles.slice(0, 1).map((bundle) => (
+            <Button
+              key={bundle.key}
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={buy.isPending}
+              onClick={() => start("bundle", bundle.key)}
+              data-testid="decide-unlock-bundle"
+            >
+              {fill(w.inBundle, {
+                name: locale.startsWith("en") ? bundle.name.en : bundle.name.fr,
+                price: euros(bundle.monthly_price, format),
+              })}
+            </Button>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-shell-muted">{w.askAdmin}</p>
+      )}
+    </div>
+  );
+}
+
 function ChosenAgent({
   agent,
   choice,
   onChange,
   readable,
+  unlock,
 }: {
   agent: ProposedAgent;
   choice: Choice;
   onChange: (next: Choice) => void;
   readable: Readable[];
+  unlock?: React.ReactNode;
 }) {
   const w = useDictionary().intentions.agents;
   const said = w.deliverables as Record<string, string>;
@@ -256,6 +350,7 @@ function ChosenAgent({
           <Why agent={agent} />
         </span>
       </label>
+      {unlock}
       {choice.on && needed.length ? (
         <div className="space-y-2 ps-6">
           {needed.map((field) => {
@@ -356,6 +451,31 @@ export function AgentsDecision({ intention }: { intention: IntentionDetail }) {
     if (!proposal) return;
     setChoices(Object.fromEntries(proposal.agents.map((a) => [a.key, initial(a)])));
   }, [proposal]);
+  // Back from paying (2026-10-14: « au retour du paiement, l'intention est
+  // relancée automatiquement »): its agents start once Stripe says it is
+  // paid — read again until they have, then followed at Action.
+  const client = useQueryClient();
+  const search = useSearchParams();
+  const bought = search?.get("bought");
+  const waiting = Boolean(bought) && bought !== "cancelled" && intention.status === "awaiting_decision";
+  useEffect(() => {
+    if (!bought) return;
+    if (bought === "cancelled") notify.info({ title: w.boughtCancelled });
+    else notify.success({ title: w.boughtSoon });
+  }, [bought, w]);
+  useEffect(() => {
+    if (!waiting) return;
+    const every = window.setInterval(
+      () => void client.invalidateQueries({ queryKey: intentionKeys.one(intention.id) }),
+      3000,
+    );
+    return () => window.clearInterval(every);
+  }, [waiting, client, intention.id]);
+  useEffect(() => {
+    if (bought && bought !== "cancelled" && intention.status === "executing") {
+      router.push(stepHref(intention.id, "actions"));
+    }
+  }, [bought, intention.status, intention.id, router]);
 
   const launchable = may(intention.journey, "launch_agents", rights);
   const handable = may(intention.journey, "by_hand", rights);
@@ -379,9 +499,9 @@ export function AgentsDecision({ intention }: { intention: IntentionDetail }) {
   );
   const pending = decide.launch.isPending || decide.byHand.isPending;
 
-  function launch() {
-    const list: AgentLaunch[] = chosen.map((a) => {
-      const choice = choices[a.key];
+  function toLaunch(agents: ProposedAgent[]): AgentLaunch[] {
+    return agents.map((a) => {
+      const choice = choices[a.key] ?? initial(a);
       const inputs: Record<string, string | boolean> = { ...a.inputs };
       for (const [name, value] of Object.entries(choice.inputs)) {
         if (value.trim()) inputs[name] = value.trim();
@@ -393,7 +513,10 @@ export function AgentsDecision({ intention }: { intention: IntentionDetail }) {
         sources: choice.sources,
       };
     });
-    decide.launch.mutate(list, {
+  }
+
+  function launch() {
+    decide.launch.mutate(toLaunch(chosen), {
       onSuccess: () => {
         notify.success({ title: w.launched });
         router.push(stepHref(intention.id, "actions"));
@@ -401,6 +524,11 @@ export function AgentsDecision({ intention }: { intention: IntentionDetail }) {
       onError: (error) => notify.error({ title: launchError(t, error) }),
     });
   }
+  // Short of credits, or of a plan that runs agents: the plans, said there
+  // (2026-10-14: « rien ne propose de passer à un plan supérieur »).
+  const upgrade =
+    decide.launch.error instanceof ApiError &&
+    ["credits_short", "plan_required"].includes(decide.launch.error.code ?? "");
 
   function byHand() {
     decide.byHand.mutate(undefined, {
@@ -449,6 +577,15 @@ export function AgentsDecision({ intention }: { intention: IntentionDetail }) {
                   choice={choices[agent.key] ?? initial(agent)}
                   onChange={(next) => setChoices((all) => ({ ...all, [agent.key]: next }))}
                   readable={readable}
+                  unlock={
+                    agent.reasons.some((r) => PAID.has(r)) ? (
+                      <Unlock
+                        agent={agent}
+                        intentionId={intention.id}
+                        launch={() => toLaunch([...chosen, agent])}
+                      />
+                    ) : undefined
+                  }
                 />
               ))}
             </ul>
@@ -468,6 +605,14 @@ export function AgentsDecision({ intention }: { intention: IntentionDetail }) {
             </Button>
             {agents.length && !chosen.length ? (
               <p className="text-xs text-shell-muted">{w.chooseOne}</p>
+            ) : null}
+            {upgrade ? (
+              <p className="flex flex-wrap items-center gap-2 text-xs text-brand-navy" data-testid="decide-upgrade">
+                {launchError(t, decide.launch.error)}
+                <Link href={routes.billing()} className="font-medium text-brand-violet hover:underline">
+                  {w.seePlans}
+                </Link>
+              </p>
             ) : null}
           </div>
         </div>

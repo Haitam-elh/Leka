@@ -555,7 +555,20 @@ def _not_launched(error: agent_steps.AgentsRefusedError) -> ApiError:
     """Why its agents are not launched, in words a screen can act on."""
     agent = str(error.detail.get("agent") or "")
     if error.code == "unavailable":
-        reasons = ", ".join(str(r) for r in error.detail.get("reasons") or [])  # type: ignore[attr-defined]
+        codes = [str(r) for r in error.detail.get("reasons") or []]  # type: ignore[attr-defined]
+        if "plan_required" in codes:
+            return ApiError(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                ErrorCode.PLAN_REQUIRED,
+                f"{agent} runs from the Starter plan.",
+            )
+        if "not_owned" in codes:
+            return ApiError(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                ErrorCode.AGENT_NOT_OWNED,
+                f"{agent} is not bought here.",
+            )
+        reasons = ", ".join(codes)
         return ApiError(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             ErrorCode.AGENT_UNAVAILABLE,

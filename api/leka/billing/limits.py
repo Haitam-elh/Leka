@@ -35,12 +35,13 @@ class PlanLimitError(Exception):
 async def _room(session: AsyncSession, workspace_id: uuid.UUID, what: Limited, used: int) -> None:
     plans = catalogue().plans
     current = (await plan_of(session, workspace_id)).name
-    limit = getattr(catalogue().plan(current), what)
+    limit = getattr(catalogue().plan(current).quotas, what)
     if limit is None or used < limit:
         return
     keys: list[str] = [p.key for p in plans]
     above = plans[keys.index(current) + 1 :]
-    roomy = (p.key for p in above if getattr(p, what) is None or getattr(p, what) > used)
+    allows = [(p.key, getattr(p.quotas, what)) for p in above]
+    roomy = (key for key, most in allows if most is None or most > used)
     upgrade = next(roomy, None)
     raise PlanLimitError(what, current, limit, upgrade)
 

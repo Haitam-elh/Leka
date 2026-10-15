@@ -39,6 +39,7 @@ from leka.intentions.analysis import (
     Subject,
     assemble,
     execute,
+    relevant,
     select,
 )
 from leka.intentions.capabilities import (
@@ -747,3 +748,20 @@ def test_standing_says_the_state_and_what_leka_already_concluded() -> None:
     assert standing(material(asked=asked("find_owner", subjects=()))).missing[0].code == (
         "analysis.no_subject"
     )
+
+
+# ── which unread sources it may lack (LEKA-448) ──────────────────────────────
+
+
+def test_the_kinds_of_tool_an_answer_reads_follow_the_capabilities_chosen() -> None:
+    by = {c.name: c for c in CAPABILITIES}
+    # Always run, for every intention: nothing said of this one, any kind.
+    assert relevant([by["standing"]]) is None
+    owners = relevant([by["standing"], by["ownership"]])
+    assert owners is not None
+    assert {"code", "project", "docs", "custom"} <= owners
+    assert "observability" not in owners
+    incidents = relevant([by["incidents"]])
+    assert incidents is not None and "observability" in incidents and "docs" not in incidents
+    # A part read from every kind: any kind.
+    assert relevant([by["ownership"], by["evolution"]]) is None

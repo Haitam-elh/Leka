@@ -85,7 +85,7 @@ Each has its test in the same file, now green.
 
 | | Break | Fixed | Test |
 |---|---|---|---|
-| R1 | A source connected but never read (or still on its first pass) appeared nowhere in the analysis: a limit of coverage unsaid before a conclusion. | The analysis now says it among its limits — `limit.source_unread`: « connected, not read yet: what it holds is not in this answer » (`leka/intentions/processing.py`, `explain.py`). | `test_a_source_connected_but_never_read_is_said_as_a_limit` |
+| R1 | A source connected but never read (or still on its first pass) appeared nowhere in the analysis: a limit of coverage unsaid before a conclusion. | The analysis now says it among its limits — `limit.source_unread`: « connected, not read yet: the answer may be incomplete », with a link to the sources (`leka/intentions/processing.py`, `explain.py`). Only when it is of a kind of tool the capabilities chosen read (LEKA-448: `SAID_BY`, `relevant()` in `analysis.py`): who maintains a repository is not asked of a monitoring tool. | `test_a_source_connected_but_never_read_is_said_as_a_limit`, `test_a_source_never_read_is_a_limit_only_when_it_may_hold_the_answer` |
 | R2 | An inferred proof (`maintained_by`, `contributes_to`) carried no source: `sources: []`, the proof stopping at the rule. | A rule's inference with no record of its own now names the sources of its two ends — what it was inferred from (`leka/intentions/analysis.py`, `Proofs.tie`). | `test_an_inferred_proof_names_the_sources_it_was_inferred_from` |
 
 Seen, and kept as they are:

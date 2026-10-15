@@ -73,6 +73,10 @@ class ErrorCode(enum.StrEnum):
     AGENT_INPUTS_MISSING = "agent_inputs_missing"
     AGENT_NOT_PROPOSED = "agent_not_proposed"
     CREDITS_SHORT = "credits_short"
+    # What it pays for (2026-10-14): Free runs no agent; others, those
+    # bought. The screens offer the plan, or the agent and its bundles.
+    PLAN_REQUIRED = "plan_required"
+    AGENT_NOT_OWNED = "agent_not_owned"
 
     # ── Authentication (LEKA-330, spelling preserved) ────────────────────
     INVALID_CREDENTIALS = "invalid_credentials"

@@ -187,6 +187,8 @@ export interface Explanation {
   }[];
   stale: readonly string[];
   limits: readonly string[];
+  /** A source that may hold the answer is connected, never read (LEKA-448). */
+  unread?: boolean;
   next: { code: string; title: string; why: string };
   /** The context version it read, and the one its intention is at now. */
   freshness?: { read: number | null; now: number | null } | null;

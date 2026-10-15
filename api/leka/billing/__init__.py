@@ -2,6 +2,7 @@
 prices, discounts and trial, what each includes — one catalogue
 (catalogue.yaml) — and the pricing page's own analytics."""
 
+from leka.billing.add_ons import AddOn, add_on, checkout_add_on, launch_bought, marked
 from leka.billing.catalogue import (
     INTERVALS,
     Catalogue,
@@ -13,10 +14,30 @@ from leka.billing.catalogue import (
     load,
     quote,
 )
-from leka.billing.models import EVENTS, BillingAccount, SiteEvent, StripeEvent
+from leka.billing.entitlements import (
+    Owned,
+    end,
+    entitlements,
+    grant,
+    owned,
+    plan_runs_agents,
+)
+from leka.billing.models import (
+    EVENTS,
+    AddOnCheckout,
+    AgentEntitlement,
+    BillingAccount,
+    SiteEvent,
+    StripeEvent,
+)
 from leka.billing.schemas import (
+    AddOnCheckoutCreate,
+    AddOnsRead,
+    AgentOfferRead,
+    BundleOfferRead,
     CheckoutCreate,
     CheckoutRead,
+    EntitlementRead,
     PortalRead,
     PricingRead,
     SiteEventCount,
@@ -41,14 +62,23 @@ from leka.billing.sync import sync
 __all__ = [
     "EVENTS",
     "INTERVALS",
+    "AddOn",
+    "AddOnCheckout",
+    "AddOnCheckoutCreate",
+    "AddOnsRead",
+    "AgentEntitlement",
+    "AgentOfferRead",
     "BillingAccount",
     "BillingUnavailableError",
+    "BundleOfferRead",
     "Catalogue",
     "CheckoutCreate",
     "CheckoutRead",
     "CheckoutRefusedError",
+    "EntitlementRead",
     "Interval",
     "Monitoring",
+    "Owned",
     "Plan",
     "PortalRead",
     "PricingRead",
@@ -62,12 +92,21 @@ __all__ = [
     "StripeEvent",
     "SubscriptionRead",
     "account_of",
+    "add_on",
     "catalogue",
     "checkout",
+    "checkout_add_on",
     "counts",
+    "end",
+    "entitlements",
+    "grant",
+    "launch_bought",
     "launch_eligible",
     "load",
+    "marked",
+    "owned",
     "payments_open",
+    "plan_runs_agents",
     "portal",
     "pricing",
     "quote",

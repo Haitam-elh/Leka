@@ -14,10 +14,15 @@
 # shown as a guarantee. Change a value here, in a pull request: the page
 # follows, nothing else to edit.
 #
-# Users (members and pending invitations) and sources per plan: decided for
-# the UX sprint (LEKA-463), enforced by the server (leka/billing/limits.py).
+# Users (members and pending invitations) and sources: each plan's `quotas`,
+# enforced by the server (leka/billing/limits.py, LEKA-463).
 # Values not decided yet are absent, never guessed: workspaces per plan;
 # agent and bundle prices.
+#
+# Quotas (2026-10-14, the product call — TODO: à valider): people, sources
+# connected, standard analyses a month (what the AI credits come to, about
+# 20 credits each), alert rules, recurring workflows. Over its plan's, a
+# workspace is offered the next plan; what it already has is kept.
 #
 # Monitoring (LEKA-442, decided 2026-10-13, provisional): every plan sees its
 # environment's states, their freshness and coverage; proactive alerts —
@@ -46,8 +51,6 @@ launch_offer:
 plans:
   - key: free
     name: Free
-    users: 1
-    sources: 3
     monthly_price: 0
     self_service: true
     audience:
@@ -63,11 +66,10 @@ plans:
     annual: false
     # LEKA-442: the states, their freshness and coverage, seen; no proactive alerts.
     monitoring: { proactive: false, provisional: true }
+    quotas: { users: 1, sources: 3, analyses: 10, alert_rules: 0, workflows: 0, provisional: true }
 
   - key: starter
     name: Starter
-    users: 1
-    sources: 5
     monthly_price: 5900
     self_service: true
     audience:
@@ -82,11 +84,10 @@ plans:
     launch_offer: true
     annual: true
     monitoring: { proactive: true, alerts: [in_app], provisional: true }
+    quotas: { users: 1, sources: 5, analyses: 100, alert_rules: 5, workflows: 0, provisional: true }
 
   - key: growth
     name: Growth
-    users: 5
-    sources: 15
     monthly_price: 17900
     self_service: true
     recommended: true
@@ -105,11 +106,10 @@ plans:
     launch_offer: true
     annual: true
     monitoring: { proactive: true, alerts: [in_app, email], provisional: true }
+    quotas: { users: 5, sources: 15, analyses: 500, alert_rules: 20, workflows: 10, provisional: true }
 
   - key: business
     name: Business
-    users: 15
-    sources: 30
     monthly_price: 59900
     self_service: true
     audience:
@@ -124,6 +124,7 @@ plans:
     launch_offer: true
     annual: true
     monitoring: { proactive: true, alerts: [in_app, email], provisional: true }
+    quotas: { users: 15, sources: 30, analyses: 2000, alert_rules: 100, workflows: 50, provisional: true }
 
   - key: enterprise
     name: Enterprise
@@ -142,27 +143,78 @@ plans:
     launch_offer: false
     annual: false
     monitoring: { proactive: true, alerts: [in_app, email], contractual: true }
+    quotas: { contractual: true }
 
-# Every agent: none in a plan, each sold individually or in bundles — listed
-# only once available and tested, priced once its margin is shown (LEKA-446);
-# never a purchase flow before. Reference prices (Standard 9 €, Specialized
-# 15 €, Expert 25 € a month) are not set here until then.
+# Every agent: none in a plan, each sold individually or in bundles
+# (LEKA-446). On sale from 2026-10-14 (the product call): a workspace on Free
+# runs none — Starter at least — and owns an agent bought alone, or in a
+# bundle. Workspaces LEKA grants every agent (its team's, for tests) are
+# kept apart, in the database (billing.AgentEntitlement).
+#
+# TODO: à valider — every price below. Reference prices from LEKA-446,
+# accepted on 2026-10-14: Standard 9 €, Spécialisé 15 €, Expert 25 € a
+# month, an agent's runs paid besides in the plan's AI credits — so the
+# price is the margin, whatever the agent costs to run. Bundles: about a
+# quarter off their agents alone, never more than 27 %.
 add_ons:
-  available: false
+  available: true
+  provisional: true
+  # The least plan that runs an agent.
+  minimum_plan: starter
+  tiers:
+    standard: 900
+    specialized: 1500
+    expert: 2500
   agents:
-    - application-architecture
-    - test-analysis
-    - security-review
-    - incident-investigation
-    - infrastructure-analysis
-    - code-review
-    - data-analysis
-    - release-analysis
-    - documentation-assistant
-    - debug-assistant
-    - build-fixer
-    - architecture-analysis
-  bundles: []
+    application-architecture: expert
+    code-change: expert
+    security-review: expert
+    incident-investigation: expert
+    release-analysis: expert
+    architecture-analysis: specialized
+    infrastructure-analysis: specialized
+    data-analysis: specialized
+    debug-assistant: specialized
+    build-fixer: specialized
+    code-review: standard
+    test-analysis: standard
+    documentation-assistant: standard
+  bundles:
+    - key: engineering
+      name: { fr: "Ingénierie", en: "Engineering" }
+      value:
+        fr: "Développer, relire et tester votre code."
+        en: "Build, review and test your code."
+      agents: [code-change, code-review, test-analysis, build-fixer]
+      monthly_price: 4500
+    - key: architecture
+      name: { fr: "Architecture", en: "Architecture" }
+      value:
+        fr: "Documenter et faire évoluer votre architecture."
+        en: "Document and evolve your architecture."
+      agents: [application-architecture, architecture-analysis, infrastructure-analysis, documentation-assistant]
+      monthly_price: 4900
+    - key: ship-safe
+      name: { fr: "Livrer sereinement", en: "Ship safe" }
+      value:
+        fr: "Sécuriser vos changements et vos mises en production."
+        en: "Secure your changes and your releases."
+      agents: [release-analysis, test-analysis, code-review, security-review]
+      monthly_price: 5200
+    - key: incident-response
+      name: { fr: "Réponse aux incidents", en: "Incident response" }
+      value:
+        fr: "Investiguer, diagnostiquer et résoudre les incidents."
+        en: "Investigate, diagnose and resolve incidents."
+      agents: [incident-investigation, debug-assistant, release-analysis]
+      monthly_price: 4900
+    - key: security-reliability
+      name: { fr: "Sécurité et fiabilité", en: "Security & reliability" }
+      value:
+        fr: "Renforcer la sécurité et la fiabilité de vos systèmes."
+        en: "Strengthen your systems' security and reliability."
+      agents: [security-review, infrastructure-analysis, data-analysis]
+      monthly_price: 4200
 
 # The AI capacity is the plan's: never sold apart, never an overage charge.
 # At the limit, billable usage pauses; a higher plan is offered, chosen

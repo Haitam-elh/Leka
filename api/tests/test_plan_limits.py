@@ -26,9 +26,9 @@ async def _on(workspace: uuid.UUID, plan: str) -> None:
 def test_each_plan_allows_at_least_the_one_below() -> None:
     sold = [p for p in catalogue().plans if p.self_service]
     for lower, higher in pairwise(sold):
-        assert (lower.users or 0) <= (higher.users or 0)
-        assert (lower.sources or 0) < (higher.sources or 0)
-    assert catalogue().plan("enterprise").users is None
+        assert (lower.quotas.users or 0) <= (higher.quotas.users or 0)
+        assert (lower.quotas.sources or 0) < (higher.quotas.sources or 0)
+    assert catalogue().plan("enterprise").quotas.users is None
 
 
 async def test_a_seat_more_than_the_plan_allows_is_refused_the_plan_above_named(

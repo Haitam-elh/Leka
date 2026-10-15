@@ -83,6 +83,29 @@ class Part(enum.StrEnum):
     EVOLUTION = "evolution"
 
 
+# The kinds of tool that can say what each part reads (LEKA-448): a source
+# connected and never read is a limit of the answer only when it is of one.
+# Not here: read from every kind. A custom source may say anything.
+SAID_BY: Mapping[Part, frozenset[str]] = {
+    Part.OWNERS: frozenset({"code", "project", "docs", "chat"}),
+    Part.RESPONSIBILITY: frozenset({"code", "project", "docs", "chat"}),
+    Part.DOWNSTREAM: frozenset({"code", "cloud", "observability", "data", "docs"}),
+    Part.UPSTREAM: frozenset({"code", "cloud", "observability", "data", "docs"}),
+    Part.IMPACT: frozenset({"code", "cloud", "observability", "data", "docs"}),
+    Part.INCIDENTS: frozenset({"observability", "project", "chat"}),
+    Part.CHANGES: frozenset({"code", "cloud", "observability", "project"}),
+}
+
+
+def relevant(chosen: Iterable[Capability]) -> frozenset[str] | None:
+    """The kinds of tool the capabilities chosen for it read: those always
+    run, for every intention, say nothing of this one. None: any kind."""
+    parts = {part for c in chosen if not c.always for part in c.reads}
+    if not parts or any(part not in SAID_BY for part in parts):
+        return None
+    return frozenset({"custom"}).union(*(SAID_BY[part] for part in parts))
+
+
 # ── what a capability reads ──────────────────────────────────────────────────
 
 
