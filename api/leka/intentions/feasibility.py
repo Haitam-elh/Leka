@@ -45,9 +45,9 @@ from datetime import UTC, datetime, time, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from leka.billing import BillingAccount
 from leka.billing.catalogue import Catalogue, quote
 from leka.billing.catalogue import catalogue as billing_catalogue
-from leka.billing.models import BillingAccount
 from leka.capabilities import AgentRun, CatalogueService, ModelCall, find, leka_cost
 from leka.capabilities.definition import Availability, Definition, Kind, Lifecycle
 from leka.capabilities.router import Routing, route
