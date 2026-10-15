@@ -26,6 +26,8 @@ vi.mock("next/navigation", () => ({
 
 const me = vi.fn();
 vi.mock("@/lib/auth", () => ({ auth: { me: () => me(), logout: vi.fn() } }));
+// The header's plan badge reads metering: not this test's subject.
+vi.mock("@/lib/billing-queries", () => ({ useCredits: () => ({ data: undefined }) }));
 vi.mock("@/lib/workspace", () => ({
   workspace: {
     current: vi.fn().mockResolvedValue({

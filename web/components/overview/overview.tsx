@@ -21,6 +21,12 @@ import { wordActivity } from "@/components/activity/items";
 import { LekaInsights } from "@/components/insights/leka-insights";
 import { CompactIntentionComposer } from "@/components/intentions/compact-composer";
 import { FirstStepsCard } from "@/components/overview/first-steps";
+import {
+  AgentsSection,
+  BundlesBanner,
+  EnvironmentCard,
+  LatestAnalyses,
+} from "@/components/overview/home-sections";
 import { PageContainer } from "@/components/shell/page-container";
 import { useCurrentUser } from "@/components/shell/shell-provider";
 import { exactDate, shortWhen } from "@/components/knowledge/time";
@@ -242,12 +248,13 @@ function Greeting({ load }: { load: Load }) {
   return (
     <div>
       <p className="text-[0.8125rem] text-shell-muted">{today}</p>
-      <h1 className="mt-1 text-[2.125rem] leading-tight font-bold tracking-[-0.02em] text-brand-navy">
+      {/* The page's title is the question above (LEKA-456): this, a section's. */}
+      <h2 className="mt-1 text-[1.75rem] leading-tight font-bold tracking-[-0.02em] text-brand-navy">
         {fill(t.overview.greeting, { name })}
-      </h1>
+      </h2>
       {/* Held open while loading, so the page does not jump when it lands. */}
       <p
-        className="min-h-8 text-[1.625rem] leading-8 tracking-[-0.01em] text-shell-accent-muted"
+        className="min-h-8 text-[1.25rem] leading-8 tracking-[-0.01em] text-shell-accent-muted"
         aria-live="polite"
       >
         {status}
@@ -689,9 +696,18 @@ export function Overview() {
   // (LEKA-442: docs/frontend/overview-and-twin.md says each card's question).
   return (
     <PageContainer>
-      <Greeting load={load} />
-      <div className="mt-5">
+      {/* The sprint's mockup (LEKA-456): the question, « Mon environnement »
+          beside it; the agents, the bundles, the latest analyses; then what
+          the home already said — nothing lost. */}
+      <div className="grid items-start gap-8 pt-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <CompactIntentionComposer />
+        <EnvironmentCard />
+      </div>
+      <AgentsSection />
+      <BundlesBanner />
+      <LatestAnalyses />
+      <div className="mt-10">
+        <Greeting load={load} />
       </div>
       {load.status === "ready" ? (
         <FirstStepsCard sources={load.sources} />

@@ -61,11 +61,27 @@ vi.mock("@/lib/outcomes", async (original) => ({
   outcomes: told,
 }));
 
-const { IntentionsList } = await import("@/components/intentions/intentions-list");
-const { IntentionScreen } = await import("@/components/intentions/intention-screen");
+// The history's filters read the agents and the sources (LEKA-457).
+vi.mock("@/lib/capabilities-queries", () => ({
+  useCapabilities: () => ({
+    data: [
+      { key: "architect", title: "Architecte", kind: "agent" },
+      { key: "sql", title: "SQL", kind: "rules" },
+    ],
+  }),
+}));
+vi.mock("@/lib/sources-queries", () => ({
+  useSources: () => ({ data: [{ id: "s-1", display_name: "acme/backend" }] }),
+}));
+
+const { IntentionsList } =
+  await import("@/components/intentions/intentions-list");
+const { IntentionScreen } =
+  await import("@/components/intentions/intention-screen");
 const { ApiError } = await import("@/lib/api");
 
-const ago = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOString();
+const ago = (hours: number) =>
+  new Date(Date.now() - hours * 3_600_000).toISOString();
 
 function intention(overrides: Partial<IntentionDetail> = {}): IntentionDetail {
   const status = overrides.status ?? "analysing";
@@ -84,7 +100,13 @@ function intention(overrides: Partial<IntentionDetail> = {}): IntentionDetail {
     updated_at: ago(2),
     context_id: "c1",
     archived_at: null,
-    moves: ["awaiting_decision", "completed", "failed", "analysing", "cancelled"],
+    moves: [
+      "awaiting_decision",
+      "completed",
+      "failed",
+      "analysing",
+      "cancelled",
+    ],
     goal: "explain_cause",
     understanding: null,
     links: [
@@ -144,37 +166,169 @@ beforeEach(() => {
   vi.clearAllMocks();
   route.pathname = "/intentions";
   api.list.mockResolvedValue({ data: [intention()], next_cursor: null });
-  api.counts.mockResolvedValue({ all: 3, active: 2, scheduled: 0, finished: 1, archived: 4 });
+  api.counts.mockResolvedValue({
+    all: 3,
+    active: 2,
+    scheduled: 0,
+    finished: 1,
+    archived: 4,
+    statuses: { analysing: 2, failed: 0, completed: 1 },
+  });
   api.one.mockResolvedValue(intention());
   api.history.mockResolvedValue([]);
-  api.analysis.mockRejectedValue(new ApiError(404, `/intentions/${ID}/analysis`, "No analysis yet."));
+  api.analysis.mockRejectedValue(
+    new ApiError(404, `/intentions/${ID}/analysis`, "No analysis yet."),
+  );
 });
 
 describe("Mes intentions", () => {
-  it("lists what was asked, where each stands, leading to it", async () => {
+  it("lists what was asked: its agents, its sources, where it stands, leading to it", async () => {
+    api.list.mockResolvedValue({
+      data: [intention({ agents: ["architect"], sources: ["github", "jira"] })],
+      next_cursor: null,
+    });
     show(<IntentionsList />);
 
     const [row] = await screen.findAllByTestId("intention-row");
-    expect(row).toHaveTextContent("Pourquoi Billing API est lente depuis hier ?");
-    expect(row).toHaveTextContent("Diagnostic");
+    expect(row).toHaveTextContent(
+      "Pourquoi Billing API est lente depuis hier ?",
+    );
+    // The agent by its catalogue's title, the sources by their marks.
+    expect(within(row).getByTestId("intention-agents")).toHaveTextContent(
+      "Architecte",
+    );
+    expect(
+      within(row).getByRole("img", { name: "GitHub" }),
+    ).toBeInTheDocument();
     // Where it stands as the API says it (LEKA-443): the same on its page.
-    expect(within(row).getByTestId("intention-status")).toHaveTextContent("Analyse en cours");
-    expect(within(row).getByTestId("intention-status")).toHaveAttribute("data-state", "analysing");
-    expect(within(row).getByRole("link")).toHaveAttribute("href", `/intentions/${ID}`);
-    expect(api.list).toHaveBeenLastCalledWith({ phase: null, q: "", cursor: null });
+    expect(within(row).getByTestId("intention-status")).toHaveTextContent(
+      "Analyse en cours",
+    );
+    expect(within(row).getByTestId("intention-status")).toHaveAttribute(
+      "data-state",
+      "analysing",
+    );
+    expect(within(row).getByRole("link")).toHaveAttribute(
+      "href",
+      `/intentions/${ID}`,
+    );
+    expect(api.list).toHaveBeenLastCalledWith({
+      phase: null,
+      q: "",
+      filters: {},
+      cursor: null,
+      limit: 8,
+    });
   });
 
-  it("counts each phase as the API does, and asks it again by phase", async () => {
+  it("counts each tab by state as the API does, and asks again by its states", async () => {
     const user = userEvent.setup();
     show(<IntentionsList />);
 
     await waitFor(() =>
-      expect(screen.getByTestId("intentions-tab-all")).toHaveTextContent("Toutes3"),
+      expect(screen.getByTestId("intentions-tab-all")).toHaveTextContent(
+        "Toutes3",
+      ),
     );
-    expect(screen.getByTestId("intentions-tab-archived")).toHaveTextContent("Archivées4");
-    await user.click(screen.getByTestId("intentions-tab-finished"));
-    expect(api.list).toHaveBeenLastCalledWith({ phase: "finished", q: "", cursor: null });
-    expect(screen.getByTestId("intentions-tab-finished")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("intentions-tab-running")).toHaveTextContent(
+      "En cours2",
+    );
+    expect(screen.getByTestId("intentions-tab-archived")).toHaveTextContent(
+      "Archivées4",
+    );
+    await user.click(screen.getByTestId("intentions-tab-failed"));
+    expect(api.list).toHaveBeenLastCalledWith({
+      phase: null,
+      q: "",
+      filters: { statuses: ["failed"] },
+      cursor: null,
+      limit: 8,
+    });
+    expect(screen.getByTestId("intentions-tab-failed")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await user.click(screen.getByTestId("intentions-tab-archived"));
+    expect(api.list).toHaveBeenLastCalledWith(
+      expect.objectContaining({ phase: "archived" }),
+    );
+  });
+
+  it("filters by agent, source and period, and sorts, as the API does (LEKA-457)", async () => {
+    const user = userEvent.setup();
+    show(<IntentionsList />);
+    await screen.findAllByTestId("intention-row");
+    const agent = screen.getByTestId("intentions-filter-agent");
+    // Agents only: a rule is not one.
+    expect(
+      within(agent)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["Tous les agents", "Architecte"]);
+    await user.selectOptions(agent, "architect");
+    await user.selectOptions(
+      screen.getByTestId("intentions-filter-source"),
+      "s-1",
+    );
+    await user.selectOptions(
+      screen.getByTestId("intentions-filter-period"),
+      "30",
+    );
+    await user.selectOptions(screen.getByTestId("intentions-sort"), "oldest");
+    await waitFor(() =>
+      expect(api.list).toHaveBeenLastCalledWith({
+        phase: null,
+        q: "",
+        filters: {
+          agent: "architect",
+          source: "s-1",
+          days: 30,
+          sort: "oldest",
+        },
+        cursor: null,
+        limit: 8,
+      }),
+    );
+  });
+
+  it("pages eight at a time, the next one read from its cursor", async () => {
+    const page = (n: number, from: number) =>
+      Array.from({ length: n }, (_, k) =>
+        intention({
+          id: `00000000-0000-4000-8000-00000000000${from + k}`,
+          title: `T${from + k}`,
+        }),
+      );
+    api.counts.mockResolvedValue({
+      all: 10,
+      active: 10,
+      scheduled: 0,
+      finished: 0,
+      archived: 0,
+      statuses: {},
+    });
+    api.list
+      .mockResolvedValueOnce({ data: page(8, 0), next_cursor: "c2" })
+      .mockResolvedValueOnce({ data: page(2, 8), next_cursor: null });
+    const user = userEvent.setup();
+    show(<IntentionsList />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("intentions-range")).toHaveTextContent(
+        "1–8 sur 10 intentions",
+      ),
+    );
+    expect(screen.getAllByTestId("intention-row")).toHaveLength(8);
+    await user.click(screen.getByTestId("intentions-next"));
+    await waitFor(() =>
+      expect(screen.getByTestId("intentions-range")).toHaveTextContent(
+        "9–10 sur 10 intentions",
+      ),
+    );
+    expect(api.list).toHaveBeenLastCalledWith(
+      expect.objectContaining({ cursor: "c2" }),
+    );
+    expect(screen.getAllByTestId("intention-row")).toHaveLength(2);
   });
 
   it("says when nothing was asked yet, and the way to ask", async () => {
@@ -182,27 +336,9 @@ describe("Mes intentions", () => {
     show(<IntentionsList />);
     const empty = await screen.findByTestId("intentions-empty");
     expect(empty).toHaveTextContent("Vous n'avez encore rien demandé à LEKA.");
-    expect(within(empty).getByRole("link", { name: /Nouvelle intention/ })).toHaveAttribute(
-      "href",
-      "/intentions/new",
-    );
-  });
-
-  it("on a wide screen, a row is shown beside the list rather than left", async () => {
-    const other = intention({ id: "1c3bc5ff-a12e-5e92-a5ae-ad6da2029a41", title: "Qui maintient Billing API ?" });
-    api.list.mockResolvedValue({ data: [intention(), other], next_cursor: null });
-    api.one.mockImplementation(async (id: string) => (id === other.id ? other : intention()));
-    window.matchMedia = vi.fn().mockReturnValue({ matches: true });
-    const user = userEvent.setup();
-    show(<IntentionsList />);
-
-    const rows = await screen.findAllByTestId("intention-row");
-    await user.click(within(rows[1]).getByRole("link"));
-    const preview = await screen.findByTestId("intention-preview");
-    await waitFor(() => expect(preview).toHaveTextContent("Qui maintient Billing API ?"));
-    expect(preview).toHaveTextContent("Sélectionnée");
-    expect(within(rows[1]).getByRole("link")).toHaveAttribute("aria-current", "true");
-    delete (window as Partial<Window>).matchMedia;
+    expect(
+      within(empty).getByRole("link", { name: /Nouvelle intention/ }),
+    ).toHaveAttribute("href", "/intentions/new");
   });
 });
 
@@ -218,12 +354,15 @@ describe("an intention's page", () => {
     expect(screen.getByText("2 services choisis")).toBeInTheDocument();
     expect(screen.getByText(/LEKA n'a pas encore conclu/)).toBeInTheDocument();
     const links = screen.getAllByTestId("intention-link");
-    expect(links[0]).toHaveTextContent("Pourquoi Billing API est lente depuis hier ? · v2");
-    expect(within(links[1]).getByRole("link", { name: "Billing API" })).toHaveAttribute(
-      "href",
-      "/environment/services/e1",
+    expect(links[0]).toHaveTextContent(
+      "Pourquoi Billing API est lente depuis hier ? · v2",
     );
-    expect(screen.getByTestId("intention-status")).toHaveTextContent("Analyse en cours");
+    expect(
+      within(links[1]).getByRole("link", { name: "Billing API" }),
+    ).toHaveAttribute("href", "/environment/services/e1");
+    expect(screen.getByTestId("intention-status")).toHaveTextContent(
+      "Analyse en cours",
+    );
     expect(screen.getByText(/par vous/)).toBeInTheDocument();
   });
 
@@ -236,7 +375,11 @@ describe("an intention's page", () => {
         kind: "cancelled",
         at: ago(1),
         reason: "asked twice",
-        detail: { event: "moved", from_status: "analysing", to_status: "cancelled" },
+        detail: {
+          event: "moved",
+          from_status: "analysing",
+          to_status: "cancelled",
+        },
       }),
       item({
         id: "vote:v1",
@@ -263,7 +406,12 @@ describe("an intention's page", () => {
         actor: "system",
         by: null,
         by_name: null,
-        detail: { event: "moved", version: 1, from_status: "submitted", to_status: "analysing" },
+        detail: {
+          event: "moved",
+          version: 1,
+          from_status: "submitted",
+          to_status: "analysing",
+        },
       }),
       // A finding of LEKA's, worded as Insights words it — its statement is
       // the API's English.
@@ -276,7 +424,8 @@ describe("an intention's page", () => {
         detail: {
           event: "linked",
           kind: "finding",
-          label: "3 things rely on postgres-prod (database); nothing watches it.",
+          label:
+            "3 things rely on postgres-prod (database); nothing watches it.",
           code: "dependency.concentration",
           params: { dependents: 3, name: "postgres-prod", kind: "database" },
         },
@@ -310,12 +459,18 @@ describe("an intention's page", () => {
     expect(events[5]).toHaveTextContent("Décision");
     expect(events[6]).toHaveTextContent("par vous");
     expect(events[6]).toHaveTextContent("Raison : asked twice");
-    expect(told.timeline).toHaveBeenLastCalledWith(ID, { categories: [], actor: null });
+    expect(told.timeline).toHaveBeenLastCalledWith(ID, {
+      categories: [],
+      actor: null,
+    });
 
     // Filtered: by kind of thing, by who.
     await user.click(screen.getByTestId("timeline-category-decision"));
     await waitFor(() =>
-      expect(told.timeline).toHaveBeenLastCalledWith(ID, { categories: ["decision"], actor: null }),
+      expect(told.timeline).toHaveBeenLastCalledWith(ID, {
+        categories: ["decision"],
+        actor: null,
+      }),
     );
     await user.click(screen.getByTestId("timeline-actor-person"));
     await waitFor(() =>
@@ -326,22 +481,33 @@ describe("an intention's page", () => {
     );
     told.timeline.mockResolvedValue([]);
     await user.click(screen.getByTestId("timeline-actor-system"));
-    expect(await screen.findByText("Rien ne correspond à ces filtres.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Rien ne correspond à ces filtres."),
+    ).toBeInTheDocument();
   });
 
   it("is cancelled once asked, with the reason given", async () => {
     route.pathname = `/intentions/${ID}/overview`;
-    const cancelled = intention({ status: "cancelled", phase: "finished", moves: [] });
+    const cancelled = intention({
+      status: "cancelled",
+      phase: "finished",
+      moves: [],
+    });
     api.cancel.mockResolvedValue(cancelled);
     const user = userEvent.setup();
     show(<IntentionScreen />);
 
     await user.click(await screen.findByTestId("intention-cancel"));
     const dialog = await screen.findByRole("alertdialog");
-    await user.type(within(dialog).getByLabelText("Raison (facultative)"), "asked twice");
+    await user.type(
+      within(dialog).getByLabelText("Raison (facultative)"),
+      "asked twice",
+    );
     // Read again after the change: as it now is.
     api.one.mockResolvedValue(cancelled);
-    await user.click(within(dialog).getByRole("button", { name: "Annuler l'intention" }));
+    await user.click(
+      within(dialog).getByRole("button", { name: "Annuler l'intention" }),
+    );
 
     expect(api.cancel).toHaveBeenCalledWith(ID, "asked twice");
     expect(await screen.findByTestId("intention-archive")).toBeInTheDocument();
@@ -351,7 +517,9 @@ describe("an intention's page", () => {
   it("tells its story again once it moved", async () => {
     route.pathname = `/intentions/${ID}/history`;
     told.timeline.mockResolvedValue([item({})]);
-    api.cancel.mockResolvedValue(intention({ status: "cancelled", phase: "finished", moves: [] }));
+    api.cancel.mockResolvedValue(
+      intention({ status: "cancelled", phase: "finished", moves: [] }),
+    );
     const user = userEvent.setup();
     show(<IntentionScreen />);
     expect(await screen.findAllByTestId("intention-event")).toHaveLength(1);
@@ -360,15 +528,25 @@ describe("an intention's page", () => {
       item({
         kind: "cancelled",
         at: ago(0),
-        detail: { event: "moved", from_status: "analysing", to_status: "cancelled" },
+        detail: {
+          event: "moved",
+          from_status: "analysing",
+          to_status: "cancelled",
+        },
       }),
       item({}),
     ]);
     await user.click(await screen.findByTestId("intention-cancel"));
     const dialog = await screen.findByRole("alertdialog");
-    await user.click(within(dialog).getByRole("button", { name: "Annuler l'intention" }));
-    await waitFor(() => expect(screen.getAllByTestId("intention-event")).toHaveLength(2));
-    expect(screen.getAllByTestId("intention-event")[1]).toHaveTextContent("Annulée");
+    await user.click(
+      within(dialog).getByRole("button", { name: "Annuler l'intention" }),
+    );
+    await waitFor(() =>
+      expect(screen.getAllByTestId("intention-event")).toHaveLength(2),
+    );
+    expect(screen.getAllByTestId("intention-event")[1]).toHaveTextContent(
+      "Annulée",
+    );
   });
 
   it("says what LEKA understood, each part with its words", async () => {
@@ -383,7 +561,15 @@ describe("an intention's page", () => {
           mode_said: "redemarre",
           kind: "general",
           goal: { code: "act", said: ["redemarre"], confidence: 0.9 },
-          actions: [{ code: "restart", said: "redemarre", changes_systems: true, polarity: "affirmed", targets: [] }],
+          actions: [
+            {
+              code: "restart",
+              said: "redemarre",
+              changes_systems: true,
+              polarity: "affirmed",
+              targets: [],
+            },
+          ],
           entities: [
             {
               entity_id: "e1",
@@ -397,7 +583,12 @@ describe("an intention's page", () => {
           period: null,
           environment: null,
           ambiguities: [
-            { kind: "several_requests", blocking: false, said: "…", options: [] },
+            {
+              kind: "several_requests",
+              blocking: false,
+              said: "…",
+              options: [],
+            },
           ],
           clear: true,
           off_topic: false,
@@ -411,12 +602,13 @@ describe("an intention's page", () => {
     );
     const [action] = screen.getAllByTestId("understanding-action");
     expect(action).toHaveTextContent("Redémarrer « redemarre »");
-    expect(action).toHaveTextContent("modifie vos systèmes : validation requise");
-    const panel = screen.getByTestId("intention-understanding");
-    expect(within(panel).getByRole("link", { name: "Billing API" })).toHaveAttribute(
-      "href",
-      "/environment/services/e1",
+    expect(action).toHaveTextContent(
+      "modifie vos systèmes : validation requise",
     );
+    const panel = screen.getByTestId("intention-understanding");
+    expect(
+      within(panel).getByRole("link", { name: "Billing API" }),
+    ).toHaveAttribute("href", "/environment/services/e1");
     expect(screen.getByTestId("understanding-notes")).toHaveTextContent(
       "Votre demande contient plusieurs demandes",
     );
@@ -475,9 +667,24 @@ describe("an intention's page", () => {
             },
             sources: [],
             constraints: [
-              { kind: "exclude", said: "auth service", value: "e2", hard: true },
-              { kind: "read_only", said: "sans rien modifier", value: true, hard: true },
-              { kind: "deadline", said: "avant vendredi", value: "2026-10-09", hard: true },
+              {
+                kind: "exclude",
+                said: "auth service",
+                value: "e2",
+                hard: true,
+              },
+              {
+                kind: "read_only",
+                said: "sans rien modifier",
+                value: true,
+                hard: true,
+              },
+              {
+                kind: "deadline",
+                said: "avant vendredi",
+                value: "2026-10-09",
+                hard: true,
+              },
             ],
             missing: [],
           },
@@ -487,11 +694,15 @@ describe("an intention's page", () => {
     show(<IntentionScreen />);
 
     const scope = await screen.findByTestId("understanding-scope");
-    expect(within(scope).getByTestId("scope-environment")).toHaveTextContent("production · choisi");
+    expect(within(scope).getByTestId("scope-environment")).toHaveTextContent(
+      "production · choisi",
+    );
     expect(within(scope).getByTestId("scope-period")).toHaveTextContent(
       "dite dans la demande : « depuis hier »",
     );
-    expect(within(scope).getByTestId("scope-excluded")).toHaveTextContent("auth-service");
+    expect(within(scope).getByTestId("scope-excluded")).toHaveTextContent(
+      "auth-service",
+    );
     const constraints = within(scope).getByTestId("scope-constraints");
     expect(constraints).toHaveTextContent("Lecture seule");
     expect(constraints).toHaveTextContent("Échéance : 2026-10-09");
@@ -513,7 +724,15 @@ describe("an intention's page", () => {
           mode_said: "redemarre",
           kind: "general",
           goal: { code: "act", said: ["redemarre"], confidence: 0.5 },
-          actions: [{ code: "restart", said: "redemarre", changes_systems: true, polarity: "affirmed", targets: [] }],
+          actions: [
+            {
+              code: "restart",
+              said: "redemarre",
+              changes_systems: true,
+              polarity: "affirmed",
+              targets: [],
+            },
+          ],
           entities: [],
           period: null,
           environment: null,
@@ -554,7 +773,13 @@ describe("an intention's page", () => {
       kind: "general",
       goal: { code: "act" as const, said: ["redemarre"], confidence: 0.9 },
       actions: [
-        { code: "restart", said: "redemarre", changes_systems: true, polarity: "affirmed" as const, targets: [] },
+        {
+          code: "restart",
+          said: "redemarre",
+          changes_systems: true,
+          polarity: "affirmed" as const,
+          targets: [],
+        },
       ],
       withheld: [],
       entities: [],
@@ -576,11 +801,46 @@ describe("an intention's page", () => {
         restated: null,
         acting: true,
         slots: [
-          { slot: "goal", state: "known", need: "blocking", value: "act", values: [], origin: "words" },
-          { slot: "target", state: "missing", need: "blocking", value: null, values: [], origin: null },
-          { slot: "scope", state: "known", need: "blocking", value: "production", values: ["production"], origin: "words" },
-          { slot: "expected", state: "known", need: "useful", value: "action", values: [], origin: "words" },
-          { slot: "constraints", state: "missing", need: "optional", value: null, values: [], origin: null },
+          {
+            slot: "goal",
+            state: "known",
+            need: "blocking",
+            value: "act",
+            values: [],
+            origin: "words",
+          },
+          {
+            slot: "target",
+            state: "missing",
+            need: "blocking",
+            value: null,
+            values: [],
+            origin: null,
+          },
+          {
+            slot: "scope",
+            state: "known",
+            need: "blocking",
+            value: "production",
+            values: ["production"],
+            origin: "words",
+          },
+          {
+            slot: "expected",
+            state: "known",
+            need: "useful",
+            value: "action",
+            values: [],
+            origin: "words",
+          },
+          {
+            slot: "constraints",
+            state: "missing",
+            need: "optional",
+            value: null,
+            values: [],
+            origin: null,
+          },
         ],
         questions: [
           {
@@ -600,7 +860,11 @@ describe("an intention's page", () => {
     api.one.mockResolvedValue(waiting);
     api.feasibility.mockRejectedValue(new ApiError(404, "/x", "No."));
     api.answer.mockResolvedValue({
-      intention: { ...waiting, status: "analysing", journey: sampleJourney("analysing") },
+      intention: {
+        ...waiting,
+        status: "analysing",
+        journey: sampleJourney("analysing"),
+      },
       context: { context_id: "c1" },
     });
     const user = userEvent.setup();
@@ -612,14 +876,20 @@ describe("an intention's page", () => {
       "Pourquoi : Une action sur vos systèmes doit savoir exactement ce qu'elle touche.",
     );
     // Not the old way round: rewriting the whole request.
-    expect(screen.queryByTestId("understanding-clarify")).not.toBeInTheDocument();
-    await user.click(within(question).getByRole("button", { name: "Payment API" }));
+    expect(
+      screen.queryByTestId("understanding-clarify"),
+    ).not.toBeInTheDocument();
+    await user.click(
+      within(question).getByRole("button", { name: "Payment API" }),
+    );
     await waitFor(() =>
       expect(api.answer).toHaveBeenCalledWith(ID, [
         { question: "action_without_target", value: "p1", unknown: false },
       ]),
     );
-    expect(await screen.findByTestId("intention-status")).toHaveTextContent("Analyse en cours");
+    expect(await screen.findByTestId("intention-status")).toHaveTextContent(
+      "Analyse en cours",
+    );
   });
 
   it("says whether its context can ground the analysis, and what blocks it", async () => {
@@ -670,19 +940,24 @@ describe("an intention's page", () => {
       "Bloqué avant l'analyse",
     );
     expect(panel).toHaveTextContent("6 éléments · 2 sources · version 2");
-    expect(within(panel).getByTestId("readiness-facets")).toHaveTextContent("métier · 1");
+    expect(within(panel).getByTestId("readiness-facets")).toHaveTextContent(
+      "métier · 1",
+    );
     const critical = within(panel).getByTestId("readiness-critical");
     expect(critical).not.toHaveTextContent("None of the sources");
-    expect(critical).toHaveTextContent("Billing API : owner, ses sources se contredisent");
+    expect(critical).toHaveTextContent(
+      "Billing API : owner, ses sources se contredisent",
+    );
   });
 
   it("says a missing intention, its tabs kept", async () => {
     route.pathname = `/intentions/${ID}/overview`;
-    api.one.mockRejectedValue(new ApiError(404, `/intentions/${ID}`, "No such intention."));
+    api.one.mockRejectedValue(
+      new ApiError(404, `/intentions/${ID}`, "No such intention."),
+    );
     show(<IntentionScreen />);
     expect(await screen.findByTestId("intention-not-found")).toHaveTextContent(
       "Cette intention n'existe pas, ou plus.",
     );
   });
-
 });

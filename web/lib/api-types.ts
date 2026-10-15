@@ -13835,7 +13835,7 @@ export interface components {
          *     them and a rename would be a breaking change for nothing.
          * @enum {string}
          */
-        ErrorCode: "validation_failed" | "not_authenticated" | "permission_denied" | "not_found" | "conflict" | "rate_limited" | "internal_error" | "service_unavailable" | "invalid_cursor" | "invalid_sort" | "invalid_filter" | "contract_unsupported" | "off_topic" | "agent_unavailable" | "agent_inputs_missing" | "agent_not_proposed" | "credits_short" | "plan_required" | "agent_not_owned" | "invalid_credentials" | "account_unverified" | "token_invalid" | "token_expired" | "password_too_short" | "password_breached" | "session_expired" | "last_owner" | "csrf_failed";
+        ErrorCode: "validation_failed" | "not_authenticated" | "permission_denied" | "not_found" | "conflict" | "rate_limited" | "internal_error" | "service_unavailable" | "invalid_cursor" | "invalid_sort" | "invalid_filter" | "contract_unsupported" | "off_topic" | "agent_unavailable" | "agent_inputs_missing" | "agent_not_proposed" | "credits_short" | "plan_required" | "agent_not_owned" | "invalid_credentials" | "account_unverified" | "token_invalid" | "token_expired" | "password_too_short" | "password_breached" | "session_expired" | "last_owner" | "csrf_failed" | "plan_limit";
         /**
          * ErrorEnvelope
          * @description Every error response the API returns, whatever the status.
@@ -15703,6 +15703,10 @@ export interface components {
             finished: number;
             /** Archived */
             archived: number;
+            /** Statuses */
+            statuses?: {
+                [key: string]: number;
+            };
         };
         /**
          * IntentionCreated
@@ -15784,6 +15788,16 @@ export interface components {
              */
             version: number;
             journey: components["schemas"]["JourneyRead"];
+            /**
+             * Agents
+             * @description Its agents' keys, as they ran.
+             */
+            agents?: string[];
+            /**
+             * Sources
+             * @description The kinds of the sources it was asked about or its analyses cite.
+             */
+            sources?: string[];
             /** Links */
             links: components["schemas"]["IntentionLinkRead"][];
             understanding: components["schemas"]["Understanding"] | null;
@@ -16118,6 +16132,16 @@ export interface components {
              */
             version: number;
             journey: components["schemas"]["JourneyRead"];
+            /**
+             * Agents
+             * @description Its agents' keys, as they ran.
+             */
+            agents?: string[];
+            /**
+             * Sources
+             * @description The kinds of the sources it was asked about or its analyses cite.
+             */
+            sources?: string[];
         };
         /**
          * IntentionRequest
@@ -47877,13 +47901,22 @@ export interface operations {
             query?: {
                 /** @description Every one not archived when none. */
                 phase?: ("active" | "scheduled" | "finished" | "archived") | null;
-                status?: components["schemas"]["IntentionStatus"] | null;
+                /** @description Any of these states. */
+                status?: components["schemas"]["IntentionStatus"][] | null;
                 /** @description Those I asked. */
                 mine?: boolean;
                 /** @description In its title or words. */
                 q?: string | null;
                 /** @description Linked to this context, finding or entity. */
                 linked?: string | null;
+                /** @description An agent ran for it: its key. */
+                agent?: string | null;
+                /** @description Asked about this source, or its analyses cite it. */
+                source?: string | null;
+                /** @description Asked at or after. */
+                since?: string | null;
+                /** @description Asked before. */
+                until?: string | null;
                 /** @description From a previous response's next_cursor. Opaque. */
                 cursor?: string | null;
                 /** @description Rows per page. */

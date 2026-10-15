@@ -256,94 +256,93 @@ export function IntentionComposer({
   }
 
   if (compact) {
-    // Mockup 01: a card — the spark, the question, a filled field with a
-    // paperclip, a navy square to send — and the suggestions underneath.
+    // The home's hero (LEKA-456, the sprint's mockup): the question as the
+    // page's title, a white field — the spark, the paperclip, a round
+    // violet button to send — and the suggestions centred under it.
     return (
-      <section
-        aria-labelledby="compact-composer-title"
-        className={cn("rounded-xl border border-shell-line bg-white px-5 pt-4 pb-3", className)}
-      >
-        <div className="flex gap-5">
-          <Sparkle
-            className="mt-0.5 size-7 shrink-0 fill-shell-nav-active text-shell-nav-active"
-            aria-hidden="true"
-          />
-          <div className="min-w-0 flex-1">
-            <h2
-              id="compact-composer-title"
-              className="text-[1.0625rem] font-semibold tracking-[-0.01em] text-brand-navy"
-            >
-              {t.composer.compactTitle}
-            </h2>
-            <div className="mt-2.5 flex items-start gap-5">
-              <div className="relative min-w-0 flex-1">
-                <Textarea
-                  ref={box}
-                  value={value}
-                  onChange={(event) => setValue(name, event.target.value, { shouldDirty: true })}
-                  onKeyDown={(event) => {
-                    if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return;
-                    event.preventDefault();
-                    onSubmit();
-                  }}
-                  aria-label={t.composer.label}
-                  aria-keyshortcuts="Meta+Enter Control+Enter"
-                  aria-describedby={missing > 0 ? whyDisabled : undefined}
-                  placeholder={t.composer.compactPlaceholder}
-                  rows={1}
-                  data-testid="intention-input"
-                  className="min-h-[46px] resize-none rounded-lg border-shell-line bg-shell-canvas py-3 pe-12 ps-4 text-sm shadow-none placeholder:text-shell-muted focus-visible:border-brand-violet focus-visible:ring-brand-violet/20"
-                />
-                {onAttachRequest ? (
-                  <button
-                    type="button"
-                    onClick={onAttachRequest}
-                    aria-label={t.composer.attachOnNextStep}
-                    title={t.composer.attachOnNextStep}
-                    className="absolute top-[11px] end-3 rounded p-0.5 text-shell-icon outline-none hover:text-shell-nav-active focus-visible:ring-2 focus-visible:ring-brand-violet/40"
-                  >
-                    <Paperclip className="size-[18px]" aria-hidden="true" />
-                  </button>
-                ) : null}
-              </div>
-              <Button
+      <section aria-labelledby="compact-composer-title" className={cn("text-center", className)}>
+        <h1
+          id="compact-composer-title"
+          className="text-[1.75rem] leading-tight font-bold tracking-[-0.02em] text-brand-navy md:text-[2.375rem]"
+        >
+          {t.composer.compactTitle}{" "}
+          <span className="bg-gradient-to-r from-brand-violet to-[#3b82f6] bg-clip-text text-transparent">
+            {t.composer.compactTitleHighlight}
+          </span>
+        </h1>
+        <p className="mx-auto mt-3 max-w-2xl text-[0.9375rem] text-shell-muted md:text-[1.0625rem]">
+          {t.composer.compactSubtitle}
+        </p>
+        <div className="mx-auto mt-6 max-w-4xl text-start">
+          <div className="flex items-center gap-3 rounded-2xl border border-shell-line bg-white p-2 ps-3 shadow-sm focus-within:border-brand-violet focus-within:ring-3 focus-within:ring-brand-violet/20">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-violet-soft">
+              <Sparkle className="size-4 fill-brand-violet text-brand-violet" aria-hidden="true" />
+            </span>
+            <Textarea
+              ref={box}
+              value={value}
+              onChange={(event) => setValue(name, event.target.value, { shouldDirty: true })}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return;
+                event.preventDefault();
+                onSubmit();
+              }}
+              aria-label={t.composer.label}
+              aria-keyshortcuts="Meta+Enter Control+Enter"
+              aria-describedby={missing > 0 ? whyDisabled : undefined}
+              placeholder={t.composer.compactPlaceholder}
+              rows={1}
+              data-testid="intention-input"
+              className="min-h-[46px] flex-1 resize-none border-0 bg-transparent px-1 py-3 text-[0.9375rem] shadow-none placeholder:text-shell-muted focus-visible:ring-0"
+            />
+            {onAttachRequest ? (
+              <button
                 type="button"
-                onClick={onSubmit}
-                disabled={empty || tooLong || missing > 0 || submitting}
-                aria-label={t.composer.submit}
-                data-testid="intention-submit"
-                className="size-[46px] shrink-0 rounded-lg bg-brand-navy p-0 text-white hover:bg-brand-navy/90 disabled:cursor-not-allowed disabled:opacity-100"
+                onClick={onAttachRequest}
+                aria-label={t.composer.attachOnNextStep}
+                title={t.composer.attachOnNextStep}
+                className="rounded p-1 text-shell-icon outline-none hover:text-shell-nav-active focus-visible:ring-2 focus-visible:ring-brand-violet/40"
               >
-                <ArrowUp className="size-5" aria-hidden="true" />
-              </Button>
-            </div>
-            {/* Only while it is true: a disabled button that does not say why
-                reads as broken. */}
-            <p
-              id={whyDisabled}
-              aria-live="polite"
-              className="mt-1.5 text-xs text-shell-muted empty:hidden"
+                <Paperclip className="size-[18px]" aria-hidden="true" />
+              </button>
+            ) : null}
+            <Button
+              type="button"
+              onClick={onSubmit}
+              disabled={empty || tooLong || missing > 0 || submitting}
+              aria-label={t.composer.submit}
+              data-testid="intention-submit"
+              className="size-11 shrink-0 rounded-full bg-brand-violet p-0 text-white hover:bg-brand-violet/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {missing > 0
-                ? fill(t.composer.tooShortHint, { count: missing })
-                : tooLong
-                  ? fill(t.forms.charCount, {
-                      count: value.length,
-                      max: INTENTION_MAX,
-                    })
-                  : null}
-            </p>
+              <ArrowUp className="size-5" aria-hidden="true" />
+            </Button>
           </div>
+          {/* Only while it is true: a disabled button that does not say why
+              reads as broken. */}
+          <p
+            id={whyDisabled}
+            aria-live="polite"
+            className="mt-1.5 ps-4 text-xs text-shell-muted empty:hidden"
+          >
+            {missing > 0
+              ? fill(t.composer.tooShortHint, { count: missing })
+              : tooLong
+                ? fill(t.forms.charCount, {
+                    count: value.length,
+                    max: INTENTION_MAX,
+                  })
+                : null}
+          </p>
         </div>
-        <div className="mt-3 flex flex-wrap gap-3">
+        <div className="mt-4 flex flex-wrap justify-center gap-2.5">
           {suggestions.map(({ icon: Icon, label, template }) => (
             <button
               key={label}
               type="button"
               onClick={() => void applySuggestion(template)}
-              className="flex items-center gap-2.5 rounded-lg border border-shell-line bg-white px-3.5 py-[9px] text-[0.8125rem] font-medium tracking-[-0.01em] text-brand-navy transition-colors outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+              className="flex items-center gap-2 rounded-xl border border-shell-line bg-white px-3.5 py-2 text-[0.8125rem] font-medium text-brand-navy shadow-xs transition-colors outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
             >
-              <Icon className="size-4 text-shell-icon" aria-hidden="true" />
+              <Icon className="size-4 text-brand-violet" aria-hidden="true" />
               {label}
             </button>
           ))}

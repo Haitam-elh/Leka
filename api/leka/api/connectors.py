@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
 from leka.api.pagination import PageEnvelope, PageParams, SortCatalogue, serve_page
+from leka.billing.limits import PlanLimitError, room_for_source
 from leka.connectors import (
     ActivationRefusedError,
     CatalogEntry,
@@ -277,6 +278,10 @@ async def create_source(
     body: SourceCreate, service: ManagingService, session: SessionDep, principal: Manager
 ) -> SourceRead:
     """A new source, in draft. It reads nothing until it is tested and activated."""
+    try:
+        await room_for_source(session, principal.workspace_id)
+    except PlanLimitError as error:
+        raise ApiError(status.HTTP_403_FORBIDDEN, ErrorCode.PLAN_LIMIT, str(error)) from error
     try:
         source = await service.create(body.type, body.display_name, body.config, body.credentials)
     except _REFUSALS as error:

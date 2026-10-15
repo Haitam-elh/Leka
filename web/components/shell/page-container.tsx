@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ArrowLeft, ChevronRight } from "lucide-react";
+
+import { routes } from "@/config/routes";
 
 import { useDictionary } from "@/lib/i18n/locale-provider";
 
@@ -35,7 +37,18 @@ export function PageHeader({ title, subtitle, breadcrumb, actions }: PageHeaderP
   const t = useDictionary();
   return (
     <div className="mb-6">
-      {breadcrumb && breadcrumb.length > 0 && (
+      {/* Every page but the home, as the sprint's mockups draw it (LEKA-455):
+          the way back, no sidebar to find it in. */}
+      <Link
+        href={routes.overview()}
+        data-testid="back-home"
+        className="mb-4 inline-flex items-center gap-2 rounded-lg bg-shell-canvas px-3 py-1.5 text-sm text-shell-nav transition-colors outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+      >
+        <ArrowLeft className="rtl:-scale-x-100 size-4" aria-hidden="true" />
+        {t.shell.backHome}
+      </Link>
+      {/* Deeper than a page of its own: where it sits, beside the way back. */}
+      {breadcrumb && breadcrumb.length > 2 && (
         // Named in the page's language: a screen reader announcing
         // "Breadcrumb navigation" in a French interface was the one English
         // landmark left.

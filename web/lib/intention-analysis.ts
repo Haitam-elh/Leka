@@ -493,6 +493,7 @@ function explanationOf(
     conflicts,
     stale: explained.stale.map(say),
     limits: explained.limits.filter((n) => !n.code.startsWith("limit.capability.")).map(say),
+    unread: explained.limits.some((n) => n.code === "limit.source_unread"),
     next: { code: next.code, title: nextTitle, why },
     freshness: { read: analysis.context_version, now: analysis.context_now ?? null },
   };

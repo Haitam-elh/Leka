@@ -15,8 +15,10 @@
 # shown as a guarantee. Change a value here, in a pull request: the page
 # follows, nothing else to edit.
 #
-# Values not decided yet are absent, never guessed: seats, sources and
-# workspaces per plan; agent and bundle prices.
+# Users (members and pending invitations) and sources: each plan's `quotas`,
+# enforced by the server (leka/billing/limits.py, LEKA-463).
+# Values not decided yet are absent, never guessed: workspaces per plan;
+# agent and bundle prices.
 #
 # Quotas (2026-10-14, the product call — TODO: à valider): people, sources
 # connected, standard analyses a month (what the AI credits come to, about

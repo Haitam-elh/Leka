@@ -332,22 +332,36 @@ async def intentions(
         Literal["active", "scheduled", "finished", "archived"] | None,
         Query(description="Every one not archived when none."),
     ] = None,
-    state: Annotated[IntentionStatus | None, Query(alias="status")] = None,
+    state: Annotated[
+        list[IntentionStatus] | None, Query(alias="status", description="Any of these states.")
+    ] = None,
     mine: Annotated[bool, Query(description="Those I asked.")] = False,
     q: Annotated[str | None, Query(max_length=200, description="In its title or words.")] = None,
     linked: Annotated[
         uuid.UUID | None, Query(description="Linked to this context, finding or entity.")
     ] = None,
+    agent: Annotated[
+        str | None, Query(max_length=100, description="An agent ran for it: its key.")
+    ] = None,
+    source: Annotated[
+        uuid.UUID | None, Query(description="Asked about this source, or its analyses cite it.")
+    ] = None,
+    since: Annotated[datetime | None, Query(description="Asked at or after.")] = None,
+    until: Annotated[datetime | None, Query(description="Asked before.")] = None,
 ) -> PageEnvelope[IntentionRead]:
     """The intentions, the latest changed first (`sort=updated_at`) or the
     latest asked (`sort=created_at`)."""
     statement = IntentionRepository(session, principal.workspace_id).intentions(
         IntentionFilters(
             phase=phase,
-            status=state.value if state else None,
+            status=tuple(s.value for s in state or ()),
             created_by=principal.user_id if mine else None,
             words=q,
             linked=linked,
+            agent=agent,
+            source=source,
+            since=since,
+            until=until,
         )
     )
     result = await serve_page(
