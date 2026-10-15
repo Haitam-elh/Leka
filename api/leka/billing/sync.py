@@ -4,7 +4,7 @@ from catalogue.yaml, never typed into Stripe's dashboard.
 
 A price is found by its lookup key, which says what it is:
 
-    leka_core_<plan>_<interval>_<cents>     e.g. leka_core_growth_year_171840
+    leka_core_<plan>_<interval>_<cents>     e.g. leka_core_growth_year_150360
 
 so a price changed in the catalogue is a new Stripe price — Stripe's are
 never rewritten — and what checkout charges is always what the page shows.
