@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { analyse, ask } from "./intention-helpers";
+import { analyse, ask, settleAll } from "./intention-helpers";
 import { signIn } from "./sign-in";
 
 /**
@@ -101,6 +101,10 @@ test.describe("The frame", () => {
     await signIn(page);
     const id = await ask(page, `Qui est responsable d'auth-service ? (${Date.now()})`);
     analyse(id);
+    // What earlier specs asked and left waiting is genuinely followed — a
+    // list read again every 15 s, which a slow runner sees inside the
+    // window: settled first, as the sweep would.
+    settleAll();
     for (const path of ["/overview", "/intentions", "/capabilities", "/environment", `/intentions/${id}/results`]) {
       await page.goto(path);
       await page.waitForLoadState("networkidle");
