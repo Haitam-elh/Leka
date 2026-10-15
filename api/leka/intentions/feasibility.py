@@ -5,8 +5,8 @@ connected, who asks — and, when it cannot, the least it takes to.
     the capabilities   what the router sends it to (LEKA-398) — LEKA's own
                        analysis always — for this person, as the catalogue
                        stands; each said
-                         included     LEKA's own analysis — never an agent:
-                                      no plan includes one (LEKA-446)
+                         included     LEKA's own analysis, and the agents
+                                      its plan includes (Karim, 2026-10-15)
                          beta         an agent while it is not on sale:
                                       usable, its future price said
                                       (decided 2026-10-13)
@@ -23,8 +23,10 @@ connected, who asks — and, when it cannot, the least it takes to.
                        impossible (what it expects, nothing LEKA has makes)
     the path           the least it takes, cheapest first: what to connect or
                        allow; an add-on, or a bundle when it costs less than
-                       its agents one by one; the cheapest plan whose AI
-                       capacity is enough — never the dearest by default, and
+                       its agents one by one — or the plan that includes
+                       them, when it costs less (LEKA-462); the cheapest plan
+                       whose AI capacity is enough — never the dearest by
+                       default, and
                        never a capacity pack: none is sold (LEKA-446);
                        Enterprise by contract. Anything bought is consented
                        to first: nothing here buys.
@@ -36,15 +38,16 @@ from __future__ import annotations
 
 import statistics
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, time, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from leka.billing.catalogue import Catalogue
+from leka.billing.catalogue import Catalogue, quote
 from leka.billing.catalogue import catalogue as billing_catalogue
+from leka.billing.models import BillingAccount
 from leka.capabilities import AgentRun, CatalogueService, ModelCall, find, leka_cost
 from leka.capabilities.definition import Availability, Definition, Kind, Lifecycle
 from leka.capabilities.router import Routing, route
@@ -102,13 +105,16 @@ class Feasibility:
     path: tuple[Step, ...]
 
 
-def offer_of(definition: Definition, sold: Catalogue) -> str:
-    """How LEKA offers it: included, beta, add_on or planned."""
+def offer_of(
+    definition: Definition, sold: Catalogue, included: Collection[str] = frozenset()
+) -> str:
+    """How LEKA offers it: included, beta, add_on or planned — `included`,
+    the agents the workspace's plan includes."""
     if definition.lifecycle in (Lifecycle.DRAFT, Lifecycle.REVIEW):
         return "planned"
     if definition.kind is Kind.WORKFLOW:
         offers = {
-            offer_of(step, sold)
+            offer_of(step, sold, included)
             for step in _steps(definition)
             if step is not None and step.kind is not Kind.WORKFLOW
         }
@@ -118,7 +124,9 @@ def offer_of(definition: Definition, sold: Catalogue) -> str:
         return "included"
     if definition.kind is not Kind.AGENT:
         return "included"
-    # No plan includes an agent (LEKA-446): on sale, bought; until then, beta.
+    if definition.key in included:
+        return "included"
+    # Not its plan's: on sale, bought; until then, beta.
     on_sale = sold.add_ons.available and definition.key in sold.add_ons.agents
     return "add_on" if on_sale else "beta"
 
@@ -146,6 +154,7 @@ def needed_of(
     entries: Mapping[str, tuple[Definition, Availability]],
     sold: Catalogue,
     costs: Mapping[str, float],
+    included: Collection[str] = frozenset(),
 ) -> list[Needed]:
     """What it needs: what it is routed to, and what always runs."""
     keys: list[str] = [c.key for c in routing.selected]
@@ -166,7 +175,7 @@ def needed_of(
         if entry is None:
             continue
         definition, availability = entry
-        offer = offer_of(definition, sold)
+        offer = offer_of(definition, sold, included)
         found.append(
             Needed(
                 key=key,
@@ -203,6 +212,7 @@ def path_of(
     plan_credits: Mapping[str, int],
     *,
     expected: str,
+    launch: bool = True,
 ) -> tuple[str, tuple[Step, ...]]:
     """The verdict, and the least it takes — cheapest first."""
     used = [n for n in needed if n.selected]
@@ -229,48 +239,101 @@ def path_of(
     def paid(n: Needed) -> set[str]:
         return {str(r.get("code")) for r in n.reasons} & {"plan_required", "not_owned"}
 
+    current = month.plan
+    # The plan it must move to, if any: the highest any need asks for.
+    target: str | None = None
+    why = "agents"
     if any("plan_required" in paid(n) for n in used):
-        least = sold.add_ons.minimum_plan
-        steps.append(
-            Step(
-                "change_plan",
-                {
-                    "plan": least,
-                    "monthly_price": sold.plan(least).monthly_price,
-                    "credits": plan_credits.get(least),
-                    "why": "agents",
-                },
-                consent=True,
-            )
+        target = sold.add_ons.minimum_plan
+    wanted = sorted({n.key for n in used if n.offer == "add_on" and paid(n)})
+    bought = _bought(wanted, sold) if wanted else []
+    covering = _plan_including(sold, wanted, above=current) if wanted else None
+    # The least it costs a month (LEKA-462): its agents bought, or the plan
+    # that includes them — never the dearer of the two.
+    if covering is not None:
+        alone = _monthly(sold, _higher(target, current)) + sum(
+            p for step in bought if isinstance(p := step.detail.get("monthly_price"), int)
         )
-    add_ons = sorted({n.key for n in used if n.offer == "add_on" and paid(n)})
-    if add_ons:
-        steps += _bought(add_ons, sold)
+        if _monthly(sold, covering) < alone:
+            target, bought = covering, []
     short = month.state == "exhausted" or (estimate is not None and month.remaining < estimate)
+    sales = False
     if short:
         # A month that is enough: what it used and what it needs.
         need = month.used + (estimate or 1)
-        plan = _plan_enough(sold, plan_credits, need)
-        current = PLANS.index(month.plan)
-        if plan is not None and PLANS.index(plan) > current:
-            offered = sold.plan(plan)
-            detail: dict[str, object] = {
-                "plan": plan,
-                "monthly_price": offered.monthly_price,
-                "credits": plan_credits.get(plan),
-            }
-            if offered.launch_offer and sold.launch_open(month.period_end.date()):
-                detail |= {
-                    "launch_percent": sold.launch_offer.percent,
-                    "launch_months": sold.launch_offer.months,
-                }
-            steps.append(Step("change_plan", detail, consent=True))
+        enough = _plan_enough(sold, plan_credits, need)
+        if enough is not None and PLANS.index(enough) > PLANS.index(current):
+            target = _higher(target, enough)
+            if target == enough:
+                why = "credits"
+            # The plan the credits ask for may include what was to be bought.
+            if wanted and set(wanted) <= sold.add_ons.included_in(target):
+                bought = []
         else:
-            steps.append(Step("contact_sales", {"plan": "enterprise"}))
+            sales = True
+    if target is not None and PLANS.index(target) > PLANS.index(current):
+        steps.append(_plan_step(sold, plan_credits, target, month, why=why, launch=launch))
+    steps += bought
+    if sales:
+        steps.append(Step("contact_sales", {"plan": "enterprise"}))
+    if short:
         return "over_quota", tuple(steps)
     if steps:
         return "prerequisites", tuple(steps)
     return "ready", ()
+
+
+def _monthly(sold: Catalogue, plan: str) -> int:
+    return sold.plan(plan).monthly_price or 0
+
+
+def _higher(plan: str | None, other: str) -> str:
+    return other if plan is None or PLANS.index(other) > PLANS.index(plan) else plan
+
+
+def _plan_including(sold: Catalogue, agents: Sequence[str], *, above: str) -> str | None:
+    """The cheapest self-service plan above `above` that includes `agents`."""
+    for plan in sold.plans:
+        if (
+            plan.self_service
+            and PLANS.index(plan.key) > PLANS.index(above)
+            and set(agents) <= sold.add_ons.included_in(plan.key)
+        ):
+            return plan.key
+    return None
+
+
+def _plan_step(
+    sold: Catalogue,
+    plan_credits: Mapping[str, int],
+    key: str,
+    month: CreditsLeftRead,
+    *,
+    why: str,
+    launch: bool,
+) -> Step:
+    """A move to `key`, said in full before any yes (LEKA-462): its price
+    excl. VAT a month, the launch offer when this workspace may have it and
+    for how long, then what it renews at, every month until cancelled; its
+    credits and the agents it includes."""
+    priced = quote(sold.plan(key), "month", sold, today=month.period_end.date(), launch=launch)
+    detail: dict[str, object] = {
+        "plan": key,
+        "monthly_price": priced.list_monthly,
+        "credits": plan_credits.get(key),
+        "why": why,
+        "interval": "month",
+        "renews": True,
+        "includes": sorted(sold.add_ons.included_in(key)),
+    }
+    if priced.discount == "launch":
+        detail |= {
+            "launch_percent": priced.percent,
+            "launch_months": priced.for_months,
+            "launch_price": priced.monthly,
+            "then_price": priced.then_monthly,
+        }
+    return Step("change_plan", detail, consent=True)
 
 
 def _bought(add_ons: Sequence[str], sold: Catalogue) -> list[Step]:
@@ -292,6 +355,7 @@ def _bought(add_ons: Sequence[str], sold: Catalogue) -> list[Step]:
                     "bundle": best.key,
                     "agents": list(best.agents),
                     "monthly_price": best.monthly_price,
+                    "renews": True,
                 },
                 consent=True,
             )
@@ -299,7 +363,7 @@ def _bought(add_ons: Sequence[str], sold: Catalogue) -> list[Step]:
     return [
         Step(
             "buy_add_on",
-            {"agent": key, "monthly_price": sold.add_ons.prices.get(key)},
+            {"agent": key, "monthly_price": sold.add_ons.prices.get(key), "renews": True},
             consent=True,
         )
         for key in add_ons
@@ -391,13 +455,19 @@ async def feasibility_of(
     )
     agents = [key for key, (d, _) in entries.items() if d.kind is Kind.AGENT]
     costs = await run_costs(session, agents, now=now)
-    needed = needed_of(routing, entries, sold, costs)
     month = await credits_left(session, workspace_id, now=now)
+    needed = needed_of(routing, entries, sold, costs, sold.add_ons.included_in(month.plan))
     spends = [n.credits for n in needed if n.selected and n.credits is not None]
     estimate = round(sum(spends), 2) if spends else None
     expected = next((s.value for s in brief.slots if s.slot == "expected"), "answer") or "answer"
     allowances = plan_credits or {plan: credits_for(plan) for plan in PLANS}
-    verdict, path = path_of(needed, month, estimate, sold, allowances, expected=expected)
+    # The launch offer is had once (billing): never promised again after.
+    used_offer = await session.scalar(
+        select(BillingAccount.launch_offer_used).where(BillingAccount.workspace_id == workspace_id)
+    )
+    verdict, path = path_of(
+        needed, month, estimate, sold, allowances, expected=expected, launch=not used_offer
+    )
     return Feasibility(
         verdict=verdict, needed=tuple(needed), credits=month, estimate=estimate, path=path
     )

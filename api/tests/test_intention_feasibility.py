@@ -198,3 +198,79 @@ def test_a_capability_not_ready_yet_is_never_offered_as_usable() -> None:
         [ANALYSIS, only], month("growth"), None, sold_now(), CREDITS, expected="document"
     )
     assert verdict == "impossible"
+
+
+# ── LEKA-462: the least it takes, as Karim's rules have it (2026-10-15) ─────
+
+LACKING: tuple[dict[str, object], ...] = ({"code": "not_owned"},)
+
+
+def test_an_agent_its_plan_includes_is_included_nothing_to_buy() -> None:
+    found = find("code-review")
+    assert found is not None
+    assert offer_of(found, sold_now(), sold_now().add_ons.included_in("starter")) == "included"
+    # Not Starter's: on sale, bought.
+    assert offer_of(found, sold_now(), sold_now().add_ons.included_in("free")) == "add_on"
+    included = need("code-review", offer="included")
+    assert path_of(
+        [ANALYSIS, included], month("starter"), None, sold_now(), CREDITS, expected="answer"
+    ) == ("ready", ())
+
+
+def test_on_free_the_plan_that_includes_the_agent_when_it_costs_less_than_buying_it() -> None:
+    # Starter (59 €) includes code-review: less than Starter and code-review.
+    wanted = need(
+        "code-review", offer="add_on", available=False, reasons=({"code": "plan_required"},)
+    )
+    verdict, path = path_of(
+        [ANALYSIS, wanted], month("free"), None, sold_now(), CREDITS, expected="answer"
+    )
+    assert verdict == "prerequisites"
+    [step] = path
+    assert (step.kind, step.detail["plan"], step.consent) == ("change_plan", "starter", True)
+    assert "code-review" in step.detail["includes"]  # type: ignore[operator]
+
+
+def test_agents_bought_alone_when_less_than_the_plan_that_includes_them() -> None:
+    # On Starter, five of Growth's agents: 59 € and five at 15 € < Growth's 179 €.
+    keys = [
+        "architecture-analysis",
+        "infrastructure-analysis",
+        "data-analysis",
+        "debug-assistant",
+        "build-fixer",
+    ]
+    lacking = [need(k, offer="add_on", available=False, reasons=LACKING) for k in keys]
+    verdict, path = path_of(lacking, month("starter"), None, sold_now(), CREDITS, expected="answer")
+    assert verdict == "prerequisites"
+    assert sorted(s.detail["agent"] for s in path) == sorted(keys)  # type: ignore[type-var]
+    assert all(s.kind == "buy_add_on" and s.consent and s.detail["renews"] for s in path)
+    # Past Starter's credits as well: Growth is needed anyway, and includes them.
+    verdict, path = path_of(
+        lacking, month("starter", 1990), 500, sold_now(), CREDITS, expected="answer"
+    )
+    assert verdict == "over_quota"
+    [step] = path
+    assert (step.kind, step.detail["plan"], step.detail["why"]) == (
+        "change_plan",
+        "growth",
+        "credits",
+    )
+
+
+def test_a_plan_is_said_in_full_before_any_yes_its_launch_offer_only_when_it_may_be_had() -> None:
+    spent = month("free", 200, "exhausted")
+    _, (step,) = path_of([ANALYSIS], spent, None, sold_now(), CREDITS, expected="answer")
+    starter = sold_now().plan("starter")
+    assert step.detail["monthly_price"] == starter.monthly_price
+    assert (step.detail["interval"], step.detail["renews"]) == ("month", True)
+    if sold_now().launch_open(END.date()):
+        assert step.detail["launch_percent"] == sold_now().launch_offer.percent
+        assert step.detail["launch_months"] == sold_now().launch_offer.months
+        assert step.detail["launch_price"] < starter.monthly_price  # type: ignore[operator]
+        assert step.detail["then_price"] == starter.monthly_price
+    # Had once already: never promised again.
+    _, (step,) = path_of(
+        [ANALYSIS], spent, None, sold_now(), CREDITS, expected="answer", launch=False
+    )
+    assert "launch_percent" not in step.detail
