@@ -431,6 +431,12 @@ class IntentionRead(BaseModel):
         "(LEKA-443)."
     )
     journey: JourneyRead
+    # The history's columns (LEKA-457): filled for a list, empty elsewhere.
+    agents: list[str] = Field(default_factory=list, description="Its agents' keys, as they ran.")
+    sources: list[str] = Field(
+        default_factory=list,
+        description="The kinds of the sources it was asked about or its analyses cite.",
+    )
 
 
 class IntentionLinkRead(BaseModel):
@@ -697,6 +703,8 @@ class IntentionCounts(BaseModel):
     scheduled: int
     finished: int
     archived: int
+    # By state, not archived (LEKA-457): the history's own tabs.
+    statuses: dict[str, int] = Field(default_factory=dict)
 
 
 # ── its analysis (LEKA-388) ──────────────────────────────────────────────────

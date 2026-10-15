@@ -15663,6 +15663,10 @@ export interface components {
             finished: number;
             /** Archived */
             archived: number;
+            /** Statuses */
+            statuses?: {
+                [key: string]: number;
+            };
         };
         /**
          * IntentionCreated
@@ -15744,6 +15748,16 @@ export interface components {
              */
             version: number;
             journey: components["schemas"]["JourneyRead"];
+            /**
+             * Agents
+             * @description Its agents' keys, as they ran.
+             */
+            agents?: string[];
+            /**
+             * Sources
+             * @description The kinds of the sources it was asked about or its analyses cite.
+             */
+            sources?: string[];
             /** Links */
             links: components["schemas"]["IntentionLinkRead"][];
             understanding: components["schemas"]["Understanding"] | null;
@@ -16078,6 +16092,16 @@ export interface components {
              */
             version: number;
             journey: components["schemas"]["JourneyRead"];
+            /**
+             * Agents
+             * @description Its agents' keys, as they ran.
+             */
+            agents?: string[];
+            /**
+             * Sources
+             * @description The kinds of the sources it was asked about or its analyses cite.
+             */
+            sources?: string[];
         };
         /**
          * IntentionRequest
@@ -47837,7 +47861,8 @@ export interface operations {
             query?: {
                 /** @description Every one not archived when none. */
                 phase?: ("active" | "scheduled" | "finished" | "archived") | null;
-                status?: components["schemas"]["IntentionStatus"] | null;
+                /** @description Any of these states. */
+                status?: components["schemas"]["IntentionStatus"][] | null;
                 /** @description Those I asked. */
                 mine?: boolean;
                 /** @description In its title or words. */

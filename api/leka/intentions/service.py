@@ -950,7 +950,13 @@ class IntentionService:
     async def reads(self, intentions: Sequence[Intention]) -> list[IntentionRead]:
         """A page of them, each with its journey."""
         found = await self.journeys(intentions)
-        return [intention_read(i, found[i.id]) for i in intentions]
+        agents, sources = await self._repository.used(intentions)
+        return [
+            intention_read(i, found[i.id]).model_copy(
+                update={"agents": agents.get(i.id, []), "sources": sources.get(i.id, [])}
+            )
+            for i in intentions
+        ]
 
     async def detail(self, intention_id: uuid.UUID) -> IntentionDetail | None:
         intention = await self._repository.intention(intention_id)
@@ -1008,6 +1014,7 @@ class IntentionService:
         return IntentionCounts(
             all=sum(counted.values()),
             archived=by_status.get("archived", 0),
+            statuses={s: n for s, n in by_status.items() if s != "archived"},
             **counted,
         )
 
