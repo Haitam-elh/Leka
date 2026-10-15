@@ -6351,6 +6351,8 @@ const fr = {
         continue: "LEKA peut avancer, avec ces limites : {limits}.",
         block:
           "LEKA ne peut pas agir sans savoir sur quoi : reformulez votre demande, ou posez une question plutôt qu'une action.",
+        off_topic:
+          "LEKA répond aux questions liées à votre stack technique : vos applications, votre code, vos systèmes, vos données et vos outils.",
       },
       limits: {
         too_short: "demande courte",
@@ -6377,6 +6379,8 @@ const fr = {
       read: "Relire",
       launch: "Lancer l'analyse",
       launchBlocked: "Répondez d'abord à ce qui bloque",
+      offTopic:
+        "LEKA répond aux questions liées à votre stack technique : vos applications, votre code, vos systèmes, vos données et vos outils.",
       reads: "Ce que LEKA va lire",
       readsAll: "{count} {count|source connectée|sources connectées}",
       noSource:
@@ -13417,6 +13421,8 @@ const en: Dictionary = {
         continue: "LEKA can go on, with these limits: {limits}.",
         block:
           "LEKA cannot act without knowing on what: rephrase your request, or ask a question rather than an action.",
+        off_topic:
+          "LEKA answers questions about your technology stack: your applications, code, systems, data and tools.",
       },
       limits: {
         too_short: "a short request",
@@ -13443,6 +13449,8 @@ const en: Dictionary = {
       read: "Read again",
       launch: "Start the analysis",
       launchBlocked: "Answer what blocks it first",
+      offTopic:
+        "LEKA answers questions about your technology stack: your applications, code, systems, data and tools.",
       reads: "What LEKA will read",
       readsAll: "{count} connected {count|source|sources}",
       noSource: "No source connected: LEKA will read your company model only.",

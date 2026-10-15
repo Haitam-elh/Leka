@@ -128,6 +128,7 @@ from leka.intentions.service import (
     LinkRefusedError,
     NothingToStartError,
     NotYoursError,
+    OffTopicError,
     analysis_read,
     intention_read,
 )
@@ -225,6 +226,7 @@ __all__ = [
     "Move",
     "NotYoursError",
     "NothingToStartError",
+    "OffTopicError",
     "OversightRefusedError",
     "OversightService",
     "PlanCancelRequest",

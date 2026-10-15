@@ -1,35 +1,77 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import { useRef } from "react";
 
 import { Form } from "@/components/forms/form";
+import { FormAlert } from "@/components/forms/form-alert";
 import { IntentionComposer } from "@/components/intentions/intention-composer";
 import { routes } from "@/config/routes";
+import { ApiError } from "@/lib/api";
 import { useLekaForm } from "@/lib/forms/use-leka-form";
+import { useDictionary } from "@/lib/i18n/locale-provider";
+import { intentAsk, submitIntention } from "@/lib/intentions/api";
+import { intentionKeys } from "@/lib/intentions/queries";
 import { type IntentionDraft, intentionDraftSchema } from "@/lib/validation/intentions";
 
 /**
  * "Que voulez-vous accomplir aujourd'hui ?" — the box on the overview.
  *
- * It does not submit an intention. It carries the sentence to the screen
- * that does, through the same `?q=` the command palette uses, so there is
- * one way into the composer and not two. Everything the full step then
- * needs — sources, scope, attachments — is decided there, where there is
- * room to decide it.
+ * What is typed here is asked here (2026-10-14: carried to another screen
+ * to be asked again, it read as « ça ne marche pas »): the intention is
+ * made — every source, every environment, as the full step does by
+ * default — and its page opens on its analysis. A request LEKA cannot take
+ * — about anything but technology, or naming nothing it knows — is said
+ * above the box. The paperclip still carries the sentence to the full step,
+ * where files are attached.
  */
 export function CompactIntentionComposer() {
   const router = useRouter();
+  const t = useDictionary();
+  const client = useQueryClient();
+  // One key per sentence (LEKA-443): pressed twice, it is one intention.
+  const requestKey = useRef<{ text: string; key: string } | null>(null);
 
   const form = useLekaForm<IntentionDraft>({
     schema: intentionDraftSchema,
     defaultValues: { text: "" },
-    onSubmit: (values) => {
-      router.push(`${routes.intentionNew()}?q=${encodeURIComponent(values.text)}`);
+    onSubmit: async (values) => {
+      const ask = intentAsk(
+        {
+          text: values.text,
+          sources: [],
+          environment: "all",
+          period: { preset: "7d", range: { from: "", to: "" } },
+          services: [],
+          attachments: [],
+        },
+        { everySource: true, periodChosen: false },
+      );
+      if (requestKey.current?.text !== ask.text) {
+        requestKey.current = { text: ask.text, key: crypto.randomUUID() };
+      }
+      try {
+        const made = await submitIntention(ask, requestKey.current.key);
+        client.setQueryData(intentionKeys.one(made.intention.id), made.intention);
+        void client.invalidateQueries({ queryKey: intentionKeys.all });
+        router.push(`${routes.intentions()}/${made.intention.id}`);
+      } catch (caught) {
+        if (caught instanceof ApiError && caught.status === 422) {
+          form.setError("root", {
+            type: "server",
+            message: caught.code === "off_topic" ? t.intentions.brief.offTopic : t.intent.nothing,
+          });
+          return;
+        }
+        throw caught;
+      }
     },
   });
 
   return (
-    <Form form={form}>
+    <Form form={form} className="space-y-3">
+      <FormAlert />
       <IntentionComposer
         variant="compact"
         onSubmit={() => void form.submit()}

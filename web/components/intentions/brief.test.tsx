@@ -61,6 +61,7 @@ const UNDERSTOOD: Understanding = {
   environment: "production",
   ambiguities: [],
   clear: false,
+  off_topic: false,
   scope: null,
 };
 

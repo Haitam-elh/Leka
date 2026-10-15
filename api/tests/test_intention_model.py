@@ -16,6 +16,9 @@ What these protect:
   point citing what the result holds, a citation it does not hold dropped —
   and the intention's summary is that answer. An answer resting on nothing
   is not kept, and said.
+- A request about anything but technology — a recipe — is said so: the
+  brief says off_topic, asking it is refused with that code, and nothing is
+  kept (2026-10-14: the launch button stayed grey, unexplained).
 - Without a model, the rules alone, as before: test_intention_analysis_api.
 """
 
@@ -40,7 +43,7 @@ from leka.db import session_factory, workspace_scope
 from leka.intentions.models import IntentionDecision, IntentionPlan
 from tests.conftest import FakeIdentity
 from tests.test_context_engine import model
-from tests.test_intention_analysis_api import _analysed, _ask, _get, queued  # noqa: F401
+from tests.test_intention_analysis_api import API, _analysed, _ask, _get, queued  # noqa: F401
 from tests.test_sources_api import _as, acme, fake_connector  # noqa: F401 — fixtures
 
 pytestmark = pytest.mark.integration
@@ -195,6 +198,61 @@ async def test_a_request_to_act_stays_the_rules(
     assert (understood["mode"], understood["goal"]["code"]) == ("request", "act")
     assert [a["code"] for a in understood["actions"]] == ["restart"]
     assert understood["read_by"]["method"] == "model"
+
+
+async def test_a_request_about_anything_but_technology_is_said_so(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[tuple[uuid.UUID, str]],
+    gemini: Callable[..., Gemini],
+) -> None:
+    gemini(
+        {
+            "mode": "question",
+            "goal": "unknown",
+            "confidence": 0.9,
+            "restated": "Une recette de tarte aux pommes.",
+            "understood": False,
+            "about_technology": False,
+        }
+    )
+    _as(identity, acme, "member")
+    words = {"text": "Donne-moi une recette de tarte aux pommes"}
+    preview = await client.post(f"{API}/brief", json=words)
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["understanding"]["off_topic"] is True
+    assert preview.json()["brief"]["decision"] == "off_topic"
+
+    refused = await client.post(API, json=words)
+    assert refused.status_code == 422
+    assert refused.json()["error"]["code"] == "off_topic"
+    assert (await _get(client, ""))["data"] == []
+
+
+async def test_a_request_about_technology_is_never_off_topic(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[tuple[uuid.UUID, str]],
+    gemini: Callable[..., Gemini],
+) -> None:
+    # A model wrong about it changes nothing once the company's things are named.
+    gemini(
+        {
+            "mode": "question",
+            "goal": "find_owner",
+            "confidence": 0.9,
+            "restated": "Qui s'occupe de Billing API ?",
+            "about_technology": False,
+        }
+    )
+    _as(identity, acme, "member")
+    intention = await _ask(client, "Billing API, c'est à qui de voir ça ?")
+    assert intention["understanding"]["off_topic"] is False
+    assert intention["status"] == "analysing"
 
 
 @pytest.mark.parametrize(
