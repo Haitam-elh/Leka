@@ -100,6 +100,9 @@ async def test_a_disagreement_on_what_decides_an_answer_about_what_was_asked_is_
         said=json.dumps(conflict),
         id=model[BILLING],
     )
+    # Shown by its sources today: the fixture's dates age, and a score left
+    # under the cap by their age would not need capping.
+    await _sql(acme["acme"], "UPDATE entities SET last_seen_at = now()")
 
     quality = (await _create(client, model))["quality"]
 

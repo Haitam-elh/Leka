@@ -332,7 +332,9 @@ function Domain({ category, items }: { category: string; items: Capability[] }) 
   const Icon = CATEGORY_ICON[category] ?? Lightbulb;
   return (
     <section
-      className="flex flex-col overflow-hidden rounded-xl border border-shell-line bg-white"
+      // In its column, whole, under the one before (2026-10-14: a grid of
+      // rows left a short box's column white down to the next row).
+      className="mb-4 flex break-inside-avoid flex-col overflow-hidden rounded-xl border border-shell-line bg-white"
       aria-labelledby={`domain-${category}`}
       data-testid="catalogue-domain"
       data-domain={category}
@@ -561,7 +563,7 @@ function Domains({
     ...[...new Set(kept.map((c) => c.category))].filter((c) => !known.includes(c)).sort(),
   ];
   return (
-    <div className="grid items-start gap-4 xl:grid-cols-2" data-testid="catalogue-grid">
+    <div className="gap-4 xl:columns-2" data-testid="catalogue-grid">
       {order.map((category) => {
         const items = kept.filter((c) => c.category === category);
         return items.length ? <Domain key={category} category={category} items={items} /> : null;

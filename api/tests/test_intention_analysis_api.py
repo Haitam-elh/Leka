@@ -221,6 +221,24 @@ async def test_a_question_its_context_cannot_ground_is_answered_what_is_missing_
     assert (await _get(client, f"/{intention['id']}"))["status"] == "completed"
 
 
+async def test_a_migration_to_assess_is_analysed_never_asked_to_be_clarified(
+    client: AsyncClient,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[tuple[uuid.UUID, str]],
+) -> None:
+    # 2026-10-14, the product call: « à préciser » on an ordinary request.
+    intention = await _ask(
+        client, "Je dois migrer les serveurs AWS vers Azure, évaluer les dépendances"
+    )
+    assert intention["status"] == "analysing"
+    assert intention["understanding"]["goal"]["code"] == "plan_migration"
+    outcome = await _analysed(acme, intention)
+    assert outcome["status"] not in ("blocked", "failed")
+    seen = await _get(client, f"/{intention['id']}")
+    assert seen["status"] not in ("needs_clarification", "failed")
+
+
 async def test_an_action_its_context_cannot_ground_is_asked_to_be_clarified(
     client: AsyncClient,
     model: dict[str, uuid.UUID],

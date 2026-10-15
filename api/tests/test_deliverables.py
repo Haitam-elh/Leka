@@ -57,9 +57,9 @@ from leka.capabilities.deliverables.scene import (
 )
 
 COLUMNS = [
-    Column(name="API CEL_BACKEND TR", subtitle="cel_tr_ws"),
-    Column(name="OCTOPUS", subtitle="middleware CLIP / INES"),
-    Column(name="ISU", subtitle="Symphonie"),
+    Column(name="API PORTAIL BACKEND", subtitle="portail_ws"),
+    Column(name="NEXUS", subtitle="middleware d'échanges"),
+    Column(name="FACTURATION", subtitle="ERP"),
     Column(name="ORDONNANCEUR", missing=True),
 ]
 
@@ -73,18 +73,18 @@ def deck(*, lines: int = 2, app_view: bool = True, contacts: int = 6) -> Archite
         ProcessView(
             letter=letter,
             label=label,
-            front="DIGITAL EC PASSERELLE",
-            front_label="FRONT TR",
-            channel_label="Espace Client TR",
+            front="DIGITAL ESPACE CLIENT",
+            front_label="FRONT WEB",
+            channel_label="Espace Client",
             columns=COLUMNS,
             bands=[
                 Band(
                     title="Vérification du solde",
                     lines=[
                         chain(
-                            ("API CEL_BACKEND TR", "ws_api/private/paiement/cb"),
-                            ("OCTOPUS", "ws_lireCompteClient (solde)"),
-                            ("ISU", "BAPI"),
+                            ("API PORTAIL BACKEND", "ws/paiement/carte"),
+                            ("NEXUS", "ws_lireSolde (solde)"),
+                            ("FACTURATION", "BAPI"),
                         )
                     ]
                     * lines,
@@ -101,12 +101,12 @@ def deck(*, lines: int = 2, app_view: bool = True, contacts: int = 6) -> Archite
     ]
     return ArchitectureDeck(
         parcours="Paiement CB",
-        perimetre="Périmètre Digital - Espace Client TR",
+        perimetre="Périmètre Digital - Espace Client",
         business=BusinessLayer(
             actor="Client",
             trigger="Choisit de payer par Carte Bancaire",
             process_name="Paiement par CB",
-            channel="Espace Client TR",
+            channel="Espace Client",
             groupings=[
                 Grouping(
                     letter="A",
@@ -129,25 +129,25 @@ def deck(*, lines: int = 2, app_view: bool = True, contacts: int = 6) -> Archite
         rules=[Rule(etape="A - Solde", regle="Le bouton Payer suit le solde.", statut="Documenté")],
         app_view=AppView(
             apps=[
-                AppBox(name="Espace Client TR", kind="perimetre"),
-                AppBox(name="OCTOPUS", kind="middleware"),
-                AppBox(name="ISU", kind="connexe", stores=["Factures"]),
-                AppBox(name="Worldline", kind="externe"),
+                AppBox(name="Espace Client", kind="perimetre"),
+                AppBox(name="NEXUS", kind="middleware"),
+                AppBox(name="FACTURATION", kind="connexe", stores=["Factures"]),
+                AppBox(name="Prestataire de paiement", kind="externe"),
             ],
             flows=[
-                Flow(n="1", source="Espace Client TR", target="OCTOPUS", interface="API REST"),
-                Flow(n="2", source="OCTOPUS", target="ISU", interface="BAPI", data="solde"),
-                Flow(n="3", source="OCTOPUS", target="Worldline", status="À confirmer"),
+                Flow(n="1", source="Espace Client", target="NEXUS", interface="API REST"),
+                Flow(n="2", source="NEXUS", target="FACTURATION", interface="BAPI", data="solde"),
+                Flow(n="3", source="NEXUS", target="Prestataire de paiement", status="À confirmer"),
             ],
         )
         if app_view
         else None,
         processes=process,
         raci=[
-            Contact(application="OCTOPUS", role="Conduite applicative", raci="R")
+            Contact(application="NEXUS", role="Conduite applicative", raci="R")
             for _ in range(contacts)
         ],
-        raci_notes="L'annuaire n'a pas répondu pour OCTOPUS.",
+        raci_notes="L'annuaire n'a pas répondu pour NEXUS.",
         controls=[Control(manque="ORDONNANCEUR ?", localisation="Process A - bande 2")],
         sources=[SourceRow(source="Confluence MO", elements="Parcours", statut="Consulté")],
     )
@@ -298,6 +298,6 @@ def test_the_powerpoint_is_native_and_the_pdf_has_a_page_per_slide() -> None:
 
 
 def test_the_pdf_says_what_helvetica_cannot_draw_in_what_it_can() -> None:
-    assert plain("Front → OCTOPUS ⇒ ISU") == "Front -> OCTOPUS => ISU"
+    assert plain("Front → NEXUS ⇒ FACTURATION") == "Front -> NEXUS => FACTURATION"
     assert plain("Règle « À confirmer » — œuvre") == "Règle « À confirmer » — œuvre"
     assert plain("✓ 漢") == "v ?"

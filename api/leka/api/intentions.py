@@ -93,6 +93,7 @@ from leka.intentions import (
     ModelReading,
     NothingToStartError,
     NotYoursError,
+    OffTopicError,
     SourceToReadRead,
     Understanding,
     Withdrawal,
@@ -171,6 +172,12 @@ def _refused(error: Exception) -> ApiError:
         )
     if isinstance(error, IntentionArchivedError | ContextArchivedError):
         return ApiError(status.HTTP_409_CONFLICT, ErrorCode.CONFLICT, "Archived: restore it first.")
+    if isinstance(error, OffTopicError):
+        return ApiError(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ErrorCode.OFF_TOPIC,
+            "LEKA answers questions about your technology stack.",
+        )
     if isinstance(error, NothingToStartError | ContextRefusedError):
         return ApiError(status.HTTP_422_UNPROCESSABLE_CONTENT, ErrorCode.VALIDATION_FAILED, NOTHING)
     if isinstance(error, LinkRefusedError):
@@ -188,6 +195,7 @@ REFUSED = (
     IntentionArchivedError,
     ContextArchivedError,
     NothingToStartError,
+    OffTopicError,
     ContextRefusedError,
     NotYoursError,
     LinkRefusedError,

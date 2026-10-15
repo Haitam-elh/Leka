@@ -400,6 +400,7 @@ describe("an intention's page", () => {
             { kind: "several_requests", blocking: false, said: "…", options: [] },
           ],
           clear: true,
+          off_topic: false,
         },
       }),
     );
@@ -439,6 +440,7 @@ describe("an intention's page", () => {
           environment: "production",
           ambiguities: [],
           clear: true,
+          off_topic: false,
           scope: {
             entities: [
               {
@@ -524,6 +526,7 @@ describe("an intention's page", () => {
             },
           ],
           clear: false,
+          off_topic: false,
         },
       }),
     );
@@ -559,6 +562,7 @@ describe("an intention's page", () => {
       environment: "production",
       ambiguities: [],
       clear: false,
+      off_topic: false,
       scope: null,
     };
     const waiting = intention({
