@@ -314,7 +314,7 @@ describe("the overview", () => {
   it("greets the person and says what needs them", async () => {
     mount();
 
-    expect(screen.getByRole("heading", { level: 1, name: "Bonjour Nora," })).toBeVisible();
+    expect(screen.getByRole("heading", { level: 2, name: "Bonjour Nora," })).toBeVisible();
     // What is in trouble first (LEKA-442), then the sources.
     expect(await screen.findByText("1 élément est en difficulté.")).toBeVisible();
   });
@@ -324,7 +324,7 @@ describe("the overview", () => {
     try {
       mount();
 
-      expect(screen.getByRole("heading", { level: 1, name: "Bonjour Haitam," })).toBeVisible();
+      expect(screen.getByRole("heading", { level: 2, name: "Bonjour Haitam," })).toBeVisible();
     } finally {
       currentUser = { id: "u1", email: "nora@acme.example" };
     }

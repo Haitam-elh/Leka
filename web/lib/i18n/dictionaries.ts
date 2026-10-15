@@ -287,7 +287,10 @@ const fr = {
   composer: {
     label: "Votre intention",
     placeholder: "Pourquoi l'API de paiement est-elle plus lente depuis hier ?",
-    compactTitle: "Que voulez-vous accomplir aujourd'hui ?",
+    compactTitle: "Que souhaitez-vous accomplir",
+    compactTitleHighlight: "aujourd'hui ?",
+    compactSubtitle:
+      "Posez votre question, lancez une analyse ou demandez une recommandation. LEKA comprend votre environnement et transforme vos données en actions.",
     submit: "Lancer l'analyse",
     submitHint: "⌘↵ pour lancer",
     sidePanel: "Contexte et périmètre",
@@ -352,6 +355,40 @@ const fr = {
    * than showing the mockup's number (decided 2026-09-25).
    */
   overview: {
+    /** The home's blocks of the sprint's mockup (LEKA-456). */
+    home: {
+      environment: "Mon environnement",
+      health: {
+        unknown: "Non vérifié",
+        stale: "Non vérifié",
+        incident: "Incident en cours",
+        partial: "Partiellement vérifié",
+        stable: "Stable",
+      },
+      healthHint: {
+        unknown: "Aucune source ne dit encore l'état de vos services.",
+        stale: "Vos sources n'ont pas été lues récemment.",
+        incident: "",
+        partial: "",
+        stable: "Aucun incident détecté",
+      },
+      incidents: "{count} {count|incident ouvert|incidents ouverts}",
+      measured: "{known} {known|service mesuré|services mesurés} sur {total}",
+      sources: "sources connectées",
+      lastSync: "Dernière synchronisation",
+      services: "services analysés",
+      agents: "Agents disponibles",
+      agentsBody:
+        "Activez des agents IA spécialisés pour aller plus loin dans l'analyse, la compréhension et l'action sur votre environnement.",
+      allAgents: "Voir tous les agents et bundles",
+      bundles: "Bundles LEKA",
+      bundlesBody:
+        "{count} ensembles d'agents pour couvrir vos besoins les plus fréquents, à un prix avantageux.",
+      discoverBundles: "Découvrir les bundles",
+      latest: "Dernières analyses",
+      latestBody: "Vos demandes et analyses récentes.",
+      allHistory: "Voir tout l'historique",
+    },
     /** What needs someone first, and whether what LEKA sees can be trusted (LEKA-442). */
     twin: {
       statusTrouble: "{count} {count|élément est|éléments sont} en difficulté.",
@@ -7734,7 +7771,10 @@ const en: Dictionary = {
   composer: {
     label: "Your intention",
     placeholder: "Why has the payment API been slower since yesterday?",
-    compactTitle: "What would you like to do today?",
+    compactTitle: "What would you like to achieve",
+    compactTitleHighlight: "today?",
+    compactSubtitle:
+      "Ask a question, run an analysis or ask for a recommendation. LEKA understands your environment and turns your data into actions.",
     submit: "Start the analysis",
     submitHint: "⌘↵ to start",
     sidePanel: "Context and scope",
@@ -7791,6 +7831,38 @@ const en: Dictionary = {
     connectSource: "Connect a source",
   },
   overview: {
+    home: {
+      environment: "My environment",
+      health: {
+        unknown: "Not verified",
+        stale: "Not verified",
+        incident: "Incident in progress",
+        partial: "Partly verified",
+        stable: "Stable",
+      },
+      healthHint: {
+        unknown: "No source says the state of your services yet.",
+        stale: "Your sources have not been read recently.",
+        incident: "",
+        partial: "",
+        stable: "No incident detected",
+      },
+      incidents: "{count} {count|open incident|open incidents}",
+      measured: "{known} of {total} services measured",
+      sources: "connected sources",
+      lastSync: "Last synchronisation",
+      services: "services analysed",
+      agents: "Available agents",
+      agentsBody:
+        "Turn on specialised AI agents to go further in analysing, understanding and acting on your environment.",
+      allAgents: "See all agents and bundles",
+      bundles: "LEKA bundles",
+      bundlesBody: "{count} sets of agents for your most frequent needs, at a better price.",
+      discoverBundles: "Discover the bundles",
+      latest: "Latest analyses",
+      latestBody: "Your recent requests and analyses.",
+      allHistory: "See the whole history",
+    },
     twin: {
       statusTrouble: "{count} {count|element is|elements are} in trouble.",
       statusLate: "Your sources have not been read for over 2 hours.",
