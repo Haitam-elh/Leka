@@ -98,6 +98,9 @@ test.describe("The frame", () => {
   });
 
   test("a page at rest asks the API nothing more", async ({ page }) => {
+    // Five pages watched 10 s each: about a minute alone — past the default
+    // 60 s on a slow runner (CI, 2026-10-15).
+    test.setTimeout(180_000);
     await signIn(page);
     const id = await ask(page, `Qui est responsable d'auth-service ? (${Date.now()})`);
     analyse(id);
