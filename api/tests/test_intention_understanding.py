@@ -148,6 +148,18 @@ def test_a_request_to_act_is_said_with_what_it_would_change() -> None:
     assert understood.clear
 
 
+def test_a_migration_to_assess_is_a_project_to_plan_never_an_act() -> None:
+    # 2026-10-14: read without a model, it stopped on « à préciser ».
+    text = "Je dois migrer les serveurs AWS vers Azure, évaluer les dépendances"
+    understood = understand(text, plan(text, "general", [], subjects=[]))
+    assert understood.goal.code == "plan_migration"
+    assert not any(a.changes_systems for a in understood.actions)
+    assert understood.clear
+    # Asked alone, a migration is still what a person decides on.
+    alone = "Migre Billing API vers AWS"
+    assert understand(alone, plan(alone, "general", [])).goal.code == "act"
+
+
 def test_asked_politely_with_a_question_mark_it_is_still_a_request() -> None:
     text = "Peux-tu faire un rollback de Billing API ?"
     understood = understand(text, plan(text, "general", []))

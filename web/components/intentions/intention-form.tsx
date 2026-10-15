@@ -207,7 +207,10 @@ export function IntentionForm({
       } catch (caught) {
         // Nothing to start from: said in the words of the form, not the API's.
         if (caught instanceof ApiError && caught.status === 422) {
-          form.setError("root", { type: "server", message: t.intent.nothing });
+          form.setError("root", {
+            type: "server",
+            message: caught.code === "off_topic" ? t.intentions.brief.offTopic : t.intent.nothing,
+          });
           return;
         }
         throw caught;
@@ -412,17 +415,29 @@ export function IntentionForm({
                 </Button>
               </p>
             ) : null}
-            <BriefView
-              brief={preview.brief}
-              understanding={preview.understanding}
-              answers={answers}
-              onAnswer={answer}
-              pending={reviewing}
-            />
+            {preview.brief.decision === "off_topic" ? (
+              // Not about technology: said what LEKA answers about — nothing
+              // to answer, nothing greyed without a word (2026-10-14).
+              <p
+                role="status"
+                className="rounded-lg bg-brand-violet-soft px-4 py-3 text-[0.875rem] text-brand-navy"
+                data-testid="intention-off-topic"
+              >
+                {t.intentions.brief.offTopic}
+              </p>
+            ) : (
+              <BriefView
+                brief={preview.brief}
+                understanding={preview.understanding}
+                answers={answers}
+                onAnswer={answer}
+                pending={reviewing}
+              />
+            )}
             <ReadsCard sources={preview.sources} />
             <FeasibilityPanel feasibility={preview.feasibility} />
             <div className="flex flex-wrap items-center justify-end gap-3">
-              {!launchable && !stale ? (
+              {!launchable && !stale && preview.brief.decision !== "off_topic" ? (
                 <span className="text-[0.8125rem] text-shell-muted">
                   {t.intentions.brief.launchBlocked}
                 </span>

@@ -82,6 +82,11 @@ asked, naming what it is about as written.
 - understood: true when LEKA can start working on it as it is — whatever \
 it names, however broadly (« les serveurs AWS » is every AWS server LEKA \
 knows); false only when the words say nothing LEKA could work on.
+- about_technology: false only when the request has nothing to do with \
+the company's technology — its software, code, systems, servers, cloud, \
+data, tools, projects, teams or documentation: a recipe, the weather, a \
+sports score, a poem. Anything about building, running, documenting or \
+changing technology, however vague, is true.
 Say only what the words say."""
 
 
@@ -93,6 +98,7 @@ class Reading(BaseModel):
     confidence: float = Field(ge=0, le=1)
     restated: str = Field(max_length=300)
     understood: bool = True
+    about_technology: bool = True
 
 
 # What says the work asked is to think, plan or produce — not to change
@@ -193,6 +199,9 @@ def merged(understood: Understanding, reading: Reading, by: UnderstoodBy) -> Und
             # A plan, not an action: what would change systems is not asked.
             actions = [a for a in actions if not a.changes_systems]
     still_acting = goal.code == "act" or any(a.changes_systems for a in actions)
+    # Nothing about technology, and nothing of the company's named: LEKA says
+    # what it answers about rather than asking what is wanted (2026-10-14).
+    off_topic = not reading.about_technology and sure and not understood.entities and not acting
     settled = goal.code != "unknown"
     understood_as_is = reading.understood and sure
     ambiguities = []
@@ -220,6 +229,7 @@ def merged(understood: Understanding, reading: Reading, by: UnderstoodBy) -> Und
             "clear": not any(a.blocking for a in ambiguities),
             "restated": reading.restated.strip() or None,
             "read_by": by,
+            "off_topic": off_topic,
         }
     )
 

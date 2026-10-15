@@ -620,18 +620,33 @@ def understand(
     found = [a for a in every if a.polarity == AFFIRMED]
     done = [a for a in every if a.polarity == DONE]
     spoken = [a for a in every if a.polarity != DONE]
+    folded = set(fold(text).split())
+    # A migration asked with what to assess, study or plan around it is a
+    # project to plan — no system changed now (2026-10-14: « Je dois migrer
+    # les serveurs AWS vers Azure, évaluer les dépendances » stopped on
+    # « à préciser » when no model read it).
+    migrating = [a for a in found if a.verb.code == "migrate"]
+    project = bool(migrating) and (
+        any(not a.verb.changes_systems for a in found) or bool(folded & PLANS)
+    )
+    if project:
+        found = [a for a in found if a.verb.code != "migrate"]
     mode, mode_said = mode_of(text, found)
     kinds = kinds_said(text)
     named = _entities(plan)
-    goal = _goal(
-        plan,
-        kinds,
-        mode,
-        found,
-        set(fold(text).split()),
-        bool(named),
-        done=done,
-        asked=mode_said is not None,
+    goal = (
+        GoalRead(code="plan_migration", said=[a.said for a in migrating], confidence=LIKELY)
+        if project
+        else _goal(
+            plan,
+            kinds,
+            mode,
+            found,
+            folded,
+            bool(named),
+            done=done,
+            asked=mode_said is not None,
+        )
     )
     actions = [
         ActionRead(code=a.verb.code, said=a.said, changes_systems=a.verb.changes_systems)

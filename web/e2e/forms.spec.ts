@@ -16,23 +16,21 @@ import { signIn } from "./sign-in";
 const SEND = process.platform === "darwin" ? "Meta+Enter" : "Control+Enter";
 
 test.describe("the intention journey", () => {
-  test("carries a question from the overview into step 1 and launches it", async ({ page }) => {
+  test("carries a question into step 1 and launches it", async ({ page }) => {
     await signIn(page);
 
+    // The palette hands a sentence to the full step through ?q= (the
+    // overview's box asks it itself: activation.spec.ts).
     const question = "Pourquoi l'API de paiement est-elle plus lente depuis hier ?";
-    await page.getByTestId("intention-input").fill(question);
-    await page.keyboard.press(SEND);
-
-    // The compact box does not analyse anything: it hands the sentence to
-    // the screen that does, through the same ?q= the palette uses.
-    await expect(page).toHaveURL(/\/intentions\/new\?q=/);
+    await page.goto(`/intentions/new?q=${encodeURIComponent(question)}`);
     await expect(page.getByTestId("intention-input")).toHaveValue(question);
     // The workspace's own sources, ticked once they arrive (scripts/seed.py).
     await expect(page.getByRole("checkbox", { name: "acme/backend" })).toBeChecked();
 
     // What LEKA understood first (LEKA-439): its goal, what it is about, what
-    // it will read, what it takes — then launched.
-    await page.getByTestId("intention-submit").click();
+    // it will read, what it takes — asked with the keyboard, then launched.
+    await page.getByTestId("intention-input").focus();
+    await page.keyboard.press(SEND);
     const brief = page.getByTestId("intention-brief");
     await expect(brief).toHaveAttribute("data-decision", /analyse|continue/);
     await expect(brief.locator('[data-testid="brief-slot"][data-slot="goal"]')).toBeVisible();
