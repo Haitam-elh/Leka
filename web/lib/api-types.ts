@@ -6799,7 +6799,7 @@ export interface components {
             owned: boolean;
             /**
              * Why
-             * @description plan_required, not_owned — none when it may run it.
+             * @description not_for_sale, plan_required, not_owned — none when it may run it.
              */
             why: string | null;
             /**
@@ -6807,6 +6807,17 @@ export interface components {
              * @description The bundles it comes in.
              */
             bundles: string[];
+            /**
+             * Reference
+             * @description Its name in the marketplace reference (LEKA-454).
+             */
+            reference?: string | null;
+            /**
+             * Included
+             * @description Its plan runs it, without an option.
+             * @default false
+             */
+            included: boolean;
         };
         /**
          * AgentProposalRead
@@ -8551,6 +8562,24 @@ export interface components {
             /** Origin */
             origin: ("words" | "answer" | "model" | "company_model" | "default") | null;
         };
+        /**
+         * BundleMemberRead
+         * @description An agent a bundle names (LEKA-454): the registry's agent standing for
+         *     it — none when no agent does yet, the bundle then not sold.
+         */
+        BundleMemberRead: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Agent */
+            agent: string | null;
+            /**
+             * Monthly Price
+             * @description Its reference price; none when unpriced.
+             */
+            monthly_price: number | null;
+        };
         /** BundleOfferRead */
         BundleOfferRead: {
             /** Key */
@@ -8563,13 +8592,24 @@ export interface components {
             monthly_price: number;
             /**
              * Alone Price
-             * @description Its agents bought one by one, cents a month.
+             * @description Its members bought one by one, cents a month — none when one is unpriced.
              */
-            alone_price: number;
-            /** Discount Percent */
-            discount_percent: number;
+            alone_price: number | null;
+            /**
+             * Discount Percent
+             * @description Computed from the members' prices; none when it cannot be shown.
+             */
+            discount_percent: number | null;
             /** Owned */
             owned: boolean;
+            /**
+             * Sellable
+             * @description Every member an agent of the registry.
+             * @default true
+             */
+            sellable: boolean;
+            /** Members */
+            members?: components["schemas"]["BundleMemberRead"][];
         };
         /**
          * BusinessContext
