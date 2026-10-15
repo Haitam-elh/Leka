@@ -13,6 +13,10 @@ import { signIn } from "./sign-in";
  *   readers read — once made the document taller than the window.
  * - The step open on an intention's page is ringed whole: its ring is not
  *   cut by the strip that scrolls the steps sideways.
+ * - Capacités: each domain's box sits right under the one before it in its
+ *   column — no white band down to the next row (2026-10-14).
+ * - A page at rest asks the API nothing more: nothing read again in a loop
+ *   (2026-10-14: « l'affichage a pris un net retard »).
  */
 
 test.use({ viewport: { width: 1451, height: 754 } });
@@ -69,5 +73,46 @@ test.describe("The frame", () => {
     // Its ring (2px) and the current step's halo (6px) fit inside the strip.
     expect(room.top).toBeGreaterThanOrEqual(6);
     await expect(strip).toBeVisible();
+  });
+
+  test("Capacités: each domain's box right under the one before, in two columns", async ({ page }) => {
+    await signIn(page);
+    await page.goto("/capabilities");
+    await expect(page.getByTestId("catalogue-domain").nth(2)).toBeVisible();
+    const boxes = await page.getByTestId("catalogue-domain").evaluateAll((all) =>
+      all.map((box) => {
+        const r = box.getBoundingClientRect();
+        return { left: Math.round(r.left), top: r.top, bottom: r.bottom };
+      }),
+    );
+    const columns = new Map<number, { top: number; bottom: number }[]>();
+    for (const box of boxes) columns.set(box.left, [...(columns.get(box.left) ?? []), box]);
+    expect(columns.size).toBe(2);
+    for (const column of columns.values()) {
+      column.sort((a, b) => a.top - b.top);
+      for (let i = 1; i < column.length; i++) {
+        // The 16px between two boxes, never more.
+        expect(column[i].top - column[i - 1].bottom).toBeLessThanOrEqual(17);
+      }
+    }
+  });
+
+  test("a page at rest asks the API nothing more", async ({ page }) => {
+    await signIn(page);
+    const id = await ask(page, `Qui est responsable d'auth-service ? (${Date.now()})`);
+    analyse(id);
+    for (const path of ["/overview", "/intentions", "/capabilities", "/environment", `/intentions/${id}/results`]) {
+      await page.goto(path);
+      await page.waitForLoadState("networkidle");
+      const asked: string[] = [];
+      const count = (request: { url: () => string }) => {
+        if (request.url().includes("/api/v1/")) asked.push(request.url());
+      };
+      page.on("request", count);
+      await page.waitForTimeout(10_000);
+      page.off("request", count);
+      // Nothing is working on anything here: nothing to follow.
+      expect(asked, `${path} kept asking: ${asked.join(", ")}`).toHaveLength(0);
+    }
   });
 });

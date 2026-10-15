@@ -13469,7 +13469,7 @@ export interface components {
          *     them and a rename would be a breaking change for nothing.
          * @enum {string}
          */
-        ErrorCode: "validation_failed" | "not_authenticated" | "permission_denied" | "not_found" | "conflict" | "rate_limited" | "internal_error" | "service_unavailable" | "invalid_cursor" | "invalid_sort" | "invalid_filter" | "contract_unsupported" | "invalid_credentials" | "account_unverified" | "token_invalid" | "token_expired" | "password_too_short" | "password_breached" | "session_expired" | "last_owner" | "csrf_failed";
+        ErrorCode: "validation_failed" | "not_authenticated" | "permission_denied" | "not_found" | "conflict" | "rate_limited" | "internal_error" | "service_unavailable" | "invalid_cursor" | "invalid_sort" | "invalid_filter" | "contract_unsupported" | "off_topic" | "invalid_credentials" | "account_unverified" | "token_invalid" | "token_expired" | "password_too_short" | "password_breached" | "session_expired" | "last_owner" | "csrf_failed";
         /**
          * ErrorEnvelope
          * @description Every error response the API returns, whatever the status.
@@ -15292,7 +15292,7 @@ export interface components {
              * Decision
              * @enum {string}
              */
-            decision: "analyse" | "clarify" | "continue" | "block";
+            decision: "analyse" | "clarify" | "continue" | "block" | "off_topic";
             /** Restated */
             restated: string | null;
             /**
@@ -21952,6 +21952,12 @@ export interface components {
             restated?: string | null;
             /** @description Who read it; none: LEKA's rules, before LEKA-394. */
             read_by?: components["schemas"]["UnderstoodBy"] | null;
+            /**
+             * Off Topic
+             * @description Nothing about the company's technology — a recipe, the weather: LEKA answers about its stack only, and says so (2026-10-14).
+             * @default false
+             */
+            off_topic: boolean;
         };
         /**
          * UnderstoodBy

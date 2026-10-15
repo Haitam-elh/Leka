@@ -66,7 +66,7 @@ vi.mock("@/lib/intentions/api", async (original) => {
 /** What POST /intentions/brief answers (LEKA-439): what LEKA understood,
  * its brief, what it reads, what it takes. */
 function preview(
-  decision: "analyse" | "clarify" | "continue" | "block" = "analyse",
+  decision: "analyse" | "clarify" | "continue" | "block" | "off_topic" = "analyse",
   questions: Record<string, unknown>[] = [],
 ) {
   return {
@@ -463,6 +463,22 @@ describe("the new intention's context and scope", () => {
         expect.any(String),
       ),
     );
+  });
+
+  it("says what LEKA answers about when a request is not about technology", async () => {
+    // 2026-10-14: a recipe left « Lancer l'analyse » grey, unexplained.
+    intentionsApi.brief.mockResolvedValueOnce(preview("off_topic"));
+    const user = userEvent.setup();
+    show();
+    await screen.findByRole("checkbox", { name: "acme/backend" });
+    await user.type(screen.getByTestId("intention-input"), "Donne-moi une recette de tarte aux pommes");
+    await user.click(screen.getByTestId("intention-submit"));
+
+    expect(await screen.findByTestId("intention-off-topic")).toHaveTextContent(
+      "LEKA répond aux questions liées à votre stack technique",
+    );
+    expect(screen.getByTestId("intention-launch")).toBeDisabled();
+    expect(screen.queryByText("Répondez d'abord à ce qui bloque")).not.toBeInTheDocument();
   });
 
   it("asks the same intention again once it is edited", async () => {

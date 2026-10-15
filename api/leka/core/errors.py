@@ -64,6 +64,10 @@ class ErrorCode(enum.StrEnum):
     # (LEKA-376: Leka-Context-Contract).
     CONTRACT_UNSUPPORTED = "contract_unsupported"
 
+    # ── Intentions ───────────────────────────────────────────────────────
+    # Nothing about the company's technology (2026-10-14).
+    OFF_TOPIC = "off_topic"
+
     # ── Authentication (LEKA-330, spelling preserved) ────────────────────
     INVALID_CREDENTIALS = "invalid_credentials"
     ACCOUNT_UNVERIFIED = "account_unverified"

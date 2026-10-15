@@ -552,7 +552,7 @@ def _status(text: str) -> Cell:
 
 
 def _domain(perimetre: str) -> str:
-    """« Périmètre Digital - Espace Client TR » -> « Digital »."""
+    """« Périmètre Digital - Espace Client » -> « Digital »."""
     text = perimetre.strip()
     if text.lower().startswith("périmètre "):
         text = text[len("périmètre ") :]
