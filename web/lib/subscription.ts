@@ -15,10 +15,13 @@ export type CheckoutAnswer = components["schemas"]["CheckoutRead"];
 export const subscription = {
   read: () => apiFetch<Subscription>("/billing/subscription"),
   pricing: () => apiFetch<Pricing>("/pricing"),
-  checkout: (plan: string, interval: "month" | "year") =>
+  /** Opened from an intention (LEKA-458): Stripe brings the person back to it. */
+  checkout: (plan: string, interval: "month" | "year", intentionId?: string) =>
     apiFetch<CheckoutAnswer>("/billing/checkout", {
       method: "POST",
-      body: JSON.stringify({ plan, interval }),
+      body: JSON.stringify(
+        intentionId ? { plan, interval, intention_id: intentionId } : { plan, interval },
+      ),
     }),
   portal: () => apiFetch<{ url: string }>("/billing/portal", { method: "POST" }),
 };
