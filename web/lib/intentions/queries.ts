@@ -2,8 +2,10 @@
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { agentRunKeys } from "@/lib/agent-runs-queries";
 import { ApiError } from "@/lib/api";
 import {
+  type AgentLaunch,
   type IntentionAnalysisRead,
   type IntentionAnswer,
   type IntentionDetail,
@@ -168,4 +170,23 @@ export function useAnswer(id: string) {
       void client.invalidateQueries({ queryKey: intentionKeys.counts });
     },
   });
+}
+
+/** The Décision step's two ways, and « Relancer » (2026-10-14): the
+ * intention as it now stands, its agents read again. */
+export function useDecide(id: string) {
+  const client = useQueryClient();
+  const settled = (updated: IntentionDetail) => {
+    client.setQueryData(intentionKeys.one(id), updated);
+    void client.invalidateQueries({ queryKey: intentionKeys.all });
+    void client.invalidateQueries({ queryKey: agentRunKeys.intention(id) });
+  };
+  return {
+    launch: useMutation({
+      mutationFn: (agents: AgentLaunch[]) => intentions.launch(id, agents),
+      onSuccess: settled,
+    }),
+    byHand: useMutation({ mutationFn: () => intentions.byHand(id), onSuccess: settled }),
+    retry: useMutation({ mutationFn: () => intentions.retryAgents(id), onSuccess: settled }),
+  };
 }

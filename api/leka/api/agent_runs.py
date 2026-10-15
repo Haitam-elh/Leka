@@ -60,7 +60,9 @@ from leka.capabilities import (
     read_deliverable,
     without_block,
 )
+from leka.capabilities.definition import Definition
 from leka.capabilities.deliverables import MEDIA_TYPES
+from leka.capabilities.runtime import DRAWN
 from leka.core.errors import ErrorCode, FieldError
 from leka.governance import (
     AIControlService,
@@ -165,6 +167,16 @@ def review_read(detail: Mapping[str, object]) -> CodeReviewRead | None:
     )
 
 
+def _expected(run: AgentRun, definition: Definition | None) -> list[str]:
+    """The files a run is to deliver: those asked when it was launched — or,
+    launched without saying, every one its agent draws."""
+    asked = run.detail.get("formats")
+    if isinstance(asked, list):
+        return [str(f) for f in asked]
+    drawn = DRAWN.get(definition.renders or "", ()) if definition is not None else ()
+    return [f for f in drawn if f in ("pdf", "pptx")]
+
+
 def run_read(run: AgentRun, principal: Principal) -> AgentRunRead:
     definition = find(run.key)
     failure = run.detail.get("failure")
@@ -186,6 +198,7 @@ def run_read(run: AgentRun, principal: Principal) -> AgentRunRead:
         context_version=run.context_version,
         format=run.format,
         pending=[str(p) for p in pending] if isinstance(pending, list) else [],
+        expected=_expected(run, definition),
         deliverables=[
             DeliverableRead(
                 format=f["format"],

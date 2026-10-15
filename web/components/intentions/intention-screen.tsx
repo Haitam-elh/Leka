@@ -18,7 +18,12 @@ import { cn } from "cn";
 import { ActionsTab } from "@/components/actions/actions-tab";
 import { IntentionDecision } from "@/components/decisions/intention-decision";
 import { Card, entityHref } from "@/components/environment/parts";
-import { AgentWork } from "@/components/intentions/agent-work";
+import {
+  AgentsAction,
+  AgentsDecision,
+  PlanChecklist,
+  ProposalView,
+} from "@/components/intentions/agents-decision";
 import {
   AnalysisProgress,
   AnalysisResults,
@@ -57,7 +62,7 @@ import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import { useIntentionRuns } from "@/lib/agent-runs-queries";
 import type { IntentionDetail, IntentionLink } from "@/lib/intentions/api";
-import { may, working } from "@/lib/intentions/journey";
+import { may } from "@/lib/intentions/journey";
 import { useAnswer, useIntention, useIntentionChange } from "@/lib/intentions/queries";
 import { buildBreadcrumb } from "@/lib/navigation/breadcrumb";
 import { matchRoute } from "@/lib/navigation/active";
@@ -129,7 +134,7 @@ export function IntentionScreen() {
   } else if (shown === "decision") {
     body = <DecisionStep intention={data} />;
   } else if (shown === "actions") {
-    body = <ActionsTab intention={data} />;
+    body = <ActionStep intention={data} />;
   } else {
     body = <Overview intention={data} />;
   }
@@ -180,10 +185,6 @@ export function IntentionScreen() {
           <Asked intention={data} />
           {/* What happened, since when, what comes next and who (LEKA-443). */}
           <JourneyNote intention={data} />
-          {/* What an agent is doing for it — its PDF the moment it is drawn. */}
-          <div className="mb-4">
-            <AgentWork intentionId={data.id} live={working(data.journey)} />
-          </div>
         </>
       ) : null}
       {body}
@@ -216,13 +217,6 @@ const STEP_OF: Partial<Record<View, Step>> = {
   decision: "decision",
   actions: "action",
 };
-
-/** Whether it goes, or went, past its results: something to do on the
- * systems, put to a decision. A question answered stops at its results —
- * as its journey says (LEKA-443). */
-function decides(intention: IntentionDetail): boolean {
-  return intention.journey.step.last >= STEPS.indexOf("decision");
-}
 
 /** Mockup 04's banner: what was asked, said once above every step. */
 function Asked({ intention }: { intention: IntentionDetail }) {
@@ -277,28 +271,56 @@ function MoreViews({ id, shown }: { id: string; shown: View }) {
   );
 }
 
-/** Step 3, mockup 04: what LEKA concludes, then what it found. */
+/** Step 3, mockup 04: what LEKA concludes, what it found — then the plan
+ * and the agents it takes (2026-10-14). */
 function ResultsStep({ intention }: { intention: IntentionDetail }) {
-  return <AnalysisResults intention={intention} />;
+  return (
+    <div className="space-y-4">
+      <AnalysisResults intention={intention} />
+      <ProposalView intention={intention} />
+    </div>
+  );
 }
 
-/** Step 4, mockup 05: what to decide, and why. Nothing to decide — a
- * question answered — said so. */
+/** Step 4, mockup 05: every request decided (2026-10-14) — its agents
+ * launched, or done by hand; and, when it changes systems, the decision
+ * on its actions (LEKA-390). */
 function DecisionStep({ intention }: { intention: IntentionDetail }) {
-  const t = useDictionary();
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:items-start">
       <div className="min-w-0 space-y-4">
         <IntentionDecision intentionId={intention.id} />
-        {decides(intention) ? null : (
-          <p className="rounded-xl border border-shell-line bg-white px-5 py-6 text-[0.875rem] text-shell-muted">
-            {t.intentions.steps.notNeeded}
-          </p>
-        )}
+        <AgentsDecision intention={intention} />
       </div>
       <DecisionAside intention={intention} />
     </div>
   );
+}
+
+/** Step 5: what is done — by its agents, by its asker with the plan, or the
+ * actions a decision approved (LEKA-391). */
+function ActionStep({ intention }: { intention: IntentionDetail }) {
+  const t = useDictionary();
+  const runs = useIntentionRuns(intention.id);
+  const path = intention.journey.path;
+  if (path === "self") return <PlanChecklist intention={intention} />;
+  if (path === "agents" || runs.data?.length) return <AgentsAction intention={intention} />;
+  if (intention.status === "awaiting_decision") {
+    return (
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-shell-line bg-white px-5 py-4" data-testid="action-nothing-yet">
+        <p className="min-w-0 flex-1 text-[0.875rem] text-shell-muted">
+          {t.intentions.agents.nothingYet}
+        </p>
+        <Link
+          href={`${routes.intentions()}/${intention.id}/decision`}
+          className={buttonVariants({ variant: "outline", size: "sm" })}
+        >
+          {t.intentions.agents.toDecision}
+        </Link>
+      </div>
+    );
+  }
+  return <ActionsTab intention={intention} />;
 }
 
 function Subtitle({ intention }: { intention: IntentionDetail }) {

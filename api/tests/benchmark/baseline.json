@@ -695,16 +695,16 @@
    "standing": 1,
    "synthesis": 1
   },
-  "commit": "47904e2",
+  "commit": "3527c86",
   "company_model_version": 9,
-  "dataset_sha256": "eaf82f7ba72d7667e2393128567291e4a65142a0fac4a91f0bb6b4c7117cbc12",
-  "dataset_version": 3,
+  "dataset_sha256": "9395fa0a808d005485c9a11c467305f7817e0e5d1a9625498b32bcf58b890370",
+  "dataset_version": 4,
   "fixture": "demo-seed",
   "prompts": {
-   "analyst": "a24ba68880bc243f",
-   "dispatch": "d5224b880da0015c",
+   "analyst": "5c2a6a0f195f193e",
+   "proposal": "3bdb8e76883edb39",
    "reading": "d86e769f887bc575",
-   "synthesis": "74e3cefed3dd0cda"
+   "synthesis": "39372efe66d07999"
   },
   "read_by": [
    "rules"

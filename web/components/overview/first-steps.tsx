@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { cn } from "cn";
+import { ExploreDemoButton } from "@/components/demo/demo";
+import { useInDemo } from "@/components/demo/in-demo";
 import { buttonVariants } from "@/components/ui/button";
 import { routes } from "@/config/routes";
 import { fill } from "@/lib/i18n/dictionaries";
@@ -102,6 +104,7 @@ export function FirstStepsCard({ sources }: { sources: readonly Source[] }) {
   const t = useDictionary();
   const w = t.overview.firstSteps;
   const counts = useIntentionCounts();
+  const inDemo = useInDemo();
   const [hidden, setHidden] = useState(true);
 
   // Read after mount: the server has no localStorage.
@@ -219,6 +222,13 @@ export function FirstStepsCard({ sources }: { sources: readonly Source[] }) {
             >
               {action.label}
             </Link>
+          ) : null}
+          {/* Nothing read yet: Nova Retail, the demonstration, to see it first (LEKA-451). */}
+          {steps.stage !== "ready" && !inDemo ? (
+            <div className="mt-3 border-t border-shell-line pt-3" data-testid="first-steps-demo">
+              <p className="mb-2 text-[0.8125rem] text-shell-muted">{t.demo.exploreHint}</p>
+              <ExploreDemoButton />
+            </div>
           ) : null}
         </li>
         <li className="rounded-lg border border-shell-line bg-white p-3">

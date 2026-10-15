@@ -49,7 +49,12 @@ export function AgentWork({ intentionId, live = false }: { intentionId: string; 
       aria-labelledby="agent-work-title"
       data-testid="agent-work"
     >
-      <h2 id="agent-work-title" className="sr-only">
+      {/* Who works on it, said apart from the skills its analysis used
+          (2026-10-14: « on ne comprend pas quel agent a travaillé »). */}
+      <h2
+        id="agent-work-title"
+        className="mb-3 text-xs font-semibold uppercase tracking-[0.06em] text-shell-muted"
+      >
         {w.title}
       </h2>
       <ul className="flex flex-col gap-4">
@@ -60,7 +65,14 @@ export function AgentWork({ intentionId, live = false }: { intentionId: string; 
             ? fill(w.working, { agent })
             : run.status === "succeeded"
               ? fill(run.deliverables.length ? w.delivered : w.done, { agent })
-              : fill(w.stopped, { agent });
+              : run.status === "awaiting_approval"
+                ? fill(w.agent, { agent })
+                : fill(w.stopped, { agent });
+          // The files it was asked for, never ones it will not draw
+          // (2026-10-14: « PDF et PowerPoint » said of every agent).
+          const formats = (run.expected ?? [])
+            .map((f) => (t.intentions.agents.deliverables as Record<string, string>)[f] ?? f)
+            .join(", ");
           return (
             <li key={run.id} className="flex flex-col gap-3 sm:flex-row sm:items-center" data-testid="agent-work-run">
               <IconTile
@@ -81,8 +93,12 @@ export function AgentWork({ intentionId, live = false }: { intentionId: string; 
                 </p>
                 {run.status === "failed" && run.error ? (
                   <p className="text-[0.8125rem] text-state-danger">{errors[run.error] ?? run.error}</p>
+                ) : run.status === "awaiting_approval" ? (
+                  <p className="text-[0.8125rem] text-shell-muted">{w.held}</p>
                 ) : moving ? (
-                  <p className="text-[0.8125rem] text-shell-muted">{w.filesSoon}</p>
+                  <p className="text-[0.8125rem] text-shell-muted">
+                    {formats ? fill(w.filesSoon, { formats }) : w.reportSoon}
+                  </p>
                 ) : null}
               </div>
               <div className="flex flex-wrap items-center gap-2">

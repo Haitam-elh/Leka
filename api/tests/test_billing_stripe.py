@@ -239,23 +239,23 @@ async def test_the_catalogue_is_made_in_stripe_once() -> None:
     done = await sync(fake.client(), catalogue(), today=date(2026, 10, 17))
     assert set(done.prices) == {
         "leka_core_starter_month_5900",
-        "leka_core_starter_year_56640",
+        "leka_core_starter_year_49560",
         "leka_core_growth_month_17900",
-        "leka_core_growth_year_171840",
+        "leka_core_growth_year_150360",
         "leka_core_business_month_59900",
-        "leka_core_business_year_575040",
+        "leka_core_business_year_503160",
     }
     assert fake.products == {"leka_core_starter", "leka_core_growth", "leka_core_business"}
-    assert fake.coupons == {"leka_launch_30_12m"}
+    assert fake.coupons == {"leka_launch_20_12m"}
     [coupon] = fake.posted("/v1/coupons")
     assert (coupon["percent_off"], coupon["duration"], coupon["duration_in_months"]) == (
-        "30",
+        "20",
         "repeating",
         "12",
     )
-    yearly = next(p for p in fake.posted("/v1/prices") if p["lookup_key"].endswith("_year_171840"))
+    yearly = next(p for p in fake.posted("/v1/prices") if p["lookup_key"].endswith("_year_150360"))
     assert (yearly["unit_amount"], yearly["recurring[interval]"], yearly["currency"]) == (
-        "171840",
+        "150360",
         "year",
         "eur",
     )
@@ -294,18 +294,18 @@ async def test_checkout_charges_what_the_page_shows_the_launch_offer_once(
     assert opened.status_code == 200, opened.text
     said = opened.json()
     assert said["url"] == "https://checkout.stripe.test/cs_1"
-    assert (said["quote"]["discount"], said["quote"]["charged"]) == ("launch", 12530)
+    assert (said["quote"]["discount"], said["quote"]["charged"]) == ("launch", 14320)
     [session] = stripe.posted("/v1/checkout/sessions")
     assert session["mode"] == "subscription"
     assert session["line_items[0][price]"] == stripe.prices["leka_core_growth_month_17900"]
-    assert session["discounts[0][coupon]"] == "leka_launch_30_12m"
+    assert session["discounts[0][coupon]"] == "leka_launch_20_12m"
     assert session["client_reference_id"] == str(acme["acme"])
     assert session["success_url"] == "https://leka.test/billing?checkout=success"
     # A year: the annual discount, never the coupon as well.
     yearly = await client.post(f"{API}/checkout", json={"plan": "growth", "interval": "year"})
     assert yearly.json()["quote"]["discount"] == "annual"
     session = stripe.posted("/v1/checkout/sessions")[-1]
-    assert session["line_items[0][price]"] == stripe.prices["leka_core_growth_year_171840"]
+    assert session["line_items[0][price]"] == stripe.prices["leka_core_growth_year_150360"]
     assert "discounts[0][coupon]" not in session
     # One Stripe customer for the workspace.
     assert len(stripe.posted("/v1/customers")) == 1
@@ -432,7 +432,7 @@ async def test_growth_s_trial_takes_a_card_says_its_first_charge_and_is_had_once
     opened = await client.post(f"{API}/checkout", json={"plan": "growth", "interval": "month"})
     quote = opened.json()["quote"]
     # Said before paying: 14 days, then the launch price on that day.
-    assert (quote["trial_days"], quote["charged"], quote["then_monthly"]) == (14, 12530, 17900)
+    assert (quote["trial_days"], quote["charged"], quote["then_monthly"]) == (14, 14320, 17900)
     assert quote["first_charge_on"] is not None
     [session] = stripe.posted("/v1/checkout/sessions")
     assert session["subscription_data[trial_period_days]"] == "14"

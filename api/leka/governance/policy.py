@@ -38,6 +38,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 from leka.governance.schemas import (
+    DEMO_REFUSED,
     ROLE_PERMISSIONS,
     WRITE_PERMISSIONS,
     Permission,
@@ -146,6 +147,7 @@ class Subject:
     custom_role: str | None = None
     granted: frozenset[Permission] | None = None
     policies: tuple[Rule, ...] = ()
+    workspace_demo: bool = False
 
     @classmethod
     def of(cls, principal: Principal) -> Subject:
@@ -156,6 +158,7 @@ class Subject:
             principal.custom_role,
             principal.granted,
             tuple(principal.policies),
+            principal.workspace_demo,
         )
 
     @property
@@ -267,6 +270,14 @@ def evaluate(
             permission,
             "This workspace is suspended: your data is intact and readable, "
             "but changes are paused until the account is reactivated.",
+        )
+    if subject.workspace_demo and permission in DEMO_REFUSED:
+        return _refused(
+            "workspace",
+            "workspace_demo",
+            permission,
+            "This is a demonstration workspace: its data is fictive and nothing in it "
+            "reaches a real system. Connect your own tools in your workspace.",
         )
     granted = subject.permissions
     if permission not in granted:

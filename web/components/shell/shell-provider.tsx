@@ -20,6 +20,7 @@
 import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
+import { InDemoContext } from "@/components/demo/in-demo";
 import { ApiError } from "@/lib/api";
 import { auth, type CurrentUser, type WorkspaceMembership } from "@/lib/auth";
 import { useLanguage } from "@/lib/i18n/locale-provider";
@@ -122,7 +123,12 @@ export function ShellProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo(() => ({ state, retry, updateUser }), [state, retry, updateUser]);
-  return <ShellContext.Provider value={value}>{children}</ShellContext.Provider>;
+  const inDemo = state.status === "ready" && state.workspace?.demo === true;
+  return (
+    <ShellContext.Provider value={value}>
+      <InDemoContext.Provider value={inDemo}>{children}</InDemoContext.Provider>
+    </ShellContext.Provider>
+  );
 }
 
 function useShellContext(): ShellState {

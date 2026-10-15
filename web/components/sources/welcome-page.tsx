@@ -1,12 +1,14 @@
 "use client";
 
-import { Check, CircleCheck, Lock, Wrench } from "lucide-react";
+import { Check, CircleCheck, Lock, Plug, Wrench } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { cn } from "cn";
+import { ExploreDemoButton } from "@/components/demo/demo";
 import { PageContainer, PageHeader } from "@/components/shell/page-container";
+import { useInDemo } from "@/components/demo/in-demo";
 import { AddSourceDialog } from "@/components/sources/add-source-dialog";
 import { capabilityWord } from "@/components/sources/source-panel";
 import { SourceLogo } from "@/components/sources/source-logo";
@@ -73,6 +75,8 @@ export function WelcomePage() {
   const [connecting, setConnecting] = useState(false);
   const [opened, setOpened] = useState<Opened | null>(null);
   const [custom, setCustom] = useState(false);
+
+  const inDemo = useInDemo();
 
   const breadcrumb = buildBreadcrumb(pathname, t);
   if (catalog.isPending || list.isPending) {
@@ -187,6 +191,7 @@ export function WelcomePage() {
         breadcrumb={breadcrumb}
       />
       {wizard}
+      {inDemo ? null : <StartChoice />}
       <AddSourceDialog
         open={custom}
         start="custom"
@@ -197,7 +202,7 @@ export function WelcomePage() {
         <Lock className="size-3.5" aria-hidden="true" />
         {t.sources.add.readOnly}
       </p>
-      <div className="flex flex-col gap-6">
+      <div id="welcome-tools" className="flex scroll-mt-4 flex-col gap-6">
         {categories.map(({ category, entries }) => (
           <section key={category} aria-labelledby={`welcome-${category}`}>
             <h2 id={`welcome-${category}`} className="mb-2 text-sm font-semibold text-brand-navy">
@@ -242,6 +247,37 @@ export function WelcomePage() {
         </Button>
       </div>
     </PageContainer>
+  );
+}
+
+/** Two ways in, of the same weight (LEKA-451): one's own tools, below, or
+ * the demonstration — Nova Retail, nothing to connect. */
+function StartChoice() {
+  const t = useDictionary();
+  const w = t.demo;
+  return (
+    <section aria-labelledby="welcome-start" className="mb-6" data-testid="welcome-start">
+      <h2 id="welcome-start" className="mb-2 text-sm font-semibold text-brand-navy">
+        {w.chooseTitle}
+      </h2>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <a
+          href="#welcome-tools"
+          className="flex flex-col gap-1 rounded-xl border border-shell-line bg-white p-4 outline-none hover:border-brand-violet focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+        >
+          <span className="flex items-center gap-2 font-semibold text-brand-navy">
+            <Plug className="size-4 text-brand-violet" aria-hidden="true" />
+            {w.connectTitle}
+          </span>
+          <span className="text-[0.8125rem] text-shell-muted">{w.connectBody}</span>
+        </a>
+        <div className="flex flex-col items-start gap-2 rounded-xl border border-shell-line bg-white p-4">
+          <span className="font-semibold text-brand-navy">{w.exploreTitle}</span>
+          <span className="text-[0.8125rem] text-shell-muted">{w.exploreBody}</span>
+          <ExploreDemoButton />
+        </div>
+      </div>
+    </section>
   );
 }
 

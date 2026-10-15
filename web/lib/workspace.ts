@@ -16,6 +16,7 @@ import type { components } from "@/lib/api-types";
 
 export type CurrentWorkspace = components["schemas"]["CurrentWorkspace"];
 export type WorkspaceRead = components["schemas"]["WorkspaceRead"];
+export type DemoRead = components["schemas"]["DemoRead"];
 
 export const workspace = {
   current: () => apiFetch<CurrentWorkspace>("/workspaces/current", { redirectOn401: false }),
@@ -32,4 +33,8 @@ export const workspace = {
   /** Make it the workspace this browser works in. */
   enter: (workspaceId: string) =>
     apiFetch<unknown>(`/workspaces/${workspaceId}/switch`, { method: "POST" }),
+  /** My demonstration (LEKA-449), made when I have none — `fresh`: made
+   * again from a clean state — and entered. */
+  openDemo: (fresh = false) =>
+    apiFetch<DemoRead>(fresh ? "/demo?fresh=true" : "/demo", { method: "POST" }),
 };

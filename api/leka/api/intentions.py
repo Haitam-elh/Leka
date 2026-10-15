@@ -60,13 +60,14 @@ from leka.context import (
     ContextRepository,
     ContextService,
 )
-from leka.core.errors import ErrorCode
+from leka.core.errors import ErrorCode, FieldError
 from leka.db import SortableField
 from leka.governance import Permission, Principal, require_permission
 from leka.ingestion import ContentRepository, ResolutionRepository
 from leka.intelligence import IntelligenceRepository
 from leka.intentions import (
     Actor,
+    AgentsLaunchRequest,
     FeasibilityRead,
     IllegalTransitionError,
     Intention,
@@ -100,6 +101,7 @@ from leka.intentions import (
     queue_analysis,
     route_intention,
 )
+from leka.intentions import agents as agent_steps
 from leka.intentions.brief import brief_of, tidy
 from leka.intentions.feasibility import Feasibility, feasibility_of
 from leka.knowledge import GraphRepository, GraphService
@@ -375,9 +377,14 @@ async def counts(
 
 
 @router.get("/{intention_id}", response_model=IntentionDetail)
-async def intention(intention_id: uuid.UUID, service: Reading) -> IntentionDetail:
+async def intention(
+    intention_id: uuid.UUID, service: Reading, session: SessionDep, principal: Reader
+) -> IntentionDetail:
     """One intention: where it stands, where it may go next, what it is
-    linked to."""
+    linked to. Its agents all ended: settled first — verified or failed —
+    never left executing (2026-10-14)."""
+    if await agent_steps.settle(session, principal.workspace_id, intention_id):
+        await session.commit()
     found = await service.detail(intention_id)
     if found is None:
         raise _missing()
@@ -553,6 +560,129 @@ async def stop(intention_id: uuid.UUID, service: Asking, principal: Asker) -> In
         raise _refused(error) from error
     if found is None:
         raise _missing()
+    return await service.detail_now(found)
+
+
+def _not_launched(error: agent_steps.AgentsRefusedError) -> ApiError:
+    """Why its agents are not launched, in words a screen can act on."""
+    agent = str(error.detail.get("agent") or "")
+    if error.code == "unavailable":
+        reasons = ", ".join(str(r) for r in error.detail.get("reasons") or [])  # type: ignore[attr-defined]
+        return ApiError(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ErrorCode.AGENT_UNAVAILABLE,
+            f"{agent} cannot run here: {reasons}.",
+        )
+    if error.code == "missing_inputs":
+        missing = [str(m) for m in error.detail.get("missing") or []]  # type: ignore[attr-defined]
+        return ApiError(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ErrorCode.AGENT_INPUTS_MISSING,
+            f"{agent} needs: {', '.join(missing)}.",
+            details=[
+                FieldError(field=f"agents.{agent}.inputs.{name}", message="missing")
+                for name in missing
+            ],
+        )
+    if error.code == "credits":
+        return ApiError(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ErrorCode.CREDITS_SHORT,
+            "This month's credits are short of what these agents take.",
+        )
+    if error.code in ("not_proposed", "unknown_agent"):
+        return ApiError(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ErrorCode.AGENT_NOT_PROPOSED,
+            "Only the agents its analysis proposed are launched from it.",
+        )
+    return ApiError(
+        status.HTTP_422_UNPROCESSABLE_CONTENT,
+        ErrorCode.VALIDATION_FAILED,
+        f"Its agents cannot be launched: {error.code}.",
+    )
+
+
+@router.post("/{intention_id}/agents", response_model=IntentionDetail)
+async def launch_agents(
+    intention_id: uuid.UUID,
+    body: AgentsLaunchRequest,
+    service: Asking,
+    principal: Asker,
+    session: SessionDep,
+) -> IntentionDetail:
+    """« Lancer avec ces agents » (2026-10-14): the agents its analysis
+    proposed that a person chose, started on it — never by LEKA alone — with
+    the inputs they completed and only the files they asked for. Approved,
+    then executing. 422 when one cannot run here, lacks an input, or the
+    credits are short — nothing started; 409 when it cannot be decided."""
+    try:
+        launched = await agent_steps.launch(
+            session,
+            principal.workspace_id,
+            intention_id,
+            [agent_steps.Chosen(a.key, a.inputs, a.formats, a.sources) for a in body.agents],
+            by=principal.user_id,
+            steward=_steward(principal),
+        )
+    except agent_steps.AgentsRefusedError as error:
+        raise _not_launched(error) from error
+    except REFUSED as error:
+        raise _refused(error) from error
+    if launched is None:
+        raise _missing()
+    found, runs = launched
+    await session.commit()
+    await agent_steps.queue_all(principal.workspace_id, runs)
+    return await service.detail_now(found)
+
+
+@router.post("/{intention_id}/by-hand", response_model=IntentionDetail)
+async def by_hand(
+    intention_id: uuid.UUID, service: Asking, principal: Asker, session: SessionDep
+) -> IntentionDetail:
+    """« Je le fais moi-même » (2026-10-14): its asker does the work with the
+    plan in hand — done, nothing for LEKA to run. 409 when it cannot be
+    decided."""
+    try:
+        found = await agent_steps.by_hand(
+            session,
+            principal.workspace_id,
+            intention_id,
+            by=principal.user_id,
+            steward=_steward(principal),
+        )
+    except REFUSED as error:
+        raise _refused(error) from error
+    if found is None:
+        raise _missing()
+    await session.commit()
+    return await service.detail_now(found)
+
+
+@router.post("/{intention_id}/agents/retry", response_model=IntentionDetail)
+async def retry_agents(
+    intention_id: uuid.UUID, service: Asking, principal: Asker, session: SessionDep
+) -> IntentionDetail:
+    """« Relancer »: the agents that failed, launched again with what they
+    were given — those that delivered kept. 409 unless its agents failed."""
+    try:
+        launched = await agent_steps.retry(
+            session,
+            principal.workspace_id,
+            intention_id,
+            by=principal.user_id,
+            steward=_steward(principal),
+        )
+    except agent_steps.AgentsRefusedError as error:
+        raise _not_launched(error) from error
+    except REFUSED as error:
+        raise _refused(error) from error
+    if launched is None:
+        raise _missing()
+    found, runs = launched
+    await session.commit()
+    await agent_steps.queue_all(principal.workspace_id, runs)
     return await service.detail_now(found)
 
 
