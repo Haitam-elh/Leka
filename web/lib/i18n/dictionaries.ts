@@ -5596,6 +5596,7 @@ const fr = {
         none: "Rien n'a manqué : chaque capacité a répondu, chaque source était à jour.",
         silent: "Ce qui n'a pas répondu, et ce qu'on ne sait donc pas",
         stale: "Ce qui peut être daté",
+        seeSources: "Voir les sources",
       },
       next: { title: "Prochaine étape", why: "Pourquoi :" },
       freshness: {
@@ -6934,7 +6935,7 @@ const fr = {
         "limit.source_degraded":
           "{source} est dégradée : ce qu'elle disait peut être incomplet.",
         "limit.source_unread":
-          "{source} est connectée mais pas encore lue : ce qu'elle contient n'est pas dans cette réponse.",
+          "{source} est connectée mais pas encore lue : la réponse peut être incomplète.",
         "limit.context_limited":
           "Il manque à son contexte quelque chose dont elle a besoin.",
         "limit.capability.standing":
@@ -12840,6 +12841,7 @@ const en: Dictionary = {
         none: "Nothing was missing: every capability answered, every source was up to date.",
         silent: "What did not answer, and what is therefore not known",
         stale: "What may be out of date",
+        seeSources: "See the sources",
       },
       next: { title: "Next step", why: "Why:" },
       freshness: {
@@ -14128,7 +14130,7 @@ const en: Dictionary = {
         "limit.source_degraded":
           "{source} is degraded: what it said may be incomplete.",
         "limit.source_unread":
-          "{source} is connected but not read yet: what it holds is not in this answer.",
+          "{source} is connected but not read yet: the answer may be incomplete.",
         "limit.context_limited": "Its context lacks something it needs.",
         "limit.capability.standing":
           "Its state, and how well LEKA knows it, are not known.",

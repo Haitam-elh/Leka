@@ -36,7 +36,7 @@ from typing import Any
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, text, update
 
 from leka.connectors import (
     Capability,
@@ -428,6 +428,29 @@ async def test_a_source_connected_but_never_read_is_said_as_a_limit(
     explanation = asked["analysis"]["result"]["explanation"]
     # It may hold the answer: the analysis should say it has not read it.
     assert any("GitHub C" in n["text"] for n in explanation["limits"])
+
+
+async def test_a_source_never_read_is_a_limit_only_when_it_may_hold_the_answer(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    # Who maintains a repository: code may say it, monitoring does not (LEKA-448).
+    workspace = acme["acme"]
+    github = await _source(workspace, "Acme GitHub", "a")
+    await _source(workspace, "GitHub C", "c")
+    monitoring = await _source(workspace, "Acme Datadog", "d")
+    with workspace_scope(workspace):
+        async with session_factory() as session:
+            await session.execute(
+                update(Source).where(Source.id == monitoring.id).values(kind=SourceKind.DATADOG)
+            )
+            await session.commit()
+    await _processed(workspace, github)
+    await _modelled(workspace)
+    _as(identity, acme, "admin")
+    asked = await _ask(client, workspace, OWNER)
+    limits = asked["analysis"]["result"]["explanation"]["limits"]
+    unread = [n["params"]["source"] for n in limits if n["code"] == "limit.source_unread"]
+    assert unread == ["GitHub C"]
 
 
 async def test_an_inferred_proof_names_the_sources_it_was_inferred_from(
