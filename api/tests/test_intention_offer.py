@@ -208,7 +208,8 @@ async def test_several_agents_bought_together_back_to_the_intention_each_owned(
     await _on(acme["globex"], "starter", ungranted=False)
     _as(identity, acme, "other_admin")
     intention = uuid.uuid4()
-    keys = f"{ARCHITECT},code-review"
+    # Neither included in Starter (Karim's matrix): both options.
+    keys = f"{ARCHITECT},debug-assistant"
     bought = await client.post(
         "/api/v1/billing/add-ons/checkout",
         json={"kind": "agents", "key": keys, "intention_id": str(intention)},
@@ -217,7 +218,7 @@ async def test_several_agents_bought_together_back_to_the_intention_each_owned(
     [opened] = paying.posted("/v1/checkout/sessions")
     # One subscription, a line each, at the catalogue's prices.
     assert opened["line_items[0][price_data][unit_amount]"] == "2500"
-    assert opened["line_items[1][price_data][unit_amount]"] == "900"
+    assert opened["line_items[1][price_data][unit_amount]"] == "1500"
     assert opened["subscription_data[metadata][leka_add_on_kind]"] == "agents"
     assert opened["success_url"] == f"https://leka.test/intentions/{intention}?bought={keys}"
 
@@ -243,7 +244,7 @@ async def test_several_agents_bought_together_back_to_the_intention_each_owned(
     )
     assert paid.status_code == 200, paid.text
     rights = (await client.get("/api/v1/billing/entitlements")).json()
-    assert sorted(r["key"] for r in rights) == [ARCHITECT, "code-review"]
+    assert sorted(r["key"] for r in rights) == [ARCHITECT, "debug-assistant"]
     ended = await _deliver(
         client,
         _event(

@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 import { openContextTab } from "./context-tab";
 import { openIncidentAnalysis } from "./incident";
@@ -26,8 +26,15 @@ import { openNavigation, signIn } from "./sign-in";
 
 const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"];
 
-async function expectNoViolations(page: Page) {
-  await expect(page.getByRole("main")).toBeVisible();
+/**
+ * What the screen shows, then what a machine finds wrong in it. Shown is its
+ * main content by default — or what is open above it: a modal hides the
+ * rest from assistive technologies, as it should, so the main content is
+ * then no landmark to wait for (it was, while the modal was still taking
+ * over, which is why waiting for it passed only on a fast machine).
+ */
+async function expectNoViolations(page: Page, shown: Locator = page.getByRole("main")) {
+  await expect(shown).toBeVisible();
   const { violations } = await new AxeBuilder({ page }).withTags(TAGS).analyze();
   // Named rather than counted: "expected 0, got 3" sends whoever reads the
   // failure to the report, and the report is in CI.
@@ -95,7 +102,11 @@ test.describe("what a screen opens", () => {
     await expect(page.getByTestId("nav-capabilities-mine")).toBeVisible();
     await expect(page.getByTestId("nav-sources")).toBeVisible();
 
-    await expectNoViolations(page);
+    // The navigation is a modal here: it, not the page under it.
+    await expectNoViolations(
+      page,
+      page.getByRole("dialog", { name: /^(Navigation principale|Main navigation)$/ }),
+    );
   });
 
   test("an incident's analysis, unfolded, a probable cause's evidence open", async ({ page }) => {
