@@ -114,6 +114,7 @@ async def start_checkout(
             body.interval,
             client=stripe(),
             today=datetime.now(UTC).date(),
+            intention_id=body.intention_id,
         )
     except BillingUnavailableError:
         raise _unavailable() from None

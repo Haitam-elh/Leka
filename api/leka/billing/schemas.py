@@ -101,6 +101,8 @@ class CheckoutCreate(BaseModel):
 
     plan: Literal["starter", "growth", "business"]
     interval: Literal["month", "year"]
+    # Opened from an intention (LEKA-458): back to it once paid.
+    intention_id: uuid.UUID | None = None
 
 
 class CheckoutRead(_Read):
@@ -199,8 +201,10 @@ class AddOnsRead(_Read):
 class AddOnCheckoutCreate(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    kind: Literal["agent", "bundle"]
-    key: str = Field(max_length=100)
+    # « agents »: several agents bought together, `key` their keys
+    # comma-separated (LEKA-458).
+    kind: Literal["agent", "bundle", "agents"]
+    key: str = Field(max_length=400)
     # Opened from an intention's decision: the agents to launch once paid.
     intention_id: uuid.UUID | None = None
     launch: list[dict[str, JsonValue]] = Field(default_factory=list, max_length=3)

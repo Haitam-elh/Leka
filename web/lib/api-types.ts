@@ -5135,6 +5135,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/intentions/{intention_id}/offer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Offer
+         * @description What carrying it through costs here (LEKA-458): its agents as this
+         *     workspace may run each, the capacity, the least plan, each line and the
+         *     total — before anything is consented to. `agents`: those chosen, by
+         *     key, comma-separated; every one available when absent.
+         */
+        get: operations["offer_api_v1_intentions__intention_id__offer_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/intentions/{intention_id}/cancel": {
         parameters: {
             query?: never;
@@ -6691,7 +6714,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "agent" | "bundle";
+            kind: "agent" | "bundle" | "agents";
             /** Key */
             key: string;
             /** Intention Id */
@@ -9834,6 +9857,8 @@ export interface components {
              * @enum {string}
              */
             interval: "month" | "year";
+            /** Intention Id */
+            intention_id?: string | null;
         };
         /**
          * CheckoutRead
@@ -15884,6 +15909,50 @@ export interface components {
             /** Linked By */
             linked_by: string | null;
         };
+        /**
+         * IntentionOfferRead
+         * @description What it takes to carry an intention through here (LEKA-458): its
+         *     agents, the capacity, the least plan, the lines and their total — said
+         *     before anything is bought.
+         */
+        IntentionOfferRead: {
+            /** Plan Now */
+            plan_now: string;
+            plan: components["schemas"]["OfferPlanRead"];
+            /** Change Plan */
+            change_plan: boolean;
+            /** Agents */
+            agents: components["schemas"]["OfferAgentRead"][];
+            /** Lines */
+            lines: components["schemas"]["OfferLineRead"][];
+            /** Total Monthly */
+            total_monthly: number;
+            /** Then Monthly */
+            then_monthly: number | null;
+            /**
+             * Used
+             * @description AI credits used this month: measured.
+             */
+            used: number;
+            /** Allowance */
+            allowance: number;
+            /**
+             * Estimate
+             * @description What the agents chosen will take: estimated.
+             */
+            estimate: number | null;
+            /** Estimate Complete */
+            estimate_complete: boolean;
+            /** Blocked */
+            blocked: "credits_exhausted" | null;
+            /**
+             * Ready
+             * @description Nothing to buy: it can be launched.
+             */
+            ready: boolean;
+            /** Provisional */
+            provisional: boolean;
+        };
         /** IntentionPlanEventRead */
         IntentionPlanEventRead: {
             /**
@@ -17737,6 +17806,113 @@ export interface components {
             reported?: {
                 [key: string]: components["schemas"]["JsonValue"];
             } | null;
+        };
+        /**
+         * OfferAgentRead
+         * @description A proposed agent, as this workspace may run it.
+         */
+        OfferAgentRead: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Category */
+            category: string;
+            /** Tier */
+            tier: string | null;
+            /**
+             * Monthly Price
+             * @description Cents a month, HT; none when not sold.
+             */
+            monthly_price: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "included" | "owned" | "to_buy" | "unavailable";
+            /**
+             * Reasons
+             * @description Why it is unavailable: missing_source, not_for_sale…
+             */
+            reasons: string[];
+            /**
+             * Credits
+             * @description One run's cost here, estimated; none before one.
+             */
+            credits: number | null;
+            /** Chosen */
+            chosen: boolean;
+        };
+        /**
+         * OfferLineRead
+         * @description What is paid each month, once consented to.
+         */
+        OfferLineRead: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "plan" | "agent" | "bundle";
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /**
+             * Monthly Price
+             * @description Cents a month, HT, now.
+             */
+            monthly_price: number;
+            /**
+             * Then Monthly
+             * @description After the launch offer.
+             */
+            then_monthly?: number | null;
+            /** For Months */
+            for_months?: number | null;
+            /** Agents */
+            agents?: string[];
+        };
+        /**
+         * OfferPlanRead
+         * @description A plan, as the catalogue sells it.
+         */
+        OfferPlanRead: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /**
+             * Monthly Price
+             * @description Its list price, cents HT; none by contract.
+             */
+            monthly_price: number | null;
+            /**
+             * Launch Monthly
+             * @description With the launch offer, while it lasts.
+             */
+            launch_monthly: number | null;
+            /** Launch Months */
+            launch_months: number | null;
+            /** Trial Days */
+            trial_days: number | null;
+            /**
+             * Credits
+             * @description Its AI credits a month.
+             */
+            credits: number | null;
+            /** Users */
+            users: number | null;
+            /** Sources */
+            sources: number | null;
+            /**
+             * Analyses
+             * @description Standard analyses a month it comes to.
+             */
+            analyses: number | null;
+            /** Runs Agents */
+            runs_agents: boolean;
+            /** Contractual */
+            contractual: boolean;
         };
         /**
          * OperationRead
@@ -49062,6 +49238,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FeasibilityRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    offer_api_v1_intentions__intention_id__offer_get: {
+        parameters: {
+            query?: {
+                agents?: string | null;
+            };
+            header?: never;
+            path: {
+                intention_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntentionOfferRead"];
                 };
             };
             /** @description The request could not be understood. */

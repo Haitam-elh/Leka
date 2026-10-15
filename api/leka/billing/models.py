@@ -144,13 +144,14 @@ class AddOnCheckout(Base, WorkspaceScopedMixin):
     __tablename__ = "add_on_checkouts"
     __table_args__ = (
         UniqueConstraint("stripe_session_id", name="uq_add_on_checkouts_session"),
-        CheckConstraint("kind IN ('agent', 'bundle')", name="kind"),
+        CheckConstraint("kind IN ('agent', 'bundle', 'agents')", name="kind"),
         CheckConstraint("status IN ('open', 'paid', 'expired')", name="status"),
     )
 
     stripe_session_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    # « agents »: several bought together (LEKA-458), their keys in `key`.
     kind: Mapped[str] = mapped_column(String(10), nullable=False)
-    key: Mapped[str] = mapped_column(String(100), nullable=False)
+    key: Mapped[str] = mapped_column(String(400), nullable=False)
     status: Mapped[str] = mapped_column(String(10), nullable=False, server_default="open")
     requested_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     # Opened from an intention's decision: launched once paid.

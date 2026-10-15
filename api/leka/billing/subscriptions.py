@@ -147,9 +147,11 @@ async def checkout(
     *,
     client: Stripe,
     today: date,
+    intention_id: uuid.UUID | None = None,
 ) -> Checkout:
     """A Stripe Checkout session for a self-service plan, at the price the
-    catalogue says — CheckoutRefusedError otherwise."""
+    catalogue says — CheckoutRefusedError otherwise. Opened from an
+    intention (LEKA-458), Stripe brings the person back to it."""
     offer = catalogue()
     try:
         plan = offer.plan(plan_key)
@@ -176,6 +178,11 @@ async def checkout(
         "leka_interval": interval,
         "leka_launch": "yes" if launch else "no",
     }
+    back, flag = (
+        (f"{settings.web_url}/intentions/{intention_id}", "activated")
+        if intention_id is not None
+        else (f"{settings.web_url}/billing", "checkout")
+    )
     made = await client.post(
         "/v1/checkout/sessions",
         {
@@ -196,8 +203,8 @@ async def checkout(
             },
             "payment_method_collection": "always",
             "metadata": marks,
-            "success_url": f"{settings.web_url}/billing?checkout=success",
-            "cancel_url": f"{settings.web_url}/billing?checkout=cancelled",
+            "success_url": f"{back}?{flag}=success",
+            "cancel_url": f"{back}?{flag}=cancelled",
         },
     )
     await session.commit()
