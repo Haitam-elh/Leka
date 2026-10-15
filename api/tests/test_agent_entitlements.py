@@ -265,8 +265,7 @@ async def test_opened_from_a_decision_its_agents_are_launched_once_paid(
     assert bought.status_code == 200, bought.text
     [opened] = selling.posted("/v1/checkout/sessions")
     assert (
-        opened["success_url"]
-        == f"https://leka.test/intentions/{intention}?bought=security-review"
+        opened["success_url"] == f"https://leka.test/intentions/{intention}?bought=security-review"
     )
 
     queued: list[tuple[Any, ...]] = []
