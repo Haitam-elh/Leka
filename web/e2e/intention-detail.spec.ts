@@ -15,9 +15,11 @@ import { signIn } from "./sign-in";
  * React migration — four agents of the registry and the plan — is written
  * into the analysis, as the analysis keeps it; the demo workspace is put on
  * Free, LEKA's grant taken back, for the test only. What a unit test cannot
- * answer: that the server's offer reaches the page — the agents as Free may
- * run them, the least plan, the launch offer and the price after it, the
- * total — and that nothing is bought without a confirmation saying it all.
+ * answer: that the server's offer reaches the page — the agents as the plan
+ * to take runs them (Starter includes code review and test analysis, Karim's
+ * matrix), the plan that costs least, the launch offer and the price after
+ * it, the total — and that nothing is bought without a confirmation saying
+ * it all.
  */
 
 // As the registry names them: what a real analysis proposes.
@@ -120,21 +122,23 @@ test.describe("An intention's page", () => {
 
     await expect(page.getByTestId("intention-detail-page")).toBeVisible();
     await expect(page.getByTestId("detail-request")).toContainText("React 17 à React 18");
-    // Never shown included: each an option, at the catalogue's price.
+    // Included with the plan to take, said so; the others, options at the
+    // catalogue's price.
     const agents = page.getByTestId("detail-agent");
     await expect(agents).toHaveCount(4);
-    await expect(agents.filter({ hasText: "/ mois" })).toHaveCount(4);
+    await expect(agents.filter({ hasText: "Inclus avec Starter" })).toHaveCount(2);
+    await expect(agents.filter({ hasText: "/ mois" })).toHaveCount(2);
     await expect(page.getByTestId("detail-agents")).toContainText(
       "Agents disponibles uniquement via un abonnement",
     );
-    // The least plan that runs agents, its launch offer and the price after.
+    // The plan that costs least, its launch offer and the price after.
     const plan = page.getByTestId("detail-plan");
     await expect(plan).toContainText("Starter");
     await expect(plan).toContainText("59 €");
     const total = page.getByTestId("detail-total");
-    // 47,20 € (Starter, −20 %) + 9 + 25 + 9 + 25.
-    await expect(total).toContainText("115,20 €");
-    await expect(page.getByTestId("detail-then")).toContainText("puis 127 €");
+    // 47,20 € (Starter, −20 %) + 25 + 25: the two experts it does not include.
+    await expect(total).toContainText("97,20 €");
+    await expect(page.getByTestId("detail-then")).toContainText("puis 109 €");
     await expect(total).toContainText("renouvelé automatiquement");
     // The plan, step by step, each agent beside its step; LEKA Assistant
     // for what LEKA does itself.
@@ -143,7 +147,7 @@ test.describe("An intention's page", () => {
 
     // One fewer: the total follows, from the server.
     await page.getByTestId("detail-agent-choose").nth(3).uncheck();
-    await expect(total).toContainText("90,20 €");
+    await expect(total).toContainText("72,20 €");
 
     // Nothing bought without a confirmation that says it all.
     await page.getByTestId("detail-activate").click();

@@ -3,12 +3,13 @@
 faked.
 
 What these protect:
-- Each proposed agent as this workspace may run it: included (LEKA's
-  grant), owned, to buy at the catalogue's price — never shown included
-  when it is not.
-- The least plan that carries it: on Free, agents need Starter — its price
-  with the launch offer, for how long, and the price after it; the plan
-  kept when it suffices. The lines and their total, now and after.
+- Each proposed agent as the plan said runs it: included (LEKA's grant,
+  or the plan's own, Karim's matrix), owned, to buy at the catalogue's
+  price — never shown included when it is not.
+- The plan that carries it for least: on Free, agents need Starter — its
+  price with the launch offer, for how long, and the price after it; the
+  plan kept when it suffices; what it includes never sold with it. The
+  lines and their total, now and after.
 - The month's capacity measured, the agents' estimated; spent: blocked,
   the next plan offered — never an overage.
 - Bought from the intention: the plan's checkout and several agents in one,
@@ -18,6 +19,7 @@ What these protect:
 # ruff: noqa: F811 — fixtures imported to be requested by name.
 from __future__ import annotations
 
+import importlib
 import time
 import uuid
 from collections.abc import Callable
@@ -40,6 +42,7 @@ from leka.governance import set_plan
 from leka.intentions import offer as offer_module
 from leka.intentions.schemas import CreditsLeftRead
 from tests.conftest import FakeIdentity
+from tests.test_agent_entitlements import _offer as _catalogued
 from tests.test_agent_runs_api import _ready
 from tests.test_billing_stripe import SECRET, FakeStripe, _deliver, _event, _synced, stripe
 from tests.test_context_engine import model
@@ -142,6 +145,38 @@ async def test_on_free_the_least_plan_and_the_agent_priced_now_and_after(
     # None chosen: the plan alone carries what is left — nothing to buy.
     bare = await _offer(client, intention["id"], agents="")
     assert (bare["change_plan"], bare["lines"], bare["ready"]) == (False, [], True)
+
+
+# The module, not the function the package exports under its name.
+billing_catalogue = importlib.import_module("leka.billing.catalogue")
+
+
+async def test_what_the_plan_includes_is_never_sold_with_it(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[tuple[uuid.UUID, str]],
+    gemini: Callable[..., Gemini],
+    started: list[uuid.UUID],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+) -> None:
+    _catalogued(monkeypatch, tmp_path, lambda a: a.update(included={"starter": [ARCHITECT]}))
+    try:
+        await _ready(acme)
+        gemini()
+        _as(identity, acme, "member")
+        intention = await _proposed(client, acme)
+        await _on(acme["acme"], "free")
+        said = await _offer(client, intention["id"])
+        # Starter includes it: the plan alone, the agent said included.
+        [agent] = said["agents"]
+        assert (agent["status"], said["plan"]["key"]) == ("included", "starter")
+        assert [line["kind"] for line in said["lines"]] == ["plan"]
+        assert (said["total_monthly"], said["then_monthly"]) == (4720, 5900)
+    finally:
+        billing_catalogue.catalogue.cache_clear()
 
 
 async def test_on_starter_owning_it_launched_as_it_is(

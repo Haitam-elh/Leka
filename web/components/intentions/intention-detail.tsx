@@ -41,7 +41,7 @@ import { routes } from "@/config/routes";
 import { ApiError } from "@/lib/api";
 import { useIntentionRuns } from "@/lib/agent-runs-queries";
 import { billing, euros } from "@/lib/billing";
-import { fill } from "@/lib/i18n/dictionaries";
+import { type Dictionary, fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import type {
   AgentLaunch,
@@ -228,6 +228,11 @@ const CATEGORY_ICON: Record<string, LucideIcon> = {
   knowledge: FileText,
 };
 
+/** Included — with the plan to take, when it is not the one it is on. */
+function includedAs(offer: IntentionOffer | undefined, w: Dictionary["intentions"]["detail"]): string {
+  return offer?.change_plan ? fill(w.includedWith, { plan: offer.plan.name }) : w.included;
+}
+
 function iconOf(category: string): LucideIcon {
   return CATEGORY_ICON[category] ?? Bot;
 }
@@ -314,6 +319,7 @@ function UnderstandingCard({
                 // What the person ticks, at once; the totals follow from the server.
                 checked={chosen ? chosen.includes(agent.key) : agent.chosen}
                 onToggle={() => toggle(agent.key)}
+                included={includedAs(offer, w)}
               />
             ))}
           </ul>
@@ -328,11 +334,13 @@ function AgentCard({
   intention,
   checked,
   onToggle,
+  included,
 }: {
   agent: OfferAgent;
   intention: IntentionDetail;
   checked: boolean;
   onToggle: () => void;
+  included: string;
 }) {
   const t = useDictionary();
   const w = t.intentions.detail;
@@ -362,7 +370,7 @@ function AgentCard({
           <p className="text-[0.875rem] font-semibold text-brand-navy">{agent.title}</p>
           <p className="text-[0.8125rem] text-brand-navy">
             {agent.status === "included" ? (
-              <span className="text-state-success">{w.included}</span>
+              <span className="text-state-success">{included}</span>
             ) : agent.status === "owned" ? (
               <span className="text-state-success">{w.owned}</span>
             ) : agent.status === "unavailable" ? (
@@ -782,10 +790,12 @@ function PlanSteps({ intention, offer }: { intention: IntentionDetail; offer: In
                   <p className="text-shell-muted">
                     {agent
                       ? agent.status === "included"
-                        ? w.included
-                        : agent.monthly_price !== null
-                          ? fill(w.perMonth, { price: euros(agent.monthly_price, format) })
-                          : w.unavailable
+                        ? includedAs(offer, w)
+                        : agent.status === "owned"
+                          ? w.owned
+                          : agent.status !== "unavailable" && agent.monthly_price !== null
+                            ? fill(w.perMonth, { price: euros(agent.monthly_price, format) })
+                            : w.unavailable
                       : w.assistantIncluded}
                   </p>
                 </div>

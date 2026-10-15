@@ -5,7 +5,8 @@
  * - What LEKA says is what the server's offer says: a plan to take, options
  *   to add, everything covered — or the month's capacity spent.
  * - Each agent never shown included when it is not: its price, or
- *   « Inclus », « Actif », « Indisponible ici ».
+ *   « Inclus » — « Inclus avec Starter » when the plan to take includes it —
+ *   « Actif », « Indisponible ici ».
  * - The total now and after the launch offer, renewed until cancelled.
  * - Nothing bought without a confirmation that says it all; covered, it is
  *   launched as it is.
@@ -195,6 +196,20 @@ describe("an intention's page", () => {
     expect(checkout).not.toHaveBeenCalled();
     await user.click(within(dialog).getByRole("button", { name: "Payer et activer" }));
     await waitFor(() => expect(checkout).toHaveBeenCalledWith("starter", "month", "i1"));
+  });
+
+  it("an agent the plan to take includes: said included with it, never sold", () => {
+    offered.value = offer({
+      agents: [{ ...offer().agents[0], status: "included" }],
+      lines: [offer().lines[0]],
+      total_monthly: 4720,
+      then_monthly: 5900,
+    });
+    show();
+    const [agent] = screen.getAllByTestId("detail-agent");
+    expect(agent).toHaveTextContent("Inclus avec Starter");
+    expect(agent).not.toHaveTextContent("/ mois");
+    expect(screen.getByTestId("detail-total")).toHaveTextContent("47,20 € / mois");
   });
 
   it("covered by the plan and its agents: launched as it is, nothing to pay", async () => {

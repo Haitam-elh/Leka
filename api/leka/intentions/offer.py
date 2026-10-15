@@ -3,16 +3,19 @@ analysis proposed, as this workspace may run each; the AI capacity it will
 take; the least plan that carries it; what is paid each month, the launch
 offer and what is paid after — said before anything is consented to.
 
-    agents     each proposed agent: included in its plan, owned (an option
-               active), to buy (its monthly price), or unavailable and why —
-               never shown included when it is not (LEKA-454)
+    agents     each proposed agent as the plan said runs it: included in
+               it (Karim's matrix, LEKA-454), owned (an option active), to
+               buy (its monthly price), or unavailable and why — never shown
+               included when it is not
     capacity   what this month has used — measured — and what the agents
                chosen will take — an estimate, from what they cost here
                before: none until they ran once
-    plan       the least plan that carries it, cheapest first: one that
-               runs agents when some are chosen, whose AI capacity left
-               holds the estimate; the current plan when it does, Enterprise
-               (by contract) when none does
+    plan       of the plans that carry it — one that runs agents when some
+               are chosen, whose AI capacity left holds the estimate — the
+               one that costs least each month, its options counted: the
+               current plan when it does, a higher one when what it
+               includes costs less than the options; Enterprise (by
+               contract) when none does
     lines      the plan to subscribe to, then the options to buy — a sold
                bundle when it costs less than its agents one by one — each
                monthly, renewed until cancelled; the launch offer on the
@@ -113,41 +116,26 @@ async def offer_for(
     month = await credits_left(session, workspace_id, now=moment)
     account = await account_of(session, workspace_id)
 
-    agents: list[OfferAgentRead] = []
-    for agent in proposal.agents if proposal else []:
-        why = has.why(agent.key)
-        if has.every or agent.key in has.included:
-            status = "included"
-        elif why is None:
-            status = "owned"
-        elif why in ("not_owned", "plan_required") and agent.key in sold.agents:
-            status = "to_buy"
-        else:
-            status = "unavailable"
-        # What else keeps it from running here, its sources above all.
+    proposed = proposal.agents if proposal else []
+    # Unavailable here whatever the plan: not for sale, or kept from running
+    # by what it lacks — its sources above all.
+    kept: dict[str, list[str]] = {}
+    for agent in proposed:
         blocking = [r for r in agent.reasons if r not in ("not_owned", "plan_required")]
-        if blocking and status != "unavailable":
-            status = "unavailable"
-        agents.append(
-            OfferAgentRead(
-                key=agent.key,
-                title=agent.title,
-                category=agent.category,
-                tier=sold.agents[agent.key].tier if agent.key in sold.agents else None,
-                monthly_price=sold.prices.get(agent.key),
-                status=status,
-                reasons=blocking or ([why] if status == "unavailable" and why else []),
-                credits=agent.credits,
-                chosen=False,
-            )
-        )
-    wanted = (
-        {a.key for a in agents if a.status != "unavailable"}
-        if chosen is None
-        else {k for k in chosen if any(a.key == k and a.status != "unavailable" for a in agents)}
-    )
-    agents = [a.model_copy(update={"chosen": a.key in wanted}) for a in agents]
-    picked = [a for a in agents if a.chosen]
+        if not blocking and not has.every and agent.key not in sold.agents:
+            blocking = [has.why(agent.key) or "not_for_sale"]
+        kept[agent.key] = blocking
+
+    def status(key: str, plan: str) -> str:
+        """As `plan` runs it."""
+        if kept[key]:
+            return "unavailable"
+        if has.every or key in sold.included_in(plan):
+            return "included"
+        return "owned" if key in has.agents else "to_buy"
+
+    wanted = {a.key for a in proposed if not kept[a.key] and (chosen is None or a.key in chosen)}
+    picked = [a for a in proposed if a.key in wanted]
 
     # The capacity: this month's, measured; the agents', estimated from
     # what they cost here — said unknown until each ran once.
@@ -156,7 +144,7 @@ async def offer_for(
     estimate_complete = bool(picked) and len(known) == len(picked)
 
     current = month.plan
-    needs_agents = any(a.status in ("to_buy", "owned") for a in picked) and not has.every
+    needs_agents = bool(picked) and not has.every
 
     def enough(key: str) -> bool:
         plan = _plan_read(key, today_launch=False, today=moment)
@@ -168,67 +156,96 @@ async def offer_for(
         left = total - month.used
         return estimate is None or left >= estimate
 
-    start = PLANS.index(current) if current in PLANS else 0
-    recommended = next((p for p in PLANS[start:] if enough(p)), "enterprise")
-    # The month's capacity spent, the plan enforcing it: blocked — the next
+    def priced(key: str) -> tuple[OfferPlanRead, list[OfferLineRead]]:
+        """The plan, and what is bought with it: the plan when it changes,
+        then the options it does not include — a sold bundle when it costs
+        less than its agents one by one."""
+        eligible = key not in ("free", "enterprise") and launch_eligible(
+            account, offer, key, "month", moment.date()
+        )
+        plan = _plan_read(key, today_launch=eligible, today=moment)
+        lines: list[OfferLineRead] = []
+        if key != current and not plan.contractual and plan.monthly_price:
+            lines.append(
+                OfferLineRead(
+                    kind="plan",
+                    key=plan.key,
+                    label=plan.name,
+                    monthly_price=plan.launch_monthly or plan.monthly_price,
+                    then_monthly=plan.monthly_price if plan.launch_monthly else None,
+                    for_months=plan.launch_months,
+                )
+            )
+        to_buy = [a for a in picked if status(a.key, key) == "to_buy"]
+        prices = sold.prices
+        alone = sum(prices.get(a.key, 0) for a in to_buy)
+        bundle = next(
+            (
+                b
+                for b in sold.bundles
+                if b.sellable
+                and to_buy
+                and {a.key for a in to_buy} <= set(b.agents)
+                and b.monthly_price < alone
+            ),
+            None,
+        )
+        if bundle is not None:
+            lines.append(
+                OfferLineRead(
+                    kind="bundle",
+                    key=bundle.key,
+                    label=bundle.name.fr,
+                    monthly_price=bundle.monthly_price,
+                    agents=list(bundle.agents),
+                )
+            )
+        else:
+            lines.extend(
+                OfferLineRead(
+                    kind="agent",
+                    key=a.key,
+                    label=a.title,
+                    monthly_price=prices.get(a.key, 0),
+                    agents=[a.key],
+                )
+                for a in to_buy
+            )
+        return plan, lines
+
+    def costs(key: str) -> tuple[bool, int, int, int]:
+        """What it all comes to each month on `key` — the current plan's
+        own price counted, paid either way; by contract, last."""
+        plan, lines = priced(key)
+        kept_on = (plan.monthly_price or 0) if key == current else 0
+        now_ = kept_on + sum(line.monthly_price for line in lines)
+        after = kept_on + sum(line.then_monthly or line.monthly_price for line in lines)
+        return plan.contractual, now_, after, PLANS.index(key)
+
+    # The month's capacity spent, the plan enforcing it: blocked — a higher
     # plan holds more; never an overage, never capacity sold apart.
     blocked = "credits_exhausted" if month.state == "exhausted" and month.enforced else None
-    if blocked and recommended == current and current in PLANS[:-1]:
-        recommended = PLANS[PLANS.index(current) + 1]
-    eligible = (
-        launch_eligible(account, offer, recommended, "month", moment.date())
-        if (recommended not in ("free", "enterprise"))
-        else False
-    )
-    plan = _plan_read(recommended, today_launch=eligible, today=moment)
+    first = PLANS.index(current) if current in PLANS else 0
+    carrying = [
+        p for p in PLANS[first:] if enough(p) and not (blocked and p == current and p != PLANS[-1])
+    ]
+    recommended = min(carrying, key=costs) if carrying else "enterprise"
+    plan, lines = priced(recommended)
     change = recommended != current
-
-    lines: list[OfferLineRead] = []
-    if change and not plan.contractual and plan.monthly_price:
-        lines.append(
-            OfferLineRead(
-                kind="plan",
-                key=plan.key,
-                label=plan.name,
-                monthly_price=plan.launch_monthly or plan.monthly_price,
-                then_monthly=plan.monthly_price if plan.launch_monthly else None,
-                for_months=plan.launch_months,
-            )
+    agents = [
+        OfferAgentRead(
+            key=a.key,
+            title=a.title,
+            category=a.category,
+            tier=sold.agents[a.key].tier if a.key in sold.agents else None,
+            monthly_price=sold.prices.get(a.key),
+            status=status(a.key, recommended),
+            reasons=kept[a.key],
+            credits=a.credits,
+            chosen=a.key in wanted,
         )
-    to_buy = [a for a in picked if a.status == "to_buy"]
-    alone = sum(a.monthly_price or 0 for a in to_buy)
-    bundle = next(
-        (
-            b
-            for b in sold.bundles
-            if b.sellable
-            and to_buy
-            and {a.key for a in to_buy} <= set(b.agents)
-            and b.monthly_price < alone
-        ),
-        None,
-    )
-    if bundle is not None:
-        lines.append(
-            OfferLineRead(
-                kind="bundle",
-                key=bundle.key,
-                label=bundle.name.fr,
-                monthly_price=bundle.monthly_price,
-                agents=list(bundle.agents),
-            )
-        )
-    else:
-        lines.extend(
-            OfferLineRead(
-                kind="agent",
-                key=a.key,
-                label=a.title,
-                monthly_price=a.monthly_price or 0,
-                agents=[a.key],
-            )
-            for a in to_buy
-        )
+        for a in proposed
+    ]
     total = sum(line.monthly_price for line in lines)
     then = sum(line.then_monthly or line.monthly_price for line in lines)
 
