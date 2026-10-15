@@ -15,8 +15,10 @@
 # shown as a guarantee. Change a value here, in a pull request: the page
 # follows, nothing else to edit.
 #
-# Values not decided yet are absent, never guessed: seats, sources and
-# workspaces per plan; agent and bundle prices.
+# Users (members and pending invitations) and sources: each plan's `quotas`,
+# enforced by the server (leka/billing/limits.py, LEKA-463).
+# Values not decided yet are absent, never guessed: workspaces per plan;
+# agent and bundle prices.
 #
 # Quotas (2026-10-14, the product call — TODO: à valider): people, sources
 # connected, standard analyses a month (what the AI credits come to, about
@@ -147,11 +149,12 @@ plans:
 # The agents (LEKA-454, the subscription mock-up of 14 October — it replaces
 # « no agent in a plan »): LEKA's own capabilities — understanding, the
 # analysis, its answer: LEKA Assistant — are every plan's, its fundamental
-# agents. A plan may also include some of the registry's agents
-# (`included`, none yet: TODO à valider — the mock-ups include none). Every
-# other agent is a specialised option, sold monthly, alone at its tier's
-# price or in a bundle, from Starter; it runs while its option is active —
-# granted only once Stripe confirms the payment.
+# agents. Each plan also includes registry agents (`included`, decided by
+# Karim on 2026-10-15): Starter three, Growth eight, Business all thirteen.
+# Every agent its plan does not include is a specialised option, sold
+# monthly, alone at its tier's price or in a bundle, from Starter; it runs
+# while its option is active — granted only once Stripe confirms the
+# payment.
 #
 # `agents`: the registry's agents on sale (agents/*/SKILL.md), each with its
 # tier and the name the marketplace reference (« Agents & Bundles », 14
@@ -191,8 +194,14 @@ add_ons:
     # No equivalent in the reference: LEKA's tier, to validate.
     architecture-analysis: { tier: specialized }
     code-change: { tier: expert }
-  # Included in a plan, without an option — none yet (TODO: à valider).
-  included: {}
+  # Included in a plan, without an option — and in every plan above it
+  # (Karim, 2026-10-15). Free runs none; Enterprise, by contract, every
+  # one. Included agents' runs take the plan's AI credits; an agent of the
+  # registry in draft is never included (only the agents above may be).
+  included:
+    starter: [code-review, test-analysis, documentation-assistant]
+    growth: [architecture-analysis, infrastructure-analysis, data-analysis, debug-assistant, build-fixer]
+    business: [application-architecture, code-change, security-review, incident-investigation, release-analysis]
   reference:
     # product
     product-strategist: { name: "Product Strategist", category: product, tier: standard }

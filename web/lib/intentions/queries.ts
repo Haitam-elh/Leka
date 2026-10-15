@@ -35,10 +35,15 @@ const WHILE_RUNNING = 4_000;
 
 /** A list of them, a page at a time: by phase — none, every one not
  * archived — and words. */
-export function useIntentions(phase: IntentionPhase | null, q: string, filters: IntentionFilters = {}) {
+export function useIntentions(
+  phase: IntentionPhase | null,
+  q: string,
+  filters: IntentionFilters = {},
+  limit = 20,
+) {
   return useInfiniteQuery({
-    queryKey: intentionKeys.list(phase, q, filters),
-    queryFn: ({ pageParam }) => intentions.list({ phase, q, filters, cursor: pageParam }),
+    queryKey: [...intentionKeys.list(phase, q, filters), limit],
+    queryFn: ({ pageParam }) => intentions.list({ phase, q, filters, cursor: pageParam, limit }),
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.next_cursor,
     // A row LEKA works on moves by itself: read again, as its page is.

@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
 import { accountLanguage } from "./account-language";
-import { DEMO_EMAIL, DEMO_PASSWORD, expectShellReady, expectSignedIn, LANDING, loginAnswer, signIn } from "./sign-in";
+import { DEMO_EMAIL, DEMO_PASSWORD, expectShellReady, expectSignedIn, LANDING, loginAnswer, openNavigation, signIn } from "./sign-in";
 
 /**
  * Languages, end to end (docs/languages.md).
@@ -158,7 +158,9 @@ test("the account menu and the settings change the language and the region", asy
   const dialog = page.getByTestId("language-dialog");
   await dialog.getByRole("combobox").fill("english");
   await dialog.locator('[data-tag="en"]').click();
+  await openNavigation(page);
   await expect(page.getByTestId("nav-environment-overview")).toContainText("My environment");
+  await page.keyboard.press("Escape");
 
   await page.goto("/settings");
   const settings = page.getByTestId("language-settings");
@@ -179,9 +181,9 @@ test.describe("right to left", () => {
         await page.goto(`${where}${where.includes("?") ? "&" : "?"}qa-language=ar-XB`);
         await expect(html(page)).toHaveAttribute("dir", "rtl");
         await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-        // The sidebar on the right, the content on the left.
-        const sidebar = await page.locator("#app-sidebar").boundingBox();
-        expect(sidebar && sidebar.x > width / 2, where).toBe(true);
+        // The logo, the header's start, on the right.
+        const logo = await page.getByTestId("home-logo").boundingBox();
+        expect(logo && logo.x > width / 2, where).toBe(true);
         const sideways = await page.evaluate(
           () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
         );

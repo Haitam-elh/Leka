@@ -43,12 +43,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 }
 
 /** The shell, handed its counts: inside the providers, which they are read
- * through. Notifications have no ticket yet: none — the red dot on the
- * bell was a mocked "1" for everyone. */
+ * through. */
 function Shell({ children }: { children: React.ReactNode }) {
   const badges = useNavBadges();
   return (
-    <AppShell badges={badges} notificationCount={0}>
+    <AppShell badges={badges}>
       {/* Before the guard: with no workspace open every page is refused,
           and a new account needs a way in, not a refusal. */}
       <WorkspaceGate>

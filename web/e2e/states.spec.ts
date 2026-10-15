@@ -82,7 +82,7 @@ test.describe("when the address is wrong", () => {
     await signIn(page);
     await page.goto("/nothing/here");
 
-    await expect(page.getByRole("navigation", { name: "Navigation principale" })).toBeVisible();
+    await expect(page.getByTestId("home-logo")).toBeVisible();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Page introuvable");
 
     await page.getByRole("link", { name: "Retour à la vue d'ensemble" }).click();

@@ -11,7 +11,7 @@ import {
   UserCheck,
   UsersRound,
 } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { cn } from "cn";
@@ -54,6 +54,7 @@ function Invite({ onClose }: { onClose: () => void }) {
   const t = useDictionary();
   const w = t.team;
   const { invite } = useTeamChange();
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("member");
   const [link, setLink] = useState<string | null>(null);
@@ -65,6 +66,13 @@ function Invite({ onClose }: { onClose: () => void }) {
       notify.success({ title: fill(w.sent, { email: email.trim() }) });
       setLink(`${window.location.origin}/invitations/${encodeURIComponent(made.token)}`);
     } catch (error) {
+      if (error instanceof ApiError && error.code === "plan_limit") {
+        notify.error({
+          title: t.billing.planLimit.users,
+          action: { label: t.billing.planLimit.see, onClick: () => router.push("/billing") },
+        });
+        return;
+      }
       notify.error({ title: error instanceof ApiError ? error.message : String(error) });
     }
   }

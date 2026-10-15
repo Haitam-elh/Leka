@@ -219,6 +219,21 @@ async def client() -> AsyncIterator[AsyncClient]:
 
 
 @pytest.fixture(autouse=True)
+def unlimited_plans(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A plan's users and sources (LEKA-463) are test_plan_limits.py's: a
+    test workspace is on Free, which would otherwise refuse the second
+    member or the fourth source every other test needs."""
+    if request.module.__name__.endswith("test_plan_limits"):
+        return
+    from leka.billing import limits
+
+    async def room(*args: object) -> None:
+        return None
+
+    monkeypatch.setattr(limits, "_room", room)
+
+
+@pytest.fixture(autouse=True)
 async def clear_rate_limits() -> AsyncIterator[None]:
     """Forget throttling counters between tests.
 

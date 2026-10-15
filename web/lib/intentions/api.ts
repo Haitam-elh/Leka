@@ -107,6 +107,8 @@ export type IntentionFilters = {
   /** Asked in the last so many days. */
   days?: number;
   sort?: "updated" | "newest" | "oldest";
+  /** Any of these states: a tab of the history (LEKA-457). */
+  statuses?: readonly IntentionStatus[];
 };
 
 export const intentions = {
@@ -143,6 +145,7 @@ export const intentions = {
     const query = new URLSearchParams({ limit: String(limit) });
     if (phase) query.set("phase", phase);
     if (q) query.set("q", q);
+    for (const status of filters.statuses ?? []) query.append("status", status);
     if (filters.agent) query.set("agent", filters.agent);
     if (filters.source) query.set("source", filters.source);
     if (filters.days) query.set("since", new Date(Date.now() - filters.days * 86_400_000).toISOString());

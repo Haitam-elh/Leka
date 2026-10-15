@@ -158,6 +158,7 @@ async def test_its_status_is_kept_and_queried(
         "scheduled": 0,
         "finished": 1,
         "archived": 0,
+        "statuses": {"analysing": 2, "cancelled": 1},
     }
     assert (await _get(client, "/counts", mine="true"))["all"] == 2
 

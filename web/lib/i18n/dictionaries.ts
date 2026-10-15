@@ -69,6 +69,9 @@ const fr = {
   },
   shell: {
     tagline: "Understand. Decide. Act.",
+    home: "LEKA — accueil",
+    backHome: "Retour à l'accueil",
+    plan: "Formule",
     mainNavigation: "Navigation principale",
     sidebar: "Barre latérale",
     breadcrumb: "Fil d'Ariane",
@@ -284,7 +287,10 @@ const fr = {
   composer: {
     label: "Votre intention",
     placeholder: "Pourquoi l'API de paiement est-elle plus lente depuis hier ?",
-    compactTitle: "Que voulez-vous accomplir aujourd'hui ?",
+    compactTitle: "Que souhaitez-vous accomplir",
+    compactTitleHighlight: "aujourd'hui ?",
+    compactSubtitle:
+      "Posez votre question, lancez une analyse ou demandez une recommandation. LEKA comprend votre environnement et transforme vos données en actions.",
     submit: "Lancer l'analyse",
     submitHint: "⌘↵ pour lancer",
     sidePanel: "Contexte et périmètre",
@@ -349,6 +355,40 @@ const fr = {
    * than showing the mockup's number (decided 2026-09-25).
    */
   overview: {
+    /** The home's blocks of the sprint's mockup (LEKA-456). */
+    home: {
+      environment: "Mon environnement",
+      health: {
+        unknown: "Non vérifié",
+        stale: "Non vérifié",
+        incident: "Incident en cours",
+        partial: "Partiellement vérifié",
+        stable: "Stable",
+      },
+      healthHint: {
+        unknown: "Aucune source ne dit encore l'état de vos services.",
+        stale: "Vos sources n'ont pas été lues récemment.",
+        incident: "",
+        partial: "",
+        stable: "Aucun incident détecté",
+      },
+      incidents: "{count} {count|incident ouvert|incidents ouverts}",
+      measured: "{known} {known|service mesuré|services mesurés} sur {total}",
+      sources: "sources connectées",
+      lastSync: "Dernière synchronisation",
+      services: "services analysés",
+      agents: "Agents disponibles",
+      agentsBody:
+        "Activez des agents IA spécialisés pour aller plus loin dans l'analyse, la compréhension et l'action sur votre environnement.",
+      allAgents: "Voir tous les agents et bundles",
+      bundles: "Bundles LEKA",
+      bundlesBody:
+        "{count} ensembles d'agents pour couvrir vos besoins les plus fréquents, à un prix avantageux.",
+      discoverBundles: "Découvrir les bundles",
+      latest: "Dernières analyses",
+      latestBody: "Vos demandes et analyses récentes.",
+      allHistory: "Voir tout l'historique",
+    },
     /** What needs someone first, and whether what LEKA sees can be trusted (LEKA-442). */
     twin: {
       statusTrouble: "{count} {count|élément est|éléments sont} en difficulté.",
@@ -976,6 +1016,14 @@ const fr = {
   },
   /** Facturation (mockup 16): the consumption, counted. */
   billing: {
+    // A user or a source more than the plan allows (LEKA-463).
+    planLimit: {
+      users:
+        "Votre formule ne permet pas un utilisateur de plus. Passez à une formule supérieure pour inviter quelqu'un d'autre.",
+      sources:
+        "Votre formule ne permet pas une source de plus. Passez à une formule supérieure depuis Facturation pour en connecter une autre.",
+      see: "Voir les formules",
+    },
     subscription: {
       title: "Votre formule",
       notAvailable: "Le paiement en ligne n'est pas encore ouvert.",
@@ -6212,6 +6260,32 @@ const fr = {
       sort: "Tri",
       sorts: { updated: "Dernière modification", newest: "Plus récentes", oldest: "Plus anciennes" },
     },
+    // The history of the sprint's mockup (LEKA-457).
+    historyPage: {
+      title: "Historique de vos intentions",
+      subtitle: "Retrouvez toutes vos demandes, analyses et actions effectuées avec LEKA.",
+      columns: {
+        intention: "Intention",
+        agents: "Agents",
+        sources: "Sources",
+        status: "Statut",
+        result: "Résultat / actions",
+        date: "Date",
+      },
+      tabs: {
+        all: "Toutes",
+        running: "En cours",
+        done: "Terminées",
+        waiting: "En attente",
+        failed: "Échec",
+        archived: "Archivées",
+      },
+      range: "{from}–{to} sur {total} {total|intention|intentions}",
+      previous: "Page précédente",
+      next: "Page suivante",
+      page: "Page {n}",
+      none: "—",
+    },
     failed: "Les intentions n'ont pas pu être lues.",
     retry: "Réessayer",
     empty: "Aucune intention ici.",
@@ -7649,6 +7723,9 @@ const en: Dictionary = {
   },
   shell: {
     tagline: "Understand. Decide. Act.",
+    home: "LEKA — home",
+    backHome: "Back to home",
+    plan: "Plan",
     mainNavigation: "Main navigation",
     sidebar: "Sidebar",
     breadcrumb: "Breadcrumb",
@@ -7831,7 +7908,10 @@ const en: Dictionary = {
   composer: {
     label: "Your intention",
     placeholder: "Why has the payment API been slower since yesterday?",
-    compactTitle: "What would you like to do today?",
+    compactTitle: "What would you like to achieve",
+    compactTitleHighlight: "today?",
+    compactSubtitle:
+      "Ask a question, run an analysis or ask for a recommendation. LEKA understands your environment and turns your data into actions.",
     submit: "Start the analysis",
     submitHint: "⌘↵ to start",
     sidePanel: "Context and scope",
@@ -7888,6 +7968,38 @@ const en: Dictionary = {
     connectSource: "Connect a source",
   },
   overview: {
+    home: {
+      environment: "My environment",
+      health: {
+        unknown: "Not verified",
+        stale: "Not verified",
+        incident: "Incident in progress",
+        partial: "Partly verified",
+        stable: "Stable",
+      },
+      healthHint: {
+        unknown: "No source says the state of your services yet.",
+        stale: "Your sources have not been read recently.",
+        incident: "",
+        partial: "",
+        stable: "No incident detected",
+      },
+      incidents: "{count} {count|open incident|open incidents}",
+      measured: "{known} of {total} services measured",
+      sources: "connected sources",
+      lastSync: "Last synchronisation",
+      services: "services analysed",
+      agents: "Available agents",
+      agentsBody:
+        "Turn on specialised AI agents to go further in analysing, understanding and acting on your environment.",
+      allAgents: "See all agents and bundles",
+      bundles: "LEKA bundles",
+      bundlesBody: "{count} sets of agents for your most frequent needs, at a better price.",
+      discoverBundles: "Discover the bundles",
+      latest: "Latest analyses",
+      latestBody: "Your recent requests and analyses.",
+      allHistory: "See the whole history",
+    },
     twin: {
       statusTrouble: "{count} {count|element is|elements are} in trouble.",
       statusLate: "Your sources have not been read for over 2 hours.",
@@ -8475,6 +8587,12 @@ const en: Dictionary = {
     waitingDecision: "The run is prepared once the decision is approved.",
   },
   billing: {
+    planLimit: {
+      users: "Your plan does not allow one more user. Move to a higher plan to invite someone else.",
+      sources:
+        "Your plan does not allow one more source. Move to a higher plan from Billing to connect another one.",
+      see: "See the plans",
+    },
     subscription: {
       title: "Your plan",
       notAvailable: "Online payment is not open yet.",
@@ -13559,6 +13677,31 @@ const en: Dictionary = {
       periods: { all: "All time", 7: "Last 7 days", 30: "Last 30 days", 90: "Last 90 days" },
       sort: "Sort",
       sorts: { updated: "Last changed", newest: "Newest", oldest: "Oldest" },
+    },
+    historyPage: {
+      title: "Your intentions' history",
+      subtitle: "Find every request, analysis and action you made with LEKA.",
+      columns: {
+        intention: "Intention",
+        agents: "Agents",
+        sources: "Sources",
+        status: "Status",
+        result: "Result / actions",
+        date: "Date",
+      },
+      tabs: {
+        all: "All",
+        running: "In progress",
+        done: "Finished",
+        waiting: "Waiting",
+        failed: "Failed",
+        archived: "Archived",
+      },
+      range: "{from}–{to} of {total} {total|intention|intentions}",
+      previous: "Previous page",
+      next: "Next page",
+      page: "Page {n}",
+      none: "—",
     },
     failed: "Intentions could not be read.",
     retry: "Retry",

@@ -2,8 +2,13 @@
 
 Sprint « Refonte UX UI » (LEKA-452). Ce que LEKA fait aujourd'hui, prouvé par
 le code, et où chaque fonctionnalité va dans la nouvelle UX : conservée,
-déplacée, remplacée, manquante ou à arbitrer. **À faire valider par Karim
-avant de considérer la migration du shell et des écrans comme terminée.**
+déplacée, remplacée, manquante ou à arbitrer.
+
+**Statut (Karim, 15/10) : validée comme base de travail, pas encore comme
+matrice finale.** Les écarts non résolus restent tracés ci-dessous ; la
+matrice ne sera finale qu'une fois les fonctionnalités manquantes ou à
+arbitrer traitées (parcours d'achat des agents et bundles, limites de plan,
+droits).
 
 ## Comment la lire
 
@@ -37,34 +42,34 @@ avant de considérer la migration du shell et des écrans comme terminée.**
 
 | # | Blocage | Effet | Qui lève |
 |---|---|---|---|
-| B1 | **4 maquettes sur 5 absentes de Jira** (Accueil, Historique, Détail, Mon environnement : « import natif échoué ») ; seule la marketplace est jointe (LEKA-460). | La destination visuelle fine (quel bloc, quel ordre) n'est pas vérifiable : les destinations ci-dessous suivent les descriptions des tickets. | Karim : joindre les fichiers originaux |
-| B2 | **Contradiction sur les agents inclus** : « aucun agent n'est inclus dans CORE » (LEKA-452, commentaires LEKA-460 du 14/10 19:17 et 19:43) contre « les agents fondamentaux sont inclus selon le plan » (description LEKA-460, LEKA-453, commentaire du 14/10 20:12 qui dit remplacer l'ancienne phrase). | Le code suit LEKA-446 : aucun agent dans un plan, tous en beta. La liste des « agents fondamentaux » par plan n'existe nulle part. | Karim : trancher et lister les agents fondamentaux par plan |
-| B3 | **Stripe non vérifiable** : pas de clé Stripe en local ; en production, non contrôlé (accès serveur sur accord). | Price IDs, produits agents/bundles et droits accordés par Stripe : « à vérifier ». | Bilal : accord pour lire la prod, ou clés de test |
-| B4 | **Changements non mergés** : la démo (PR #280) et LEKA-448 (PR #276) ne sont pas encore sur main. | Leurs lignes sont décrites mais non comptées dans les routes de main. | Merge |
+| B1 | ~~4 maquettes sur 5 absentes de Jira~~ — **constat périmé** : selon Karim (15/10), les cinq maquettes sont jointes aux tickets LEKA-456 à 460. Les destinations ci-dessous suivent encore les descriptions des tickets : elles restent à confronter aux maquettes jointes. | Destination visuelle fine à revoir écran par écran (LEKA-456 à 460). | Équipe : confronter chaque ligne à sa maquette |
+| B2 | **Agents inclus — tranché le 15/10** : les agents fondamentaux sont inclus selon le plan CORE ; les agents spécialisés et les bundles restent payants. **Non résolu** : la liste des agents inclus par plan ; le code (#292) n'en inclut toujours aucun (Free : aucun agent ; Starter et au-dessus : à l'achat). | Matrice agents × plans proposée à Karim, construite depuis le registre et les droits configurés. | Karim : valider la matrice ; puis LEKA-454 |
+| B3 | **Stripe** : en production, `stripe-sync` lancé le 15/10 (prix annuels −30 % et coupon `leka_launch_20_12m` créés). **Non résolu** : pas de clé de test en local ; agents/bundles vendus au prix du catalogue envoyé au checkout (#292, pas encore déployé en production) ; aucun test de bout en bout paiement → droits. | Price IDs de test et preuve checkout → droits : « à vérifier ». | Bilal : clés de test ; LEKA-461 |
+| B4 | ~~Changements non mergés~~ — **levé** : la démo (#280) et LEKA-448 (#276) sont sur main depuis le 15/10. Les routes de la démo ne sont pas encore comptées : régénérer la matrice. | — | Régénération |
 
 ## Écarts commerciaux : règles canoniques du sprint → code actuel
 
-Le code et le catalogue reflètent LEKA-446 (livré le 14/10). Les règles du
-sprint (LEKA-453/456/458/460) les changent sur plusieurs points. **Rien n'est
-corrigé ici** : chaque écart est à reprendre dans LEKA-461 (source de vérité),
-LEKA-454 (droits) ou LEKA-463 (alertes).
+Mis à jour le 15/10 après #287 (remises), #292 (agents payants, quotas au
+catalogue) et les décisions de Karim. Chaque écart reste à reprendre dans
+LEKA-461 (source de vérité), LEKA-454 (droits) ou LEKA-463 (quotas).
 
 | Règle canonique (sprint) | Code / catalogue aujourd'hui (`api/leka/billing/catalogue.yaml`, `core/settings/credits.py`) | Écart | Ticket |
 |---|---|---|---|
 | Plans HT : Free 0, Starter 59, Growth 179, Business 599 €, Enterprise sur devis | 0 / 5 900 / 17 900 / 59 900 centimes, Enterprise `null` | ✅ conforme | — |
-| Annuel : −30 % sur 12 mensualités (Starter 495,60, Growth 1 503,60, Business 5 031,60 €/an) | `annual_discount_percent: 20` | ❌ 20 % au lieu de 30 % | LEKA-461 |
-| Lancement : −20 % sur le mensuel 12 mois, non cumulable avec l'annuel | `launch_offer: {percent: 30, months: 12, intervals: [month]}` | ❌ 30 % au lieu de 20 % ; non-cumul ✅ (mensuel seulement) | LEKA-461 |
+| Annuel : −30 % sur 12 mensualités (Starter 495,60, Growth 1 503,60, Business 5 031,60 €/an) | `annual_discount_percent: 30` (#287), prix Stripe de production créés | ✅ conforme | LEKA-461 |
+| Lancement : −20 % sur le mensuel 12 mois, non cumulable avec l'annuel | `launch_offer: {percent: 20, months: 12, intervals: [month]}` (#287), coupon `leka_launch_20_12m` | ✅ conforme | LEKA-461 |
 | Essai | Growth 14 jours, carte requise (LEKA-446) | ⚠️ non mentionné par les règles du sprint : à confirmer | LEKA-461 |
 | Quotas : Free 10, Starter 100, Growth 500, Business 2 000 analyses standard/mois | Crédits IA : 200 / 2 000 / 10 000 / 40 000 | ⚠️ exactement ×20 : cohérent si une analyse standard = 20 crédits, **non mesuré** (banc LEKA-447 non lancé avec le vrai modèle) | LEKA-461 / 463 |
-| Utilisateurs / sources : Free 1/3, Starter 1/5, Growth 5/15, Business 15/30 | Aucune limite dans le code | ❌ manquant | LEKA-454 / 463 |
-| Règles d'alerte : Starter 5 de base + historique, Growth 20, Business 100 ; workflows : Growth 10, Business 50 | Alertes en app/e-mail selon le plan (`monitoring`), pas de nombre de règles ; aucun quota de workflows | ❌ manquant | LEKA-463 |
-| Agents fondamentaux inclus selon le plan ; packs spécialisés payants | Aucun agent inclus ; `add_ons.available: false` ; 12 agents listés en add-on, tous « beta » gratuits | ❌ + B2 | LEKA-454 / 461 |
-| Agents Standard 9, Spécialisé 15, Expert 25 €/mois HT | Aucun prix d'agent dans le catalogue (`add_ons.prices` vide) | ❌ manquant | LEKA-461 |
-| Bundles : Engineering 59, Ship Safe 79, Incident Response 89, Security & Reliability 69, Frontend Craft 29 € | `bundles: []` | ❌ manquant | LEKA-461 |
-| Agents/bundles mensuels, renouvellement automatique, pas d'annuel | Le parcours d'achat (`buy_add_on`, `buy_bundle`) existe dans la faisabilité, sans route de checkout agent ni produit Stripe | ❌ checkout manquant | LEKA-462 |
+| Utilisateurs / sources : Free 1/3, Starter 1/5, Growth 5/15, Business 15/30 | Valeurs au catalogue (`quotas`, #292, provisoires) ; appliquées par le serveur dans #288, **pas encore mergée** (conflit avec #292 à résoudre entre devs) | ⚠️ en cours | LEKA-463 |
+| Règles d'alerte : Starter 5, Growth 20, Business 100 ; workflows : Growth 10, Business 50 | Valeurs au catalogue (`quotas`, #292). Aucune création de règle d'alerte ni de workflow par un workspace : rien à compter | ⏸ reporté (Karim, 15/10) : appliqué avec les fonctions de création, via des tickets dédiés ; ne pas l'annoncer comme opérationnel | tickets à créer |
+| Agents fondamentaux inclus selon le plan ; packs spécialisés payants | Tranché (Karim, 15/10). Code : aucun agent inclus — Free n'en lance aucun, Starter et au-dessus à l'achat (#292) | ❌ liste par plan à valider (B2) | LEKA-454 |
+| Agents Standard 9, Spécialisé 15, Expert 25 €/mois HT | `add_ons.tiers` 900 / 1 500 / 2 500, 13 agents classés (#292, « à valider ») | ⚠️ prix présents, non validés | LEKA-461 |
+| Bundles : Engineering 59, Ship Safe 79, Incident Response 89, Security & Reliability 69, Frontend Craft 29 € | 5 bundles au catalogue (#292) : engineering 45, architecture 49, ship-safe 52, incident-response 49, security-reliability 42 € ; Frontend Craft absent | ❌ prix et liste différents | LEKA-461 / 460 |
+| Agents/bundles mensuels, renouvellement automatique, pas d'annuel | Checkout d'agent et de bundle, droits `AgentEntitlement` (#292) | ⚠️ à prouver en bout de chaîne (paiement confirmé → droit) | LEKA-461 / 462 |
 | Capacité épuisée : alerte + proposition d'upgrade, pas de dépassement facturé | `automatic_overage: false` ; faisabilité `over_quota` → « Passer au forfait… » ; alertes de crédits 80 % / 100 % | ✅ conforme (bouton de paiement visible même si Stripe n'est pas configuré : à vérifier) | LEKA-462 / 463 |
 | Économies de bundle affichées seulement si démontrables | Rien d'affiché | ✅ (rien à corriger tant qu'aucun bundle) | LEKA-460 |
-| Price IDs, produits Stripe, droits accordés après paiement confirmé | `stripe-sync` ne crée que les plans ; droits de plan sur webhook confirmé | 🔒 non vérifié (B3) ; agents/bundles absents de Stripe | LEKA-454 / 461 |
+| Price IDs, produits Stripe, droits accordés après paiement confirmé | Plans : prix de production créés le 15/10. Agents/bundles : pas de Price ID, prix du catalogue envoyé au checkout (`price_data`, #292) | 🔒 non prouvé (B3) | LEKA-461 |
+| La démo garde son quota Free, isolé du workspace réel, côté serveur (Karim, 15/10) | La démo est un workspace à part, ses crédits comptés à part ; test `test_demo_credits.py` | ✅ conforme | LEKA-449 |
 
 ## Rapprochement du catalogue d'agents (maquette « Agents & Bundles(3) » → registre)
 

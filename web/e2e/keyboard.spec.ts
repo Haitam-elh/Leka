@@ -55,6 +55,8 @@ test.describe("the keyboard, page by page", () => {
       for (let stop = 0; stop < STOPS; stop++) {
         await page.keyboard.press("Tab");
         const focus = await focusShown(page);
+        // Past the page's last stop: a short page, since the sidebar went (LEKA-455).
+        if (focus.name === "body") break;
         if (!focus.visible || !focus.shown) missing.push(`${stop + 1}: ${focus.name}`);
       }
       // Named, so the failure says which stop shows nothing.

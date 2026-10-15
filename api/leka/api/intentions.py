@@ -334,7 +334,9 @@ async def intentions(
         Literal["active", "scheduled", "finished", "archived"] | None,
         Query(description="Every one not archived when none."),
     ] = None,
-    state: Annotated[IntentionStatus | None, Query(alias="status")] = None,
+    state: Annotated[
+        list[IntentionStatus] | None, Query(alias="status", description="Any of these states.")
+    ] = None,
     mine: Annotated[bool, Query(description="Those I asked.")] = False,
     q: Annotated[str | None, Query(max_length=200, description="In its title or words.")] = None,
     linked: Annotated[
@@ -354,7 +356,7 @@ async def intentions(
     statement = IntentionRepository(session, principal.workspace_id).intentions(
         IntentionFilters(
             phase=phase,
-            status=state.value if state else None,
+            status=tuple(s.value for s in state or ()),
             created_by=principal.user_id if mine else None,
             words=q,
             linked=linked,

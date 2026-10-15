@@ -133,6 +133,8 @@ async def test_free_sees_everything_and_is_never_alerted(
     client: AsyncClient, identity: FakeIdentity, outbox: Outbox
 ) -> None:
     workspace_id = await demo(identity)
+    # The seeded company is on Business (LEKA-463): put back on Free.
+    await plan(workspace_id, "free")
     await incident(workspace_id, "open")
     read = (await client.get("/api/v1/monitoring")).json()
     assert read["entitlement"] == {

@@ -37,7 +37,7 @@ async function said(page: Page, id: string): Promise<{ state: string; reason: st
   return journey;
 }
 
-/** Its state on its page, the list, the panel beside it — each the API's. */
+/** Its state on its page and in the history — each the API's. */
 async function everywhere(page: Page, id: string): Promise<string> {
   const { state } = await said(page, id);
   // Its first step's view: where it stands said above every step.
@@ -49,12 +49,6 @@ async function everywhere(page: Page, id: string): Promise<string> {
     has: page.locator(`a[href="/intentions/${id}"]`),
   });
   await expect(row.getByTestId("intention-status")).toHaveAttribute("data-state", state);
-  // The panel beside the list shows the latest: this one, just asked.
-  const preview = page.getByTestId("intention-preview");
-  if (await preview.isVisible()) {
-    await row.getByRole("link").click();
-    await expect(preview.getByTestId("intention-status")).toHaveAttribute("data-state", state);
-  }
   return state;
 }
 

@@ -33,7 +33,7 @@ class Row:
     lifecycle: str | None
     tier: str | None
     price: int | None  # cents a month
-    status: str  # on_sale, included, registry_only, not_built, unpriced
+    status: str  # on_sale, registry_only, not_built, unpriced
     included_in: tuple[str, ...]
     bundles: tuple[str, ...]
 
@@ -60,7 +60,8 @@ def rows(offer: Catalogue | None = None) -> list[Row]:
         agent = sold.runtime_of(ref_key)
         tier = sold.agents[agent].tier if agent else ref.tier
         if agent is not None:
-            status = "included" if any(agent in included[p] for p in PLANS) else "on_sale"
+            # Sold as an option below the plan that includes it.
+            status = "on_sale"
         else:
             status = "not_built" if ref.tier is not None else "unpriced"
         found.append(
@@ -97,8 +98,7 @@ def rows(offer: Catalogue | None = None) -> list[Row]:
 
 
 STATUS = {
-    "on_sale": "Option payante",
-    "included": "Inclus",
+    "on_sale": "Option payante, incluse dès le plan indiqué",
     "registry_only": "Registre seulement — jamais vendu",
     "not_built": "Référence seulement — non construit, jamais vendu",
     "unpriced": "Nommé par un bundle, absent de la liste — à arbitrer",
@@ -123,7 +123,7 @@ def markdown(offer: Catalogue | None = None) -> str:
         "## Agents",
         "",
         "| Reference | Category | Registry agent | Lifecycle | Tier | Price HT / month | "
-        "Status | Included in | Bundles |",
+        "Status | Included from | Bundles |",
         "|---|---|---|---|---|---|---|---|---|",
     ]
     for r in rows(offer):
