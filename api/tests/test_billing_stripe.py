@@ -414,6 +414,48 @@ async def test_the_plan_comes_from_verified_events_once_never_undone_by_an_older
     assert "discounts[0][coupon]" not in stripe.posted("/v1/checkout/sessions")[-1]
 
 
+@pytest.mark.integration
+async def test_a_declined_card_spends_no_offer_and_its_expiry_never_undoes_the_paid_plan(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    stripe: FakeStripe,
+) -> None:
+    # As seen on Stripe's test mode (2026-10-15): card 4000…0002, then 4242….
+    workspace = acme["acme"]
+    await _synced(stripe)
+    _as(identity, acme, "admin")
+    declined = subscription("starter", "incomplete", sub="sub_declined")
+    created = _event("customer.subscription.created", declined, created=1_800_000_100)
+    assert (await _deliver(client, created)).json() == {"received": "ignored"}
+    assert await _plan(workspace) == "free"
+    said = (await client.get(f"{API}/subscription")).json()
+    assert (said["launch_offer_available"], said["trial_available"]) == (True, True)
+    retried = await client.post(f"{API}/checkout", json={"plan": "starter", "interval": "month"})
+    assert retried.json()["quote"]["discount"] == "launch"
+
+    stripe.subscriptions["sub_paid"] = subscription("starter", "active", sub="sub_paid")
+    completed = _event(
+        "checkout.session.completed",
+        {
+            "id": "cs_2",
+            "mode": "subscription",
+            "subscription": "sub_paid",
+            "customer": "cus_1",
+            "client_reference_id": str(workspace),
+        },
+        created=1_800_000_200,
+    )
+    assert (await _deliver(client, completed)).json() == {"received": "plan:starter"}
+    # A day later Stripe lets the declined one expire: the paid plan holds.
+    expired = subscription("starter", "incomplete_expired", sub="sub_declined")
+    late = _event("customer.subscription.updated", expired, created=1_800_086_400)
+    assert (await _deliver(client, late)).json() == {"received": "ignored"}
+    assert await _plan(workspace) == "starter"
+    said = (await client.get(f"{API}/subscription")).json()
+    assert (said["status"], said["launch_offer_available"]) == ("active", False)
+
+
 # ── the trial ───────────────────────────────────────────────────────────────
 
 

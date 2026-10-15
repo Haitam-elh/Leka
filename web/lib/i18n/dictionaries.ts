@@ -1082,7 +1082,7 @@ const fr = {
     versus: "{count} le mois dernier",
     invoices: "Historique des factures",
     invoicesNone:
-      "Aucune facture : LEKA n'en émet pas encore, les offres et les packs sont ajoutés par votre interlocuteur LEKA.",
+      "Aucune facture : LEKA n'en émet pas encore, votre offre est attribuée par votre interlocuteur LEKA.",
     credits: {
       title: "Crédits IA du mois",
       explain:
@@ -1711,15 +1711,35 @@ const fr = {
   },
   /** LEKA's capabilities (LEKA-393, mockup 13). */
   catalogue: {
-    title: "Les capacités de LEKA",
+    title: "Agents et bundles LEKA",
     views: {
       available: "Disponibles",
       mine: "Mes capacités",
       configuration: "Configuration",
     },
     subtitle:
-      "Des agents spécialisés pour comprendre, analyser et agir sur votre environnement.",
+      "Des agents IA spécialisés pour comprendre, décider et agir sur votre environnement.",
+    subtitleMore:
+      "Choisissez les agents dont vous avez besoin ou un bundle pour encore plus de valeur.",
     ask: "Demander une capacité",
+    /** The four figures beside the title (LEKA-460) — counted, never said ahead. */
+    stats: {
+      agents: "{count|agent spécialisé|agents spécialisés}",
+      agentsLead: "Couvrent votre cycle de vie technique",
+      bundles: "{count|bundle thématique|bundles thématiques}",
+      upTo: "Jusqu'à {percent} % d'économie",
+      soon: "Bientôt disponibles",
+      fit: "Adapté",
+      fitLabel: "à vos besoins",
+      fitLead: "Recommandations personnalisées",
+      safe: "Sécurisé",
+      safeLead: "Contrôles, permissions et validation avant action",
+    },
+    allAgents: "Tous les agents LEKA",
+    allAgentsLead:
+      "Chaque agent peut être acheté individuellement. Les prix sont mensuels, en euros, hors TVA.",
+    compare: "Voir la comparaison des offres",
+    allTiers: "Tous les niveaux",
     /** Said once, above the list: what keeps many from running here. */
     wide: {
       no_model:
@@ -1729,7 +1749,7 @@ const fr = {
       configure: "Configurer un modèle",
     },
     need: "Que voulez-vous faire ?",
-    allNeeds: "Tout",
+    allNeeds: "Tous les besoins",
     /** One box per domain, its agents apart from LEKA's own capabilities
      * (2026-10-14). */
     domains: {
@@ -1833,8 +1853,13 @@ const fr = {
       buy: "Acheter",
       fromPlan: "À partir du plan {plan}",
       askAdmin: "Demandez à un administrateur de votre espace de l'acheter.",
-      bundlesTitle: "Bundles",
-      bundlesLead: "Des agents réunis pour un besoin, moins chers qu'achetés un par un.",
+      bundlesTitle: "Bundles LEKA",
+      bundlesLead:
+        "Des ensembles d'agents pour couvrir vos besoins les plus fréquents, à un prix avantageux.",
+      upTo: "Jusqu'à {percent} % d'économie",
+      upToLead: "par rapport à l'achat des agents individuellement",
+      agentsIn: "{count} {count|agent inclus|agents inclus}",
+      soon: "Bientôt disponible",
       save: "−{percent} %",
       choose: "Choisir ce bundle",
       ownedTitle: "Ce que votre espace possède",
@@ -6753,7 +6778,17 @@ const fr = {
       confirmBody:
         "{price} par mois, hors taxes. Vos crédits IA passent à {credits} par mois dès le paiement. Vous serez redirigé vers la page de paiement sécurisée : rien n'est payé sans votre validation.",
       confirm: "Continuer vers le paiement",
-      launch: "Offre de lancement : −{percent} % les {months} premiers mois.",
+      launch:
+        "Offre de lancement : {launchPrice} par mois les {months} premiers mois (−{percent} %), puis {price} par mois.",
+      renews:
+        "Renouvellement automatique chaque mois, résiliable à tout moment.",
+      includesAgents: "Agents inclus : {agents}.",
+      keep: "Retenir : {step}",
+      total: "Total retenu : {price} par mois, hors taxes.",
+      totalThen: "Les {months} premiers mois, puis {price} par mois.",
+      buyTitle: "Ajouter « {name} » ?",
+      buyBody:
+        "{price} par mois, hors taxes, renouvelé automatiquement chaque mois, résiliable à tout moment. L'accès est ouvert dès que Stripe confirme le paiement. Vous serez redirigé vers la page de paiement sécurisée : rien n'est payé sans votre validation.",
       plans: {
         free: "Free",
         starter: "Starter",
@@ -8652,7 +8687,7 @@ const en: Dictionary = {
     versus: "{count} last month",
     invoices: "Invoice history",
     invoicesNone:
-      "No invoice: LEKA issues none yet — plans and packs are added by your LEKA contact.",
+      "No invoice: LEKA issues none yet — your plan is set by your LEKA contact.",
     credits: {
       title: "This month's AI credits",
       explain:
@@ -9265,15 +9300,32 @@ const en: Dictionary = {
     },
   },
   catalogue: {
-    title: "LEKA's capabilities",
+    title: "LEKA agents and bundles",
     views: {
       available: "Available",
       mine: "My capabilities",
       configuration: "Configuration",
     },
     subtitle:
-      "Specialised agents to understand, analyse and act on your environment.",
+      "Specialised AI agents to understand, decide and act on your environment.",
+    subtitleMore: "Choose the agents you need, or a bundle for even more value.",
     ask: "Ask for a capability",
+    stats: {
+      agents: "{count|specialised agent|specialised agents}",
+      agentsLead: "Across your technical lifecycle",
+      bundles: "{count|themed bundle|themed bundles}",
+      upTo: "Up to {percent}% saved",
+      soon: "Coming soon",
+      fit: "Fitted",
+      fitLabel: "to your needs",
+      fitLead: "Personalised recommendations",
+      safe: "Secure",
+      safeLead: "Checks, permissions and approval before action",
+    },
+    allAgents: "All LEKA agents",
+    allAgentsLead: "Each agent can be bought on its own. Prices are monthly, in euros, excluding VAT.",
+    compare: "Compare the plans",
+    allTiers: "All levels",
     /** Said once, above the list: what keeps many from running here. */
     wide: {
       no_model:
@@ -9283,7 +9335,7 @@ const en: Dictionary = {
       configure: "Configure a model",
     },
     need: "What do you want to do?",
-    allNeeds: "Everything",
+    allNeeds: "Every need",
     domains: {
       development: "Code & development",
       architecture: "Architecture",
@@ -9379,8 +9431,12 @@ const en: Dictionary = {
       buy: "Buy",
       fromPlan: "From the {plan} plan",
       askAdmin: "Ask an administrator of your workspace to buy it.",
-      bundlesTitle: "Bundles",
-      bundlesLead: "Agents together for one need, cheaper than bought one by one.",
+      bundlesTitle: "LEKA bundles",
+      bundlesLead: "Sets of agents for your most frequent needs, at a better price.",
+      upTo: "Up to {percent}% saved",
+      upToLead: "compared with buying the agents one by one",
+      agentsIn: "{count} {count|agent included|agents included}",
+      soon: "Coming soon",
       save: "−{percent} %",
       choose: "Choose this bundle",
       ownedTitle: "What your workspace owns",
@@ -14156,7 +14212,16 @@ const en: Dictionary = {
       confirmBody:
         "{price} a month, excluding tax. Your AI credits become {credits} a month once paid. You will go to the secure payment page: nothing is paid without your approval.",
       confirm: "Continue to payment",
-      launch: "Launch offer: −{percent}% for the first {months} months.",
+      launch:
+        "Launch offer: {launchPrice} a month for the first {months} months (−{percent}%), then {price} a month.",
+      renews: "Renews automatically every month, cancel any time.",
+      includesAgents: "Agents included: {agents}.",
+      keep: "Keep: {step}",
+      total: "Total kept: {price} a month, excluding tax.",
+      totalThen: "For the first {months} months, then {price} a month.",
+      buyTitle: "Add « {name} »?",
+      buyBody:
+        "{price} a month, excluding tax, renewed automatically every month, cancel any time. Access opens once Stripe confirms the payment. You will go to the secure payment page: nothing is paid without your approval.",
       plans: {
         free: "Free",
         starter: "Starter",

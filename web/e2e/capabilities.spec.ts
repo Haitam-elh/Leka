@@ -18,7 +18,7 @@ test.describe("Capabilities", () => {
   test("the catalogue, the architect's sheet, turned off and on", async ({ page }) => {
     await signIn(page);
     await page.goto("/capabilities");
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Les capacités de LEKA");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Agents et bundles LEKA");
     // A model answers here: nothing holds the catalogue back (LEKA-438).
     await expect(page.getByTestId("catalogue-grid")).toBeVisible();
     await expect(page.getByTestId("catalogue-wide")).toHaveCount(0);
@@ -43,7 +43,8 @@ test.describe("Capabilities", () => {
     // Its price, owned here — LEKA's demo runs every agent (2026-10-14) —
     // and the bundles under the domains.
     await expect(architect.getByTestId("agent-price")).toContainText("25 € / mois");
-    await expect(architect.getByTestId("agent-price")).toContainText("Actif");
+    // The demo's plan includes it (Karim's matrix, LEKA-454).
+    await expect(architect.getByTestId("agent-price")).toContainText("Inclus dans votre plan");
     await expect(page.getByTestId("bundle")).toHaveCount(5);
 
     // Its words find it.

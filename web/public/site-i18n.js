@@ -4,7 +4,7 @@
    l'anglais, puis sur le français du HTML (docs/languages.md). */
 (() => {
   const D = { en: {
-"Environnement":"Environment","Capacités":"Capabilities","De l'intention à l'action":"From intent to action","Contrôle":"Control","Se connecter":"Sign in","Découvrir LEKA":"Discover LEKA",
+"Environnement":"Environment","Capacités":"Capabilities","De l'intention à l'action":"From intent to action","Contrôle":"Control","Tarifs":"Pricing","Se connecter":"Sign in","Découvrir LEKA":"Discover LEKA",
 "Le système nerveux technologique de votre entreprise":"The technological nervous system of your company",
 "Comprenez. Décidez. Agissez. Sans perdre de temps.":"Understand. Decide. Act. Without wasting time.",
 "LEKA comprend votre environnement technologique, ses relations et ses capacités pour vous permettre d'aller directement du besoin à l'action.":"LEKA understands your technology environment, its relationships and its capabilities so you can go straight from need to action.",
@@ -60,7 +60,7 @@
     const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     let n;
     while ((n = w.nextNode())) {
-      if (n.parentElement.closest('footer,header,script,style,[data-i18n]')) continue;
+      if (n.parentElement.closest('footer,header:not(.hero),script,style,[data-i18n]')) continue;
       if (n.__o === undefined) { if (!K.has(n.nodeValue.trim())) continue; n.__o = n.nodeValue; }
       const t = n.__o.trim(), r = d[t] !== undefined ? d[t] : t;
       n.nodeValue = n.__o.replace(t, () => r);

@@ -20,6 +20,7 @@ What these protect:
 # ruff: noqa: F811 — the gateway's fixtures are imported to be requested by name.
 from __future__ import annotations
 
+import re
 import shutil
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -54,6 +55,8 @@ from tests.test_model_gateway import (
 pytestmark = pytest.mark.integration
 
 FAST = breaker.Policy(threshold=3, window_seconds=60, cooldown_seconds=1)
+# Open while it is read: a busy machine takes more than a second to answer.
+HELD = breaker.Policy(threshold=3, window_seconds=60, cooldown_seconds=120)
 
 
 # ── circuit breakers ───────────────────────────────────────────────────────
@@ -365,11 +368,16 @@ async def test_the_metrics_say_the_system_by_route_never_an_id(
     ).status_code == 401
     some_id = uuid.uuid4()
     await client.get(f"/api/v1/agent-runs/{some_id}")
-    await breaker.failure(f"action_endpoint:{some_id}", FAST)
-    await breaker.failure(f"action_endpoint:{some_id}", FAST)
-    await breaker.failure(f"action_endpoint:{some_id}", FAST)
+    endpoint = f"action_endpoint:{some_id}"
+    for _ in range(3):
+        await breaker.failure(endpoint, HELD)
     forget()
-    answer = await client.get("/api/v1/ops/metrics", headers=operator)
+    try:
+        answer = await client.get("/api/v1/ops/metrics", headers=operator)
+    finally:
+        # Closed again, for the tests after it.
+        await _cooled(endpoint)
+        await breaker.success(endpoint)
     assert answer.status_code == 200 and answer.headers["content-type"].startswith("text/plain")
     said = answer.text
     for family in (
@@ -380,9 +388,11 @@ async def test_the_metrics_say_the_system_by_route_never_an_id(
         "leka_queue_depth",
         "leka_model_calls_1h",
         "leka_runs_failed_1h",
-        'leka_circuits_open{kind="action_endpoint"} 1',
     ):
         assert family in said, family
+    # This one open at least — another test's may still be.
+    opened = re.search(r'leka_circuits_open\{kind="action_endpoint"\} (\d+)', said)
+    assert opened is not None and int(opened.group(1)) >= 1, said
     assert 'route="/agent-runs/{run_id}"' in said
     assert str(some_id) not in said
 

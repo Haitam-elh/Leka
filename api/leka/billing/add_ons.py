@@ -41,7 +41,7 @@ logger = structlog.get_logger(__name__)
 # intentions' job, by its dotted path — billing never imports them.
 LAUNCH_JOB = "leka.intentions.agents.run_bought_launch"
 # Stripe's subscription statuses that keep an add-on.
-KEEPING = frozenset({"active", "trialing", "past_due"})
+ENDING = frozenset({"canceled", "unpaid", "incomplete_expired"})
 # The events that grant an option, once its payment is confirmed.
 GRANTING = frozenset({"checkout.session.completed", "checkout.session.async_payment_succeeded"})
 PAID = frozenset({"paid", "no_payment_required"})
@@ -223,7 +223,10 @@ async def apply_add_on(
         return f"add_on:{what}:{key}"
     if kind.startswith("customer.subscription."):
         status = str(data.get("status") or "")
-        if kind.endswith(".deleted") or status not in KEEPING:
+        # Ended only by a status that ends it: an event delivered late — the
+        # subscription « incomplete » as it was made, before its payment —
+        # never takes back what its paid checkout granted.
+        if kind.endswith(".deleted") or status in ENDING:
             ended = await end(session, workspace_id, subscription=str(data.get("id") or ""))
             return f"add_on_ended:{ended}"
         return "add_on_kept"

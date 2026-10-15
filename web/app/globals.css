@@ -269,6 +269,9 @@
   }
   html {
     @apply font-sans;
+    /* A field scrolled to (an error, a focus) is not hidden under the
+     * sticky header (68px): WCAG 2.4.11. */
+    scroll-padding-top: 5rem;
   }
   /* Text a person or a model wrote may be in any language, either way: each
    * paragraph reads in its own direction — an answer in Arabic right to

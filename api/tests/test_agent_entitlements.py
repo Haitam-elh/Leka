@@ -386,6 +386,13 @@ async def test_granted_only_once_stripe_confirms_the_payment(
     )
     assert confirmed.status_code == 200, confirmed.text
     assert await _why(client, "security-review") == set()
+    # Its subscription's creation, delivered late — still « incomplete » as it
+    # was made, before its payment (seen on Stripe's test mode, 2026-10-15):
+    # what was paid for is kept.
+    made = {"id": "sub_9", "customer": "cus_1", "status": "incomplete", "metadata": marks}
+    late = await _deliver(client, _event("customer.subscription.created", made, created=now + 1))
+    assert late.json() == {"received": "add_on_kept"}
+    assert await _why(client, "security-review") == set()
     # A renewal failing: kept while Stripe retries (past_due) …
     retried = {"id": "sub_9", "customer": "cus_1", "status": "past_due", "metadata": marks}
     kept = await _deliver(
