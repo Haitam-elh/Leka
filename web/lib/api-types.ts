@@ -6058,6 +6058,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/billing/add-ons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Agents and bundles, sold */
+        get: operations["read_add_ons_api_v1_billing_add_ons_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/entitlements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What it owns */
+        get: operations["read_entitlements_api_v1_billing_entitlements_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/add-ons/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Buy an agent or a bundle, with Stripe */
+        post: operations["buy_add_on_api_v1_billing_add_ons_checkout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -6634,6 +6685,59 @@ export interface components {
             /** Previous */
             previous: number;
         };
+        /** AddOnCheckoutCreate */
+        AddOnCheckoutCreate: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "agent" | "bundle";
+            /** Key */
+            key: string;
+            /** Intention Id */
+            intention_id?: string | null;
+            /** Launch */
+            launch?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            }[];
+        };
+        /**
+         * AddOnsRead
+         * @description What is sold besides a plan: agents, alone or in bundles — and where
+         *     this workspace stands.
+         */
+        AddOnsRead: {
+            /** Available */
+            available: boolean;
+            /**
+             * Provisional
+             * @description Prices to validate: said so where shown.
+             */
+            provisional: boolean;
+            /** Currency */
+            currency: string;
+            /**
+             * Minimum Plan
+             * @description The least plan that runs an agent.
+             */
+            minimum_plan: string;
+            /** Plan */
+            plan: string;
+            /**
+             * Runs Agents
+             * @description Its plan runs agents, or LEKA granted every one.
+             */
+            runs_agents: boolean;
+            /**
+             * Every
+             * @description LEKA granted it every agent (its team's, for tests).
+             */
+            every: boolean;
+            /** Agents */
+            agents: components["schemas"]["AgentOfferRead"][];
+            /** Bundles */
+            bundles: components["schemas"]["BundleOfferRead"][];
+        };
         /**
          * AgentFieldRead
          * @description One input an agent takes, for a person to complete it.
@@ -6669,6 +6773,40 @@ export interface components {
              * @description The only sources it reads — none: those the intention was asked on, else every one.
              */
             sources?: string[];
+        };
+        /**
+         * AgentOfferRead
+         * @description An agent as it is sold: its tier and price, whether this workspace owns
+         *     it, and why it may not run it.
+         */
+        AgentOfferRead: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Summary */
+            summary: string;
+            /** Category */
+            category: string;
+            /** Tier */
+            tier: string;
+            /**
+             * Monthly Price
+             * @description Cents a month, excluding VAT.
+             */
+            monthly_price: number;
+            /** Owned */
+            owned: boolean;
+            /**
+             * Why
+             * @description plan_required, not_owned — none when it may run it.
+             */
+            why: string | null;
+            /**
+             * Bundles
+             * @description The bundles it comes in.
+             */
+            bundles: string[];
         };
         /**
          * AgentProposalRead
@@ -8412,6 +8550,26 @@ export interface components {
             values?: string[];
             /** Origin */
             origin: ("words" | "answer" | "model" | "company_model" | "default") | null;
+        };
+        /** BundleOfferRead */
+        BundleOfferRead: {
+            /** Key */
+            key: string;
+            name: components["schemas"]["Words"];
+            value: components["schemas"]["Words"] | null;
+            /** Agents */
+            agents: string[];
+            /** Monthly Price */
+            monthly_price: number;
+            /**
+             * Alone Price
+             * @description Its agents bought one by one, cents a month.
+             */
+            alone_price: number;
+            /** Discount Percent */
+            discount_percent: number;
+            /** Owned */
+            owned: boolean;
         };
         /**
          * BusinessContext
@@ -13004,6 +13162,34 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /**
+         * EntitlementRead
+         * @description What a workspace owns: an agent, a bundle, or every one.
+         */
+        EntitlementRead: {
+            /** Key */
+            key: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "agent" | "bundle" | "all";
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "purchase" | "grant";
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /**
+             * Agents
+             * @description The agents it gives.
+             */
+            agents: string[];
+        };
         /** EntityActivityDay */
         EntityActivityDay: {
             /** Day */
@@ -13609,7 +13795,7 @@ export interface components {
          *     them and a rename would be a breaking change for nothing.
          * @enum {string}
          */
-        ErrorCode: "validation_failed" | "not_authenticated" | "permission_denied" | "not_found" | "conflict" | "rate_limited" | "internal_error" | "service_unavailable" | "invalid_cursor" | "invalid_sort" | "invalid_filter" | "contract_unsupported" | "off_topic" | "agent_unavailable" | "agent_inputs_missing" | "agent_not_proposed" | "credits_short" | "invalid_credentials" | "account_unverified" | "token_invalid" | "token_expired" | "password_too_short" | "password_breached" | "session_expired" | "last_owner" | "csrf_failed";
+        ErrorCode: "validation_failed" | "not_authenticated" | "permission_denied" | "not_found" | "conflict" | "rate_limited" | "internal_error" | "service_unavailable" | "invalid_cursor" | "invalid_sort" | "invalid_filter" | "contract_unsupported" | "off_topic" | "agent_unavailable" | "agent_inputs_missing" | "agent_not_proposed" | "credits_short" | "plan_required" | "agent_not_owned" | "invalid_credentials" | "account_unverified" | "token_invalid" | "token_expired" | "password_too_short" | "password_breached" | "session_expired" | "last_owner" | "csrf_failed";
         /**
          * ErrorEnvelope
          * @description Every error response the API returns, whatever the status.
@@ -53585,6 +53771,286 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    read_add_ons_api_v1_billing_add_ons_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddOnsRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    read_entitlements_api_v1_billing_entitlements_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementRead"][];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    buy_add_on_api_v1_billing_add_ons_checkout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddOnCheckoutCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
             };
             /** @description Not signed in, or the session has expired. */
             401: {

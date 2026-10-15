@@ -175,10 +175,24 @@ async def _workspace(members: dict[uuid.UUID, str]) -> uuid.UUID:
 
 @pytest.fixture
 async def acme() -> AsyncIterator[dict[str, uuid.UUID]]:
-    """An owner and a member in Acme; another workspace, with its own admin."""
+    """An owner and a member in Acme; another workspace, with its own admin.
+
+    Acme runs every agent, as LEKA's team's workspaces do (2026-10-14);
+    Globex, on Free, none."""
     people = {name: await _user(name) for name in ("admin", "member", "other_admin")}
     people["acme"] = await _workspace({people["admin"]: "admin", people["member"]: "member"})
     people["globex"] = await _workspace({people["other_admin"]: "admin"})
+    with system_scope():
+        async with session_factory() as session:
+            await session.execute(
+                text(
+                    "INSERT INTO agent_entitlements (workspace_id, key, kind, origin, status, "
+                    "by_whom, reason, started_at) VALUES (:w, '*', 'all', 'grant', 'active', "
+                    "'tests', 'every agent, as LEKA team workspaces', now())"
+                ),
+                {"w": people["acme"]},
+            )
+            await session.commit()
     yield people
     with system_scope():
         async with session_factory() as session:

@@ -31,16 +31,43 @@ are told in advance. They are never shown as a cost-validated guarantee.
 | AI credits a month | 200 *(provisional)* | 2,000 *(provisional)* | 10,000 *(provisional)* | 40,000 *(provisional)* | by contract |
 | Trial | — | — | **14 days, card required** | — | — |
 | Language model | managed by LEKA | managed by LEKA | managed by LEKA | managed by LEKA | managed by LEKA, **or the customer's own** |
-| Agents (application architect, QA, security review, incident investigation, infrastructure, code review, data, release, documentation, debugging, build fixer, architecture analysis) | **none included**: add-ons, **not on sale yet** | add-ons | add-ons | add-ons | add-ons |
+| Agents (§ 1 bis) | **none runs** | bought alone or in bundles | idem | idem | idem |
+| People · sources · standard analyses a month · alert rules · recurring workflows *(to validate)* | 1 · 3 · 10 · 0 · 0 | 1 · 5 · 100 · 5 · 0 | 5 · 15 · 500 · 20 · 10 | 15 · 30 · 2,000 · 100 · 50 | by contract |
 | Extra AI capacity | **never sold apart**: a higher plan | idem | idem | idem | by contract |
 | How to start | sign up | sign up | sign up | sign up | **book a meeting with the team**, or the enquiry form |
 
 **Not decided yet, so not stated anywhere**:
-- seats, sources, workspaces and integrations per plan;
-- agent and bundle prices — the reference ones (Standard €9, Specialized €15, Expert €25 a month) are not set until their margin is shown;
+- workspaces and integrations per plan;
 - support levels.
 
-Each is added to the catalogue when decided, and the page shows it with nothing else to edit. The plans differ today by price, AI capacity, and the own-model option on Enterprise. They do not differ by any capability, because the product does not gate any by plan.
+The quotas above come from the pricing screen shared after the product call of 2026-10-14, and are marked `provisional` (to validate) in the catalogue.
+
+## 1 bis. Agents and bundles (2026-10-14)
+
+Decided on 2026-10-14, after the product call. The prices are to validate (`provisional: true`), and the PR that brought them lists them.
+
+- **No agent in a plan.** A workspace on **Free runs none**, refused by the server (`plan_required`). From **Starter**, it runs the agents it bought (`not_owned` otherwise).
+- **Each agent is sold alone**, at its tier's monthly price:
+  - Standard: **€9** (code review, test analysis, documentation);
+  - Specialised: **€15** (architecture analysis, infrastructure, data, debugging, build fixer);
+  - Expert: **€25** (application architect, code change, security review, incident investigation, release analysis).
+
+  An agent's runs are paid on top, in the plan's AI credits. Its price is therefore margin, whatever it costs to run.
+- **Bundles** are agents together, 22 to 25 % cheaper than one by one. The catalogue refuses a bundle that is not cheaper, or more than 27 % off:
+
+| Bundle | Agents | Alone | Bundle |
+| --- | --- | --- | --- |
+| Ingénierie | code change, code review, test analysis, build fixer | €58 | **€45** |
+| Architecture | application architect, architecture analysis, infrastructure, documentation | €64 | **€49** |
+| Livrer sereinement | release analysis, test analysis, code review, security review | €68 | **€52** |
+| Réponse aux incidents | incident investigation, debugging, release analysis | €65 | **€49** |
+| Sécurité et fiabilité | security review, infrastructure, data | €55 | **€42** |
+
+- **Bought** with Stripe, as a subscription of its own beside the plan's. Its amount is the catalogue's, sent as the line's price. It is owned once Stripe says it is paid (`checkout.session.completed`), and no longer once the subscription is cancelled or unpaid. **An add-on's events never touch the plan.**
+- **Bought from an intention's decision**, the agents chosen there are launched once it is paid (`leka.intentions.agents.run_bought_launch`).
+- **LEKA's team's workspaces** keep every agent for tests. The migration granted every agent to the workspaces on a paid plan when it ran. `python -m leka.billing.cli grant-agents <workspace> --by NAME --reason WHY` grants one more, and `--end` takes the grant back.
+
+Each is added to the catalogue when decided, and the page shows it with nothing else to edit. The plans differ by price, AI capacity, the quotas above, the own-model option on Enterprise, and agents: none run on Free.
 
 **LEAD by LEKA** is not on this page: its packaging (a separate product or a module of LEKA CORE) is to be confirmed first.
 

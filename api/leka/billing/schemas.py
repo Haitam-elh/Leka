@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from leka.billing.catalogue import Quote, Words
 from leka.billing.models import EVENTS
@@ -127,3 +128,67 @@ class SubscriptionRead(_Read):
     trial_available: bool = Field(description="Never subscribed here: a plan's trial may be had.")
     last_invoice: str | None
     has_customer: bool
+
+
+# ── agents and bundles (2026-10-14) ─────────────────────────────────────────
+
+
+class AgentOfferRead(_Read):
+    """An agent as it is sold: its tier and price, whether this workspace owns
+    it, and why it may not run it."""
+
+    key: str
+    title: str
+    summary: str
+    category: str
+    tier: str
+    monthly_price: int = Field(description="Cents a month, excluding VAT.")
+    owned: bool
+    why: str | None = Field(description="plan_required, not_owned — none when it may run it.")
+    bundles: list[str] = Field(description="The bundles it comes in.")
+
+
+class BundleOfferRead(_Read):
+    key: str
+    name: Words
+    value: Words | None
+    agents: list[str]
+    monthly_price: int
+    alone_price: int = Field(description="Its agents bought one by one, cents a month.")
+    discount_percent: int
+    owned: bool
+
+
+class AddOnsRead(_Read):
+    """What is sold besides a plan: agents, alone or in bundles — and where
+    this workspace stands."""
+
+    available: bool
+    provisional: bool = Field(description="Prices to validate: said so where shown.")
+    currency: str
+    minimum_plan: str = Field(description="The least plan that runs an agent.")
+    plan: str
+    runs_agents: bool = Field(description="Its plan runs agents, or LEKA granted every one.")
+    every: bool = Field(description="LEKA granted it every agent (its team's, for tests).")
+    agents: list[AgentOfferRead]
+    bundles: list[BundleOfferRead]
+
+
+class AddOnCheckoutCreate(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    kind: Literal["agent", "bundle"]
+    key: str = Field(max_length=100)
+    # Opened from an intention's decision: the agents to launch once paid.
+    intention_id: uuid.UUID | None = None
+    launch: list[dict[str, JsonValue]] = Field(default_factory=list, max_length=3)
+
+
+class EntitlementRead(_Read):
+    """What a workspace owns: an agent, a bundle, or every one."""
+
+    key: str
+    kind: Literal["agent", "bundle", "all"]
+    origin: Literal["purchase", "grant"]
+    started_at: datetime
+    agents: list[str] = Field(description="The agents it gives.")

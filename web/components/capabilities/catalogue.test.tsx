@@ -48,6 +48,49 @@ vi.mock("@/lib/capabilities", async (original) => ({
   capabilities: api,
 }));
 vi.mock("@/lib/notify", () => ({ notify: notices }));
+// What is sold besides the plan (2026-10-14).
+const sold = vi.hoisted(() => ({ addOns: vi.fn(), entitlements: vi.fn(), buy: vi.fn() }));
+vi.mock("@/lib/billing", async (original) => ({
+  ...(await original<typeof import("@/lib/billing")>()),
+  billing: sold,
+}));
+
+function addOns(owned: boolean, plan = "starter") {
+  return {
+    available: true,
+    provisional: true,
+    currency: "EUR",
+    minimum_plan: "starter",
+    plan,
+    runs_agents: plan !== "free",
+    every: false,
+    agents: [
+      {
+        key: "application-architecture",
+        title: "Architecte applicatif",
+        summary: "Le deck d'architecture d'un parcours.",
+        category: "architecture",
+        tier: "expert",
+        monthly_price: 2500,
+        owned,
+        why: owned ? null : plan === "free" ? "plan_required" : "not_owned",
+        bundles: ["architecture"],
+      },
+    ],
+    bundles: [
+      {
+        key: "architecture",
+        name: { fr: "Architecture", en: "Architecture" },
+        value: { fr: "Documenter votre architecture.", en: "Document your architecture." },
+        agents: ["application-architecture"],
+        monthly_price: 4900,
+        alone_price: 6400,
+        discount_percent: 23,
+        owned,
+      },
+    ],
+  };
+}
 
 const { CatalogueScreen } = await import("@/components/capabilities/catalogue");
 const { CapabilityScreen } = await import("@/components/capabilities/capability-detail");
@@ -157,6 +200,8 @@ function show(node: React.ReactNode) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  sold.addOns.mockResolvedValue(addOns(false));
+  sold.entitlements.mockResolvedValue([]);
   route.pathname = "/capabilities";
   route.search = "";
   permissions.value = ["workspace:read", "intention:create"];
@@ -176,7 +221,7 @@ describe("the catalogue", () => {
     // LEKA's own, in French.
     expect(owner).toHaveTextContent("Responsabilités");
     expect(owner).toHaveTextContent("Qui en est responsable");
-    expect(owner).toHaveTextContent("12 exécutions");
+    expect(owner).toHaveTextContent("Lancée 12 fois dans votre espace");
     expect(owner).toHaveTextContent("Disponible");
     expect(architect).toHaveTextContent("Architecte applicatif");
     // What it does in the reader's words, not the description its model reads.
@@ -258,15 +303,43 @@ describe("the catalogue", () => {
     expect(screen.queryByTestId("catalogue-wide")).not.toBeInTheDocument();
   });
 
-  it("shows « Mes capacités », and says when none is kept", async () => {
+  it("shows « Mes capacités »: what the workspace owns, LEKA's own with it", async () => {
+    // 2026-10-14: « l'onglet Mes capacités ne sert strictement à rien ».
     route.search = "tab=mine";
-    api.list.mockResolvedValue([]);
+    sold.entitlements.mockResolvedValue([]);
     show(<CatalogueScreen />);
-    expect(await screen.findByTestId("catalogue-empty")).toHaveTextContent(
-      "Aucune capacité gardée sous la main",
-    );
-    expect(api.list).toHaveBeenCalledWith(expect.objectContaining({ view: "mine" }));
+    await screen.findAllByTestId("capability-card");
+    const keys = screen.getAllByTestId("capability-card").map((c) => c.dataset.key);
+    expect(keys).toContain("ownership");
+    expect(keys).not.toContain("application-architecture");
+    expect(await screen.findByText(/Aucun agent pour l'instant/)).toBeVisible();
     expect(screen.getByTestId("catalogue-view-mine")).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("prices each agent, offers its bundles, and buys for who may", async () => {
+    permissions.value = ["workspace:read", "workspace:update"];
+    sold.buy.mockResolvedValue({ url: "https://checkout.stripe.test/cs_1" });
+    const user = userEvent.setup();
+    show(<CatalogueScreen />);
+    const price = await screen.findByTestId("agent-price");
+    expect(price).toHaveTextContent("25 € / mois");
+    expect(price).toHaveTextContent("Expert");
+    const bundle = await screen.findByTestId("bundle");
+    expect(bundle).toHaveTextContent("Architecture");
+    expect(bundle).toHaveTextContent("49 €");
+    expect(bundle).toHaveTextContent("−23 %");
+    await user.click(within(price).getByTestId("agent-buy"));
+    await waitFor(() =>
+      expect(sold.buy).toHaveBeenCalledWith({ kind: "agent", key: "application-architecture" }),
+    );
+  });
+
+  it("on Free, says the plan agents need instead of selling one", async () => {
+    sold.addOns.mockResolvedValue(addOns(false, "free"));
+    show(<CatalogueScreen />);
+    const price = await screen.findByTestId("agent-price");
+    expect(price).toHaveTextContent("À partir du plan Starter");
+    expect(within(price).queryByTestId("agent-buy")).not.toBeInTheDocument();
   });
 
   it("lets an admin turn one off, only saying why — and anyone else read it", async () => {

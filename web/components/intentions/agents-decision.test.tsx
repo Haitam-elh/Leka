@@ -35,7 +35,7 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/components/shell/shell-provider", () => ({
   useCurrentUser: () => ({ id: ME }),
-  usePermissions: () => ["intention:read", "intention:create"],
+  usePermissions: () => permissions.value,
 }));
 vi.mock("@/lib/notify", () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
@@ -51,6 +51,12 @@ vi.mock("@/lib/intentions/api", async (original) => ({
 }));
 const runs = vi.hoisted(() => ({ forIntention: vi.fn() }));
 const sourcesApi = vi.hoisted(() => ({ list: vi.fn() }));
+const sold = vi.hoisted(() => ({ addOns: vi.fn(), entitlements: vi.fn(), buy: vi.fn() }));
+vi.mock("@/lib/billing", async (original) => ({
+  ...(await original<typeof import("@/lib/billing")>()),
+  billing: sold,
+}));
+const permissions = vi.hoisted(() => ({ value: ["intention:read", "intention:create"] }));
 vi.mock("@/lib/sources", async (original) => ({
   ...(await original<typeof import("@/lib/sources")>()),
   sources: sourcesApi,
@@ -267,6 +273,61 @@ describe("the agents it takes, and the decision", () => {
     expect(screen.getByTestId("decide-by-hand")).toHaveTextContent("Je m'arrête là");
     await waitFor(() => expect(api.byHand).toHaveBeenCalledWith(ID));
     await waitFor(() => expect(push).toHaveBeenCalledWith(`/intentions/${ID}/actions`));
+  });
+
+  it("unlocks an agent not bought, then launches what was chosen once paid", async () => {
+    // 2026-10-14: « Débloquer et lancer » — Stripe's page, then back.
+    permissions.value = ["intention:read", "intention:create", "workspace:update"];
+    const locked = { ...REVIEW, available: false, reasons: ["not_owned"] };
+    api.analysis.mockResolvedValue(analysis(proposal({ agents: [ARCHITECT, locked] })));
+    sold.addOns.mockResolvedValue({
+      available: true,
+      provisional: true,
+      currency: "EUR",
+      minimum_plan: "starter",
+      plan: "growth",
+      runs_agents: true,
+      every: false,
+      agents: [
+        {
+          key: "code-review",
+          title: "Revue de code",
+          summary: "Relit une pull request.",
+          category: "development",
+          tier: "standard",
+          monthly_price: 900,
+          owned: false,
+          why: "not_owned",
+          bundles: ["engineering"],
+        },
+      ],
+      bundles: [
+        {
+          key: "engineering",
+          name: { fr: "Ingénierie", en: "Engineering" },
+          value: null,
+          agents: ["code-change", "code-review", "test-analysis", "build-fixer"],
+          monthly_price: 4500,
+          alone_price: 5800,
+          discount_percent: 22,
+          owned: false,
+        },
+      ],
+    });
+    sold.buy.mockResolvedValue({ url: "https://checkout.stripe.test/cs_1" });
+    const user = userEvent.setup();
+    show(<AgentsDecision intention={intention()} />);
+    const unlock = await screen.findByTestId("decide-unlock");
+    expect(unlock).toHaveTextContent("À débloquer : 9 € / mois");
+    expect(within(unlock).getByTestId("decide-unlock-bundle")).toHaveTextContent(
+      "Dans le bundle Ingénierie : 45 € / mois",
+    );
+    await user.click(within(unlock).getByTestId("decide-unlock-agent"));
+    await waitFor(() => expect(sold.buy).toHaveBeenCalled());
+    const [asked] = sold.buy.mock.calls[0];
+    expect(asked).toMatchObject({ kind: "agent", key: "code-review", intention_id: ID });
+    expect(asked.launch.map((l: { key: string }) => l.key)).toContain("code-review");
+    permissions.value = ["intention:read", "intention:create"];
   });
 
   it("says how it was decided once it was", async () => {
