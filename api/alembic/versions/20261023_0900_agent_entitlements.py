@@ -1,7 +1,7 @@
 """The agents a workspace may run, and the Checkouts opened to buy one.
 
 Revision ID: 8a3f5c2e9d14
-Revises: 6e1c9a4b7d20
+Revises: 9b3e5d7c1a42
 Created: 2026-10-23
 
 The product call of 2026-10-14: a workspace on Free runs no agent, and
@@ -27,7 +27,9 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "8a3f5c2e9d14"
-down_revision: str | None = "6e1c9a4b7d20"
+# After the demo workspace (LEKA-449, #280): both were written on
+# 6e1c9a4b7d20, and two heads stop every upgrade (2026-10-15).
+down_revision: str | None = "9b3e5d7c1a42"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
