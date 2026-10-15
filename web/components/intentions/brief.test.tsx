@@ -423,6 +423,51 @@ describe("what it takes", () => {
     vi.unstubAllGlobals();
   });
 
+  it("lets each paid step be left out and says the total again", async () => {
+    const user = userEvent.setup();
+    show(
+      <FeasibilityPanel
+        feasibility={feasibility({
+          verdict: "over_quota",
+          path: [
+            {
+              kind: "change_plan",
+              detail: {
+                plan: "starter",
+                monthly_price: 5900,
+                credits: 2000,
+                launch_percent: 20,
+                launch_months: 12,
+                launch_price: 4720,
+                then_price: 5900,
+              },
+              consent: true,
+            },
+            {
+              kind: "buy_add_on",
+              detail: { agent: "security-review", monthly_price: 2500, renews: true },
+              consent: true,
+            },
+          ],
+        })}
+      />,
+    );
+    const total = screen.getByTestId("feasibility-total");
+    expect(total).toHaveTextContent("Total retenu : 72,20 € par mois, hors taxes.");
+    expect(total).toHaveTextContent("Les 12 premiers mois, puis 84,00 € par mois.");
+    const [plan, agent] = screen.getAllByTestId("feasibility-keep");
+    await user.click(agent!);
+    expect(total).toHaveTextContent("Total retenu : 47,20 €");
+    // Left out: nothing to buy for it.
+    expect(screen.queryByTestId("feasibility-buy")).not.toBeInTheDocument();
+    await user.click(plan!);
+    expect(total).toHaveTextContent("Total retenu : 0,00 €");
+    expect(total).not.toHaveTextContent("premiers mois");
+    await user.click(agent!);
+    expect(total).toHaveTextContent("Total retenu : 25,00 €");
+    expect(screen.getByTestId("feasibility-buy")).toBeInTheDocument();
+  });
+
   it("never offers payment to who may not pay for the workspace", () => {
     permissions.list = ["intention:read"];
     show(
