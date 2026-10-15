@@ -6645,7 +6645,14 @@ const fr = {
       confirmBody:
         "{price} par mois, hors taxes. Vos crédits IA passent à {credits} par mois dès le paiement. Vous serez redirigé vers la page de paiement sécurisée : rien n'est payé sans votre validation.",
       confirm: "Continuer vers le paiement",
-      launch: "Offre de lancement : −{percent} % les {months} premiers mois.",
+      launch:
+        "Offre de lancement : {launchPrice} par mois les {months} premiers mois (−{percent} %), puis {price} par mois.",
+      renews:
+        "Renouvellement automatique chaque mois, résiliable à tout moment.",
+      includesAgents: "Agents inclus : {agents}.",
+      buyTitle: "Ajouter « {name} » ?",
+      buyBody:
+        "{price} par mois, hors taxes, renouvelé automatiquement chaque mois, résiliable à tout moment. L'accès est ouvert dès que Stripe confirme le paiement. Vous serez redirigé vers la page de paiement sécurisée : rien n'est payé sans votre validation.",
       plans: {
         free: "Free",
         starter: "Starter",
@@ -13941,7 +13948,13 @@ const en: Dictionary = {
       confirmBody:
         "{price} a month, excluding tax. Your AI credits become {credits} a month once paid. You will go to the secure payment page: nothing is paid without your approval.",
       confirm: "Continue to payment",
-      launch: "Launch offer: −{percent}% for the first {months} months.",
+      launch:
+        "Launch offer: {launchPrice} a month for the first {months} months (−{percent}%), then {price} a month.",
+      renews: "Renews automatically every month, cancel any time.",
+      includesAgents: "Agents included: {agents}.",
+      buyTitle: "Add « {name} »?",
+      buyBody:
+        "{price} a month, excluding tax, renewed automatically every month, cancel any time. Access opens once Stripe confirms the payment. You will go to the secure payment page: nothing is paid without your approval.",
       plans: {
         free: "Free",
         starter: "Starter",
