@@ -144,8 +144,24 @@ class AgentOfferRead(_Read):
     tier: str
     monthly_price: int = Field(description="Cents a month, excluding VAT.")
     owned: bool
-    why: str | None = Field(description="plan_required, not_owned — none when it may run it.")
+    why: str | None = Field(
+        description="not_for_sale, plan_required, not_owned — none when it may run it."
+    )
     bundles: list[str] = Field(description="The bundles it comes in.")
+    reference: str | None = Field(
+        default=None, description="Its name in the marketplace reference (LEKA-454)."
+    )
+    included: bool = Field(default=False, description="Its plan runs it, without an option.")
+
+
+class BundleMemberRead(_Read):
+    """An agent a bundle names (LEKA-454): the registry's agent standing for
+    it — none when no agent does yet, the bundle then not sold."""
+
+    key: str
+    name: str
+    agent: str | None
+    monthly_price: int | None = Field(description="Its reference price; none when unpriced.")
 
 
 class BundleOfferRead(_Read):
@@ -154,9 +170,15 @@ class BundleOfferRead(_Read):
     value: Words | None
     agents: list[str]
     monthly_price: int
-    alone_price: int = Field(description="Its agents bought one by one, cents a month.")
-    discount_percent: int
+    alone_price: int | None = Field(
+        description="Its members bought one by one, cents a month — none when one is unpriced."
+    )
+    discount_percent: int | None = Field(
+        description="Computed from the members' prices; none when it cannot be shown."
+    )
     owned: bool
+    sellable: bool = Field(default=True, description="Every member an agent of the registry.")
+    members: list[BundleMemberRead] = Field(default_factory=list)
 
 
 class AddOnsRead(_Read):

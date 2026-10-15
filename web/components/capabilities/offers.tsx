@@ -1,7 +1,9 @@
 "use client";
 
-import { BadgeCheck, Lock, Package, ShoppingCart } from "lucide-react";
+import { BadgeCheck, Clock, Lock, Package, ShoppingCart } from "lucide-react";
 import Link from "next/link";
+
+import { cn } from "cn";
 
 import { Card, IconTile } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
@@ -58,7 +60,11 @@ export function AgentPrice({ agentKey }: { agentKey: string }) {
         {fill(w.perMonth, { price: euros(offer.monthly_price, format) })}
       </span>
       <Pill tone="neutral">{tiers[offer.tier] ?? offer.tier}</Pill>
-      {offer.owned ? (
+      {offer.included ? (
+        <Pill tone="success" dot>
+          {w.includedInPlan}
+        </Pill>
+      ) : offer.owned ? (
         <Pill tone="success" dot>
           {w.active}
         </Pill>
@@ -126,19 +132,39 @@ function BundleCard({
           {euros(bundle.monthly_price, format)}
         </span>
         <span className="text-xs text-shell-muted">{w.month}</span>
-        <span className="text-xs text-shell-muted line-through">{euros(bundle.alone_price, format)}</span>
-        <Pill tone="success">{fill(w.save, { percent: bundle.discount_percent })}</Pill>
+        {/* Computed from its members' prices, shown only when every one
+            has one (LEKA-454): never a saving that cannot be shown. */}
+        {bundle.alone_price !== null && bundle.discount_percent !== null ? (
+          <>
+            <span className="text-xs text-shell-muted line-through">{euros(bundle.alone_price, format)}</span>
+            <Pill tone="success">{fill(w.save, { percent: bundle.discount_percent })}</Pill>
+          </>
+        ) : null}
       </p>
-      <ul className="space-y-1 text-[0.8125rem] text-brand-navy">
-        {bundle.agents.map((key) => (
-          <li key={key} className="flex items-center gap-1.5">
-            <BadgeCheck className="size-3.5 text-state-success" aria-hidden="true" />
-            {titles.get(key) ?? key}
+      <ul className="space-y-1 text-[0.8125rem] text-brand-navy" data-testid="bundle-members">
+        {(bundle.members ?? []).map((member) => (
+          <li
+            key={member.key}
+            className={cn("flex items-center gap-1.5", !member.agent && "text-shell-muted")}
+            data-built={member.agent ? "true" : "false"}
+          >
+            {member.agent ? (
+              <BadgeCheck className="size-3.5 text-state-success" aria-hidden="true" />
+            ) : (
+              <Clock className="size-3.5" aria-hidden="true" />
+            )}
+            {member.agent ? (titles.get(member.agent) ?? member.name) : member.name}
+            {member.agent ? null : <span className="text-xs">· {w.notBuilt}</span>}
           </li>
         ))}
       </ul>
       <div className="mt-auto">
-        {bundle.owned ? (
+        {!bundle.sellable ? (
+          // Some of its agents are not built: not sold (LEKA-454).
+          <p className="text-xs text-shell-muted" data-testid="bundle-soon">
+            {w.bundleSoon}
+          </p>
+        ) : bundle.owned ? (
           <Pill tone="success" dot>
             {w.active}
           </Pill>
@@ -166,7 +192,8 @@ function BundleCard({
   );
 }
 
-/** The bundles: agents together, cheaper than one by one. */
+/** The bundles, as the reference composes them: sold once every agent they
+ * name is built, their saving computed (LEKA-454). */
 export function Bundles() {
   const t = useDictionary();
   const w = t.catalogue.offers;

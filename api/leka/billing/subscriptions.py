@@ -382,7 +382,7 @@ async def receive(
                 row.outcome = "ignored" if said in ("ignored", "stale", "not_paid") else "applied"
                 row.detail = {"said": said}
             await session.commit()
-            if kind == "checkout.session.completed" and said.startswith("add_on:"):
+            if said.startswith("add_on:"):
                 from leka.billing.add_ons import launch_bought
 
                 await launch_bought(session, workspace_id, str(data.get("id") or ""))

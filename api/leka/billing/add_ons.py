@@ -42,6 +42,9 @@ logger = structlog.get_logger(__name__)
 LAUNCH_JOB = "leka.intentions.agents.run_bought_launch"
 # Stripe's subscription statuses that keep an add-on.
 KEEPING = frozenset({"active", "trialing", "past_due"})
+# The events that grant an option, once its payment is confirmed.
+GRANTING = frozenset({"checkout.session.completed", "checkout.session.async_payment_succeeded"})
+PAID = frozenset({"paid", "no_payment_required"})
 
 
 @dataclass(frozen=True)
@@ -58,7 +61,8 @@ def add_on(kind: str, key: str) -> AddOn | None:
     if kind == "agent" and key in sold.agents:
         return AddOn("agent", key, sold.prices[key], (key,))
     bundle = sold.bundle(key) if kind == "bundle" else None
-    if bundle is not None:
+    # Sold only once every agent it names is (LEKA-454).
+    if bundle is not None and bundle.sellable:
         return AddOn("bundle", key, bundle.monthly_price, bundle.agents)
     return None
 
@@ -87,7 +91,7 @@ async def checkout_add_on(
         raise CheckoutRefusedError(
             "plan_required", f"Agents run from the {sold.minimum_plan.title()} plan."
         )
-    if has.every or all(a in has.agents for a in found.agents):
+    if has.every or all(a in has.agents or a in has.included for a in found.agents):
         raise CheckoutRefusedError("owned", "Already owned here.")
     account = await account_of(session, workspace_id)
     customer = await _customer(client, account)
@@ -163,7 +167,11 @@ async def apply_add_on(
     if found is None:
         return "ignored"
     what, key = found
-    if kind == "checkout.session.completed":
+    if kind in GRANTING:
+        # Granted only once Stripe says it is paid (LEKA-454): a payment
+        # still processing is granted by its async_payment_succeeded.
+        if str(data.get("payment_status") or "") not in PAID:
+            return "not_paid"
         subscription = str(data.get("subscription") or "") or None
         await grant(
             session,

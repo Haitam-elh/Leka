@@ -1,11 +1,13 @@
 """The agents a workspace may run (2026-10-14, the product call: « un compte
 Free a utilisé l'agent Architecte applicatif gratuitement »).
 
-    owned()    its plan, and what it owns: an agent bought alone, a bundle's
-               agents, or every one LEKA granted it (its team's, for tests)
-    Owned.why  why it may not run an agent — `plan_required` on a plan below
-               the catalogue's least (Free), `not_owned` when not bought —
-               or None
+    owned()    its plan, and what it runs: the agents its plan includes, an
+               option bought alone, a bundle's agents, or every one LEKA
+               granted it (its team's, for tests)
+    Owned.why  why it may not run an agent — `not_for_sale` for one the
+               catalogue does not sell (LEKA-454: never shown available),
+               `plan_required` on a plan below the catalogue's least (Free),
+               `not_owned` when its option is not bought — or None
     grant()    an agent, a bundle, or every one, from now on: bought (its
                Stripe subscription) or granted by LEKA — kept, said why
     end()      no longer: a subscription cancelled, a grant taken back —
@@ -44,11 +46,16 @@ class Owned:
     every: bool
     agents: frozenset[str]
     bundles: frozenset[str]
+    # Its plan's own agents (LEKA-454), and every agent on sale.
+    included: frozenset[str] = frozenset()
+    on_sale: frozenset[str] = frozenset()
 
     def why(self, key: str) -> str | None:
         """Why this agent may not run here — None when it may."""
-        if self.every:
+        if self.every or key in self.included:
             return None
+        if key not in self.on_sale:
+            return "not_for_sale"
         if not plan_runs_agents(self.plan):
             return "plan_required"
         if key in self.agents:
@@ -78,11 +85,14 @@ async def owned(session: AsyncSession, workspace_id: uuid.UUID) -> Owned:
         bundle = sold.bundle(key)
         if bundle is not None:
             agents |= set(bundle.agents)
+    plan = (await plan_of(session, workspace_id)).name
     return Owned(
-        plan=(await plan_of(session, workspace_id)).name,
+        plan=plan,
         every=any(r.kind == "all" for r in rows),
         agents=frozenset(agents),
         bundles=bundles,
+        included=sold.included_in(plan),
+        on_sale=frozenset(sold.agents) if sold.available else frozenset(),
     )
 
 

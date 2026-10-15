@@ -1771,6 +1771,7 @@ const fr = {
       deprecated: "Dépréciée : elle sera remplacée",
       plan_required: "Disponible à partir du plan Starter",
       not_owned: "À débloquer",
+      not_for_sale: "Pas encore proposé",
       unknown: "Indisponible",
     },
     or: " ou ",
@@ -1800,6 +1801,9 @@ const fr = {
       failed: "L'achat n'a pas pu commencer. Réessayez dans un instant.",
       plan_required: "Les agents sont disponibles à partir du plan Starter.",
       owned: "Votre espace l'a déjà.",
+      includedInPlan: "Inclus dans votre plan",
+      notBuilt: "en préparation",
+      bundleSoon: "Bientôt disponible : certains de ses agents sont encore en préparation.",
     },
     summaries: {
       standing:
@@ -9123,6 +9127,7 @@ const en: Dictionary = {
       deprecated: "Deprecated: it will be replaced",
       plan_required: "Available from the Starter plan",
       not_owned: "To unlock",
+      not_for_sale: "Not offered yet",
       unknown: "Unavailable",
     },
     or: " or ",
@@ -9152,6 +9157,9 @@ const en: Dictionary = {
       failed: "The purchase could not start. Try again in a moment.",
       plan_required: "Agents are available from the Starter plan.",
       owned: "Your workspace already has it.",
+      includedInPlan: "Included in your plan",
+      notBuilt: "in preparation",
+      bundleSoon: "Coming soon: some of its agents are still in preparation.",
     },
     summaries: {
       standing:
