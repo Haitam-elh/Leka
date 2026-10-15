@@ -24,7 +24,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from leka.db import WorkspaceScopedRepository, system_scope, workspace_scope
 from leka.platform.models import (
     Invitation,
-    InvitationStatus,
     Membership,
     Role,
     Workspace,
@@ -194,11 +193,10 @@ class InvitationRepository(WorkspaceScopedRepository):
             )
             return result.scalar_one_or_none()
 
-    async def get_pending_for_email(self, email: str) -> Invitation | None:
+    async def get_for_email(self, email: str) -> Invitation | None:
+        """The address's invitation, whatever its status: one per address."""
         result = await self._session.execute(
-            self.select(Invitation)
-            .where(Invitation.email == email)
-            .where(Invitation.status == InvitationStatus.PENDING)
+            self.select(Invitation).where(Invitation.email == email)
         )
         return result.scalar_one_or_none()
 
