@@ -89,7 +89,7 @@ test.describe("Platform pages", () => {
   test("billing says the consumption", async ({ page }) => {
     await signIn(page);
     await page.goto("/billing");
-    await expect(page.getByTestId("billing-plan")).toContainText("Free");
+    await expect(page.getByTestId("billing-plan")).toContainText("Business");
     await expect(page.getByTestId("billing-credits")).toContainText("Crédits IA du mois");
     await expect(page.getByTestId("billing-entities")).toContainText(/\d/);
   });

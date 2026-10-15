@@ -21,7 +21,10 @@ from leka.api.dependencies import (
     SessionDep,
     UserIdDep,
 )
+from leka.api.errors import ApiError
 from leka.api.pagination import PageEnvelope, PageParams, SortCatalogue, serve_page
+from leka.billing.limits import PlanLimitError, room_for_user
+from leka.core.errors import ErrorCode
 from leka.db import SortableField
 from leka.governance import (
     PendingInvitationRead,
@@ -126,6 +129,10 @@ async def invite_member(
     clear token exactly once too, for whoever must pass it on by hand; it
     is never stored and no other route will return it again.
     """
+    try:
+        await room_for_user(db, principal.workspace_id, payload.email)
+    except PlanLimitError as error:
+        raise ApiError(status.HTTP_403_FORBIDDEN, ErrorCode.PLAN_LIMIT, str(error)) from error
     invitation, token = await members.invite(
         payload.email, payload.role, invited_by=principal.user_id
     )

@@ -14,8 +14,10 @@
 # shown as a guarantee. Change a value here, in a pull request: the page
 # follows, nothing else to edit.
 #
-# Values not decided yet are absent, never guessed: seats, sources and
-# workspaces per plan; agent and bundle prices.
+# Users (members and pending invitations) and sources per plan: decided for
+# the UX sprint (LEKA-463), enforced by the server (leka/billing/limits.py).
+# Values not decided yet are absent, never guessed: workspaces per plan;
+# agent and bundle prices.
 #
 # Monitoring (LEKA-442, decided 2026-10-13, provisional): every plan sees its
 # environment's states, their freshness and coverage; proactive alerts —
@@ -44,6 +46,8 @@ launch_offer:
 plans:
   - key: free
     name: Free
+    users: 1
+    sources: 3
     monthly_price: 0
     self_service: true
     audience:
@@ -62,6 +66,8 @@ plans:
 
   - key: starter
     name: Starter
+    users: 1
+    sources: 5
     monthly_price: 5900
     self_service: true
     audience:
@@ -79,6 +85,8 @@ plans:
 
   - key: growth
     name: Growth
+    users: 5
+    sources: 15
     monthly_price: 17900
     self_service: true
     recommended: true
@@ -100,6 +108,8 @@ plans:
 
   - key: business
     name: Business
+    users: 15
+    sources: 30
     monthly_price: 59900
     self_service: true
     audience:

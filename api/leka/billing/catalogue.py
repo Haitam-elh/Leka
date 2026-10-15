@@ -89,6 +89,10 @@ class Plan(_Model):
     monitoring: Monitoring = Monitoring(proactive=False)
     # Days free before the first charge, a card required; None: none.
     trial_days: int | None = Field(default=None, gt=0)
+    # Seats (members and pending invitations) and sources (LEKA-463);
+    # None: per contract.
+    users: int | None = Field(default=None, gt=0)
+    sources: int | None = Field(default=None, gt=0)
 
     @model_validator(mode="after")
     def _coherent(self) -> Plan:

@@ -80,6 +80,11 @@ class ErrorCode(enum.StrEnum):
     LAST_OWNER = "last_owner"
     CSRF_FAILED = "csrf_failed"
 
+    # ── Billing ──────────────────────────────────────────────────────────
+    # One user or source more than the plan allows (LEKA-463): a higher plan
+    # is named in the message.
+    PLAN_LIMIT = "plan_limit"
+
 
 # What a 500 says out loud. Fixed, and deliberately uninformative: whoever
 # reads it has the request id, and everything else is in our logs.
