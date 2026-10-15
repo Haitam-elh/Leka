@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { signIn } from "./sign-in";
+import { openNavigation, signIn } from "./sign-in";
 
 /**
  * Activité and a thing's Historique, in a real browser (LEKA-383).
@@ -24,6 +24,7 @@ test.describe("Activité", () => {
   }) => {
     await signIn(page);
     // Activité is one of Mon environnement's lines (2026-10-07).
+    await openNavigation(page);
     await page.getByTestId("nav-section-environment-toggle").click();
     await page.getByTestId("nav-activity").click();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Activité");

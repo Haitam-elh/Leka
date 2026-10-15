@@ -69,6 +69,9 @@ const fr = {
   },
   shell: {
     tagline: "Understand. Decide. Act.",
+    home: "LEKA — accueil",
+    backHome: "Retour à l'accueil",
+    plan: "Formule",
     mainNavigation: "Navigation principale",
     sidebar: "Barre latérale",
     breadcrumb: "Fil d'Ariane",
@@ -7527,6 +7530,9 @@ const en: Dictionary = {
   },
   shell: {
     tagline: "Understand. Decide. Act.",
+    home: "LEKA — home",
+    backHome: "Back to home",
+    plan: "Plan",
     mainNavigation: "Main navigation",
     sidebar: "Sidebar",
     breadcrumb: "Breadcrumb",

@@ -143,7 +143,7 @@ test.describe("the settings form", () => {
     await page.goto("/settings");
 
     await page.getByLabel("Nom de l'espace").fill("Quelque chose d'autre");
-    await page.getByTestId("nav-overview").click();
+    await page.getByTestId("home-logo").click();
 
     const dialog = page.getByRole("alertdialog");
     await expect(dialog).toContainText("Quitter sans enregistrer ?");

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { ask } from "./intention-helpers";
-import { LANDING, signIn } from "./sign-in";
+import { LANDING, openNavigation, signIn } from "./sign-in";
 
 /**
  * The information architecture, clicked through.
@@ -11,7 +11,7 @@ import { LANDING, signIn } from "./sign-in";
  * above the title and the right words in the browser tab.
  */
 
-/** Every page the sidebar opens, the line it marks, the title it carries. */
+/** Every page the menu opens, the line it marks, the title it carries. */
 const ZONES = [
   ["/overview", "overview", "Mon Dashboard"],
   ["/intentions/new", "intention-new", "Nouvelle intention"],
@@ -33,22 +33,25 @@ test.describe("the information architecture", () => {
 
     for (const [path, id, label] of ZONES) {
       await page.goto(path);
+      await expect(page).toHaveTitle(`${label} · LEKA`);
 
-      await expect(page.getByRole("navigation", { name: "Navigation principale" })).toBeVisible();
       // Marked, and in sight: the section it is in opened on arrival.
+      await openNavigation(page);
       await expect(page.getByTestId(`nav-${id}`)).toHaveAttribute("aria-current", "page");
       await expect(page.getByTestId(`nav-${id}`)).toBeVisible();
-      await expect(page.locator('a[aria-current="page"]')).toHaveCount(1);
-      await expect(page).toHaveTitle(`${label} · LEKA`);
+      await expect(page.getByRole("navigation", { name: "Navigation principale" }).locator('a[aria-current="page"]')).toHaveCount(1);
+      await page.keyboard.press("Escape");
     }
   });
 
   test("marks the composer's line on the composer, not « Mes intentions »", async ({ page }) => {
     await signIn(page);
 
+    await openNavigation(page);
     await page.getByTestId("nav-intention-new").click();
 
     await expect(page).toHaveURL("http://localhost:3000/intentions/new");
+    await openNavigation(page);
     await expect(page.getByTestId("nav-intention-new")).toHaveAttribute("aria-current", "page");
     await expect(page.getByTestId("nav-intentions")).not.toHaveAttribute("aria-current", "page");
   });
@@ -62,6 +65,7 @@ test.describe("the information architecture", () => {
     await expect(trail.getByText("Payment API")).toBeVisible();
     await expect(page).toHaveTitle("Payment API · LEKA");
     // The parent stays marked while you read one of its children.
+    await openNavigation(page);
     await expect(page.getByTestId("nav-environment-overview")).toHaveAttribute(
       "aria-current",
       "page",
@@ -110,8 +114,8 @@ test.describe("the information architecture", () => {
     await signIn(page);
     await page.goto("/there-is-no-such-page");
 
-    // Not a bare 404: dropping the sidebar here reads as "you were logged out".
-    await expect(page.getByRole("navigation", { name: "Navigation principale" })).toBeVisible();
+    // Not a bare 404: dropping the shell here reads as "you were logged out".
+    await expect(page.getByTestId("home-logo")).toBeVisible();
     await expect(page.getByTestId("route-state-not-found")).toBeVisible();
     await page.getByRole("link", { name: "Retour à la vue d'ensemble" }).click();
     await expect(page).toHaveURL("http://localhost:3000/overview");
@@ -126,21 +130,26 @@ test.describe("the three pillars (LEKA-428)", () => {
 
     // Its name opens its overview, and unfolds it: under it, Activité only
     // (2026-10-14).
+    await openNavigation(page);
     await page.getByTestId("nav-environment-overview").click();
     await expect(page).toHaveURL("http://localhost:3000/environment");
     await expect(page.getByTestId("env-view")).toContainText("Vue globale");
+    await openNavigation(page);
     await expect(page.getByTestId("nav-section-environment-toggle")).toHaveAttribute("aria-expanded", "true");
     await expect(page.getByTestId("nav-activity")).toBeVisible();
     await expect(page.getByTestId("nav-environment-applications")).toHaveCount(0);
     await expect(page.getByTestId("nav-environment-overview")).toHaveAttribute("aria-current", "page");
-    await expect(page.locator('a[aria-current="page"]')).toHaveCount(1);
+    await expect(page.getByRole("navigation", { name: "Navigation principale" }).locator('a[aria-current="page"]')).toHaveCount(1);
+    await page.keyboard.press("Escape");
 
-    // A view chosen top right: in the address, the sidebar still on its page.
+    // A view chosen top right: in the address, the menu still on its page.
     await page.getByTestId("env-view").click();
     await page.getByRole("option", { name: "Applications" }).click();
     await expect(page).toHaveURL("http://localhost:3000/environment?tab=applications");
     await expect(page.getByTestId("env-view")).toContainText("Applications");
+    await openNavigation(page);
     await expect(page.getByTestId("nav-environment-overview")).toHaveAttribute("aria-current", "page");
+    await page.keyboard.press("Escape");
 
     // And the address is the view: reloaded, or sent, it opens there.
     await page.goto("/environment?tab=domains");
@@ -149,6 +158,7 @@ test.describe("the three pillars (LEKA-428)", () => {
 
   test("opens and closes a section, from the keyboard too, and remembers it", async ({ page }) => {
     await signIn(page);
+    await openNavigation(page);
 
     const administration = page.getByTestId("nav-section-administration-toggle");
     await expect(administration).toHaveAttribute("aria-expanded", "false");
@@ -165,6 +175,7 @@ test.describe("the three pillars (LEKA-428)", () => {
     await expect(page.getByTestId("nav-intentions")).toBeHidden();
 
     await page.reload();
+    await openNavigation(page);
     await expect(page.getByTestId("nav-section-administration-toggle")).toHaveAttribute(
       "aria-expanded",
       "true",
@@ -180,6 +191,7 @@ test.describe("the three pillars (LEKA-428)", () => {
     await page.setViewportSize({ width: 1440, height: 789 });
     await signIn(page);
     await page.goto("/activity");
+    await openNavigation(page);
 
     await expect(page.getByTestId("nav-section-environment-toggle")).toHaveAttribute(
       "aria-expanded",
@@ -190,33 +202,11 @@ test.describe("the three pillars (LEKA-428)", () => {
     // Leaving it closes it again: nothing was chosen.
     await page.getByTestId("nav-approvals").click();
     await expect(page).toHaveURL("http://localhost:3000/approvals");
+    await openNavigation(page);
     await expect(page.getByTestId("nav-section-environment-toggle")).toHaveAttribute(
       "aria-expanded",
       "false",
     );
-  });
-
-  test("gives a section's pages in a menu on the rail", async ({ page }) => {
-    // Between 1024 and 1279px the sidebar is the rail.
-    await page.setViewportSize({ width: 1100, height: 800 });
-    await signIn(page);
-    await page.goto("/environment?tab=events");
-
-    const environment = page.getByTestId("nav-section-environment-toggle");
-    await expect(environment).toHaveAccessibleName("Mon environnement, page actuelle");
-    await environment.click();
-
-    const menu = page.getByRole("menu");
-    await expect(menu).toContainText("Le système vivant de votre entreprise.");
-    // A view chosen on its page is its overview's (2026-10-14).
-    await expect(menu.getByRole("menuitem", { name: "Vue globale" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
-    await menu.getByRole("menuitem", { name: "Activité" }).click();
-
-    await expect(page).toHaveURL("http://localhost:3000/activity");
-    await expect(menu).toBeHidden();
   });
 });
 
@@ -334,7 +324,10 @@ test.describe("what a member may see", () => {
     await signIn(page);
     await asAMember(page);
     await page.goto("/overview");
+    // The plan is said, with no door to Facturation.
+    await expect(page.getByTestId("plan-badge")).not.toHaveAttribute("href");
 
+    await openNavigation(page);
     await expect(page.getByTestId("nav-section-environment")).toBeVisible();
     await page.getByTestId("nav-section-administration-toggle").click();
     await expect(page.getByTestId("nav-settings")).toBeVisible();
@@ -344,7 +337,7 @@ test.describe("what a member may see", () => {
     await page.goto("/billing");
 
     // In the shell, with a way out: not a 404, and not a silent redirect.
-    await expect(page.getByRole("navigation", { name: "Navigation principale" })).toBeVisible();
+    await expect(page.getByTestId("home-logo")).toBeVisible();
     await expect(page.getByTestId("route-state-forbidden")).toBeVisible();
     await expect(page.getByRole("link", { name: "Retour à la vue d'ensemble" })).toBeVisible();
   });

@@ -70,14 +70,14 @@ export async function signIn(page: Page): Promise<void> {
  * shell reporting that a call came back 401. One cause, three disguises,
  * and no way to see it from any of them.
  *
- * Waiting for a navigation entry is waiting for the permissions to have
- * arrived, since the sidebar shows nothing until they have. A failure now
+ * Waiting for the plan in the header is waiting for the session to have
+ * arrived (LEKA-455: no sidebar any more), since it reads the workspace's. A failure now
  * happens here, under this name, instead of in whichever test drew the
  * short straw.
  */
 export async function expectShellReady(page: Page): Promise<void> {
   try {
-    await expect(page.getByTestId("nav-overview")).toBeVisible();
+    await expect(page.getByTestId("plan-badge")).toBeVisible();
   } catch {
     // The shell has three ways of failing and it prints all of them: a
     // loading message that never resolved, "the API is unreachable", or
@@ -90,4 +90,16 @@ export async function expectShellReady(page: Page): Promise<void> {
       `The shell never became usable.\n  URL:  ${page.url()}\n  Says: ${said.slice(0, 300)}`,
     );
   }
+}
+
+/**
+ * Every page, in the drawer the header's menu opens (LEKA-455): the way a
+ * spec reaches an entry the sidebar used to show.
+ */
+export async function openNavigation(page: Page): Promise<void> {
+  await page.getByTestId("open-navigation").click();
+  // Named in the interface's language: a spec may have switched it.
+  await expect(
+    page.getByRole("navigation", { name: /^(Navigation principale|Main navigation)$/ }),
+  ).toBeVisible();
 }
