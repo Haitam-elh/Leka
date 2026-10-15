@@ -303,13 +303,20 @@ class MembershipService:
         Losing it means re-inviting — which is the correct trade for a
         database that cannot be turned into a set of usable invitations.
         """
-        existing = await self._invitations.get_pending_for_email(email)
-        if existing is not None:
-            # Re-inviting replaces rather than accumulating, so revoking one
-            # invitation does not leave two others alive.
-            existing.status = InvitationStatus.REVOKED
-
         token = secrets.token_urlsafe(INVITATION_TOKEN_BYTES)
+        existing = await self._invitations.get_for_email(email)
+        if existing is not None:
+            # One row per address (uq_invitations_workspace_email): inviting
+            # it again renews that one — a new token, the old link dead.
+            existing.role = role
+            existing.token_hash = hash_token(token)
+            existing.expires_at = datetime.now(UTC) + INVITATION_LIFETIME
+            existing.invited_by_user_id = invited_by
+            existing.status = InvitationStatus.PENDING
+            existing.accepted_at = None
+            await self._invitations.flush()
+            return existing, token
+
         invitation = Invitation(
             email=email,
             role=role,

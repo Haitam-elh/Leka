@@ -356,6 +356,29 @@ async def test_an_invitation_token_works_once(
     assert second.status_code == 403
 
 
+async def test_inviting_an_address_again_renews_its_invitation_the_old_link_dead(
+    client: AsyncClient, identity: FakeIdentity, people: dict[str, uuid.UUID]
+) -> None:
+    workspace = await _create_workspace(client, identity, people["owner"], "Acme Corp")
+    identity.sign_in(people["owner"], uuid.UUID(workspace["id"]))
+    first = await client.post(f"{API}/members/invite", json={"email": "admin@acme.example"})
+    # Again, as an admin this time: one invitation, renewed — never a 500.
+    again = await client.post(
+        f"{API}/members/invite", json={"email": "admin@acme.example", "role": "admin"}
+    )
+    assert again.status_code == 201, again.text
+    assert again.json()["invitation"]["id"] == first.json()["invitation"]["id"]
+    assert again.json()["invitation"]["role"] == "admin"
+    assert len((await client.get(f"{API}/invitations")).json()) == 1
+
+    identity.sign_in(people["admin"], uuid.UUID(workspace["id"]))
+    stale = await client.post(f"{API}/invitations/{first.json()['token']}/accept")
+    assert stale.status_code == 403
+    joined = await client.post(f"{API}/invitations/{again.json()['token']}/accept")
+    assert joined.status_code == 200
+    assert joined.json()["role"] == "admin"
+
+
 async def test_an_expired_invitation_is_refused(
     client: AsyncClient, identity: FakeIdentity, people: dict[str, uuid.UUID]
 ) -> None:
