@@ -81,12 +81,13 @@ def _shipped() -> Any:
 # The module, not the function the package exports under its name.
 billing_catalogue = importlib.import_module("leka.billing.catalogue")
 
-# A bundle every member of which is built: sold (LEKA-454).
+# A bundle every member of which is built, neither in Starter: sold
+# (LEKA-454).
 PAIR = {
     "key": "review-pair",
     "name": {"fr": "Revue", "en": "Review"},
-    "members": ["code-reviewer", "test-strategist"],
-    "monthly_price": 1500,
+    "members": ["security-reviewer", "incident-investigator"],
+    "monthly_price": 4500,
 }
 
 
@@ -178,7 +179,7 @@ async def test_bought_paid_owned_cancelled_no_longer_the_plan_untouched(
     await _connect({"acme": globex}, "github")
     await _on(globex, "starter")
     _as(identity, acme, "other_admin")
-    assert await _why(client, "code-review") == {"not_owned"}
+    assert await _why(client, "security-review") == {"not_owned"}
 
     bought = await client.post(
         f"{API}/billing/add-ons/checkout", json={"kind": "bundle", "key": "review-pair"}
@@ -187,12 +188,12 @@ async def test_bought_paid_owned_cancelled_no_longer_the_plan_untouched(
     assert bought.json()["url"] == "https://checkout.stripe.test/cs_1"
     [opened] = selling.posted("/v1/checkout/sessions")
     # The catalogue's price, a subscription of its own, marked as the bundle.
-    assert opened["line_items[0][price_data][unit_amount]"] == "1500"
+    assert opened["line_items[0][price_data][unit_amount]"] == "4500"
     assert opened["line_items[0][price_data][recurring][interval]"] == "month"
     assert opened["subscription_data[metadata][leka_add_on_key]"] == "review-pair"
     assert opened["success_url"] == "https://leka.test/capabilities?bought=review-pair"
     # Coming back from Checkout owns nothing: only Stripe's event does.
-    assert await _why(client, "code-review") == {"not_owned"}
+    assert await _why(client, "security-review") == {"not_owned"}
 
     marks = {
         "workspace_id": str(globex),
@@ -217,7 +218,7 @@ async def test_bought_paid_owned_cancelled_no_longer_the_plan_untouched(
         ),
     )
     assert paid.status_code == 200, paid.text
-    assert await _why(client, "code-review") == set()
+    assert await _why(client, "security-review") == set()
     assert await _why(client, "application-architecture") == {"not_owned"}
     # The plan is the plan's: an add-on's events never touch it.
     assert await _plan(globex) == "starter"
@@ -231,7 +232,7 @@ async def test_bought_paid_owned_cancelled_no_longer_the_plan_untouched(
         ),
     )
     assert cancelled.status_code == 200, cancelled.text
-    assert await _why(client, "code-review") == {"not_owned"}
+    assert await _why(client, "security-review") == {"not_owned"}
     assert await _plan(globex) == "starter"
     with workspace_scope(globex):
         async with session_factory() as session:
@@ -251,12 +252,12 @@ async def test_opened_from_a_decision_its_agents_are_launched_once_paid(
     await _on(globex, "starter")
     _as(identity, acme, "other_admin")
     intention = uuid.uuid4()
-    launch = [{"key": "code-review", "inputs": {}, "formats": []}]
+    launch = [{"key": "security-review", "inputs": {}, "formats": []}]
     bought = await client.post(
         f"{API}/billing/add-ons/checkout",
         json={
             "kind": "agent",
-            "key": "code-review",
+            "key": "security-review",
             "intention_id": str(intention),
             "launch": launch,
         },
@@ -265,7 +266,7 @@ async def test_opened_from_a_decision_its_agents_are_launched_once_paid(
     [opened] = selling.posted("/v1/checkout/sessions")
     assert (
         opened["success_url"]
-        == f"https://leka.test/intentions/{intention}/decision?bought=code-review"
+        == f"https://leka.test/intentions/{intention}/decision?bought=security-review"
     )
 
     queued: list[tuple[Any, ...]] = []
@@ -278,7 +279,7 @@ async def test_opened_from_a_decision_its_agents_are_launched_once_paid(
     marks = {
         "workspace_id": str(globex),
         "leka_add_on_kind": "agent",
-        "leka_add_on_key": "code-review",
+        "leka_add_on_key": "security-review",
     }
     paid = await _deliver(
         client,
@@ -299,7 +300,7 @@ async def test_opened_from_a_decision_its_agents_are_launched_once_paid(
         async with session_factory() as session:
             [row] = (await session.scalars(select(AddOnCheckout))).all()
             assert (row.status, row.intention_id, row.launch) == ("paid", intention, launch)
-            assert (await owned(session, globex)).why("code-review") is None
+            assert (await owned(session, globex)).why("security-review") is None
     assert queued == [("leka.intentions.agents.run_bought_launch", str(globex), str(row.id))]
 
 
@@ -363,7 +364,7 @@ async def test_granted_only_once_stripe_confirms_the_payment(
     marks = {
         "workspace_id": str(globex),
         "leka_add_on_kind": "agent",
-        "leka_add_on_key": "code-review",
+        "leka_add_on_key": "security-review",
     }
     now = int(time.time())
     session = {"id": "cs_9", "mode": "subscription", "subscription": "sub_9", "metadata": marks}
@@ -373,7 +374,7 @@ async def test_granted_only_once_stripe_confirms_the_payment(
         _event("checkout.session.completed", {**session, "payment_status": "unpaid"}, created=now),
     )
     assert waiting.json() == {"received": "not_paid"}
-    assert await _why(client, "code-review") == {"not_owned"}
+    assert await _why(client, "security-review") == {"not_owned"}
     # Confirmed: granted.
     confirmed = await _deliver(
         client,
@@ -384,18 +385,46 @@ async def test_granted_only_once_stripe_confirms_the_payment(
         ),
     )
     assert confirmed.status_code == 200, confirmed.text
-    assert await _why(client, "code-review") == set()
+    assert await _why(client, "security-review") == set()
     # A renewal failing: kept while Stripe retries (past_due) …
     retried = {"id": "sub_9", "customer": "cus_1", "status": "past_due", "metadata": marks}
     kept = await _deliver(
         client, _event("customer.subscription.updated", retried, created=now + 60)
     )
     assert kept.json() == {"received": "add_on_kept"}
-    assert await _why(client, "code-review") == set()
+    assert await _why(client, "security-review") == set()
     # … ended once Stripe gives up (unpaid): no right without a payment.
     unpaid = {**retried, "status": "unpaid"}
     ended = await _deliver(
         client, _event("customer.subscription.updated", unpaid, created=now + 120)
     )
     assert ended.json() == {"received": "add_on_ended:1"}
-    assert await _why(client, "code-review") == {"not_owned"}
+    assert await _why(client, "security-review") == {"not_owned"}
+
+
+async def test_each_plan_runs_the_agents_it_includes_and_those_of_the_plans_below(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+) -> None:
+    await sync_catalogue()
+    globex = acme["globex"]
+    await _connect({"acme": globex}, "github")
+    _as(identity, acme, "other_admin")
+    # Karim, 2026-10-15: Starter three; Growth those and five more; Business
+    # all thirteen. What a plan does not include is an option.
+    await _on(globex, "starter")
+    assert await _why(client, "code-review") == set()
+    assert await _why(client, "debug-assistant") == {"not_owned"}
+    assert await _why(client, "security-review") == {"not_owned"}
+    await _on(globex, "growth")
+    assert await _why(client, "code-review") == set()
+    assert await _why(client, "debug-assistant") == set()
+    assert await _why(client, "security-review") == {"not_owned"}
+    await _on(globex, "business")
+    assert await _why(client, "security-review") == set()
+    sold = (await client.get(f"{API}/billing/add-ons")).json()
+    assert all(a["included"] for a in sold["agents"])
+    # Free runs none.
+    await _on(globex, "free")
+    assert await _why(client, "code-review") == {"plan_required"}

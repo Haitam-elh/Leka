@@ -47,8 +47,15 @@ The quotas above come from the pricing screen shared after the product call of 2
 The subscription mock-up of 14 October rules (it replaces « no agent in a plan »). Every value is in `api/leka/billing/catalogue.yaml`, `provisional: true`, to validate. The inventory — every agent, its price, status, what includes it and the bundles — is generated from the sources: [billing/agents-inventory.md](billing/agents-inventory.md).
 
 - **Fundamental agents are every plan's**: LEKA's own capabilities — understanding the request, its analysis, its answer (LEKA Assistant) — run on every plan, Free included, within its quotas.
-- **A plan may include some of the registry's agents** (`included`, per plan and every plan above). None is yet: the mock-ups include none; to validate.
-- **Every other agent is a specialised option**, monthly, renewed until cancelled, at its tier's price: Standard **€9**, Specialised **€15**, Expert **€25** HT. It runs from **Starter** (`plan_required` on Free), once its option is active (`not_owned` otherwise). The 13 agents of the registry are on sale, each with the name the marketplace reference gives it (Architect, Code Reviewer, Test Strategist…); `architecture-analysis` and `code-change` have no equivalent there, their tier LEKA's.
+- **Each plan includes registry agents** (`included`, every plan above it too — Karim, 2026-10-15), their runs taking the plan's AI credits:
+  - Free: none;
+  - Starter: code review, test analysis, documentation;
+  - Growth: those, and architecture analysis, infrastructure, data, debugging, build fixer;
+  - Business: all thirteen;
+  - Enterprise: by contract (every one by default).
+
+  An agent in draft is never included: only agents on sale may be.
+- **Every agent its plan does not include is a specialised option**, monthly, renewed until cancelled, at its tier's price: Standard **€9**, Specialised **€15**, Expert **€25** HT. It runs from **Starter** (`plan_required` on Free), once its option is active (`not_owned` otherwise). The 13 agents of the registry are on sale, each with the name the marketplace reference gives it (Architect, Code Reviewer, Test Strategist…); `architecture-analysis` and `code-change` have no equivalent there, their tier LEKA's.
 - **The reference's agents not built** (47) are never sold, never shown available (`not_for_sale`).
 - **Bundles** are the reference's five, at its prices — Engineering €59, Ship Safe €79, Incident Response €89, Security & Reliability €69, Frontend Craft €29 — and its compositions. A bundle is **sold only once every agent it names is built**: none is today. Its saving is computed from its members' prices and shown only when every member has one (Engineering −35 %, Frontend Craft −40 %; the others name Migration Planner or Reliability Analyst, which the reference does not price). « Jusqu'à 27 % » is not shown.
 - **Paid before owned**: an option is granted when Stripe says it is paid (`payment_status: paid`, or `checkout.session.async_payment_succeeded` for a payment still processing), kept while Stripe retries a failed renewal (`past_due`), ended when the subscription is cancelled or unpaid. **An option's events never touch the plan.**

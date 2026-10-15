@@ -63,10 +63,18 @@ def test_the_catalogue_lekas_ships_is_whole() -> None:
     assert [p.key for p in offer.plans if p.recommended] == ["growth"]
     assert [p.key for p in offer.plans if p.trial_days] == ["growth"]
     assert offer.plan("growth").trial_days == 14
-    # LEKA's own capabilities are every plan's; the registry's agents are
-    # options, none included yet (LEKA-454: to validate).
-    assert {"application-architecture", "test-analysis"} <= set(offer.add_ons.agents)
-    assert offer.add_ons.included == {}
+    # LEKA's own capabilities are every plan's; each plan includes some of
+    # the registry's agents, every plan above it too (Karim, 2026-10-15).
+    sold_ = offer.add_ons
+    assert {"application-architecture", "test-analysis"} <= set(sold_.agents)
+    assert sold_.included_in("free") == frozenset()
+    assert sold_.included_in("starter") == {
+        "code-review",
+        "test-analysis",
+        "documentation-assistant",
+    }
+    assert len(sold_.included_in("growth")) == 8
+    assert sold_.included_in("business") == set(sold_.agents) == sold_.included_in("enterprise")
     assert "core_agents" not in _raw()
     assert [p.key for p in offer.plans if p.own_llm] == ["enterprise"]
     assert all(p.managed_llm for p in offer.plans)
