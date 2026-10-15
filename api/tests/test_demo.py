@@ -32,7 +32,7 @@ from httpx import AsyncClient
 from sqlalchemy import select, text
 
 from leka.connectors import Source
-from leka.connectors import base as connectors_base
+from leka.connectors import network as connectors_network
 from leka.db import session_factory, system_scope, workspace_scope
 from leka.ingestion import pipeline as pipeline_module
 from leka.ingestion import sync as sync_module
@@ -66,7 +66,7 @@ def offline(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[None]:
         msg = "a demonstration reached the network"
         raise AssertionError(msg)
 
-    monkeypatch.setattr(connectors_base.PublicTransport, "__init__", nowhere)
+    monkeypatch.setattr(connectors_network.PublicTransport, "__init__", nowhere)
     from leka.platform import storage
 
     monkeypatch.setattr(storage, "_store", LocalObjectStore(tmp_path))
