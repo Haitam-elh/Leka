@@ -3439,6 +3439,9 @@ const fr = {
         not_covered: "Non couvert",
         none: "Aucun état connu",
       },
+      mapTitle: "Cartographie de l'environnement",
+      mapSubtitle:
+        "Vos services, leurs dépendances et leur état, tels que vos sources les montrent.",
       zoom: {
         label: "Taille de l'architecture",
         in: "Zoom avant",
@@ -3461,9 +3464,13 @@ const fr = {
         close: "Fermer le détail",
         tabs: {
           overview: "Vue d'ensemble",
-          relations: "Relations",
-          events: "Événements",
+          relations: "Dépendances",
+          events: "Incidents",
         },
+        logs: "Logs",
+        documentation: "Documentation",
+        lastDeploy: "Dernier déploiement",
+        unknownValue: "inconnu",
         deduced: "Déduit",
         deducedFrom: "Déduit de {host} ({kind}) : {state}",
         deducedHint:
@@ -3504,7 +3511,7 @@ const fr = {
         evidence: "Vu dans",
         open: "Ouvrir la fiche",
         tables: "Voir ses tables",
-        relationsTitle: "Relations ({count})",
+        relationsTitle: "Dépendances ({count})",
         noRelations: "Aucune relation connue.",
         eventsEmpty: "Rien n'a bougé autour de cet élément.",
         seeAll: "Voir tout",
@@ -10875,6 +10882,8 @@ const en: Dictionary = {
         not_covered: "Not covered",
         none: "No known state",
       },
+      mapTitle: "Environment map",
+      mapSubtitle: "Your services, their dependencies and their state, as your sources show them.",
       zoom: {
         label: "Architecture size",
         in: "Zoom in",
@@ -10896,9 +10905,13 @@ const en: Dictionary = {
         close: "Close the detail",
         tabs: {
           overview: "Overview",
-          relations: "Relations",
-          events: "Events",
+          relations: "Dependencies",
+          events: "Incidents",
         },
+        logs: "Logs",
+        documentation: "Documentation",
+        lastDeploy: "Last deployment",
+        unknownValue: "unknown",
         deduced: "Inferred",
         deducedFrom: "Inferred from {host} ({kind}): {state}",
         deducedHint:
@@ -10939,7 +10952,7 @@ const en: Dictionary = {
         evidence: "Seen in",
         open: "Open its page",
         tables: "See its tables",
-        relationsTitle: "Relations ({count})",
+        relationsTitle: "Dependencies ({count})",
         noRelations: "No known relation.",
         eventsEmpty: "Nothing moved around it.",
         seeAll: "See all",

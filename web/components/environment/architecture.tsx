@@ -463,7 +463,7 @@ export function ArchitectureBoard({ data }: { data: Architecture }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className={cn("grid gap-3", card ? "xl:grid-cols-[minmax(0,1fr)_18.5rem]" : "")}>
+      <div className={cn("grid gap-3", card ? "xl:grid-cols-[minmax(0,1fr)_24rem]" : "")}>
         <Canvas data={data} byId={byId} selected={selected} onSelect={setChosen} />
         {card ? (
           <DetailPanel
@@ -994,6 +994,7 @@ function Canvas({
 }) {
   const t = useDictionary();
   const w = t.environment.architecture;
+  const { format: locale } = useLocale();
   const frame = useRef<HTMLDivElement>(null);
   const outer = useRef<HTMLDivElement>(null);
   const { scale, height, zoom, fit } = useFit(outer, frame);
@@ -1019,12 +1020,42 @@ function Canvas({
     />
   );
 
+  const percent = new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 0 });
+  const zoomButton = (Icon: LucideIcon, label: string, act: () => void) => (
+    <button
+      key={label}
+      type="button"
+      onClick={act}
+      aria-label={label}
+      title={label}
+      className="flex size-8 items-center justify-center rounded-md border border-shell-line bg-white text-brand-navy outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+    >
+      <Icon className="size-3.5" aria-hidden="true" />
+    </button>
+  );
+
   return (
     <section
       aria-label={w.label}
-      className="relative min-w-0 rounded-xl border border-shell-line bg-shell-canvas/40 p-2.5"
+      className="relative min-w-0 rounded-xl border border-shell-line bg-white p-3"
       data-testid="architecture"
     >
+      {/* The mockup's head (LEKA-459): what it is, then its size. */}
+      <div className="mb-3 flex flex-wrap items-start gap-3">
+        <IconTile icon={Network} tone="violet" className="size-9" />
+        <div className="min-w-0 flex-1">
+          <h2 className="text-[1.0625rem] font-semibold tracking-[-0.01em] text-brand-navy">{w.mapTitle}</h2>
+          <p className="text-[0.8125rem] text-shell-muted">{w.mapSubtitle}</p>
+        </div>
+        <div className="flex items-center gap-1.5" role="group" aria-label={w.zoom.label}>
+          {zoomButton(Minus, w.zoom.out, () => step(-1))}
+          <span className="min-w-12 rounded-md border border-shell-line bg-white px-2 py-1 text-center text-xs text-brand-navy tabular-nums" aria-live="polite">
+            {percent.format(scale)}
+          </span>
+          {zoomButton(Plus, w.zoom.in, () => step(1))}
+          {zoomButton(Maximize2, w.zoom.fit, fit)}
+        </div>
+      </div>
       <div
         ref={outer}
         className="relative overflow-hidden"
@@ -1052,26 +1083,6 @@ function Canvas({
         </div>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div className="flex items-center gap-1" role="group" aria-label={w.zoom.label}>
-          {(
-            [
-              [Plus, w.zoom.in, () => step(1)],
-              [Minus, w.zoom.out, () => step(-1)],
-              [Maximize2, w.zoom.fit, fit],
-            ] as const
-          ).map(([Icon, label, act]) => (
-            <button
-              key={label}
-              type="button"
-              onClick={act}
-              aria-label={label}
-              title={label}
-              className="flex size-7 items-center justify-center rounded-md border border-shell-line bg-white text-brand-navy outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
-            >
-              <Icon className="size-3.5" aria-hidden="true" />
-            </button>
-          ))}
-        </div>
         <Legend />
       </div>
       <Sentences data={data} byId={byId} />
@@ -1438,9 +1449,15 @@ export function DetailPanel({
           tone={KIND_TONES[card.column] ?? "violet"}
           className="size-8 [&>svg]:size-4"
         />
-        <h2 className="min-w-0 flex-1 truncate text-[1rem] font-semibold text-brand-navy">
-          {cardName(card)}
-        </h2>
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <h2 className="truncate text-[1rem] font-semibold text-brand-navy">{cardName(card)}</h2>
+            {card.status ? <StatePill status={card.status} /> : null}
+          </div>
+          <p className="truncate text-xs text-shell-muted">
+            {[kindLabel(w, card), card.environment].filter(Boolean).join(" · ")}
+          </p>
+        </div>
         <button
           type="button"
           onClick={onClose}
@@ -1451,7 +1468,7 @@ export function DetailPanel({
           <X className="size-4" aria-hidden="true" />
         </button>
       </div>
-      <div role="tablist" aria-label={p.label} className="flex gap-1 border-b border-shell-line">
+      <div role="tablist" aria-label={p.label} className="flex gap-1 overflow-x-auto border-b border-shell-line">
         {PANEL_TABS.map((key) => (
           <button
             key={key}
@@ -1472,6 +1489,18 @@ export function DetailPanel({
               : p.tabs[key]}
           </button>
         ))}
+        {/* What only its sheet shows: there, at its tab. */}
+        {href
+          ? (["logs", "documentation"] as const).map((key) => (
+              <Link
+                key={key}
+                href={`${href}/${key}`}
+                className="-mb-px border-b-2 border-transparent px-1.5 py-1 text-[0.78125rem] font-medium whitespace-nowrap text-shell-muted outline-none hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+              >
+                {p[key]}
+              </Link>
+            ))
+          : null}
       </div>
       {tab === "overview" ? (
         <Overview card={card} data={data} byId={byId} onSelect={onSelect} href={href} />
@@ -1481,6 +1510,22 @@ export function DetailPanel({
         <Events card={card} />
       )}
     </section>
+  );
+}
+
+/** Its state, in a word, beside its name (LEKA-459). */
+function StatePill({ status }: { status: string }) {
+  const w = useDictionary().environment.architecture;
+  const tone = STATUS_TONE[status];
+  const label = (w.health as Record<string, string>)[status];
+  if (!tone || !label) return null;
+  return (
+    <span
+      className={cn("shrink-0 rounded-full px-2 py-0.5 text-[0.6875rem] font-medium", TONES[tone].badge)}
+      data-testid="architecture-state"
+    >
+      {label}
+    </span>
   );
 }
 
@@ -1659,10 +1704,29 @@ export function Overview({
             ) : null}
           </div>
           {card.deduced ? <p className="mt-1 text-xs text-shell-muted">{why}</p> : null}
-          {card.column === "services" ? (
-            <p className="mt-1 text-xs text-shell-muted">{`${p.uptime} : ${p.notMeasured}`}</p>
-          ) : null}
         </div>
+      ) : null}
+      {card.column === "services" ? (
+        // The mockup's figures (LEKA-459), each only as a source knows it.
+        <dl className="grid grid-cols-3 gap-1.5" data-testid="architecture-figures">
+          {[
+            [p.uptime, null],
+            [p.lastDeploy, deployment],
+            [w.facts.version, typeof card.facts.version === "string" ? card.facts.version : null],
+          ].map(([label, value]) => (
+            <div key={label} className="rounded-lg border border-shell-line px-2 py-1.5">
+              <dt className="truncate text-[0.6875rem] text-shell-muted">{label}</dt>
+              <dd
+                className={cn(
+                  "truncate text-[0.8125rem] font-semibold",
+                  value ? "text-brand-navy" : "font-normal text-shell-muted",
+                )}
+              >
+                {value ?? (label === p.uptime ? p.notMeasured : p.unknownValue)}
+              </dd>
+            </div>
+          ))}
+        </dl>
       ) : null}
       {card.description ? (
         <p className="text-[0.8125rem] leading-snug text-brand-navy">{card.description}</p>
