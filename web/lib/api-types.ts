@@ -47884,6 +47884,14 @@ export interface operations {
                 q?: string | null;
                 /** @description Linked to this context, finding or entity. */
                 linked?: string | null;
+                /** @description An agent ran for it: its key. */
+                agent?: string | null;
+                /** @description Asked about this source, or its analyses cite it. */
+                source?: string | null;
+                /** @description Asked at or after. */
+                since?: string | null;
+                /** @description Asked before. */
+                until?: string | null;
                 /** @description From a previous response's next_cursor. Opaque. */
                 cursor?: string | null;
                 /** @description Rows per page. */

@@ -608,7 +608,7 @@ def explain(
         limits.append(
             _note(
                 "limit.source_unread",
-                f"{name}: connected, not read yet — what it holds is not in this answer.",
+                f"{name}: connected, not read yet — the answer may be incomplete.",
                 source=name,
             )
         )

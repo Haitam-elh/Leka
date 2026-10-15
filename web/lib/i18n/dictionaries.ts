@@ -5600,6 +5600,7 @@ const fr = {
         none: "Rien n'a manqué : chaque capacité a répondu, chaque source était à jour.",
         silent: "Ce qui n'a pas répondu, et ce qu'on ne sait donc pas",
         stale: "Ce qui peut être daté",
+        seeSources: "Voir les sources",
       },
       next: { title: "Prochaine étape", why: "Pourquoi :" },
       freshness: {
@@ -6093,6 +6094,17 @@ const fr = {
       "Suivez vos demandes, où elles en sont, et tout ce qui leur est arrivé.",
     new: "Nouvelle intention",
     search: "Rechercher une intention…",
+    // The history's filters (LEKA-457).
+    filters: {
+      agent: "Agent",
+      anyAgent: "Tous les agents",
+      source: "Source",
+      anySource: "Toutes les sources",
+      period: "Période",
+      periods: { all: "Toute la période", 7: "7 derniers jours", 30: "30 derniers jours", 90: "90 derniers jours" },
+      sort: "Tri",
+      sorts: { updated: "Dernière modification", newest: "Plus récentes", oldest: "Plus anciennes" },
+    },
     failed: "Les intentions n'ont pas pu être lues.",
     retry: "Réessayer",
     empty: "Aucune intention ici.",
@@ -6938,7 +6950,7 @@ const fr = {
         "limit.source_degraded":
           "{source} est dégradée : ce qu'elle disait peut être incomplet.",
         "limit.source_unread":
-          "{source} est connectée mais pas encore lue : ce qu'elle contient n'est pas dans cette réponse.",
+          "{source} est connectée mais pas encore lue : la réponse peut être incomplète.",
         "limit.context_limited":
           "Il manque à son contexte quelque chose dont elle a besoin.",
         "limit.capability.standing":
@@ -12848,6 +12860,7 @@ const en: Dictionary = {
         none: "Nothing was missing: every capability answered, every source was up to date.",
         silent: "What did not answer, and what is therefore not known",
         stale: "What may be out of date",
+        seeSources: "See the sources",
       },
       next: { title: "Next step", why: "Why:" },
       freshness: {
@@ -13324,6 +13337,16 @@ const en: Dictionary = {
       "Follow your requests, where they stand, and everything that happened to them.",
     new: "New intention",
     search: "Search an intention…",
+    filters: {
+      agent: "Agent",
+      anyAgent: "All agents",
+      source: "Source",
+      anySource: "All sources",
+      period: "Period",
+      periods: { all: "All time", 7: "Last 7 days", 30: "Last 30 days", 90: "Last 90 days" },
+      sort: "Sort",
+      sorts: { updated: "Last changed", newest: "Newest", oldest: "Oldest" },
+    },
     failed: "Intentions could not be read.",
     retry: "Retry",
     empty: "No intention here.",
@@ -14136,7 +14159,7 @@ const en: Dictionary = {
         "limit.source_degraded":
           "{source} is degraded: what it said may be incomplete.",
         "limit.source_unread":
-          "{source} is connected but not read yet: what it holds is not in this answer.",
+          "{source} is connected but not read yet: the answer may be incomplete.",
         "limit.context_limited": "Its context lacks something it needs.",
         "limit.capability.standing":
           "Its state, and how well LEKA knows it, are not known.",
