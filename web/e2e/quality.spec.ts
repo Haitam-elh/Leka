@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-import { signIn } from "./sign-in";
+import { openNavigation, signIn } from "./sign-in";
 
 /**
  * Knowledge quality, in a real browser (LEKA-381).
@@ -22,6 +22,7 @@ test.describe("Knowledge quality", () => {
   test("says how far what LEKA knows can be trusted, the weakest first", async ({ page }) => {
     await signIn(page);
     // Mon environnement, then its view chosen top right (2026-10-14).
+    await openNavigation(page);
     await page.getByTestId("nav-environment-overview").click();
     await page.getByTestId("env-view").click();
     await page.getByRole("option", { name: "Qualité" }).click();

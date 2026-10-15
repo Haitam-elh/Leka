@@ -117,7 +117,7 @@ export function AppSidebar({ collapsed, onToggle, onNavigate, badges }: AppSideb
       <div className={cn("border-t border-shell-line px-3.5 py-3", collapsed && "px-2")}>
         <UserMenu variant="sidebar" collapsed={collapsed} />
         <div className="my-2 border-t border-shell-line" aria-hidden="true" />
-        <WorkspaceSwitcher collapsed={collapsed} />
+        <WorkspaceSwitcher collapsed={collapsed} variant="drawer" />
       </div>
     </div>
   );

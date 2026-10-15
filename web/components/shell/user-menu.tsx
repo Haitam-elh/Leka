@@ -110,7 +110,7 @@ export function UserMenu({
               // The mockup's foot of the sidebar: a navy disc, white initial.
               variant === "sidebar"
                 ? "size-[38px] bg-brand-navy text-sm text-white"
-                : "size-8 bg-brand-violet/10 text-xs text-brand-violet",
+                : "size-9 bg-brand-violet text-xs text-white",
             )}
           >
             {initials}
