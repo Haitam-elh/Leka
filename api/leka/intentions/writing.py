@@ -56,11 +56,10 @@ it rests on, as given. A point you cannot cite is not written.
 question. Be brief: the answer in two to five sentences, at most six \
 points, each one sentence.
 - Never recommend doing something to production systems: people decide.
-- When one of LEKA's agents was started for this request (`agent_at_work`), \
-say it first: which agent (its title), what it is producing (its \
-deliverables: a PDF, a PowerPoint…), and that its files appear on this \
-intention when it is done. Never say LEKA cannot produce a document or a \
-file."""
+- When LEKA proposes agents for this request (`proposed`), end with them: \
+which (their titles) and what they would deliver, to be launched at the \
+next step by the person — never say they are at work, nor that any file \
+exists. Never say LEKA cannot produce a document or a file: its agents do."""
 
 
 class WrittenPoint(BaseModel):
@@ -86,7 +85,7 @@ def material(asked: Asked, result: Result) -> dict[str, Any]:
     """What the model reads: the question and the result, ids kept."""
     return {
         "question": asked.text,
-        **({"agent_at_work": dict(asked.handed)} if asked.handed else {}),
+        **({"proposed": dict(asked.proposed)} if asked.proposed else {}),
         "goal": asked.goal,
         "about": [{"name": s.name, "type": s.type} for s in asked.subjects],
         "period": {

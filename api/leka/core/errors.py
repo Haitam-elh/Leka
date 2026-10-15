@@ -67,6 +67,12 @@ class ErrorCode(enum.StrEnum):
     # ── Intentions ───────────────────────────────────────────────────────
     # Nothing about the company's technology (2026-10-14).
     OFF_TOPIC = "off_topic"
+    # Its agents not launched (2026-10-14): which, and why, in the message;
+    # the code says what to do about it.
+    AGENT_UNAVAILABLE = "agent_unavailable"
+    AGENT_INPUTS_MISSING = "agent_inputs_missing"
+    AGENT_NOT_PROPOSED = "agent_not_proposed"
+    CREDITS_SHORT = "credits_short"
 
     # ── Authentication (LEKA-330, spelling preserved) ────────────────────
     INVALID_CREDENTIALS = "invalid_credentials"

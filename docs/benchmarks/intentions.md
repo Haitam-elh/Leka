@@ -56,7 +56,9 @@ checked (the header of `intentions.yaml` lists them all):
 - **constraints**: `constraints`, `environment`, `period_said`;
 - **what follows**: `decision` (analyse, clarify, continue, block), `asks`,
   `must_not_ask`;
-- **the final state**: `final` (the intention's status once analysed),
+- **the final state**: `final` (the intention's status once analysed —
+  `answered` when it awaits only its asker's own decision, its agents or by
+  hand; `awaiting_decision` when a decision on actions to systems is open),
   `analysis`;
 - **the evidence expected**: `findings`, `cites`;
 - **the action**: `decides` (put to a person, never approved by LEKA),

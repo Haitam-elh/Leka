@@ -32,12 +32,12 @@ version: "2026-10-14"
 currency: EUR
 
 # 20% off when billed yearly.
-annual_discount_percent: 20
+annual_discount_percent: 30
 
 # The launch offer: 30% off the first 12 months, on monthly billing only —
 # never stacked with the annual discount.
 launch_offer:
-  percent: 30
+  percent: 20
   months: 12
   intervals: [month]
   # Until when a new subscription may take it; empty: until further notice.

@@ -21,7 +21,7 @@ import asyncio
 import json
 import re
 import uuid
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -143,6 +143,7 @@ async def draw(
     analysis: str,
     *,
     budget: float = DECK_BUDGET,
+    formats: Sequence[str] | None = None,
 ) -> Drawn:
     """The deck of a run's analysis, drawn and kept — or, for a code-change
     agent, the change it proposes (changes.py) — or why not."""
@@ -198,7 +199,7 @@ async def draw(
     store = object_store()
     files: list[dict[str, Any]] = []
     try:
-        for fmt in FORMATS:
+        for fmt in [f for f in FORMATS if formats is None or f in formats]:
             stored = await store.put(
                 deliverable_key(run.workspace_id, run.id, fmt),
                 from_bytes(rendered.of(fmt)),

@@ -430,6 +430,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/demo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Demo
+         * @description My demonstration, made when I have none — `fresh`: the one before
+         *     erased, a new one made — and the session moved into it.
+         */
+        post: operations["open_demo_api_v1_demo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/members": {
         parameters: {
             query?: never;
@@ -4960,7 +4981,8 @@ export interface paths {
         /**
          * Intention
          * @description One intention: where it stands, where it may go next, what it is
-         *     linked to.
+         *     linked to. Its agents all ended: settled first — verified or failed —
+         *     never left executing (2026-10-14).
          */
         get: operations["intention_api_v1_intentions__intention_id__get"];
         put?: never;
@@ -5151,6 +5173,73 @@ export interface paths {
          *     same. 409 when it is not being analysed.
          */
         post: operations["stop_api_v1_intentions__intention_id__stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intentions/{intention_id}/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Launch Agents
+         * @description « Lancer avec ces agents » (2026-10-14): the agents its analysis
+         *     proposed that a person chose, started on it — never by LEKA alone — with
+         *     the inputs they completed and only the files they asked for. Approved,
+         *     then executing. 422 when one cannot run here, lacks an input, or the
+         *     credits are short — nothing started; 409 when it cannot be decided.
+         */
+        post: operations["launch_agents_api_v1_intentions__intention_id__agents_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intentions/{intention_id}/by-hand": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * By Hand
+         * @description « Je le fais moi-même » (2026-10-14): its asker does the work with the
+         *     plan in hand — done, nothing for LEKA to run. 409 when it cannot be
+         *     decided.
+         */
+        post: operations["by_hand_api_v1_intentions__intention_id__by_hand_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intentions/{intention_id}/agents/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Agents
+         * @description « Relancer »: the agents that failed, launched again with what they
+         *     were given — those that delivered kept. 409 unless its agents failed.
+         */
+        post: operations["retry_agents_api_v1_intentions__intention_id__agents_retry_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6546,6 +6635,63 @@ export interface components {
             previous: number;
         };
         /**
+         * AgentFieldRead
+         * @description One input an agent takes, for a person to complete it.
+         */
+        AgentFieldRead: {
+            /** Name */
+            name: string;
+            /** Type */
+            type: string;
+            /** Required */
+            required: boolean;
+            /** Description */
+            description: string;
+            /** Choices */
+            choices?: string[];
+        };
+        /**
+         * AgentLaunch
+         * @description An agent a person launches from the Décision step: its inputs as they
+         *     completed them, the files they want drawn.
+         */
+        AgentLaunch: {
+            /** Key */
+            key: string;
+            /** Inputs */
+            inputs?: {
+                [key: string]: string | boolean;
+            };
+            /** Formats */
+            formats?: ("pdf" | "pptx")[];
+            /**
+             * Sources
+             * @description The only sources it reads — none: those the intention was asked on, else every one.
+             */
+            sources?: string[];
+        };
+        /**
+         * AgentProposalRead
+         * @description What LEKA proposes to get it done (2026-10-14): the agents its work
+         *     needs and the plan, step by step — launched only by a person.
+         */
+        AgentProposalRead: {
+            /** Agents */
+            agents: components["schemas"]["ProposedAgentRead"][];
+            /** Steps */
+            steps: components["schemas"]["PlanStepRead"][];
+            /**
+             * Informative
+             * @description It only asks to know: nothing to produce or change.
+             */
+            informative: boolean;
+            /**
+             * By
+             * @enum {string}
+             */
+            by: "model" | "rules";
+        };
+        /**
          * AgentRunCreate
          * @description An agent to run, with what its contract takes.
          */
@@ -6641,6 +6787,11 @@ export interface components {
              * @description The files LEKA drew of what it delivered (its pptx, its pdf), each to download.
              */
             deliverables: components["schemas"]["DeliverableRead"][];
+            /**
+             * Expected
+             * @description The files it is to deliver (pdf, pptx), as asked when it was launched (2026-10-14) — none when only its report.
+             */
+            expected?: string[];
             /**
              * Error
              * @description Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, invalid_output, abandoned, error.
@@ -6766,6 +6917,11 @@ export interface components {
              */
             deliverables: components["schemas"]["DeliverableRead"][];
             /**
+             * Expected
+             * @description The files it is to deliver (pdf, pptx), as asked when it was launched (2026-10-14) — none when only its report.
+             */
+            expected?: string[];
+            /**
              * Error
              * @description Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, invalid_output, abandoned, error.
              */
@@ -6811,6 +6967,11 @@ export interface components {
              * @description At list price; none when a price is not known.
              */
             cost_usd: number | null;
+        };
+        /** AgentsLaunchRequest */
+        AgentsLaunchRequest: {
+            /** Agents */
+            agents: components["schemas"]["AgentLaunch"][];
         };
         /**
          * AlertRead
@@ -11834,6 +11995,15 @@ export interface components {
              */
             gone: number;
         };
+        /** DemoRead */
+        DemoRead: {
+            workspace: components["schemas"]["WorkspaceSummary"];
+            /**
+             * Created
+             * @description Made now: its sources are being read.
+             */
+            created: boolean;
+        };
         /**
          * Dependencies
          * @description What an entity depends on, transitively — or what depends on it:
@@ -13439,7 +13609,7 @@ export interface components {
          *     them and a rename would be a breaking change for nothing.
          * @enum {string}
          */
-        ErrorCode: "validation_failed" | "not_authenticated" | "permission_denied" | "not_found" | "conflict" | "rate_limited" | "internal_error" | "service_unavailable" | "invalid_cursor" | "invalid_sort" | "invalid_filter" | "contract_unsupported" | "off_topic" | "invalid_credentials" | "account_unverified" | "token_invalid" | "token_expired" | "password_too_short" | "password_breached" | "session_expired" | "last_owner" | "csrf_failed" | "plan_limit";
+        ErrorCode: "validation_failed" | "not_authenticated" | "permission_denied" | "not_found" | "conflict" | "rate_limited" | "internal_error" | "service_unavailable" | "invalid_cursor" | "invalid_sort" | "invalid_filter" | "contract_unsupported" | "off_topic" | "agent_unavailable" | "agent_inputs_missing" | "agent_not_proposed" | "credits_short" | "invalid_credentials" | "account_unverified" | "token_invalid" | "token_expired" | "password_too_short" | "password_breached" | "session_expired" | "last_owner" | "csrf_failed" | "plan_limit";
         /**
          * ErrorEnvelope
          * @description Every error response the API returns, whatever the status.
@@ -15209,6 +15379,8 @@ export interface components {
             recommendations?: components["schemas"]["AnalysisRecommendation"][];
             /** @description On what it rests (LEKA-441); none on an analysis made before. */
             explanation?: components["schemas"]["AnalysisExplanation"] | null;
+            /** @description The agents its work needs and the plan (2026-10-14); none before. */
+            proposal?: components["schemas"]["AgentProposalRead"] | null;
         };
         /**
          * IntentionAnswer
@@ -16019,7 +16191,7 @@ export interface components {
              * Controls
              * @description What a person may do now, as its state allows — each route checks it again.
              */
-            controls: ("answer" | "ask_again" | "stop" | "resume" | "analyse_again" | "cancel" | "decide" | "modify_decision" | "start_actions" | "unschedule" | "stop_actions" | "retry_actions" | "report_outcome" | "archive" | "restore")[];
+            controls: ("answer" | "ask_again" | "stop" | "resume" | "analyse_again" | "cancel" | "decide" | "modify_decision" | "start_actions" | "unschedule" | "stop_actions" | "retry_actions" | "report_outcome" | "archive" | "restore" | "launch_agents" | "by_hand" | "retry_agents")[];
             step: components["schemas"]["JourneyStepRead"];
             /**
              * Late
@@ -16031,6 +16203,11 @@ export interface components {
              * @description The error as kept, for whoever diagnoses it — never the words a person reads.
              */
             technical: string | null;
+            /**
+             * Path
+             * @description How it is carried out once decided: by LEKA's agents, or by its asker with the plan in hand (2026-10-14).
+             */
+            path?: ("agents" | "self") | null;
         };
         /**
          * JourneyStepRead
@@ -18238,6 +18415,21 @@ export interface components {
              */
             timezone: string;
         };
+        /** PlanStepRead */
+        PlanStepRead: {
+            /** Title */
+            title: string;
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+            /**
+             * Agent
+             * @description The agent that would do it, if one.
+             */
+            agent?: string | null;
+        };
         /**
          * PolicyProbe
          * @description An action as it could be proposed: what the policy would say of it.
@@ -18579,6 +18771,68 @@ export interface components {
             name: string;
             /** Type */
             type: string;
+        };
+        /**
+         * ProposedAgentRead
+         * @description An agent the work needs (proposal.py): who, why here, what it would
+         *     deliver and from what — and whether it can run here, said why not.
+         */
+        ProposedAgentRead: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /**
+             * Summary
+             * @description Its role, in a sentence.
+             */
+            summary: string;
+            /** Category */
+            category: string;
+            /**
+             * Why
+             * @description Why it helps with this request, in its language.
+             */
+            why: string;
+            /**
+             * Deliverables
+             * @description What a run of it delivers: its report, then what LEKA draws (pdf, pptx, diff).
+             */
+            deliverables: string[];
+            /**
+             * Asked
+             * @description The files the request asks for: drawn when launched.
+             */
+            asked: string[];
+            /**
+             * Inputs
+             * @description Its inputs, from the request's words.
+             */
+            inputs: {
+                [key: string]: string | boolean;
+            };
+            /**
+             * Missing
+             * @description The required inputs the request does not give.
+             */
+            missing: string[];
+            /**
+             * Fields
+             * @description Every input it takes, for a person to complete.
+             */
+            fields?: components["schemas"]["AgentFieldRead"][];
+            /**
+             * Credits
+             * @description What a run of it has cost here, in credits — none before a few runs.
+             */
+            credits: number | null;
+            /** Available */
+            available: boolean;
+            /**
+             * Reasons
+             * @description Why it cannot run here: missing_source, plan…
+             */
+            reasons: string[];
         };
         /** ProtectionPolicyRead */
         ProtectionPolicyRead: {
@@ -22462,6 +22716,11 @@ export interface components {
             slug: string;
             /** Role */
             role: string;
+            /**
+             * Demo
+             * @default false
+             */
+            demo: boolean;
         };
         /**
          * WorkspaceModelRead
@@ -22553,6 +22812,11 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Demo
+             * @default false
+             */
+            demo: boolean;
         };
         /**
          * WorkspaceStatus
@@ -22580,6 +22844,11 @@ export interface components {
             slug: string;
             status: components["schemas"]["WorkspaceStatus"];
             role: components["schemas"]["Role"];
+            /**
+             * Demo
+             * @default false
+             */
+            demo: boolean;
         };
         /**
          * WorkspaceUpdate
@@ -24762,6 +25031,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspaceSummary"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    open_demo_api_v1_demo_post: {
+        parameters: {
+            query?: {
+                fresh?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DemoRead"];
                 };
             };
             /** @description The request could not be understood. */
@@ -48640,6 +49003,292 @@ export interface operations {
         };
     };
     stop_api_v1_intentions__intention_id__stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intention_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntentionDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    launch_agents_api_v1_intentions__intention_id__agents_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intention_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentsLaunchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntentionDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    by_hand_api_v1_intentions__intention_id__by_hand_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intention_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntentionDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    retry_agents_api_v1_intentions__intention_id__agents_retry_post: {
         parameters: {
             query?: never;
             header?: never;

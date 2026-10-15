@@ -63,6 +63,8 @@ class WorkspaceRead(BaseModel):
     settings: dict[str, object]
     default_language: str
     created_at: datetime
+    # A demonstration, its data fictive (LEKA-449).
+    demo: bool = False
 
 
 class WorkspaceSummary(BaseModel):
@@ -75,6 +77,7 @@ class WorkspaceSummary(BaseModel):
     slug: str
     status: WorkspaceStatus
     role: Role
+    demo: bool = False
 
 
 class CurrentWorkspace(BaseModel):

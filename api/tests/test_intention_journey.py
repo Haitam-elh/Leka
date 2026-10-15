@@ -13,8 +13,13 @@ What these protect:
 - Stopped by a person, it is ready, never failed.
 - A question answered in part is said partial; a decision on a partial
   analysis says so.
-- The five steps follow the state, never a screen. A cancelled one stays
-  where it was withdrawn; a question ends at its results.
+- The five steps follow the state, never a screen, and every request goes
+  through all five (2026-10-14): its result, its decision — its agents, or
+  by hand — then what is done. A cancelled one stays where it was
+  withdrawn; only a decision not to act ends at its decision.
+- Decided: its agents launched are followed, their failure said with a way
+  to launch them again; done by hand, it is done, its agents still
+  launchable.
 - What a person may do is the lifecycle's: no control a route would refuse.
   Archived, only restored.
 - The matrix covers every lifecycle state and every move, and each state's
@@ -183,9 +188,16 @@ def test_an_action_failure_says_why_and_offers_to_retry_what_failed(
 
 
 def test_a_question_answered_whole_or_in_part_an_action_verified() -> None:
+    # Answered before every request was decided: its decision still open.
     whole = journey(_facts(S.COMPLETED, last="answered", analysis="complete", acting=False), NOW)
     assert (whole.state, whole.next) == (J.RESULT_AVAILABLE, "read_result")
-    assert (whole.step.at, whole.step.done, whole.step.last) == ("results", True, 2)
+    assert (whole.step.at, whole.step.done, whole.step.reached, whole.step.last) == (
+        "results",
+        True,
+        3,
+        4,
+    )
+    assert "launch_agents" in whole.controls
     part = journey(_facts(S.COMPLETED, last="answered", analysis="partial", acting=False), NOW)
     assert (part.state, part.reason) == (J.ANALYSIS_PARTIAL, "partial")
     none = journey(_facts(S.COMPLETED, last="answered", analysis="inconclusive", acting=False), NOW)
@@ -195,10 +207,59 @@ def test_a_question_answered_whole_or_in_part_an_action_verified() -> None:
     assert (done.step.at, done.step.done) == ("action", True)
 
 
+def test_every_request_is_decided_its_agents_or_by_hand() -> None:
+    asked = journey(
+        _facts(S.AWAITING_DECISION, last="proposed", analysis="complete", acting=False), NOW
+    )
+    assert (asked.state, asked.reason, asked.next, asked.by, asked.step.at, asked.step.last) == (
+        J.DECISION_REQUIRED,
+        "choose",
+        "choose",
+        "asker",
+        "decision",
+        4,
+    )
+    assert {"launch_agents", "by_hand"} <= set(asked.controls)
+    assert "decide" not in asked.controls
+    # Its agents launched: followed, nothing to stop by hand.
+    working = journey(_facts(S.EXECUTING, last="execution_started", detail={"path": "agents"}), NOW)
+    assert (working.state, working.reason, working.next, working.path) == (
+        J.ACTION_RUNNING,
+        "agents",
+        "follow_agents",
+        "agents",
+    )
+    assert working.controls == ()
+    # One failed: said, and launched again by who asked.
+    failed = journey(
+        _facts(
+            S.FAILED,
+            last="failed",
+            detail={"path": "agents", "agent": "code-review", "error": "timeout"},
+            from_status=S.EXECUTING,
+        ),
+        NOW,
+    )
+    assert (failed.state, failed.reason, failed.next, failed.by, failed.technical) == (
+        J.ACTION_FAILED,
+        "agent_failed",
+        "retry_agents",
+        "asker",
+        "timeout",
+    )
+    assert "retry_agents" in failed.controls
+    assert failed.step.at == "action"
+    # Done by hand: done, its five steps through, its agents still there.
+    mine = journey(_facts(S.COMPLETED, last="by_hand", detail={"path": "self"}), NOW)
+    assert (mine.state, mine.reason, mine.path) == (J.DONE, "by_hand", "self")
+    assert (mine.step.at, mine.step.done, mine.step.last) == ("action", True, 4)
+    assert "launch_agents" in mine.controls
+
+
 def test_a_decision_on_a_partial_analysis_says_so() -> None:
     whole = journey(_facts(S.AWAITING_DECISION, last="proposed", analysis="complete"), NOW)
     assert (whole.state, whole.reason, whole.by) == (J.DECISION_REQUIRED, None, "approver")
-    assert {"decide", "modify_decision"} <= set(whole.controls)
+    assert {"decide", "modify_decision", "launch_agents", "by_hand"} <= set(whole.controls)
     part = journey(_facts(S.AWAITING_DECISION, last="proposed", analysis="partial"), NOW)
     assert part.reason == "partial"
 
@@ -272,6 +333,9 @@ def _every_facts() -> list[Facts]:
         ("stopped", {}),
         ("verified", {}),
         ("answered", {}),
+        ("by_hand", {"path": "self"}),
+        ("execution_started", {"path": "agents", "runs": []}),
+        ("failed", {"path": "agents", "error": "timeout"}),
     )
     for status in IntentionStatus:
         for last, detail in moves:

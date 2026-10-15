@@ -54,6 +54,7 @@ LAYERS: dict[str, int] = {
     "monitoring": 11,
     # Metering (LEKA-430): derives the usage ledger from the calls and runs.
     "metering": 11,
+    "demo": 11,
     "api": 12,
 }
 

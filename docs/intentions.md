@@ -106,7 +106,9 @@ pure), and serves it on every intention (`IntentionRead.journey`):
 - `step`: where the five steps put it;
 - `late`: past what it should take;
 - `technical`: the error as kept, for whoever diagnoses it — never the
-  words a person reads first.
+  words a person reads first;
+- `path`: how it is carried out once decided — its agents (`agents`), or by
+  its asker with the plan (`self`) — § 15 bis.
 
 It is read from three things:
 - the lifecycle state;
@@ -124,16 +126,16 @@ its page, its steps, the overview all draw `journey`.
 | `needs_clarification` — Clarification requise | `needs_clarification` | `clarification_asked` | answer, ask again, cancel | `unclear`, `context_blocked` | answer LEKA's questions — the asker |
 | `ready` — Prête à analyser | `analysing` with no analysis of this attempt started; or `submitted`, stopped by a person | `asked_again`, `clarified`, `retried`, `resumed`; `stopped` | analyse now (queued); resume (stopped); ask again; stop (queued); cancel | `queued` (late after 5 min), `stopped` | wait — LEKA; resume — the asker |
 | `analysing` — Analyse en cours | `analysing`, an analysis of this attempt running | `analysis_started`, and the moves above once it starts | stop, ask again, cancel; analyse again once late | late after 10 min | wait — LEKA |
-| `analysis_partial` — Analyse partielle | `completed` (a question), its analysis `partial` or `inconclusive` | `answered` | ask again, archive | `partial`, `inconclusive` | read the result — the asker |
+| `analysis_partial` — Analyse partielle | `completed` (a question answered before 2026-10-14), its analysis `partial` or `inconclusive` | `answered` | ask again, archive, launch its agents | `partial`, `inconclusive` | read the result — the asker |
 | `analysis_failed` — Analyse échouée | `failed`, from its analysis | `failed` | analyse again, ask again, cancel | `interrupted`, `crashed`, `timed_out`, `model`, `context_blocked`, `error` | analyse again — the asker |
-| `result_available` — Résultat disponible | `completed` (a question), its analysis complete | `answered` | ask again, archive | — | read the result — the asker |
-| `decision_required` — Décision requise | `awaiting_decision` | `proposed` | decide, change the decision, ask again, cancel | `partial`: proposed on a partial analysis | decide — who may approve |
+| `result_available` — Résultat disponible | `completed` (a question answered before 2026-10-14), its analysis complete | `answered` | ask again, archive, launch its agents | — | read the result — the asker |
+| `decision_required` — Décision requise | `awaiting_decision` — every request once analysed (2026-10-14) | `proposed` | launch its agents, do it by hand; decide and change the decision when it changes systems; ask again, cancel | `choose`: its agents or by hand; `partial`: on a partial analysis | choose — the asker; decide — who may approve, when it changes systems |
 | `approved` — Approuvée | `approved`, `scheduled` | `approved`, `scheduled`, `unscheduled` | start the actions, unschedule, cancel | `scheduled` | start the actions — who may approve; wait for its time — LEKA |
 | `rejected` — Rejetée | `rejected` | `rejected` | ask again, archive | `by_person` | ask again — the asker |
-| `action_running` — Action en cours | `executing` | `execution_started` | stop the actions | — | follow it; a step may wait for a person — LEKA |
-| `action_failed` — Action échouée | `failed`, from its actions or their outcome | `failed` | retry the actions, ask again, cancel | `step_failed`, `stopped`, `conditions_changed`, `expected_not_met` | retry — who may approve |
+| `action_running` — Action en cours | `executing` | `execution_started` | stop the actions; its agents run to their end | `agents`: its agents at work | follow it; a step may wait for a person — LEKA |
+| `action_failed` — Action échouée | `failed`, from its actions, their outcome, or its agents | `failed` | retry the actions; launch its failed agents again; ask again, cancel | `step_failed`, `stopped`, `conditions_changed`, `expected_not_met`, `agent_failed` | retry — who may approve; its agents — the asker |
 | `to_verify` — Résultat à vérifier | `verifying` | `executed` | conclude the check | — | LEKA checks; a person may conclude |
-| `done` — Terminée | `completed`, acted on and verified | `verified` | ask again, archive | — | nothing |
+| `done` — Terminée | `completed`, acted on and verified, or done by hand | `verified`, `by_hand` | ask again, archive, launch its agents | `by_hand` | nothing |
 | `cancelled` — Annulée | `cancelled` | `cancelled` | archive | `by_person` | nothing |
 | `superseded` — Remplacée par une version plus récente | an analysis or a decision of an earlier version, never an intention | `asked_again`, `clarified` | — | — | — |
 
@@ -1663,29 +1665,31 @@ workspace's, another workspace's 404. Web: `actions-tab.test.tsx`,
 expected, confirmed by a person, achieved, its story told and filtered;
 concluded short of it, failed.
 
-## 15 bis. Handed to the agent that does the work
+## 15 bis. Its agents, proposed — launched by a person (2026-10-14)
 
-A request for what an agent delivers (a deck, a document, a review, an investigation, a plan) is handed to that agent: LEKA does the work, not only answers it (`dispatch.py`).
+Every request goes through its five steps. Its result is followed by a decision, then by what is done. LEKA never starts an agent on its own: the product call of 2026-10-14 found agents chosen and started without anyone seeing them (`proposal.py`, `agents.py`).
 
-1. **At the start of its analysis, a model reads two things:**
-   - the request;
-   - the agents the person may use here, each with what it delivers, its formats and its inputs.
+1. **Proposed with its result** (`proposal.py`). A model reads the request and every agent of the catalogue, each with what it delivers, its inputs and whether it can run here. It says:
+   - the agents the work needs, three at most, the most useful first;
+   - each agent's inputs, from the request's own words, and the required ones the request does not give (`missing`);
+   - the files the request asks for (`pdf`, `pptx`);
+   - why each agent helps;
+   - the plan, three to eight steps in order, each with the agent that would do it, or none when the person does it;
+   - whether the request only asks to know something (`informative`).
 
-   It says which agent does the work, with which inputs, taken from the request's own words. Or it says none: LEKA's own analysis answers then, and a plain question is the analysis's.
-2. **Checked before anything starts:**
-   - the agent is one of those offered;
-   - its inputs are exactly its contract's: unknown ones are dropped, booleans are read as such, and no required input is missing.
-3. **Started for the person who asked,** as if they had launched it:
-   - the same checks, re-made by the worker (their role read then);
-   - the same approval controls (LEKA-406);
-   - the run is kept on the intention, where its files (the PDF, the PowerPoint) appear.
-4. **Said first in the answer:** which agent is at work and what it delivers. Never that LEKA cannot produce a document: its agents do.
+   An agent that cannot run here is proposed all the same when it is the one the work needs, and the reason is said. Each agent also comes with what a run of it has cost here (the median, in credits). The proposal is kept with the analysis's result. Without a model, the catalogue's own discovery picks the agent, and the plan is chosen by goal: a migration's plan lowers the DNS TTL before the switch.
+2. **Décision** (`POST /intentions/{id}/agents`, `POST …/by-hand`). This is open to its asker, or to someone who may approve.
+   - « Lancer avec ces agents »: only agents that were proposed. Each is checked usable here, its inputs whole and the month's credits enough; otherwise 422 says why and nothing starts. Only the files ticked are drawn: an architect launched without a PDF or a PowerPoint draws none (`formats`). The intention is approved by the person, then executing. The approval controls of LEKA-406 still hold a run for an approver.
+   - « Je le fais moi-même »: the intention is done (`by_hand`), and the plan stays with it.
+   - A question only answered says « Aller plus loin avec un agent » and « Je m'arrête là ». Its agents can still be launched after the fact, from a completed intention.
+   - An intention that asks to change systems keeps its decision on actions (LEKA-390). Agents launched beside it leave that decision open.
+3. **Action.** The agents' work is followed live, with the files expected of each.
+   - Once every agent launched has ended, the intention is settled (`settle`): verified, with what each delivered, or failed, saying which agent and why (`agent_failed`). This happens when its page is read and in the analyses' sweep, every 15 minutes, so an intention nobody looks at is never left executing.
+   - « Relancer » (`POST …/agents/retry`) launches again the agents that failed, with what they were given; those that delivered are kept.
+   - A run no worker finishes fails, `abandoned`: running past 30 minutes, or queued past 45, found by the runs' sweep every 10 minutes.
+   - Done by hand, the Action step is the plan, ticked off in the browser and downloadable as Markdown.
 
-**Once per intention:** analysing it again starts nothing more, and the agent already at work is the one said.
-
-An agent at work on it unblocks it: what an action would need first no longer stops it.
-
-No model, or no agent offered: nothing is started, and the analysis answers as before.
+The answer is told what is proposed, never that an agent is at work (`proposed`).
 
 ## 16. Tested
 

@@ -115,6 +115,14 @@ one careless click. Promote another owner first (409 otherwise).
 in `WRITE_PERMISSIONS` is refused with 403 and an explanation; everything
 else works. An unpaid invoice must not look like data loss, and never a 404.
 
+**A demonstration refuses what would reach a real system** (LEKA-449,
+[demo.md](demo.md)). In a workspace marked `demo`, every permission in
+`DEMO_REFUSED` is refused with 403, whoever asks, its owner included:
+`source:manage`, `member:invite`, `member:update_role`, `member:remove`,
+`workspace:update` (its own model, its actions' endpoints, a payment),
+`workspace:delete` and `workspace:transfer`. Its questions, analyses,
+decisions and plans run.
+
 **A workspace awaiting deletion refuses writes entirely.** Access stops when
 deletion is requested; the data goes at the end of the grace period.
 
@@ -169,6 +177,7 @@ its reason. In order, the first that refuses decides:
 | Rule | Refuses when | Reason |
 | --- | --- | --- |
 | `workspace` | it awaits deletion (everything), or is suspended (a write) | `workspace_unavailable`, `workspace_suspended` |
+| `workspace` | it is a demonstration, and the permission is in `DEMO_REFUSED` | `workspace_demo` |
 | `role` | the role lacks the permission | `role_lacks_permission` |
 | `owner` | the resource is someone else's, and the role lacks the permission that reaches anyone's (`anyones`: `intention:approve` for another's run, `context:manage` for another's context) | `not_owner` |
 | `restriction` | the resource is a restricted entity, and the role may not read restricted entities | `restricted` |
