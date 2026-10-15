@@ -3,6 +3,7 @@
 import {
   Activity,
   ArrowDown,
+  ArrowRight,
   ArrowUp,
   BadgeCheck,
   BookOpen,
@@ -12,6 +13,7 @@ import {
   Code,
   Database,
   FileText,
+  Layers,
   Lightbulb,
   type LucideIcon,
   Network,
@@ -19,8 +21,10 @@ import {
   Search,
   ShieldCheck,
   Star,
+  Target,
   TriangleAlert,
   Users,
+  Zap,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -111,6 +115,19 @@ const CATEGORY_FILL: Record<string, string> = {
   project_management: "fill-chart-4",
   business: "fill-brand-navy",
   knowledge: "fill-chart-5",
+};
+const CATEGORY_TEXT: Record<string, string> = {
+  architecture: "text-shell-nav-active",
+  development: "text-blue-600",
+  infrastructure: "text-state-info",
+  operations: "text-activity-alert",
+  security: "text-state-success",
+  compliance: "text-chart-2",
+  data: "text-chart-3",
+  documentation: "text-state-warning",
+  project_management: "text-chart-4",
+  business: "text-brand-navy",
+  knowledge: "text-chart-5",
 };
 const CATEGORY_DOT: Record<string, string> = {
   architecture: "bg-shell-nav-active",
@@ -210,7 +227,9 @@ function Availability({ capability }: { capability: Capability }) {
   const t = useDictionary();
   if (capability.available) {
     return capability.notes.length ? (
-      <Pill tone="warning">{reasonSaid(t, capability.notes[0])}</Pill>
+      <Pill tone="warning" className="h-auto max-w-full py-0.5 whitespace-normal">
+        {reasonSaid(t, capability.notes[0])}
+      </Pill>
     ) : (
       <Pill tone="success" dot>
         {t.catalogue.available}
@@ -271,7 +290,7 @@ function Row({ capability }: { capability: Capability }) {
   const plain = capability.available && !capability.notes.length;
   return (
     <li
-      className="flex items-start gap-3 py-2.5"
+      className="flex items-center gap-3 py-2"
       data-testid="capability-card"
       data-key={capability.key}
       data-kind={capability.kind}
@@ -280,33 +299,29 @@ function Row({ capability }: { capability: Capability }) {
       <IconTile
         icon={Icon}
         tone={agent ? "violet" : (CATEGORY_TONE[capability.category] ?? "neutral")}
-        className="size-9"
+        className="size-8"
       />
       <div className="min-w-0 flex-1">
         <Link
           href={routes.capability(capability.key)}
-          className="line-clamp-1 text-[0.9375rem] leading-snug font-semibold text-brand-navy hover:underline"
+          className="line-clamp-1 text-[0.8125rem] leading-snug font-semibold text-brand-navy hover:underline"
           title={titleOf(t, capability)}
         >
           {titleOf(t, capability)}
         </Link>
-        <p className="line-clamp-2 text-[0.8125rem] leading-snug text-shell-muted">
+        <p className="line-clamp-1 text-xs leading-snug text-shell-muted" title={summaryOf(t, capability)}>
           {summaryOf(t, capability)}
         </p>
-        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 empty:hidden">
           {capability.usage.runs ? (
             <span className="text-xs text-shell-muted">
               {fill(t.catalogue.runs, { count: capability.usage.runs })}
             </span>
           ) : null}
-          {plain ? (
-            <span className="sr-only">{t.catalogue.available}</span>
-          ) : (
-            <Availability capability={capability} />
-          )}
-          {agent ? <AgentPrice agentKey={capability.key} /> : null}
+          {plain ? <span className="sr-only">{t.catalogue.available}</span> : <Availability capability={capability} />}
         </div>
       </div>
+      {agent ? <AgentPrice agentKey={capability.key} compact /> : null}
       <Favourite capability={capability} />
     </li>
   );
@@ -347,9 +362,12 @@ function Domain({ category, items }: { category: string; items: Capability[] }) 
       data-testid="catalogue-domain"
       data-domain={category}
     >
-      <header className="flex items-center gap-2.5 border-b border-shell-line bg-shell-canvas/60 px-4 py-3">
-        <IconTile icon={Icon} tone={CATEGORY_TONE[category] ?? "neutral"} className="size-8" />
-        <h2 id={`domain-${category}`} className="min-w-0 flex-1 text-[1rem] font-semibold text-brand-navy">
+      <header className="flex items-center gap-2.5 border-b border-shell-line bg-shell-canvas/60 px-4 py-2.5">
+        <Icon className={cn("size-4.5 shrink-0", CATEGORY_TEXT[category] ?? "text-brand-navy")} aria-hidden="true" />
+        <h2
+          id={`domain-${category}`}
+          className={cn("min-w-0 flex-1 text-[0.9375rem] font-semibold", CATEGORY_TEXT[category] ?? "text-brand-navy")}
+        >
           {(w.domains as Record<string, string>)[category] ?? categorySaid(t, category)}
         </h2>
         <span className="text-xs text-shell-muted" data-testid="catalogue-domain-count">
@@ -535,9 +553,14 @@ function Domains({
   goal,
   shown,
   empty,
+  category = null,
+  tierOf,
   keep = () => true,
 }: {
   list: ReturnType<typeof useCapabilities>;
+  category?: string | null;
+  /** The level asked for, and each agent's — LEKA's own have none. */
+  tierOf?: { tier: string; of: (key: string) => string | undefined };
   goal: string | null;
   shown: Shown;
   empty: string;
@@ -558,6 +581,8 @@ function Domains({
   const kept = list.data.filter(
     (capability) =>
       keep(capability) &&
+      (!category || capability.category === category) &&
+      (!tierOf || tierOf.of(capability.key) === tierOf.tier) &&
       (!goal || capability.goals.includes(goal)) &&
       (shown === "all" || (shown === "agents") === (capability.kind === "agent")),
   );
@@ -574,7 +599,7 @@ function Domains({
     ...[...new Set(kept.map((c) => c.category))].filter((c) => !known.includes(c)).sort(),
   ];
   return (
-    <div className="gap-4 xl:columns-2" data-testid="catalogue-grid">
+    <div className="gap-4 md:columns-2 lg:columns-3 xl:columns-4" data-testid="catalogue-grid">
       {order.map((category) => {
         const items = kept.filter((c) => c.category === category);
         return items.length ? <Domain key={category} category={category} items={items} /> : null;
@@ -635,8 +660,16 @@ function Filters({
   setQ,
   sort,
   setSort,
+  category,
+  setCategory,
+  tier,
+  setTier,
 }: {
   capabilities: Capability[] | undefined;
+  category: string | null;
+  setCategory: (next: string | null) => void;
+  tier: string | null;
+  setTier: (next: string | null) => void;
   goal: string | null;
   setGoal: (next: string | null) => void;
   shown: Shown;
@@ -652,13 +685,37 @@ function Filters({
     need,
     count: (capabilities ?? []).filter((c) => c.goals.includes(need)).length,
   })).filter((n) => n.count);
-  const chip = (active: boolean) =>
-    cn(
-      "flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[0.75rem] font-medium whitespace-nowrap",
-      active
-        ? "border-shell-nav-active bg-brand-violet-soft text-shell-nav-active"
-        : "border-shell-line bg-white text-brand-navy hover:bg-shell-canvas",
-    );
+  const categories = [...new Set((capabilities ?? []).map((c) => c.category))].sort((x, y) => {
+    const order = DOMAINS as readonly string[];
+    return (order.indexOf(x) + 1 || 99) - (order.indexOf(y) + 1 || 99);
+  });
+  const tiers = t.catalogue.offers.tiers as Record<string, string>;
+  const ALL = "*";
+  // A select of its own: the value « every » as one of its items.
+  const pick = (
+    label: string,
+    value: string | null,
+    set: (next: string | null) => void,
+    items: { value: string; label: string }[],
+    testId: string,
+  ) => (
+    <Select
+      value={value ?? ALL}
+      onValueChange={(next) => set(!next || next === ALL ? null : String(next))}
+      items={items}
+    >
+      <SelectTrigger className="min-w-44 bg-white" aria-label={label} data-testid={testId}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {items.map((item) => (
+          <SelectItem key={item.value} value={item.value} data-testid={`${testId}-${item.value}`}>
+            {item.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
   return (
     <div className="flex flex-col gap-3" data-testid="catalogue-filters">
       <div className="flex flex-col gap-2 md:flex-row md:items-center">
@@ -673,7 +730,42 @@ function Filters({
             data-testid="catalogue-search"
           />
         </label>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {pick(
+            w.allCategories,
+            category,
+            setCategory,
+            [
+              { value: ALL, label: w.allCategories },
+              ...categories.map((c) => ({
+                value: c,
+                label: (w.domains as Record<string, string>)[c] ?? categorySaid(t, c),
+              })),
+            ],
+            "catalogue-category",
+          )}
+          {pick(
+            w.allTiers,
+            tier,
+            setTier,
+            [{ value: ALL, label: w.allTiers }, ...Object.entries(tiers).map(([value, label]) => ({ value, label }))],
+            "catalogue-tier",
+          )}
+          {needs.length
+            ? pick(
+                w.need,
+                goal,
+                setGoal,
+                [
+                  { value: ALL, label: w.allNeeds },
+                  ...needs.map(({ need, count }) => ({
+                    value: need,
+                    label: `${t.intentions.understanding.goals[need]} (${count})`,
+                  })),
+                ],
+                "catalogue-need",
+              )
+            : null}
           {/* Agents, or LEKA's own capabilities, or both: the domains are the
               boxes below (2026-10-14). */}
           <div role="group" aria-label={w.show} className="flex rounded-lg border border-shell-line bg-white p-0.5">
@@ -711,29 +803,6 @@ function Filters({
           </Select>
         </div>
       </div>
-      {needs.length ? (
-        <div role="group" aria-labelledby="catalogue-need" className="flex flex-wrap items-center gap-1.5">
-          <span id="catalogue-need" className="me-1 text-[0.8125rem] font-medium text-brand-navy">
-            {w.need}
-          </span>
-          <button type="button" className={chip(goal === null)} onClick={() => setGoal(null)} aria-pressed={goal === null}>
-            {w.allNeeds}
-          </button>
-          {needs.map(({ need, count }) => (
-            <button
-              key={need}
-              type="button"
-              className={chip(goal === need)}
-              onClick={() => setGoal(goal === need ? null : need)}
-              aria-pressed={goal === need}
-              data-testid={`catalogue-need-${need}`}
-            >
-              {t.intentions.understanding.goals[need]}
-              <span className="rounded bg-white/70 px-1 text-xs text-shell-muted">{count}</span>
-            </button>
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -832,6 +901,51 @@ function useBoughtSaid() {
   }, [bought, pathname, router, t]);
 }
 
+/** The four figures beside the title (LEKA-460): what is on sale, counted;
+ * a saving said only when a bundle on sale shows it. */
+function Stats() {
+  const t = useDictionary();
+  const w = t.catalogue.stats;
+  const data = useAddOns().data;
+  if (!data?.available) return null;
+  const savings = data.bundles
+    .filter((b) => b.sellable && b.discount_percent !== null)
+    .map((b) => b.discount_percent as number);
+  const tiles: { icon: LucideIcon; value: string; label: string; lead: string; id: string }[] = [
+    {
+      id: "agents",
+      icon: Zap,
+      value: String(data.agents.length),
+      label: fill(w.agents, { count: data.agents.length }),
+      lead: w.agentsLead,
+    },
+    {
+      id: "bundles",
+      icon: Layers,
+      value: String(data.bundles.length),
+      label: fill(w.bundles, { count: data.bundles.length }),
+      lead: savings.length ? fill(w.upTo, { percent: Math.max(...savings) }) : w.soon,
+    },
+    { id: "fit", icon: Target, value: w.fit, label: w.fitLabel, lead: w.fitLead },
+    { id: "safe", icon: ShieldCheck, value: w.safe, label: "", lead: w.safeLead },
+  ];
+  return (
+    <ul
+      className="grid grid-cols-2 divide-shell-line rounded-xl border border-shell-line bg-white sm:grid-cols-4 sm:divide-x"
+      data-testid="catalogue-figures"
+    >
+      {tiles.map(({ id, icon: Icon, value, label, lead }) => (
+        <li key={id} className="flex flex-col items-center px-4 py-3 text-center sm:w-40" data-testid={`catalogue-stat-${id}`}>
+          <Icon className="mb-1 size-6 text-shell-nav-active" aria-hidden="true" />
+          <span className="text-[1.125rem] leading-tight font-bold text-brand-navy">{value}</span>
+          {label ? <span className="text-[0.8125rem] font-medium text-brand-navy">{label}</span> : null}
+          <span className="mt-0.5 text-[0.6875rem] leading-snug text-shell-muted">{lead}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function CatalogueScreen() {
   const t = useDictionary();
   const w = t.catalogue;
@@ -841,6 +955,8 @@ export function CatalogueScreen() {
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<NonNullable<CatalogueQuery["sort"]>>("relevant");
   const [goal, setGoal] = useState<string | null>(null);
+  const [category, setCategory] = useState<string | null>(null);
+  const [tier, setTier] = useState<string | null>(null);
   // « Mes capacités » (2026-10-14: « l'onglet ne sert strictement à rien »):
   // what this workspace owns — LEKA's own, and the agents it bought.
   const list = useCapabilities({ view: "all", q, sort });
@@ -853,15 +969,21 @@ export function CatalogueScreen() {
 
   return (
     <PageContainer>
-      <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start">
+      <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1">
           <h1 className="text-[2.125rem] leading-tight font-bold tracking-[-0.02em] text-brand-navy">{w.title}</h1>
           <p className="mt-1 text-[1.0625rem] text-shell-accent-muted">{w.subtitle}</p>
+          <p className="text-[0.9375rem] text-shell-muted">{w.subtitleMore}</p>
+          <Link
+            href={routes.intentionNew()}
+            className={buttonVariants({ variant: "default", className: "mt-3" })}
+            data-testid="catalogue-ask"
+          >
+            <Plus className="size-4" aria-hidden="true" />
+            {w.ask}
+          </Link>
         </div>
-        <Link href={routes.intentionNew()} className={buttonVariants({ variant: "default" })} data-testid="catalogue-ask">
-          <Plus className="size-4" aria-hidden="true" />
-          {w.ask}
-        </Link>
+        <Stats />
       </div>
 
       <div className="mb-4 flex gap-1 border-b border-shell-line" role="tablist" aria-label={w.title}>
@@ -900,13 +1022,38 @@ export function CatalogueScreen() {
             setQ={setQ}
             sort={sort}
             setSort={setSort}
+            category={category}
+            setCategory={setCategory}
+            tier={tier}
+            setTier={setTier}
           />
           {view === "mine" ? <Owned /> : null}
+          {view === "available" ? (
+            <div className="flex flex-wrap items-end justify-between gap-2" data-testid="catalogue-all-agents">
+              <div>
+                <h2 className="text-[1.25rem] font-bold text-brand-navy">{w.allAgents}</h2>
+                <p className="text-[0.8125rem] text-shell-muted">{w.allAgentsLead}</p>
+              </div>
+              <Link
+                href={routes.billing()}
+                className="inline-flex items-center gap-1 text-[0.8125rem] font-medium text-shell-nav-active hover:underline"
+              >
+                {w.compare}
+                <ArrowRight className="size-3.5 rtl:-scale-x-100" aria-hidden="true" />
+              </Link>
+            </div>
+          ) : null}
           <Domains
             list={list}
             goal={goal}
             shown={shown}
             empty={empty}
+            category={category}
+            tierOf={
+              tier
+                ? { tier, of: (key) => offers.data?.agents.find((a) => a.key === key)?.tier }
+                : undefined
+            }
             keep={view === "mine" ? owned : undefined}
           />
           {view === "available" && shown !== "capabilities" ? <Bundles /> : null}

@@ -1,11 +1,11 @@
 "use client";
 
-import { BadgeCheck, Clock, Lock, Package, ShoppingCart } from "lucide-react";
+import { ArrowRight, BadgeCheck, Check, Clock, Lock, Package, Plus, ShoppingCart } from "lucide-react";
 import Link from "next/link";
 
 import { cn } from "cn";
 
-import { Card, IconTile } from "@/components/environment/parts";
+import { Card } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
 import { usePermissions } from "@/components/shell/shell-provider";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -43,8 +43,9 @@ function bought(t: ReturnType<typeof useDictionary>, error: unknown) {
   });
 }
 
-/** An agent's price and standing, on its line of the catalogue. */
-export function AgentPrice({ agentKey }: { agentKey: string }) {
+/** An agent's price and standing, on its line of the catalogue — `compact`:
+ * the price, then one round mark, as the catalogue's mockup (LEKA-460). */
+export function AgentPrice({ agentKey, compact = false }: { agentKey: string; compact?: boolean }) {
   const t = useDictionary();
   const w = t.catalogue.offers;
   const { format } = useLocale();
@@ -54,6 +55,57 @@ export function AgentPrice({ agentKey }: { agentKey: string }) {
   const offer = offers.data?.agents.find((a) => a.key === agentKey);
   if (!offer || !offers.data) return null;
   const tiers = w.tiers as Record<string, string>;
+  if (compact) {
+    const round = "flex size-7 shrink-0 items-center justify-center rounded-full border";
+    const said = (text: string) => <span className="sr-only">{text}</span>;
+    return (
+      <span className="flex shrink-0 items-center gap-2" data-testid="agent-price" data-owned={offer.owned}>
+        <span className="text-[0.8125rem] font-semibold tabular-nums text-brand-navy">
+          {euros(offer.monthly_price, format)}
+          {said(` ${w.month}`)}
+        </span>
+        {offer.included ? (
+          <span className={cn(round, "border-state-success/30 bg-state-success/10 text-state-success")} title={w.includedInPlan}>
+            <Check className="size-3.5" aria-hidden="true" />
+            {said(w.includedInPlan)}
+          </span>
+        ) : offer.owned ? (
+          <span className={cn(round, "border-state-success/30 bg-state-success/10 text-state-success")} title={w.active}>
+            <Check className="size-3.5" aria-hidden="true" />
+            {said(w.active)}
+          </span>
+        ) : offer.why === "plan_required" ? (
+          <Link
+            href={routes.billing()}
+            className={cn(round, "border-shell-line text-shell-muted hover:bg-shell-canvas")}
+            title={fill(w.fromPlan, { plan: planName(offers.data.minimum_plan) })}
+          >
+            <Lock className="size-3.5" aria-hidden="true" />
+            {said(fill(w.fromPlan, { plan: planName(offers.data.minimum_plan) }))}
+          </Link>
+        ) : may ? (
+          <button
+            type="button"
+            className={cn(round, "border-shell-line text-shell-nav-active hover:bg-brand-violet-soft disabled:opacity-50")}
+            disabled={buy.isPending}
+            title={`${w.buy} — ${offer.title}`}
+            aria-label={`${w.buy} — ${offer.title}`}
+            onClick={() =>
+              buy.mutate({ kind: "agent", key: offer.key }, { onError: (error) => bought(t, error) })
+            }
+            data-testid="agent-buy"
+          >
+            <Plus className="size-3.5" aria-hidden="true" />
+          </button>
+        ) : (
+          <span className={cn(round, "border-shell-line text-shell-muted")} title={w.locked}>
+            <Lock className="size-3.5" aria-hidden="true" />
+            {said(w.locked)}
+          </span>
+        )}
+      </span>
+    );
+  }
   return (
     <span className="flex flex-wrap items-center gap-2" data-testid="agent-price" data-owned={offer.owned}>
       <span className="text-xs font-semibold text-brand-navy">
@@ -114,55 +166,64 @@ function BundleCard({
   const may = useMayBuy();
   const name = locale.startsWith("en") ? bundle.name.en : bundle.name.fr;
   const value = bundle.value ? (locale.startsWith("en") ? bundle.value.en : bundle.value.fr) : null;
+  const tone = BUNDLE_TONES[bundle.key] ?? BUNDLE_TONES.default;
+  const members = bundle.members ?? [];
+  // A saving only where it can be shown (Karim, 2026-10-15): computed from
+  // every member's price, and the bundle on sale.
+  const saving = bundle.sellable && bundle.alone_price !== null && bundle.discount_percent !== null;
   return (
     <li
-      className="flex flex-col gap-3 rounded-xl border border-shell-line bg-white p-4"
+      className="flex flex-col overflow-hidden rounded-xl border border-shell-line bg-white"
       data-testid="bundle"
       data-key={bundle.key}
     >
-      <div className="flex items-center gap-2.5">
-        <IconTile icon={Package} tone="violet" className="size-9" />
-        <div className="min-w-0">
-          <h3 className="text-[1rem] font-semibold text-brand-navy">{name}</h3>
-          {value ? <p className="text-[0.8125rem] text-shell-muted">{value}</p> : null}
-        </div>
+      <div className={cn("flex items-center gap-2 bg-linear-to-r px-4 py-2.5 text-white", tone.band)}>
+        <Package className="size-4.5" aria-hidden="true" />
+        <h3 className="text-[0.9375rem] font-semibold">{name}</h3>
       </div>
-      <p className="flex flex-wrap items-baseline gap-2">
-        <span className="text-[1.5rem] font-semibold text-brand-navy">
-          {euros(bundle.monthly_price, format)}
-        </span>
-        <span className="text-xs text-shell-muted">{w.month}</span>
-        {/* Computed from its members' prices, shown only when every one
-            has one (LEKA-454): never a saving that cannot be shown. */}
-        {bundle.alone_price !== null && bundle.discount_percent !== null ? (
-          <>
-            <span className="text-xs text-shell-muted line-through">{euros(bundle.alone_price, format)}</span>
-            <Pill tone="success">{fill(w.save, { percent: bundle.discount_percent })}</Pill>
-          </>
-        ) : null}
-      </p>
-      <ul className="space-y-1 text-[0.8125rem] text-brand-navy" data-testid="bundle-members">
-        {(bundle.members ?? []).map((member) => (
-          <li
-            key={member.key}
-            className={cn("flex items-center gap-1.5", !member.agent && "text-shell-muted")}
-            data-built={member.agent ? "true" : "false"}
-          >
-            {member.agent ? (
-              <BadgeCheck className="size-3.5 text-state-success" aria-hidden="true" />
-            ) : (
-              <Clock className="size-3.5" aria-hidden="true" />
-            )}
-            {member.agent ? (titles.get(member.agent) ?? member.name) : member.name}
-            {member.agent ? null : <span className="text-xs">· {w.notBuilt}</span>}
-          </li>
-        ))}
-      </ul>
-      <div className="mt-auto">
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        {value ? <p className="text-[0.8125rem] text-shell-muted">{value}</p> : null}
+        <p className="flex flex-wrap items-baseline gap-2">
+          <span className="text-[1.5rem] font-bold text-brand-navy">{euros(bundle.monthly_price, format)}</span>
+          <span className="text-xs text-shell-muted">{w.month}</span>
+          {saving ? (
+            <>
+              <span className="text-xs text-shell-muted line-through">{euros(bundle.alone_price as number, format)}</span>
+              <Pill tone="success">{fill(w.save, { percent: bundle.discount_percent as number })}</Pill>
+            </>
+          ) : null}
+        </p>
+        <ul className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-brand-navy" data-testid="bundle-members">
+          {members.map((member) => (
+            <li
+              key={member.key}
+              className={cn("flex min-w-0 items-center gap-1.5", !member.agent && "text-shell-muted")}
+              data-built={member.agent ? "true" : "false"}
+              title={member.agent ? undefined : w.notBuilt}
+            >
+              {member.agent ? (
+                <BadgeCheck className="size-3.5 shrink-0 text-state-success" aria-hidden="true" />
+              ) : (
+                <Clock className="size-3.5 shrink-0" aria-hidden="true" />
+              )}
+              <span className="truncate">
+                {member.agent ? (titles.get(member.agent) ?? member.name) : member.name}
+              </span>
+              {member.agent ? null : <span className="sr-only">· {w.notBuilt}</span>}
+            </li>
+          ))}
+        </ul>
+        <p className="mt-auto text-center text-xs font-medium text-brand-navy">
+          {fill(w.agentsIn, { count: members.length })}
+        </p>
         {!bundle.sellable ? (
           // Some of its agents are not built: not sold (LEKA-454).
-          <p className="text-xs text-shell-muted" data-testid="bundle-soon">
-            {w.bundleSoon}
+          <p
+            className="flex h-9 items-center justify-center rounded-lg bg-shell-canvas text-[0.8125rem] font-medium text-shell-muted"
+            title={w.bundleSoon}
+            data-testid="bundle-soon"
+          >
+            {w.soon}
           </p>
         ) : bundle.owned ? (
           <Pill tone="success" dot>
@@ -175,7 +236,7 @@ function BundleCard({
         ) : may ? (
           <Button
             type="button"
-            className="w-full"
+            className={cn("w-full text-white", tone.button)}
             disabled={buy.isPending}
             onClick={() =>
               buy.mutate({ kind: "bundle", key: bundle.key }, { onError: (error) => bought(t, error) })
@@ -183,6 +244,7 @@ function BundleCard({
             data-testid="bundle-buy"
           >
             {w.choose}
+            <ArrowRight className="size-4 rtl:-scale-x-100" aria-hidden="true" />
           </Button>
         ) : (
           <p className="text-xs text-shell-muted">{w.askAdmin}</p>
@@ -191,6 +253,19 @@ function BundleCard({
     </li>
   );
 }
+
+/** Each bundle's colour, as the mockup gives it (LEKA-460). */
+const BUNDLE_TONES: Record<string, { band: string; button: string }> = {
+  engineering: { band: "from-blue-600 to-blue-500", button: "bg-blue-600 hover:bg-blue-700" },
+  "ship-safe": { band: "from-violet-600 to-violet-500", button: "bg-violet-600 hover:bg-violet-700" },
+  "incident-response": { band: "from-rose-600 to-rose-500", button: "bg-rose-600 hover:bg-rose-700" },
+  "security-reliability": {
+    band: "from-emerald-600 to-emerald-500",
+    button: "bg-emerald-600 hover:bg-emerald-700",
+  },
+  "frontend-craft": { band: "from-orange-500 to-amber-500", button: "bg-orange-500 hover:bg-orange-600" },
+  default: { band: "from-brand-violet to-brand-violet", button: "bg-brand-violet" },
+};
 
 /** The bundles, as the reference composes them: sold once every agent they
  * name is built, their saving computed (LEKA-454). */
@@ -201,15 +276,27 @@ export function Bundles() {
   const data = offers.data;
   if (!data?.available || !data.bundles.length) return null;
   const titles = new Map(data.agents.map((a: AgentOffer) => [a.key, a.title]));
+  const savings = data.bundles
+    .filter((b) => b.sellable && b.discount_percent !== null)
+    .map((b) => b.discount_percent as number);
+  const best = savings.length ? Math.max(...savings) : null;
   return (
     <section className="space-y-3" aria-labelledby="bundles-title" data-testid="bundles">
-      <div>
-        <h2 id="bundles-title" className="text-[1.0625rem] font-semibold text-brand-navy">
-          {w.bundlesTitle}
-        </h2>
-        <p className="text-[0.8125rem] text-shell-muted">{w.bundlesLead}</p>
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h2 id="bundles-title" className="text-[1.25rem] font-bold text-brand-navy">
+            {w.bundlesTitle}
+          </h2>
+          <p className="text-[0.8125rem] text-shell-muted">{w.bundlesLead}</p>
+        </div>
+        {best !== null ? (
+          <p className="rounded-lg border border-shell-line bg-brand-violet-soft px-3 py-1.5 text-xs" data-testid="bundles-saving">
+            <span className="font-semibold text-shell-nav-active">{fill(w.upTo, { percent: best })}</span>{" "}
+            <span className="text-shell-muted">{w.upToLead}</span>
+          </p>
+        ) : null}
       </div>
-      <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {data.bundles.map((bundle) => (
           <BundleCard
             key={bundle.key}

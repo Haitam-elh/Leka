@@ -300,12 +300,20 @@ describe("the catalogue", () => {
     const user = userEvent.setup();
     show(<CatalogueScreen />);
     await screen.findAllByTestId("capability-card");
-    await user.click(screen.getByTestId("catalogue-need-map_dependencies"));
-    expect(screen.getByTestId("catalogue-need-map_dependencies")).toHaveTextContent("Comprendre les dépendances1");
-    expect(screen.getAllByTestId("capability-card")).toHaveLength(1);
+    await user.click(screen.getByRole("combobox", { name: "Que voulez-vous faire ?" }));
+    await user.click(await screen.findByRole("option", { name: "Comprendre les dépendances (1)" }));
+    await waitFor(() => expect(screen.getAllByTestId("capability-card")).toHaveLength(1));
     expect(screen.getByTestId("capability-card")).toHaveAttribute("data-key", "application-architecture");
-    await user.click(screen.getByTestId("catalogue-need-map_dependencies"));
-    expect(screen.getAllByTestId("capability-card")).toHaveLength(2);
+    await user.click(screen.getByRole("combobox", { name: "Que voulez-vous faire ?" }));
+    await user.click(await screen.findByRole("option", { name: "Tous les besoins" }));
+    await waitFor(() => expect(screen.getAllByTestId("capability-card")).toHaveLength(2));
+    // By level: the expert agents only — LEKA's own have none.
+    await user.click(screen.getByRole("combobox", { name: "Tous les niveaux" }));
+    await user.click(await screen.findByRole("option", { name: "Expert" }));
+    await waitFor(() => expect(screen.getAllByTestId("capability-card")).toHaveLength(1));
+    await user.click(screen.getByRole("combobox", { name: "Tous les niveaux" }));
+    await user.click(await screen.findByRole("option", { name: "Tous les niveaux" }));
+    await waitFor(() => expect(screen.getAllByTestId("capability-card")).toHaveLength(2));
     await user.type(screen.getByTestId("catalogue-search"), "archi");
     await waitFor(() =>
       expect(api.list).toHaveBeenLastCalledWith(expect.objectContaining({ q: "archi" })),
@@ -347,7 +355,6 @@ describe("the catalogue", () => {
     show(<CatalogueScreen />);
     const price = await screen.findByTestId("agent-price");
     expect(price).toHaveTextContent("25 € / mois");
-    expect(price).toHaveTextContent("Expert");
     const [bundle, soon] = await screen.findAllByTestId("bundle");
     expect(bundle).toHaveTextContent("Architecture");
     expect(bundle).toHaveTextContent("49 €");
@@ -358,6 +365,8 @@ describe("the catalogue", () => {
     expect(within(soon).getByTestId("bundle-soon")).toBeVisible();
     expect(within(soon).queryByTestId("bundle-buy")).not.toBeInTheDocument();
     expect(soon).not.toHaveTextContent("%");
+    // The figures beside the title: counted, the saving the bundle on sale shows.
+    expect(screen.getByTestId("catalogue-stat-bundles")).toHaveTextContent("Jusqu'à 23 % d'économie");
     await user.click(within(price).getByTestId("agent-buy"));
     await waitFor(() =>
       expect(sold.buy).toHaveBeenCalledWith({ kind: "agent", key: "application-architecture" }),
