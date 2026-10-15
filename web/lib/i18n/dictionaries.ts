@@ -1033,7 +1033,7 @@ const fr = {
     versus: "{count} le mois dernier",
     invoices: "Historique des factures",
     invoicesNone:
-      "Aucune facture : LEKA n'en émet pas encore, les offres et les packs sont ajoutés par votre interlocuteur LEKA.",
+      "Aucune facture : LEKA n'en émet pas encore, votre offre est attribuée par votre interlocuteur LEKA.",
     credits: {
       title: "Crédits IA du mois",
       explain:
@@ -8264,7 +8264,7 @@ const en: Dictionary = {
     versus: "{count} last month",
     invoices: "Invoice history",
     invoicesNone:
-      "No invoice: LEKA issues none yet — plans and packs are added by your LEKA contact.",
+      "No invoice: LEKA issues none yet — your plan is set by your LEKA contact.",
     credits: {
       title: "This month's AI credits",
       explain:
