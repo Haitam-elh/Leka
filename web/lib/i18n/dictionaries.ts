@@ -82,6 +82,7 @@ const fr = {
     expandSidebar: "Déplier la barre latérale",
     workspace: "Workspace",
     switchWorkspace: "Changer de workspace",
+    switchFailed: "Impossible d'ouvrir ce workspace. Réessayez.",
     noWorkspace: "Aucun workspace",
     /** Someone signed in who belongs to no workspace yet — a new account. */
     firstWorkspace: {
@@ -7498,6 +7499,7 @@ const en: Dictionary = {
     expandSidebar: "Expand the sidebar",
     workspace: "Workspace",
     switchWorkspace: "Switch workspace",
+    switchFailed: "Could not open this workspace. Try again.",
     noWorkspace: "No workspace yet",
     firstWorkspace: {
       title: "Create your workspace",

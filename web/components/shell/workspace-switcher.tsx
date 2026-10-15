@@ -13,21 +13,33 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ActivityIcon } from "@/components/shell/nav-icons";
 import { useCurrentWorkspace, useWorkspaces } from "@/components/shell/shell-provider";
+import { routes } from "@/config/routes";
 import { useDictionary } from "@/lib/i18n/locale-provider";
+import { notify } from "@/lib/notify";
+import { workspace as session } from "@/lib/workspace";
 
 /**
  * Which company's LEKA you are looking at.
  *
  * Shows the active workspace and lists the ones this account may switch to.
- * TODO LEKA-331: `onSelect` is where the switch goes — it has to tell the
- * API, because the workspace is read from the session and never from the
- * client (architecture rule 3). Until then, choosing the active one is a
- * no-op and choosing another does nothing rather than lying about it.
+ * Choosing another tells the API — the workspace is read from the session,
+ * never from the client (architecture rule 3) — then reloads on its
+ * overview: nothing cached from the previous one survives.
  */
 export function WorkspaceSwitcher({ collapsed = false }: { collapsed?: boolean }) {
   const t = useDictionary();
   const workspace = useCurrentWorkspace();
   const workspaces = useWorkspaces();
+
+  async function open(id: string) {
+    if (id === workspace?.id) return;
+    try {
+      await session.enter(id);
+      window.location.assign(routes.overview());
+    } catch {
+      notify.error({ title: t.shell.switchFailed });
+    }
+  }
 
   return (
     <DropdownMenu>
@@ -62,7 +74,11 @@ export function WorkspaceSwitcher({ collapsed = false }: { collapsed?: boolean }
         <DropdownMenuGroup>
           <DropdownMenuLabel>{t.shell.switchWorkspace}</DropdownMenuLabel>
           {workspaces.map((candidate) => (
-            <DropdownMenuItem key={candidate.id} data-testid={`workspace-${candidate.slug}`}>
+            <DropdownMenuItem
+              key={candidate.id}
+              data-testid={`workspace-${candidate.slug}`}
+              onClick={() => void open(candidate.id)}
+            >
               <span className="flex-1 truncate">{candidate.name}</span>
               {candidate.id === workspace?.id && (
                 <Check className="size-4 text-brand-violet" aria-hidden="true" />
