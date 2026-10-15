@@ -78,3 +78,16 @@ async def test_the_history_filters_by_agent_source_and_period(
     month = (now - timedelta(days=30)).isoformat()
     assert _ids(await _get(client, since=month)) == {ran["id"], cited["id"]}
     assert _ids(await _get(client, until=month)) == {scoped["id"]}
+
+    # The history's columns (LEKA-457): its agents, the kinds of its sources.
+    rows = {row["id"]: row for row in (await _get(client))["data"]}
+    assert rows[ran["id"]]["agents"] == ["architect"]
+    assert rows[cited["id"]]["sources"] == ["github"]
+    assert rows[scoped["id"]]["agents"] == []
+
+    # Counted by state for its tabs, and listed by several at once.
+    counts = await _get(client, "/counts")
+    assert sum(counts["statuses"].values()) == counts["all"] == 3
+    states = list(counts["statuses"])
+    assert len((await _get(client, status=states))["data"]) == 3
+    assert (await _get(client, status=["cancelled"]))["data"] == []

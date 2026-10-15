@@ -170,7 +170,7 @@ beforeEach(() => {
 });
 
 describe("an intention's journey", () => {
-  it("is the same state on its row, beside the list and on its page", async () => {
+  it("is the same state on its row and on its page, and says why on both", async () => {
     const failed = intention({
       status: "failed",
       journey: sampleJourney("failed", { reason: "interrupted", technical: "interrupted" }),
@@ -186,10 +186,8 @@ describe("an intention's journey", () => {
       "analysis_failed",
     );
     expect(within(row).getByTestId("intention-status")).toHaveTextContent("Analyse échouée");
-    // Beside the list: the same, and why — an error stays in sight.
-    const preview = await screen.findByTestId("intention-preview");
-    expect(within(preview).getByTestId("intention-status")).toHaveTextContent("Analyse échouée");
-    expect(within(preview).getByTestId("preview-why")).toHaveTextContent(
+    // Its result column says why — an error stays in sight (LEKA-457).
+    expect(row).toHaveTextContent(
       "L'analyse s'est interrompue : le moteur d'analyse ne répondait plus.",
     );
     unmount();
