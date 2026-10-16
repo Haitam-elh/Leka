@@ -33,6 +33,8 @@ import { summaryOf } from "@/components/capabilities/catalogue";
 import { entityHref } from "@/components/environment/parts";
 import { AgentsAction, useProposal } from "@/components/intentions/agents-decision";
 import { AnalysisResults, EvidenceTab } from "@/components/intentions/analysis-tab";
+import { JourneyNote } from "@/components/intentions/journey";
+import { phaseOf, Working } from "@/components/intentions/working";
 import { useConfirm } from "@/components/interactions/confirm";
 import { useCurrentUser, usePermissions } from "@/components/shell/shell-provider";
 import { SourceLogo } from "@/components/sources/source-logo";
@@ -126,6 +128,10 @@ export function IntentionDetailPage({ intention }: { intention: IntentionDetail 
             queries): the same blocks read well beside a panel, on a phone. */}
         <div className="@container min-w-0 space-y-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-shell-line">
           <Exchange intention={intention} offer={offer.data} hasProposal={Boolean(proposal)} />
+          {/* What LEKA is doing, now (LEKA-465): at once, read from the
+              server — kept through a refresh — and only what happened. */}
+          <Working intention={intention} />
+          {NOTED.has(intention.journey.state) ? <JourneyNote intention={intention} /> : null}
           <UnderstandingCard
             intention={intention}
             offer={offer.data}
@@ -137,7 +143,9 @@ export function IntentionDetailPage({ intention }: { intention: IntentionDetail 
           {executing ? (
             <section className="space-y-3" data-testid="detail-execution">
               <h2 className="text-[1.0625rem] font-semibold text-brand-navy">{w.executionTitle}</h2>
-              <AgentsAction intention={intention} />
+              {/* At work, its steps are said above; ended, its deliverables
+                  and a failed one to launch again. */}
+              {phaseOf(intention, runs.data) === "agents" ? null : <AgentsAction intention={intention} />}
             </section>
           ) : offer.data && offer.data.agents.length ? (
             <>
@@ -259,6 +267,20 @@ const CATEGORY_ICON: Record<string, LucideIcon> = {
   operations: Activity,
   knowledge: FileText,
 };
+
+// Where the journey's word matters on its page (LEKA-465): working, stopped,
+// failed — its since, its next, the controls it allows (stop, resume, retry).
+const NOTED = new Set([
+  "draft",
+  "ready",
+  "needs_clarification",
+  "analysing",
+  "analysis_partial",
+  "analysis_failed",
+  "action_running",
+  "action_failed",
+  "cancelled",
+]);
 
 // The files an agent draws besides its report (as the decision step offers).
 const DRAWN = new Set(["pdf", "pptx"]);
