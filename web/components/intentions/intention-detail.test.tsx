@@ -237,6 +237,17 @@ describe("an intention's page", () => {
     );
   });
 
+  it("an agent still waiting on its information: completed first, never paid for to be refused", () => {
+    PROPOSAL.agents[0].missing = ["parcours"] as never[];
+    try {
+      show();
+      expect(screen.getByTestId("detail-complete")).toHaveTextContent("Compléter les informations");
+      expect(screen.queryByTestId("detail-activate")).not.toBeInTheDocument();
+    } finally {
+      PROPOSAL.agents[0].missing = [];
+    }
+  });
+
   it("says the month's capacity is spent, and offers more — never an overage", () => {
     offered.value = offer({ plan_now: "starter", blocked: "credits_exhausted" });
     show();

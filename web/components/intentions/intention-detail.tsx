@@ -476,7 +476,7 @@ function OfferCard({
   const incomplete = chosen.some((a) => a.missing.length > 0);
   const agentCount = offer.agents.filter((a) => a.chosen).length;
   // What the total pays for: the agents bought, never those the plan includes.
-  const paidAgents = options.reduce((n, l) => n + (l.kind === "bundle" ? l.agents.length : 1), 0);
+  const paidAgents = options.reduce((n, l) => n + (l.kind === "bundle" ? (l.agents ?? []).length : 1), 0);
   const launchOf = (agents: ProposedAgent[]): AgentLaunch[] =>
     agents.map((a) => ({
       key: a.key,
@@ -649,28 +649,28 @@ function OfferCard({
             <p className="text-xs text-shell-muted">{fill(w.trial, { days: plan.trial_days })}</p>
           ) : null}
           <div className="mt-3">
-            {offer.ready ? (
-              incomplete ? (
-                <Button
-                  type="button"
-                  className="w-full"
-                  onClick={() => router.push(`${routes.intentions()}/${intention.id}/decision`)}
-                  data-testid="detail-complete"
-                >
-                  {w.complete}
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  className="w-full"
-                  disabled={decide.launch.isPending || !agentCount}
-                  onClick={launch}
-                  data-testid="detail-launch"
-                >
-                  {w.launch}
-                  <ArrowRight className="size-4 rtl:-scale-x-100" aria-hidden="true" />
-                </Button>
-              )
+            {/* An agent still waiting on its information: completed first, at
+                the decision — never paid for to be refused once paid. */}
+            {incomplete ? (
+              <Button
+                type="button"
+                className="w-full"
+                onClick={() => router.push(`${routes.intentions()}/${intention.id}/decision`)}
+                data-testid="detail-complete"
+              >
+                {w.complete}
+              </Button>
+            ) : offer.ready ? (
+              <Button
+                type="button"
+                className="w-full"
+                disabled={decide.launch.isPending || !agentCount}
+                onClick={launch}
+                data-testid="detail-launch"
+              >
+                {w.launch}
+                <ArrowRight className="size-4 rtl:-scale-x-100" aria-hidden="true" />
+              </Button>
             ) : payer && !(plan.contractual && offer.change_plan) ? (
               <Button
                 type="button"
