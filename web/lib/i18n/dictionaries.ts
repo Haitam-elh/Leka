@@ -6059,6 +6059,21 @@ const fr = {
       renewal: "Mensuel, renouvelé automatiquement jusqu'à résiliation.",
       trial: "Essai de {days} jours : rien n'est débité avant sa fin.",
       allIncluded: "Tout inclus pour cette analyse",
+      /** Everything covered (LEKA-464): no price, no checkout. */
+      coveredBox: {
+        title: "Tout est inclus pour cette analyse",
+        body: "Votre formule {plan} et vos agents couvrent cette demande : rien à acheter.",
+        included: "inclus dans votre formule",
+        owned: "votre option active",
+        leka: "Les compétences d'analyse de LEKA sont incluses dans toutes les formules.",
+      },
+      /** Why each paid line is needed (LEKA-464). */
+      why: {
+        planAgents: "Votre formule {plan} n'exécute pas d'agents spécialisés.",
+        planCredits: "La capacité IA de votre formule {plan} est épuisée ce mois-ci.",
+        planCapacity: "Cette analyse demande plus de capacité IA que votre formule {plan} n'en offre.",
+        agent: "Option mensuelle : non incluse dans la formule {plan}.",
+      },
       activate: "Activer cette configuration et lancer l'analyse",
       launch: "Lancer l'analyse",
       complete: "Compléter les informations",
@@ -13577,6 +13592,19 @@ const en: Dictionary = {
       renewal: "Monthly, renewed automatically until cancelled.",
       trial: "{days}-day trial: nothing is charged before it ends.",
       allIncluded: "Everything this analysis takes",
+      coveredBox: {
+        title: "Everything this analysis takes is included",
+        body: "Your {plan} plan and your agents cover this request: nothing to buy.",
+        included: "included in your plan",
+        owned: "your active option",
+        leka: "LEKA's analysis skills are included in every plan.",
+      },
+      why: {
+        planAgents: "Your {plan} plan runs no specialised agent.",
+        planCredits: "Your {plan} plan's AI capacity is spent this month.",
+        planCapacity: "This analysis takes more AI capacity than your {plan} plan holds.",
+        agent: "Monthly option: not included in the {plan} plan.",
+      },
       activate: "Activate this setup and launch the analysis",
       launch: "Launch the analysis",
       complete: "Complete the details",
