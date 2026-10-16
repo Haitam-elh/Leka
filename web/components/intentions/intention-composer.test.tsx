@@ -8,13 +8,14 @@
  * spends the customer's money without a deliberate act.
  */
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Form } from "@/components/forms/form";
 import { ConfirmProvider } from "@/components/interactions/confirm";
-import { type Attachment, IntentionComposer } from "@/components/intentions/intention-composer";
+import { useAttachments } from "@/components/intentions/attachments";
+import { IntentionComposer } from "@/components/intentions/intention-composer";
 import { useLekaForm } from "@/lib/forms/use-leka-form";
 import { DICTIONARIES } from "@/lib/i18n/dictionaries";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
@@ -31,6 +32,14 @@ vi.mock("@/components/shell/shell-provider", () => ({
   useCurrentWorkspace: () => ({ id: "ws-1", name: "Acme", slug: "acme", role: "owner" }),
 }));
 
+// Nothing travels in these: what is refused is refused before it would.
+const sent = vi.hoisted(() => ({ upload: vi.fn(), remove: vi.fn() }));
+vi.mock("@/lib/intentions/attachments", async (original) => ({
+  ...(await original<typeof import("@/lib/intentions/attachments")>()),
+  uploadAttachment: sent.upload,
+  removeAttachment: sent.remove,
+}));
+
 const errors = vi.hoisted(() => ({ calls: [] as { title: string }[] }));
 vi.mock("@/lib/notify", () => ({
   notify: {
@@ -42,7 +51,6 @@ vi.mock("@/lib/notify", () => ({
 
 function mount({ prefilled = "" }: { prefilled?: string } = {}) {
   const onSubmit = vi.fn();
-  let attachments: Attachment[] = [];
 
   function Harness() {
     const form = useLekaForm<IntentionDraft>({
@@ -50,15 +58,10 @@ function mount({ prefilled = "" }: { prefilled?: string } = {}) {
       defaultValues: { text: prefilled },
       onSubmit,
     });
+    const files = useAttachments();
     return (
       <Form form={form}>
-        <IntentionComposer
-          attachments={attachments}
-          onAttachmentsChange={(next) => {
-            attachments = next;
-          }}
-          onSubmit={() => void form.submit()}
-        />
+        <IntentionComposer files={files} onSubmit={() => void form.submit()} />
       </Form>
     );
   }
@@ -206,18 +209,20 @@ describe("prefilling and the counter", () => {
 });
 
 describe("attachments", () => {
-  it("refuses a file past the size limit, and says which", async () => {
+  it("refuses a file past the size limit, says which and why — and sends nothing", async () => {
     const user = userEvent.setup();
     mount();
 
     const tooBig = new File(["x".repeat(11 * 1024 * 1024)], "trace.json", {
       type: "application/json",
     });
-    const input = document.querySelector('input[type="file"]');
-    await user.upload(input as HTMLInputElement, tooBig);
+    await user.upload(screen.getByTestId("attachment-input") as HTMLInputElement, tooBig);
 
-    await waitFor(() => expect(errors.calls).toHaveLength(1));
-    expect(errors.calls[0].title).toContain("trace.json");
+    const [chip] = await screen.findAllByTestId("attachment");
+    expect(chip).toHaveAttribute("data-status", "refused");
+    expect(chip).toHaveTextContent("trace.json");
+    expect(within(chip).getByTestId("attachment-error")).toHaveTextContent(fr.composer.files.errors.file_too_large);
+    expect(sent.upload).not.toHaveBeenCalled();
   });
 
   it("refuses a type nobody asked for, even dropped", async () => {
@@ -232,7 +237,11 @@ describe("attachments", () => {
       dataTransfer: { files: [wrong] },
     });
 
-    await waitFor(() => expect(errors.calls).toHaveLength(1));
-    expect(errors.calls[0].title).toContain("outil.exe");
+    const [chip] = await screen.findAllByTestId("attachment");
+    expect(chip).toHaveTextContent("outil.exe");
+    expect(within(chip).getByTestId("attachment-error")).toHaveTextContent(
+      fr.composer.files.errors.file_type_refused,
+    );
+    expect(sent.upload).not.toHaveBeenCalled();
   });
 });

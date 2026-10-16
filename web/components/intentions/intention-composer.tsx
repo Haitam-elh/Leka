@@ -9,18 +9,21 @@ import {
   Loader2,
   type LucideIcon,
   Mic,
-  Paperclip,
   Send,
   ShieldCheck,
   Sparkle,
   Sparkles,
-  X,
 } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 
 import { cn } from "cn";
 import { IconTile, type TileTone } from "@/components/environment/parts";
+import {
+  AttachmentList,
+  AttachmentPicker,
+  type Attachments,
+} from "@/components/intentions/attachments";
 import { useConfirm } from "@/components/interactions/confirm";
 import { useCurrentWorkspace } from "@/components/shell/shell-provider";
 import { Badge } from "@/components/ui/badge";
@@ -28,7 +31,6 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
-import { notify } from "@/lib/notify";
 import { INTENTION_MAX, INTENTION_MIN } from "@/lib/validation/intentions";
 
 /**
@@ -54,26 +56,8 @@ import { INTENTION_MAX, INTENTION_MIN } from "@/lib/validation/intentions";
  * work anyway.
  */
 
-/** Files a person can reasonably attach to a question about their systems. */
-const ACCEPTED_TYPES = [
-  "text/plain",
-  "text/csv",
-  "application/json",
-  "application/pdf",
-  "image/png",
-  "image/jpeg",
-] as const;
-
-const MAX_FILE_MB = 10;
-
 /** Dictation is designed and not built. The flag is what says so. */
 const DICTATION_ENABLED = false;
-
-export interface Attachment {
-  name: string;
-  /** Kept in memory only. TODO upload (S3/storage), see lib/intentions/api.ts. */
-  file: File;
-}
 
 function draftKeyFor(workspaceId: string | undefined): string {
   return `leka.intention.draft.${workspaceId ?? "unknown"}`;
@@ -114,10 +98,8 @@ function canDictate(): boolean {
 export function IntentionComposer({
   name = "text",
   variant = "full",
-  attachments = [],
-  onAttachmentsChange,
+  files,
   onSubmit,
-  onAttachRequest,
   submitting = false,
   submitLabel,
   suggested = true,
@@ -126,11 +108,10 @@ export function IntentionComposer({
   /** The field in the surrounding form. */
   name?: string;
   variant?: "full" | "compact";
-  attachments?: readonly Attachment[];
-  onAttachmentsChange?: (next: Attachment[]) => void;
+  /** Its files (components/intentions/attachments): the paperclip, and
+   * what was chosen. Without, nothing to attach. */
+  files?: Attachments;
   onSubmit: () => void;
-  /** Compact only: the paperclip. Files are attached on the full step. */
-  onAttachRequest?: () => void;
   submitting?: boolean;
   /** What the button says: « Lancer l'analyse » by default. */
   submitLabel?: string;
@@ -144,7 +125,6 @@ export function IntentionComposer({
   const { setValue, getValues } = useFormContext();
   const value = (useWatch({ name }) as string | undefined) ?? "";
   const box = useRef<HTMLTextAreaElement | null>(null);
-  const fileInput = useRef<HTMLInputElement | null>(null);
   const [dictatable, setDictatable] = useState(false);
 
   // Read after mount: the server has no sessionStorage, and a value that
@@ -167,6 +147,8 @@ export function IntentionComposer({
   // Started, but not yet enough to analyse. The button is disabled, and a
   // disabled button that does not say why reads as broken.
   const missing = empty ? 0 : Math.max(0, INTENTION_MIN - value.trim().length);
+  // A file on its way: nothing is asked before it is kept, or let go.
+  const waiting = files?.uploading ?? false;
   const compact = variant === "compact";
   const whyDisabled = useId();
   // The card's headings and each suggestion's words, named for their parts.
@@ -230,32 +212,6 @@ export function IntentionComposer({
     });
   }
 
-  function addFiles(files: FileList | null) {
-    if (files === null || onAttachmentsChange === undefined) return;
-    const accepted: Attachment[] = [];
-
-    for (const file of Array.from(files)) {
-      if (!(ACCEPTED_TYPES as readonly string[]).includes(file.type)) {
-        notify.error({
-          title: fill(t.composer.fileTypeRefused, { name: file.name }),
-        });
-        continue;
-      }
-      if (file.size > MAX_FILE_MB * 1024 * 1024) {
-        notify.error({
-          title: fill(t.composer.fileTooBig, {
-            name: file.name,
-            max: MAX_FILE_MB,
-          }),
-        });
-        continue;
-      }
-      accepted.push({ name: file.name, file });
-    }
-
-    if (accepted.length > 0) onAttachmentsChange([...attachments, ...accepted]);
-  }
-
   if (compact) {
     // The home's hero (LEKA-456, the sprint's mockup): the question as the
     // page's title, a white field — the spark, the paperclip, a round
@@ -297,21 +253,11 @@ export function IntentionComposer({
               data-testid="intention-input"
               className="min-h-[46px] flex-1 resize-none border-0 bg-transparent px-1 py-3 text-[0.9375rem] shadow-none placeholder:text-shell-muted focus-visible:ring-0"
             />
-            {onAttachRequest ? (
-              <button
-                type="button"
-                onClick={onAttachRequest}
-                aria-label={t.composer.attachOnNextStep}
-                title={t.composer.attachOnNextStep}
-                className="rounded p-1 text-shell-icon outline-none hover:text-shell-nav-active focus-visible:ring-2 focus-visible:ring-brand-violet/40"
-              >
-                <Paperclip className="size-[18px]" aria-hidden="true" />
-              </button>
-            ) : null}
+            {files ? <AttachmentPicker files={files} compact /> : null}
             <Button
               type="button"
               onClick={onSubmit}
-              disabled={empty || tooLong || missing > 0 || submitting}
+              disabled={empty || tooLong || missing > 0 || submitting || waiting}
               aria-label={t.composer.submit}
               aria-busy={submitting || undefined}
               data-testid="intention-submit"
@@ -324,6 +270,7 @@ export function IntentionComposer({
               )}
             </Button>
           </div>
+          {files ? <AttachmentList files={files} className="mt-2 ps-1" /> : null}
           {/* Only while it is true: a disabled button that does not say why
               reads as broken. */}
           <p
@@ -338,7 +285,9 @@ export function IntentionComposer({
                     count: value.length,
                     max: INTENTION_MAX,
                   })
-                : null}
+                : waiting
+                  ? t.composer.files.waiting
+                  : null}
           </p>
         </div>
       </section>
@@ -371,7 +320,7 @@ export function IntentionComposer({
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => {
             event.preventDefault();
-            addFiles(event.dataTransfer.files);
+            files?.add(event.dataTransfer.files);
           }}
           className={cn(
             "rounded-xl border border-shell-line bg-white p-3 transition-colors focus-within:border-brand-violet focus-within:ring-3 focus-within:ring-brand-violet/20",
@@ -397,58 +346,14 @@ export function IntentionComposer({
             )}
           />
 
-          {attachments.length > 0 ? (
-            <ul className="mt-2 flex flex-wrap gap-1.5">
-              {attachments.map((attachment) => (
-                <li
-                  key={attachment.name}
-                  className="flex items-center gap-1 rounded-md bg-shell-canvas px-2 py-1 text-xs text-shell-nav"
-                >
-                  {attachment.name}
-                  <button
-                    type="button"
-                    aria-label={fill(t.composer.removeFile, {
-                      name: attachment.name,
-                    })}
-                    onClick={() =>
-                      onAttachmentsChange?.(
-                        attachments.filter((current) => current.name !== attachment.name),
-                      )
-                    }
-                    className="rounded p-0.5 opacity-60 outline-none hover:opacity-100 focus-visible:ring-2 focus-visible:ring-brand-violet/40"
-                  >
-                    <X className="size-3" aria-hidden="true" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
+          {files ? <AttachmentList files={files} className="mt-2" /> : null}
 
           {/* Wraps as two groups rather than squeezing words: at 1024px, with
               the rail, "⌘↵ pour lancer" used to break over three lines. */}
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {compact ? null : (
               <>
-                <input
-                  ref={fileInput}
-                  type="file"
-                  multiple
-                  accept={ACCEPTED_TYPES.join(",")}
-                  className="hidden"
-                  onChange={(event) => {
-                    addFiles(event.target.files);
-                    event.target.value = "";
-                  }}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => fileInput.current?.click()}
-                >
-                  <Paperclip className="size-4" aria-hidden="true" />
-                  {t.composer.attach}
-                </Button>
+                {files ? <AttachmentPicker files={files} /> : null}
                 {/* Hidden outright where the browser could not do it anyway:
                     a permanently disabled button on a machine that will never
                     support it is a promise that cannot be kept. */}
@@ -466,7 +371,11 @@ export function IntentionComposer({
               {/* Polite, and only while it is true: announced once as the
                   person types past it, not read out on every keystroke. */}
               <span id={whyDisabled} aria-live="polite" className="text-xs text-shell-muted">
-                {missing > 0 ? fill(t.composer.tooShortHint, { count: missing }) : null}
+                {missing > 0
+                  ? fill(t.composer.tooShortHint, { count: missing })
+                  : waiting
+                    ? t.composer.files.waiting
+                    : null}
               </span>
               <span
                 className={cn(
@@ -490,8 +399,8 @@ export function IntentionComposer({
                 onClick={onSubmit}
                 // Below the minimum there is nothing to analyse, past the
                 // maximum there is nothing we would send. Both are refusals the
-                // person can see before pressing.
-                disabled={empty || tooLong || missing > 0 || submitting}
+                // person can see before pressing — and a file on its way.
+                disabled={empty || tooLong || missing > 0 || submitting || waiting}
                 aria-describedby={missing > 0 ? whyDisabled : undefined}
                 data-testid="intention-submit"
               >

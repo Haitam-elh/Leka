@@ -46,6 +46,7 @@ from leka.context import (
 )
 from leka.core.sensitive import guarded
 from leka.intelligence import IntelligenceRepository
+from leka.intentions.attachments import link as link_attachments
 from leka.intentions.brief import answered, answered_ask, brief_of, tidy
 from leka.intentions.grounding import acting, readiness, refined
 from leka.intentions.journey import AnalysisSeen, Facts, Journey, LastMove, journey
@@ -61,6 +62,7 @@ from leka.intentions.lifecycle import (
 from leka.intentions.models import (
     Intention,
     IntentionAnalysis,
+    IntentionAttachment,
     IntentionEvent,
     IntentionLink,
 )
@@ -69,6 +71,7 @@ from leka.intentions.schemas import (
     ContextReadiness,
     IntentionAnalysisRead,
     IntentionAnswer,
+    IntentionAttachmentRead,
     IntentionBrief,
     IntentionCounts,
     IntentionDetail,
@@ -410,6 +413,15 @@ class IntentionService:
             request_key=request_key,
         )
         self._repository.add(intention)
+        await self._repository.flush()
+        # Its files, uploaded before: linked now — one unknown refuses the
+        # intention, and the transaction keeps nothing (AttachmentUnknownError).
+        files = await link_attachments(
+            self._repository.attachments(),
+            intention.id,
+            ask.attachments if isinstance(ask, IntentionRequest) else [],
+            by=by,
+        )
         self._record(
             intention,
             "created",
@@ -417,7 +429,8 @@ class IntentionService:
             by=by,
             at=at,
             to_status=None,
-            detail={"scope": intention.scope},
+            detail={"scope": intention.scope}
+            | ({"attachments": [f.name for f in files]} if files else {}),
         )
         await self._repository.flush()
         # Read with what its asker answered (LEKA-439): their words with the
@@ -964,12 +977,18 @@ class IntentionService:
             return None
         found = await self.journeys([intention])
         return self.detail_of(
-            intention, await self._repository.links(intention.id), found[intention.id]
+            intention,
+            await self._repository.links(intention.id),
+            found[intention.id],
+            await self._repository.attachments_of(intention.id),
         )
 
     @staticmethod
     def detail_of(
-        intention: Intention, links: Sequence[IntentionLink], found: Journey
+        intention: Intention,
+        links: Sequence[IntentionLink],
+        found: Journey,
+        attachments: Sequence[IntentionAttachment] = (),
     ) -> IntentionDetail:
         return IntentionDetail(
             **intention_read(intention, found).model_dump(),
@@ -986,6 +1005,7 @@ class IntentionService:
             ),
             answers=_kept(intention),
             brief=_brief(intention),
+            attachments=[IntentionAttachmentRead.model_validate(a) for a in attachments],
         )
 
     async def detail_now(self, intention: Intention) -> IntentionDetail:
@@ -993,7 +1013,10 @@ class IntentionService:
         await self._repository.refresh(intention)
         found = await self.journeys([intention])
         return self.detail_of(
-            intention, await self._repository.links(intention.id), found[intention.id]
+            intention,
+            await self._repository.links(intention.id),
+            found[intention.id],
+            await self._repository.attachments_of(intention.id),
         )
 
     async def history(self, intention_id: uuid.UUID) -> list[IntentionEventRead] | None:

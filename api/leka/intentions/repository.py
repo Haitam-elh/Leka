@@ -18,8 +18,15 @@ from sqlalchemy.dialects.postgresql import JSONPATH
 from leka.capabilities import AgentRun
 from leka.connectors import Source
 from leka.db import WorkspaceScopedRepository
+from leka.intentions.attachments import AttachmentRepository
 from leka.intentions.lifecycle import PHASES
-from leka.intentions.models import Intention, IntentionAnalysis, IntentionEvent, IntentionLink
+from leka.intentions.models import (
+    Intention,
+    IntentionAnalysis,
+    IntentionAttachment,
+    IntentionEvent,
+    IntentionLink,
+)
 
 
 @dataclass(frozen=True)
@@ -53,6 +60,13 @@ class AnalysisBrief:
 
 class IntentionRepository(WorkspaceScopedRepository):
     """Reads and writes intentions, their history and their links."""
+
+    def attachments(self) -> AttachmentRepository:
+        """Its files, in the same transaction."""
+        return AttachmentRepository(self._session, self.workspace_id)
+
+    async def attachments_of(self, intention_id: uuid.UUID) -> Sequence[IntentionAttachment]:
+        return await self.attachments().of_intention(intention_id)
 
     async def intention(self, intention_id: uuid.UUID, *, lock: bool = False) -> Intention | None:
         """One intention — held until the transaction ends when it is about

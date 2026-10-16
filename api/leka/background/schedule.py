@@ -173,6 +173,8 @@ SCHEDULE: tuple[Scheduled, ...] = (
     # The AI credits (LEKA-430): each share of a month's credits passed, told
     # to the workspace's owners and admins — once.
     Scheduled("credit-watch", "leka.metering.credits.run_credit_watch", cron="3,18,33,48 * * * *"),
+    # Files uploaded for an intention never asked: removed after a day.
+    Scheduled("attachments-purge", "leka.intentions.attachments.run_purge", cron="40 * * * *"),
 )
 
 
