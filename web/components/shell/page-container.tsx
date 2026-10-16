@@ -33,20 +33,31 @@ interface PageHeaderProps {
   actions?: React.ReactNode;
 }
 
+/**
+ * The way back home, at the top left of every page but the home, as the
+ * sprint's mockups draw it (LEKA-455): no sidebar to find it in. A page that
+ * draws its own header puts it above (Agents et bundles, Activité, an
+ * element's page).
+ */
+export function BackHome({ className }: { className?: string }) {
+  const t = useDictionary();
+  return (
+    <Link
+      href={routes.overview()}
+      data-testid="back-home"
+      className={`inline-flex items-center gap-2 rounded-lg bg-shell-canvas px-3 py-1.5 text-sm text-shell-nav transition-colors outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40 ${className ?? "mb-4"}`}
+    >
+      <ArrowLeft className="rtl:-scale-x-100 size-4" aria-hidden="true" />
+      {t.shell.backHome}
+    </Link>
+  );
+}
+
 export function PageHeader({ title, subtitle, breadcrumb, actions }: PageHeaderProps) {
   const t = useDictionary();
   return (
     <div className="mb-6">
-      {/* Every page but the home, as the sprint's mockups draw it (LEKA-455):
-          the way back, no sidebar to find it in. */}
-      <Link
-        href={routes.overview()}
-        data-testid="back-home"
-        className="mb-4 inline-flex items-center gap-2 rounded-lg bg-shell-canvas px-3 py-1.5 text-sm text-shell-nav transition-colors outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
-      >
-        <ArrowLeft className="rtl:-scale-x-100 size-4" aria-hidden="true" />
-        {t.shell.backHome}
-      </Link>
+      <BackHome />
       {/* Deeper than a page of its own: where it sits, beside the way back. */}
       {breadcrumb && breadcrumb.length > 2 && (
         // Named in the page's language: a screen reader announcing
