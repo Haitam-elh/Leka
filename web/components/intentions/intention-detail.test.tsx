@@ -182,6 +182,10 @@ describe("an intention's page", () => {
     const [agent] = screen.getAllByTestId("detail-agent");
     expect(agent).toHaveTextContent("9 € / mois");
     expect(agent).not.toHaveTextContent("Inclus");
+    // Each paid line, which right it brings (LEKA-464).
+    const [planWhy, agentWhy] = screen.getAllByTestId("detail-line-why");
+    expect(planWhy).toHaveTextContent("Votre formule Free n'exécute pas d'agents spécialisés.");
+    expect(agentWhy).toHaveTextContent("Option mensuelle : non incluse dans la formule Starter.");
     expect(screen.getByTestId("detail-plan")).toHaveTextContent("Starter");
     const total = screen.getByTestId("detail-total");
     expect(total).toHaveTextContent("56,20 € / mois");
@@ -231,12 +235,54 @@ describe("an intention's page", () => {
     show();
     expect(screen.getByTestId("detail-leka")).toHaveTextContent("couvrent cette demande");
     expect(screen.getByTestId("detail-agent")).toHaveTextContent("Actif");
+    // LEKA-464: no price, no total, no checkout — said covered, launched.
+    const covered = screen.getByTestId("detail-covered");
+    expect(covered).toHaveTextContent("Votre formule Growth et vos agents couvrent cette demande");
+    expect(covered).toHaveTextContent(/Revue de code\s*— votre option active/);
+    expect(screen.queryByTestId("detail-offer")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("detail-total")).not.toBeInTheDocument();
     expect(screen.queryByTestId("detail-activate")).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("0 € / mois");
+    expect(document.body).not.toHaveTextContent("Stripe");
     await user.click(screen.getByTestId("detail-launch"));
     expect(launch).toHaveBeenCalledWith(
       [{ key: "code-review", inputs: {}, formats: [], sources: [] }],
       expect.anything(),
     );
+  });
+
+  it("an agent its plan includes: never offered for sale (LEKA-464)", () => {
+    offered.value = offer({
+      plan_now: "growth",
+      change_plan: false,
+      lines: [],
+      total_monthly: 0,
+      then_monthly: null,
+      ready: true,
+      agents: [{ ...offer().agents[0], status: "included" }],
+    });
+    show();
+    expect(screen.getByTestId("detail-covered")).toHaveTextContent(/Revue de code\s*— inclus dans votre formule/);
+    expect(screen.queryByTestId("detail-line")).not.toBeInTheDocument();
+  });
+
+  it("a specialised agent missing: its real price and why, before any consent (LEKA-464)", () => {
+    offered.value = offer({
+      plan_now: "growth",
+      change_plan: false,
+      plan: { ...offer().plan, key: "growth", name: "Growth" },
+      lines: [offer().lines[1]],
+      total_monthly: 900,
+      then_monthly: null,
+      ready: false,
+    });
+    show();
+    const [line] = screen.getAllByTestId("detail-line");
+    expect(line).toHaveTextContent("Revue de code");
+    expect(line).toHaveTextContent("9 € / mois");
+    expect(line).toHaveTextContent("Option mensuelle : non incluse dans la formule Growth.");
+    expect(screen.getByTestId("detail-total")).toHaveTextContent("Total mensuel (HT)");
+    expect(screen.queryByTestId("detail-covered")).not.toBeInTheDocument();
   });
 
   it("an agent still waiting on its information: completed first, never paid for to be refused", () => {
@@ -285,6 +331,10 @@ describe("an intention's page", () => {
     show();
     expect(screen.getByTestId("detail-leka")).toHaveTextContent("capacité IA de votre formule Starter est épuisée");
     expect(screen.getByTestId("detail-leka")).toHaveTextContent("rien n'est facturé en dépassement");
+    // The plan above, said why: never a launch nor an overage.
+    expect(screen.queryByTestId("detail-launch")).not.toBeInTheDocument();
+    const [plan] = screen.getAllByTestId("detail-line-why");
+    expect(plan).toHaveTextContent("La capacité IA de votre formule Starter est épuisée ce mois-ci.");
   });
 
   it("lays the plan out step by step, LEKA's own steps included", () => {

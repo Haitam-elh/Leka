@@ -142,12 +142,23 @@ export function IntentionDetailPage({ intention }: { intention: IntentionDetail 
           ) : offer.data && offer.data.agents.length ? (
             <>
               <CapacityCard offer={offer.data} />
+              {offer.data.ready ? (
+                // Everything covered (LEKA-464): launched as it is — no
+                // price, no total, no checkout.
+                <CoveredCard
+                  intention={intention}
+                  offer={offer.data}
+                  proposal={proposal?.agents ?? []}
+                  filesOf={filesOf}
+                />
+              ) : (
               <OfferCard
                 intention={intention}
                 offer={offer.data}
                 proposal={proposal?.agents ?? []}
                 filesOf={filesOf}
               />
+              )}
             </>
           ) : null}
         </div>
@@ -512,6 +523,95 @@ function CapacityCard({ offer }: { offer: IntentionOffer }) {
   );
 }
 
+/** The plan and the agents cover it (LEKA-464): said, each agent as it is
+ * had, and launched as it is — never a price, a total or a checkout. */
+function CoveredCard({
+  intention,
+  offer,
+  proposal,
+  filesOf,
+}: {
+  intention: IntentionDetail;
+  offer: IntentionOffer;
+  proposal: ProposedAgent[];
+  filesOf: (agent: ProposedAgent) => string[];
+}) {
+  const t = useDictionary();
+  const w = t.intentions.detail;
+  const router = useRouter();
+  const decide = useDecide(intention.id);
+  const chosen = proposal.filter((a) => offer.agents.some((o) => o.key === a.key && o.chosen));
+  const incomplete = chosen.some((a) => a.missing.length > 0);
+  const agents = offer.agents.filter((a) => a.chosen);
+
+  function launch() {
+    decide.launch.mutate(
+      chosen.map((a) => ({
+        key: a.key,
+        inputs: a.inputs,
+        formats: filesOf(a) as AgentLaunch["formats"],
+        sources: [],
+      })),
+      {
+        onSuccess: () => notify.success({ title: w.launched }),
+        onError: (error) => notify.error({ title: error instanceof ApiError ? error.message : w.failed }),
+      },
+    );
+  }
+
+  return (
+    <section
+      className="space-y-3 rounded-2xl bg-[#f0faf3] p-4 ring-1 ring-[#bfe5cb]"
+      aria-labelledby="detail-covered-title"
+      data-testid="detail-covered"
+    >
+      <h2 id="detail-covered-title" className="flex items-center gap-2.5 text-[1.0625rem] font-semibold text-brand-navy">
+        <CircleCheck className="size-5 text-[#15803d]" aria-hidden="true" />
+        {w.coveredBox.title}
+      </h2>
+      <p className="text-[0.875rem] text-brand-navy">
+        {fill(w.coveredBox.body, { plan: planLabel(offer.plan_now) })}
+      </p>
+      {agents.length ? (
+        <ul className="space-y-1" data-testid="detail-covered-agents">
+          {agents.map((agent) => (
+            <li key={agent.key} className="flex flex-wrap items-center gap-2 text-[0.8125rem] text-brand-navy">
+              <Check className="size-3.5 text-[#15803d]" aria-hidden="true" />
+              <span className="font-medium">{agent.title}</span>
+              <span className="text-shell-muted">
+                — {agent.status === "owned" ? w.coveredBox.owned : w.coveredBox.included}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-[0.8125rem] text-shell-muted">{w.coveredBox.leka}</p>
+      )}
+      {incomplete ? (
+        <Button
+          type="button"
+          className="w-full"
+          onClick={() => router.push(`${routes.intentions()}/${intention.id}/decision`)}
+          data-testid="detail-complete"
+        >
+          {w.complete}
+        </Button>
+      ) : (
+        <Button
+          type="button"
+          className="w-full"
+          disabled={decide.launch.isPending || !agents.length}
+          onClick={launch}
+          data-testid="detail-launch"
+        >
+          {w.launch}
+          <ArrowRight className="size-4 rtl:-scale-x-100" aria-hidden="true" />
+        </Button>
+      )}
+    </section>
+  );
+}
+
 function OfferCard({
   intention,
   offer,
@@ -672,13 +772,28 @@ function OfferCard({
           <p className="mb-2 text-[0.875rem] font-semibold text-brand-navy">{w.summary}</p>
           <ul className="grid gap-x-8 gap-y-1.5 @2xl:grid-cols-2">
             {offer.lines.map((line) => (
-              <li key={`${line.kind}:${line.key}`} className="flex items-center justify-between gap-2 text-[0.8125rem]">
-                <span className="text-brand-navy">
-                  {line.kind === "plan" ? fill(w.subscriptionLine, { plan: line.label }) : line.label}
-                </span>
-                <span className="font-semibold whitespace-nowrap text-brand-navy">
-                  {fill(w.perMonth, { price: euros(line.monthly_price, format) })}
-                </span>
+              <li key={`${line.kind}:${line.key}`} className="text-[0.8125rem]" data-testid="detail-line">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-brand-navy">
+                    {line.kind === "plan" ? fill(w.subscriptionLine, { plan: line.label }) : line.label}
+                  </span>
+                  <span className="font-semibold whitespace-nowrap text-brand-navy">
+                    {fill(w.perMonth, { price: euros(line.monthly_price, format) })}
+                  </span>
+                </div>
+                {/* Which right is missing, said beside what it costs (LEKA-464). */}
+                <p className="text-xs text-shell-muted" data-testid="detail-line-why">
+                  {line.kind === "plan"
+                    ? fill(
+                        offer.blocked === "credits_exhausted"
+                          ? w.why.planCredits
+                          : offer.plan_now === "free"
+                            ? w.why.planAgents
+                            : w.why.planCapacity,
+                        { plan: planLabel(offer.plan_now) },
+                      )
+                    : fill(w.why.agent, { plan: plan.name })}
+                </p>
               </li>
             ))}
           </ul>

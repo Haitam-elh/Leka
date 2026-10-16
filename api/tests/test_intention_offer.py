@@ -33,7 +33,7 @@ from pydantic import SecretStr
 from leka.api import add_ons as add_ons_api
 from leka.api import subscriptions as subscriptions_api
 from leka.billing import add_ons as billing_add_ons
-from leka.billing import end
+from leka.billing import end, grant
 from leka.billing import subscriptions as billing_subscriptions
 from leka.billing.entitlements import EVERY
 from leka.core.config import settings
@@ -53,7 +53,7 @@ from tests.test_billing_stripe import (
     stripe,
 )
 from tests.test_context_engine import model
-from tests.test_intention_agents import ARCHITECT, Gemini, _proposed, gemini, started
+from tests.test_intention_agents import ARCHITECT, LAUNCH, Gemini, _proposed, gemini, started
 from tests.test_intention_analysis_api import API, queued  # noqa: F401
 from tests.test_sources_api import _as, acme, fake_connector  # noqa: F401
 
@@ -323,3 +323,106 @@ async def test_the_month_spent_is_blocked_and_the_next_plan_offered_never_an_ove
     # sold apart.
     assert (said["change_plan"], said["plan"]["key"]) == (True, "growth")
     assert [line["kind"] for line in said["lines"]] == ["plan", "agent"]
+
+
+# ── LEKA-464: covered, nothing to buy; what is missing, said; the server's word ─
+
+
+@pytest.mark.parametrize(
+    ("plan", "status", "change", "kinds"),
+    [
+        ("free", "to_buy", True, ["plan", "agent"]),
+        ("starter", "to_buy", False, ["agent"]),
+        ("growth", "to_buy", False, ["agent"]),
+        # Karim's matrix: Business includes the architect; Enterprise every one.
+        ("business", "included", False, []),
+        ("enterprise", "included", False, []),
+    ],
+)
+async def test_each_plan_as_its_rights_say(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[tuple[uuid.UUID, str]],
+    gemini: Callable[..., Gemini],
+    started: list[uuid.UUID],
+    plan: str,
+    status: str,
+    change: bool,
+    kinds: list[str],
+) -> None:
+    await _ready(acme)
+    gemini()
+    _as(identity, acme, "member")
+    intention = await _proposed(client, acme)
+    await _on(acme["acme"], plan)
+    said = await _offer(client, intention["id"])
+    [agent] = said["agents"]
+    assert (agent["status"], said["change_plan"]) == (status, change)
+    assert [line["kind"] for line in said["lines"]] == kinds
+    # Nothing to buy: ready, and no price to show — never a 0 € to pay.
+    assert said["ready"] is (kinds == [])
+    if not kinds:
+        assert (said["total_monthly"], said["then_monthly"]) == (0, None)
+
+
+async def test_on_growth_owning_it_covered_launched_never_sold(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[tuple[uuid.UUID, str]],
+    gemini: Callable[..., Gemini],
+    started: list[uuid.UUID],
+) -> None:
+    await _ready(acme)
+    gemini()
+    _as(identity, acme, "member")
+    intention = await _proposed(client, acme)
+    await _on(acme["acme"], "growth")
+    with workspace_scope(acme["acme"]):
+        async with session_factory() as session:
+            await grant(
+                session, acme["acme"], key=ARCHITECT, kind="agent", by="tests", reason="bought"
+            )
+            await session.commit()
+    said = await _offer(client, intention["id"])
+    [agent] = said["agents"]
+    assert (agent["status"], said["ready"], said["lines"], said["total_monthly"]) == (
+        "owned",
+        True,
+        [],
+        0,
+    )
+    launched = await client.post(f"{API}/{intention['id']}/agents", json=LAUNCH)
+    assert launched.status_code == 200, launched.text
+    assert launched.json()["status"] == "executing"
+
+
+async def test_a_launch_its_rights_do_not_cover_is_refused_on_the_server(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[tuple[uuid.UUID, str]],
+    gemini: Callable[..., Gemini],
+    started: list[uuid.UUID],
+) -> None:
+    """Whatever a screen shows: an option not bought, a plan that runs no
+    agent — refused before anything starts."""
+    await _ready(acme)
+    gemini()
+    _as(identity, acme, "member")
+    intention = await _proposed(client, acme)
+    url = f"{API}/{intention['id']}/agents"
+    await _on(acme["acme"], "growth")
+    not_bought = await client.post(url, json=LAUNCH)
+    assert (not_bought.status_code, not_bought.json()["error"]["code"]) == (
+        422,
+        "agent_not_owned",
+    )
+    await _on(acme["acme"], "free")
+    on_free = await client.post(url, json=LAUNCH)
+    assert (on_free.status_code, on_free.json()["error"]["code"]) == (422, "plan_required")
+    assert started == []
