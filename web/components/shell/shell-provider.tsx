@@ -114,6 +114,30 @@ export function ShellProvider({ children }: { children: React.ReactNode }) {
     };
   }, [router, attempt, adopt, saved]);
 
+  // Another tab signed in as someone else, or moved the session to another
+  // workspace: the cookie is the browser's, so this tab's lists already read
+  // the new session under the old header (LEKA-469). Back on the tab, ask
+  // again; on a change, reload the whole tab, as switching workspace does.
+  const held = state.status === "ready" ? state.me : null;
+  useEffect(() => {
+    if (!held) return;
+    const check = () => {
+      if (document.visibilityState !== "visible") return;
+      auth
+        .me({ redirectOn401: false })
+        .then((now) => {
+          if (now.user.id !== held.user.id || now.active_workspace_id !== held.active_workspace_id) {
+            window.location.reload();
+          }
+        })
+        .catch((caught) => {
+          if (caught instanceof ApiError && caught.isUnauthenticated) window.location.reload();
+        });
+    };
+    document.addEventListener("visibilitychange", check);
+    return () => document.removeEventListener("visibilitychange", check);
+  }, [held]);
+
   // In place, not a reload: the greeting and the menu change with the
   // answer, and the page does not flash through its loading state.
   const updateUser = useCallback((user: CurrentUser["user"]) => {
