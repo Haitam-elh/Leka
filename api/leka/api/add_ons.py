@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, status
 
 from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
-from leka.api.subscriptions import _refused, _stripe_failed, _unavailable
+from leka.api.subscriptions import _locale, _refused, _stripe_failed, _unavailable
 from leka.billing import (
     AddOnCheckoutCreate,
     AddOnsRead,
@@ -180,6 +180,7 @@ async def buy_add_on(
             intention_id=body.intention_id,
             launch=body.launch,
             titles={k: _title(k) for k in body.key.split(",")} if body.kind == "agents" else None,
+            locale=await _locale(session, principal),
         )
     except BillingUnavailableError:
         raise _unavailable() from None

@@ -13,11 +13,18 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ConfirmProvider } from "@/components/interactions/confirm";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import { makeQueryClient } from "@/lib/query";
 import type { Pricing, Subscription } from "@/lib/subscription";
 
-const api = vi.hoisted(() => ({ read: vi.fn(), pricing: vi.fn(), checkout: vi.fn(), portal: vi.fn() }));
+const api = vi.hoisted(() => ({
+  read: vi.fn(),
+  pricing: vi.fn(),
+  checkout: vi.fn(),
+  portal: vi.fn(),
+  renewal: vi.fn(),
+}));
 const route = vi.hoisted(() => ({ search: "" }));
 vi.mock("@/lib/subscription", async (original) => ({
   ...(await original<typeof import("@/lib/subscription")>()),
@@ -105,7 +112,9 @@ function show() {
   return render(
     <QueryClientProvider client={makeQueryClient()}>
       <LocaleProvider>
-        <SubscriptionSection />
+        <ConfirmProvider>
+          <SubscriptionSection />
+        </ConfirmProvider>
       </LocaleProvider>
     </QueryClientProvider>,
   );
@@ -170,8 +179,39 @@ describe("your plan", () => {
     expect(subscribed).toHaveTextContent("Formule Growth, facturation mensuelle.");
     expect(subscribed).toHaveTextContent("Prochain renouvellement le 10 novembre 2026.");
     expect(within(subscribed).getByRole("alert")).toHaveTextContent("Stripe réessaie");
-    await user.click(within(subscribed).getByRole("button", { name: "Gérer l'abonnement" }));
+    await user.click(within(subscribed).getByRole("button", { name: "Carte et factures" }));
     await waitFor(() => expect(api.portal).toHaveBeenCalled());
+  });
+
+  it("stops the renewal in plain words, its end date said, and renews again", async () => {
+    // 2026-10-14: Stripe's « Cancel subscription », in English, only stopped
+    // the renewal.
+    const active = account({
+      plan: "growth",
+      interval: "month",
+      status: "active",
+      current_period_end: "2026-11-10T00:00:00Z",
+      has_customer: true,
+    });
+    api.read.mockResolvedValue(active);
+    api.renewal.mockResolvedValue({ ...active, cancel_at_period_end: true });
+    const user = userEvent.setup();
+    show();
+    const subscribed = await screen.findByTestId("billing-subscribed");
+    await user.click(within(subscribed).getByTestId("billing-stop-renewal"));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("Votre formule reste active jusqu'au 10 novembre 2026");
+    await user.click(within(dialog).getByRole("button", { name: "Ne pas renouveler" }));
+    await waitFor(() => expect(api.renewal).toHaveBeenCalledWith(false));
+    expect(await screen.findByTestId("billing-renew")).toHaveTextContent(
+      "Réactiver le renouvellement",
+    );
+    expect(subscribed).toHaveTextContent(
+      "Ne sera pas renouvelée : votre formule reste active jusqu'au 10 novembre 2026",
+    );
+    api.renewal.mockResolvedValue(active);
+    await user.click(screen.getByTestId("billing-renew"));
+    await waitFor(() => expect(api.renewal).toHaveBeenCalledWith(true));
   });
 
   it("back from Stripe, says what happened", async () => {

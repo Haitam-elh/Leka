@@ -24,4 +24,10 @@ export const subscription = {
       ),
     }),
   portal: () => apiFetch<{ url: string }>("/billing/portal", { method: "POST" }),
+  /** « Ne pas renouveler » / « Réactiver le renouvellement » (2026-10-14). */
+  renewal: (renew: boolean) =>
+    apiFetch<Subscription>("/billing/subscription/renewal", {
+      method: "POST",
+      body: JSON.stringify({ renew }),
+    }),
 };
