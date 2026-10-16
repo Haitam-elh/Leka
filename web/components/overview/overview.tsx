@@ -698,7 +698,11 @@ export function Overview() {
     <PageContainer>
       {/* The sprint's mockup (LEKA-456): the question, « Mon environnement »
           beside it; the agents, the bundles, the latest analyses; then what
-          the home already said — nothing lost. */}
+          the home already said — nothing lost. The first steps stay above the
+          question (LEKA-445): below the agents, a newcomer never saw them. */}
+      {load.status === "ready" ? (
+        <FirstStepsCard sources={load.sources} />
+      ) : null}
       <div className="grid items-start gap-8 pt-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <CompactIntentionComposer />
         <EnvironmentCard />
@@ -709,9 +713,6 @@ export function Overview() {
       <div className="mt-10">
         <Greeting load={load} />
       </div>
-      {load.status === "ready" ? (
-        <FirstStepsCard sources={load.sources} />
-      ) : null}
       <div
         className="mt-4 grid gap-4 xl:grid-cols-3"
         data-testid="overview-now"

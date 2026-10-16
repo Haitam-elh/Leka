@@ -94,6 +94,11 @@ vi.mock("@/components/intentions/compact-composer", () => ({
   CompactIntentionComposer: () => <div data-testid="composer" />,
 }));
 
+// So has the first-steps card (first-steps.test.tsx): here, its place.
+vi.mock("@/components/overview/first-steps", () => ({
+  FirstStepsCard: () => <div data-testid="first-steps" />,
+}));
+
 // The card has its own tests (leka-insights.test.tsx); here it is only a
 // place on the page.
 vi.mock("@/components/insights/leka-insights", () => ({
@@ -486,6 +491,9 @@ describe("the overview", () => {
 
     expect(await screen.findByText("Connectez une première source pour commencer.")).toBeVisible();
     expect(screen.getByText("Aucune source connectée pour l'instant.")).toBeVisible();
+    // The first steps above the question, where a newcomer looks (LEKA-445).
+    const steps = await screen.findByTestId("first-steps");
+    expect(steps.compareDocumentPosition(screen.getByTestId("composer")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("lists what LEKA proposes, waiting on someone, each leading to it", async () => {
