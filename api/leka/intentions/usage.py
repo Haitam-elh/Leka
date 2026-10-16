@@ -23,7 +23,9 @@ from leka.intentions.models import Intention, IntentionAnalysis, IntentionPlan
 from leka.knowledge import Entity
 from leka.platform import Membership
 
-CONNECTED = (SourceStatus.ACTIVE, SourceStatus.DEGRADED)
+# As the home and Sources count them (web/lib/sources.ts isConnected): one in
+# error is still connected — its failure is said beside it, not hidden by the count.
+CONNECTED = (SourceStatus.ACTIVE, SourceStatus.DEGRADED, SourceStatus.ERROR)
 
 # A step that ran: it succeeded, or it did not.
 RAN = frozenset({"succeeded", "failed", "timed_out"})
