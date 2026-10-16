@@ -14,6 +14,7 @@ import {
   dateOf,
   type Item,
   items as itemsOf,
+  sureWord,
   wordItem,
 } from "@/components/approvals/items";
 import { FAMILY_ICON, ItemBadge } from "@/components/approvals/parts";
@@ -360,7 +361,7 @@ function Chip({
 function sureness(t: Dictionary, item: Item): { value: number; said: string } {
   if (item.kind === "decision") return { value: 0, said: "—" };
   if (item.kind === "candidate") {
-    return { value: item.data.confidence, said: `${Math.round(item.data.confidence * 100)} %` };
+    return { value: item.data.confidence, said: sureWord(t, item.data.confidence) };
   }
   const recommendation = item.data.recommendation;
   const strength = (t.approvals.conflict.strength as Record<string, string>)[recommendation.strength];

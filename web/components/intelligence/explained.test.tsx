@@ -281,14 +281,14 @@ describe("an analysis, explained (LEKA-441)", () => {
           { status: "failed", findings: [], causes: [], missing: ["Changements n'a pas abouti."] },
           {
             confidence: { level: "unknown", reasons: [] },
-            next: { code: "rerun", title: "Relancer l'analyse.", why: "Aucune capacité n'a répondu." },
+            next: { code: "rerun", title: "Relancer l'analyse.", why: "Aucune compétence n'a répondu." },
           },
         )}
       />,
     );
     const next = screen.getByTestId("analysis-next");
     expect(next).toHaveAttribute("data-code", "rerun");
-    expect(next).toHaveTextContent("Aucune capacité n'a répondu.");
+    expect(next).toHaveTextContent("Aucune compétence n'a répondu.");
     expect(screen.queryByTestId("analysis-summary")).not.toBeInTheDocument();
   });
 

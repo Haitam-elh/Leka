@@ -17,12 +17,12 @@ const ZONES = [
   ["/intentions/new", "intention-new", "Nouvelle intention"],
   ["/intentions", "intentions", "Intentions"],
   ["/environment", "environment-overview", "Mon environnement"],
-  ["/capabilities", "capabilities-available", "Capacités"],
+  ["/capabilities", "capabilities-available", "Compétences"],
   ["/activity", "activity", "Activité"],
   ["/approvals", "approvals", "À valider"],
   ["/sources", "sources", "Sources"],
-  ["/governance", "governance", "Sécurité & gouvernance"],
-  ["/team", "team", "Équipe & accès"],
+  ["/governance", "governance", "Sécurité"],
+  ["/team", "team", "Équipe"],
   ["/billing", "billing", "Facturation"],
   ["/settings", "settings", "Paramètres"],
 ] as const;
@@ -88,7 +88,7 @@ test.describe("the information architecture", () => {
     await expect(page.getByTestId("tab-evidence")).toHaveAttribute("aria-current", "page");
   });
 
-  test("opens Sécurité & gouvernance on who may do what, and the trail of decisions", async ({
+  test("opens Sécurité on who may do what, and the trail of decisions", async ({
     page,
   }) => {
     await signIn(page);

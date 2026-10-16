@@ -62,7 +62,7 @@ test.describe("À valider", () => {
     // Accepted: kept, applied by the model's next build.
     await panel.getByRole("button", { name: "Valider" }).click();
     await expect(panel.getByTestId("candidate-status")).toHaveText("Validé");
-    await expect(panel).toContainText("Appliqué au modèle à sa prochaine construction.");
+    await expect(panel).toContainText("Pris en compte à la prochaine mise à jour de votre environnement.");
 
     // Rejected, with why: withdrawn from the model.
     await panel.getByRole("button", { name: "Refuser" }).click();
@@ -74,7 +74,7 @@ test.describe("À valider", () => {
     await expect(panel.getByTestId("candidate-history")).toContainText("« Le DBA en est responsable »");
 
     // Sent back to its analysis: waiting again.
-    await panel.getByRole("button", { name: "Retraiter" }).click();
+    await panel.getByRole("button", { name: "Revérifier" }).click();
     await expect(panel.getByTestId("candidate-status")).toHaveText("À valider");
   });
 
@@ -84,7 +84,7 @@ test.describe("À valider", () => {
 
     await page.getByRole("table").getByText("SLA de payment-api : 99.95 ou 99.9").click();
     const panel = page.getByTestId("conflict-panel");
-    await expect(panel).toContainText("Le modèle affiche 99.95");
+    await expect(panel).toContainText("LEKA retient aujourd'hui 99.95");
     const sides = panel.getByTestId("conflict-sides");
     await expect(sides).toContainText("acme/backend");
     await expect(sides).toContainText("Recommandé");
