@@ -94,6 +94,27 @@ The list can be filtered by state, and sorted.
   - on a paid plan: each alert gives what is wrong, how sure, since when, when it was last seen, and the way to analyse it. Alerts that ended in the last 7 days show what verified them;
   - on Free: « La surveillance proactive n'est pas incluse dans votre plan », then what the plan does show and the plan that includes alerts. **Never an alert simulated, never a state hidden.**
 
+### The environment's health: one rule for both screens (LEKA-468)
+
+The overview's « Mon environnement » card and the page's « État global » read the same function, `overallOf` (web/lib/twin.ts), on the same response (`GET /ingestion/enrichment/environment`, field `states`). Before, the overview counted services only, from their older status, and said « 100 % — Stable » while the page counted 67 % opérationnel with 5 unknown and 1 not covered.
+
+- **What is counted**: every thing with a twin state — services, databases, cloud resources (`twin.HAS_STATE`). The denominator is all of them, whatever their state.
+- **The share**: opérationnel ÷ total. The same figure on both screens.
+- **The word**, the first rule that holds:
+
+| Word | When |
+|---|---|
+| Non vérifié | no source connected, or nothing with a state yet |
+| Non vérifié — « Vos sources n'ont pas été lues récemment » | the last read is late (more than 2 h: `LATE_AFTER`) |
+| Incident en cours | an open incident, or a thing unavailable or degraded — « N incidents ouverts », else « N éléments dégradés ou indisponibles » |
+| Partiellement vérifié — « État connu pour K éléments sur N » | something stale, unknown or not covered |
+| Stable — « Aucun incident détecté » | every thing operational, read on time |
+
+- **Unknown, not covered and stale never disappear**: each one moves the word to « Partiellement vérifié » at best, and lowers the share. « Aucun incident détecté » is said only under « Stable ».
+- **A collection error**: the things a failing source shows go stale (`twin.py`), so the word is « Partiellement vérifié » at best; the source itself is said « En échec » with its error.
+- **Freshness, next to the measure**: « Dernière synchronisation » with its time, and « Sources lues toutes les 60 min — pas en temps réel » under it — the same sentence as the page.
+- Tests: `web/lib/twin.test.ts` (the rule), `web/components/overview/home-sections.test.tsx` (the card, the ticket's 67 % case).
+
 ## 4. Validation scenarios, with representative data
 
 | Scenario | Data | Expected | Test |

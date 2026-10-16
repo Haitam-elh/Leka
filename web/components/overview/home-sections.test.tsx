@@ -24,36 +24,48 @@ vi.mock("@/components/intentions/intentions-list", () => ({
   StatusPill: ({ status }: { status: string }) => <span>{status}</span>,
 }));
 
-const { AgentsSection, BundlesBanner, EnvironmentCard, LatestAnalyses, healthOf } = await import(
+const { AgentsSection, BundlesBanner, EnvironmentCard, LatestAnalyses } = await import(
   "@/components/overview/home-sections"
 );
 
 const show = (node: React.ReactNode) => render(<LocaleProvider>{node}</LocaleProvider>);
+const none = { unavailable: 0, degraded: 0, stale: 0, unknown: 0, not_covered: 0, operational: 0 };
 const measured = {
   services: 12,
   services_operational: 12,
   services_unknown: 0,
   incidents_open: 0,
+  states: { ...none, operational: 15 },
   sources: [{}, {}, {}],
-  freshness: { late: false, last_read_at: new Date().toISOString() },
+  freshness: { late: false, last_read_at: new Date().toISOString(), every_minutes: 60 },
 };
 
 describe("Mon environnement", () => {
-  it("says Stable only when every service is measured, fresh, with no incident", () => {
-    expect(healthOf(measured)).toBe("stable");
-    expect(healthOf({ ...measured, sources: [] })).toBe("unknown");
-    expect(healthOf({ ...measured, services: 0 })).toBe("unknown");
-    expect(healthOf({ ...measured, freshness: { late: true } })).toBe("stale");
-    expect(healthOf({ ...measured, incidents_open: 1 })).toBe("incident");
-    expect(healthOf({ ...measured, services_unknown: 2 })).toBe("partial");
-  });
-
   it("shows the measure, the sources, the services", () => {
     env.data = measured;
     show(<EnvironmentCard />);
     expect(screen.getByTestId("home-health")).toHaveTextContent("Stable");
     expect(screen.getByTestId("home-environment")).toHaveTextContent("100 %");
     expect(screen.getByTestId("home-environment")).toHaveTextContent("3sources connectées");
+    expect(screen.getByTestId("home-cadence")).toHaveTextContent("Sources lues toutes les 60 min — pas en temps réel");
+  });
+
+  it("says what the page says (LEKA-468): its services operational, the rest unknown, never « 100 % Stable »", () => {
+    // The ticket's workspace: every service operational, yet the page counts
+    // 67 % — databases and resources unknown, one not covered.
+    env.data = { ...measured, services: 3, services_operational: 3, states: { ...none, operational: 12, unknown: 5, not_covered: 1 } };
+    show(<EnvironmentCard />);
+    expect(screen.getByTestId("home-health")).toHaveTextContent("Partiellement vérifié");
+    expect(screen.getByTestId("home-environment")).toHaveTextContent("67 %");
+    expect(screen.getByTestId("home-environment")).toHaveTextContent("État connu pour 12 éléments sur 18");
+    expect(screen.getByTestId("home-environment")).not.toHaveTextContent("Aucun incident détecté");
+  });
+
+  it("calls a degraded thing trouble even without an open incident", () => {
+    env.data = { ...measured, states: { ...none, operational: 9, degraded: 1 } };
+    show(<EnvironmentCard />);
+    expect(screen.getByTestId("home-health")).toHaveTextContent("Incident en cours");
+    expect(screen.getByTestId("home-environment")).toHaveTextContent("1 élément dégradé ou indisponible");
   });
 
   it("never claims a figure it does not have", () => {

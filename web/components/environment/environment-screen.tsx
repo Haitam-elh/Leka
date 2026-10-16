@@ -63,7 +63,7 @@ import {
 import { ENVIRONMENT_VIEWS, routes } from "@/config/routes";
 import type { Environment, EnvironmentStatus } from "@/lib/environment";
 import { useEnvironment, useMonitoring } from "@/lib/environment-queries";
-import { type TwinStateName, twinOf, withTwin } from "@/lib/twin";
+import { overallOf, type TwinStateName, twinOf, withTwin } from "@/lib/twin";
 import {
   AlertsCard,
   FreshnessLine,
@@ -370,8 +370,9 @@ function Overall({
   const t = useDictionary();
   const w = t.environment.overall;
   const { format: locale } = useLocale();
-  const total = Object.values(states).reduce((sum, n) => sum + n, 0);
-  const share = total ? (states.operational ?? 0) / total : 0;
+  // The overview's « Mon environnement » reads the same rule (LEKA-468).
+  const { total, share: counted } = overallOf({ states });
+  const share = counted ?? 0;
   return (
     <Card title={w.title}>
       <div className="flex flex-wrap items-center gap-4" data-testid="overall">

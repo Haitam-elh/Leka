@@ -29,6 +29,7 @@ import { useDictionary } from "@/lib/i18n/locale-provider";
 import { useIntentions } from "@/lib/intentions/queries";
 import { isConnected } from "@/lib/sources";
 import { useSources } from "@/lib/sources-queries";
+import { type Health, overallOf } from "@/lib/twin";
 
 /**
  * The home's blocks of the sprint's mockup (LEKA-456): « Mon environnement »
@@ -43,22 +44,6 @@ const LINK =
   "inline-flex items-center gap-1.5 rounded text-sm font-medium text-brand-violet outline-none hover:underline focus-visible:ring-3 focus-visible:ring-brand-violet/40";
 
 /** The state the environment card may claim, from what is measured. */
-export type Health = "unknown" | "stale" | "incident" | "partial" | "stable";
-
-export function healthOf(env: {
-  services: number;
-  services_unknown?: number;
-  incidents_open: number;
-  sources?: readonly unknown[];
-  freshness?: { late: boolean } | null;
-}): Health {
-  if (!env.sources?.length || env.services === 0) return "unknown";
-  if (env.freshness?.late) return "stale";
-  if (env.incidents_open > 0) return "incident";
-  if ((env.services_unknown ?? 0) > 0) return "partial";
-  return "stable";
-}
-
 const RING: Record<Health, string> = {
   unknown: "text-shell-line",
   stale: "text-state-warning",
@@ -83,12 +68,11 @@ export function EnvironmentCard() {
       />
     );
   }
-  const health = healthOf(env);
-  const known = env.services - (env.services_unknown ?? 0);
+  // The page's own rule (LEKA-468): the same figure on both screens.
+  const overall = overallOf(env);
+  const { health } = overall;
   const percent =
-    env.services > 0 && health !== "unknown"
-      ? Math.round((env.services_operational / env.services) * 100)
-      : null;
+    overall.share !== null && health !== "unknown" ? Math.round(overall.share * 100) : null;
   const last = env.freshness?.last_read_at;
   return (
     <section
@@ -154,9 +138,11 @@ export function EnvironmentCard() {
           </p>
           <p className="mt-1 text-[0.8125rem] text-shell-muted">
             {health === "incident"
-              ? fill(w.incidents, { count: env.incidents_open })
+              ? env.incidents_open > 0
+                ? fill(w.incidents, { count: env.incidents_open })
+                : fill(w.troubled, { count: overall.troubled })
               : health === "partial"
-                ? fill(w.measured, { known, total: env.services })
+                ? fill(w.measured, { known: overall.known, total: overall.total })
                 : w.healthHint[health]}
           </p>
         </div>
@@ -195,6 +181,12 @@ export function EnvironmentCard() {
           <dt className="text-xs text-shell-muted">{w.services}</dt>
         </div>
       </dl>
+      {env.freshness ? (
+        // Read every hour, not live: said where the measure is (LEKA-468).
+        <p className="mt-3 text-center text-[0.6875rem] text-shell-muted" data-testid="home-cadence">
+          {fill(t.environment.twin.freshness.every, { minutes: env.freshness.every_minutes })}
+        </p>
+      ) : null}
     </section>
   );
 }
