@@ -81,7 +81,7 @@ import { useEntitySheet } from "@/lib/environment-queries";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 import { buildBreadcrumb } from "@/lib/navigation/breadcrumb";
-import { useNamePage } from "@/lib/navigation/page-name";
+import { useNamePage, usePageName } from "@/lib/navigation/page-name";
 import { matchRoute } from "@/lib/navigation/active";
 import { notify } from "@/lib/notify";
 
@@ -143,7 +143,10 @@ export function EntitySheetScreen() {
   const id = params.entityId ?? "";
   const sheet = useEntitySheet(id);
   const model = useSheetModel(sheet.data);
-  const crumbs = buildBreadcrumb(pathname, t, model ? () => model.name : undefined);
+  // A removed thing has no sheet: its name comes from its history (RemovedEntity).
+  const published = usePageName(pathname);
+  const named = model?.name ?? published;
+  const crumbs = buildBreadcrumb(pathname, t, named ? () => named : undefined);
   useNamePage(pathname, model?.name);
   const tab = matchRoute(pathname)?.tab ?? "overview";
   const missing =
