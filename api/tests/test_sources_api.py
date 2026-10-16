@@ -31,6 +31,7 @@ from leka.connectors import (
     DiagnosticCode,
     HealthResult,
     HealthStatus,
+    Source,
     SourceCredential,
     SourceEvent,
     SourceKind,
@@ -39,7 +40,7 @@ from leka.connectors import (
     unregister_connector,
 )
 from leka.connectors.postgresql import PostgreSQLConnector
-from leka.db import session_factory, system_scope
+from leka.db import session_factory, system_scope, workspace_scope
 from leka.main import app
 from leka.platform import secret_box
 from tests.conftest import FakeIdentity, error_code
@@ -288,6 +289,33 @@ async def test_a_source_goes_through_its_whole_lifecycle(
             )
     assert last == "deleted"
     assert credentials is None
+
+
+async def test_a_passed_test_clears_a_stale_unhealthy(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    # LEKA-469: new credentials tested fine, yet « En panne » stayed until
+    # the next scheduled check.
+    _as(identity, acme, "admin")
+    source = await _create(client)
+    url = f"{API}/sources/{source['id']}"
+    await client.post(f"{url}/test")
+    await client.post(f"{url}/activate")
+    with workspace_scope(acme["acme"]):
+        async with session_factory() as session:
+            row = await session.get(Source, uuid.UUID(source["id"]))
+            assert row is not None
+            row.health_status = HealthStatus.UNHEALTHY
+            await session.commit()
+
+    tested = (await client.post(f"{url}/test")).json()
+    assert tested["ok"] is True
+    assert tested["source"]["health_status"] == "healthy"
+    events = (await client.get(f"{url}/events", params={"limit": 50})).json()["data"]
+    assert any(
+        event["type"] == "health_changed" and event["payload"].get("current") == "healthy"
+        for event in events
+    )
 
 
 async def test_new_settings_take_back_the_activation(
