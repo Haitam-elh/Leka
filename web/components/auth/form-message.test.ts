@@ -27,6 +27,12 @@ describe("the sign-in screens' error messages", () => {
     expect(authErrorMessage(fr, error, true)).toBe(expected);
   });
 
+  it("says how long to wait when the API says it, in minutes", () => {
+    const error = new ApiError(429, "/auth/register", "Too many attempts. Wait 3170 seconds and try again.", "rate_limited");
+
+    expect(authErrorMessage(fr, error, true)).toBe("Trop de tentatives depuis ce réseau. Réessayez dans 53 min.");
+  });
+
   it("never quotes an API it could not reach", () => {
     const error = new ApiError(0, "/auth/login", "Cannot reach the API at http://localhost:8000");
 

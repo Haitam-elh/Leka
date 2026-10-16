@@ -7785,6 +7785,8 @@ const fr = {
         "Confirmez votre adresse e-mail avant de vous connecter. Consultez votre boîte de réception : nous pouvons renvoyer un lien.",
       rateLimited:
         "Trop de tentatives. Patientez quelques minutes avant de réessayer.",
+      rateLimitedFor:
+        "Trop de tentatives depuis ce réseau. Réessayez dans {minutes} min.",
       tokenInvalid: "Ce lien n'est plus valable. Demandez-en un nouveau.",
       passwordTooShort:
         "Ce mot de passe est trop court : au moins {min} caractères.",
@@ -15329,6 +15331,8 @@ const en: Dictionary = {
       accountUnverified:
         "Confirm your email address before signing in. Check your inbox — we can send another link.",
       rateLimited: "Too many attempts. Wait a few minutes before trying again.",
+      rateLimitedFor:
+        "Too many attempts from this network. Try again in {minutes} min.",
       tokenInvalid: "This link is no longer valid. Ask for a new one.",
       passwordTooShort:
         "This password is too short: at least {min} characters.",
