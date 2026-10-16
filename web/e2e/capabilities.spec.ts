@@ -57,6 +57,9 @@ test.describe("Capabilities", () => {
     await architect.getByRole("link", { name: "Architecte applicatif" }).click();
     await expect(page).toHaveURL(/\/capabilities\/application-architecture$/);
     const sheet = page.getByTestId("capability");
+    // Its product page (LEKA-471), the registry's details folded under it.
+    await expect(sheet).toHaveAttribute("data-page", "product");
+    await sheet.getByTestId("agent-technical").getByText("Détails techniques").click();
     await expect(sheet.getByTestId("capability-inputs")).toContainText("parcours");
     await expect(sheet.getByTestId("capability-formats")).toContainText("PDF");
     await expect(sheet.getByTestId("capability-versions")).toContainText("v19.1.0");

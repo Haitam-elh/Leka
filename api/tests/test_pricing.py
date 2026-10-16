@@ -89,6 +89,18 @@ def test_the_catalogue_lekas_ships_is_whole() -> None:
         "change-impact-analysis",
     }
     assert sold_.included_in("business") == set(sold_.agents) - later
+    # Each agent, the least plan that includes it.
+    assert [
+        sold_.included_from(k)
+        for k in ("code-review", "debug-assistant", "security-review", "design-review")
+    ] == ["starter", "growth", "business", "enterprise"]
+    assert {sold_.included_from(k) for k in sold_.agents} == {
+        "starter",
+        "growth",
+        "business",
+        "enterprise",
+    }
+    assert sold_.included_from("ghost") is None
     assert "core_agents" not in _raw()
     assert [p.key for p in offer.plans if p.own_llm] == ["enterprise"]
     assert all(p.managed_llm for p in offer.plans)

@@ -52,6 +52,8 @@ test.describe("the core screens", () => {
     "/environment",
     "/environment/graph",
     "/governance",
+    // An agent's product page (LEKA-471).
+    "/capabilities/application-architecture",
   ]) {
     test(`${path} has no violation a machine can see`, async ({ page }) => {
       await signIn(page);
@@ -64,6 +66,17 @@ test.describe("the core screens", () => {
 });
 
 test.describe("what a screen opens", () => {
+  test("an agent's product page, a question of its FAQ and its technical details open", async ({ page }) => {
+    await signIn(page);
+    await page.goto("/capabilities/code-review#faq");
+    await page.getByTestId("agent-faq-list").getByText("Peut-il modifier mes systèmes ?").click();
+    await expect(page.getByText("Non. Il travaille en lecture seule et ne déclenche rien.")).toBeVisible();
+    await page.getByTestId("agent-technical").getByText("Détails techniques").click();
+    await expect(page.getByTestId("capability-technical")).toBeVisible();
+
+    await expectNoViolations(page);
+  });
+
   test("an entity's context, assembled, an element's provenance and the left out open", async ({
     page,
   }) => {
