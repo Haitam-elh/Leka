@@ -59,7 +59,10 @@ export function EnvironmentCard() {
   const w = t.overview.home;
   const env = useEnvironment().data;
   // Connected only, as Sources counts them: a draft whose token was refused is not.
-  const connected = useSources().data?.filter(isConnected).length;
+  const sources = useSources().data;
+  const connected = sources?.filter(isConnected).length;
+  // Counted connected, as on Sources — but said, as Mon environnement says it.
+  const failing = sources?.filter((source) => source.status === "error").length ?? 0;
   if (!env) {
     return (
       <div
@@ -181,6 +184,15 @@ export function EnvironmentCard() {
           <dt className="text-xs text-shell-muted">{w.services}</dt>
         </div>
       </dl>
+      {failing > 0 ? (
+        <Link
+          href={routes.sources()}
+          className="mt-3 block rounded text-center text-xs font-medium text-state-danger outline-none hover:underline focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+          data-testid="home-sources-failing"
+        >
+          {fill(w.sourcesFailing, { count: failing })}
+        </Link>
+      ) : null}
       {env.freshness ? (
         // Read every hour, not live: said where the measure is (LEKA-468).
         <p className="mt-3 text-center text-[0.6875rem] text-shell-muted" data-testid="home-cadence">

@@ -82,6 +82,16 @@ describe("Mon environnement", () => {
     expect(screen.getByTestId("home-environment")).toHaveTextContent("1source connectée");
     listed.data = undefined;
   });
+
+  it("says a source in error, as Mon environnement does, and leads to Sources", () => {
+    env.data = measured;
+    listed.data = [{ status: "error" }];
+    show(<EnvironmentCard />);
+    expect(screen.getByTestId("home-environment")).toHaveTextContent("1source connectée");
+    expect(screen.getByTestId("home-sources-failing")).toHaveTextContent("1 source en erreur — voir les sources");
+    expect(screen.getByTestId("home-sources-failing")).toHaveAttribute("href", "/sources");
+    listed.data = undefined;
+  });
 });
 
 describe("what is on sale", () => {
