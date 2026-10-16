@@ -135,7 +135,8 @@ export function RecommendationCard({
         <IconTile icon={icon} tone={tone} className={compact ? "size-9" : "size-12"} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
-            <Heading className="min-w-0 flex-1 text-[0.9375rem] font-semibold text-brand-navy">
+            {/* Never squeezed beside its pill: under 12rem the pill goes under. */}
+            <Heading className="min-w-0 flex-[1_1_12rem] text-[0.9375rem] font-semibold text-brand-navy">
               {recommendation.title}
             </Heading>
             {priority ? (

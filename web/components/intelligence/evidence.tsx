@@ -154,7 +154,7 @@ function EvidenceItem({ item }: { item: EvidenceRef }) {
   const details = useId();
   const sub = subline(item);
   return (
-    <li className="py-2.5 text-[0.8125rem]" data-testid="evidence-item">
+    <li className="@container py-2.5 text-[0.8125rem]" data-testid="evidence-item">
       <div className="flex items-center gap-3">
         <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-shell-canvas">
           <Mark item={item} className="size-5" />
@@ -164,7 +164,7 @@ function EvidenceItem({ item }: { item: EvidenceRef }) {
           {sub ? <span className="block truncate text-xs text-shell-muted">{sub}</span> : null}
         </span>
         {item.at ? (
-          <time className="hidden shrink-0 text-xs text-shell-muted sm:block" dateTime={item.at}>
+          <time className="hidden shrink-0 text-xs text-shell-muted @md:block" dateTime={item.at}>
             {timeAgo(t, item.at)}
           </time>
         ) : null}
@@ -183,7 +183,7 @@ function EvidenceItem({ item }: { item: EvidenceRef }) {
       {open ? (
         <dl
           id={details}
-          className="mt-2 ms-12 grid gap-x-3 gap-y-1 rounded-md bg-shell-canvas p-2 text-xs sm:grid-cols-[8rem_minmax(0,1fr)]"
+          className="mt-2 ms-12 grid gap-x-3 gap-y-1 rounded-md bg-shell-canvas p-2 text-xs @md:grid-cols-[8rem_minmax(0,1fr)]"
           data-testid="evidence-detail"
         >
           <dt className="text-shell-muted">{w.kind}</dt>

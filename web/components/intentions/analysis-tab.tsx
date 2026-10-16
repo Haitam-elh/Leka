@@ -634,7 +634,9 @@ function AnswerSaid({ answer }: { answer: AnalysisAnswer }) {
               className="flex flex-wrap items-baseline gap-2"
               data-testid="answer-point"
             >
-              <span className="min-w-0 flex-1" dir="auto">
+              {/* Its words first, never squeezed beside the pill: under 16rem
+                  the pill goes under them. */}
+              <span className="min-w-0 flex-[1_1_16rem]" dir="auto">
                 {point.text}
               </span>
               <Pill tone="neutral">

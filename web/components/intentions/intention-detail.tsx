@@ -115,7 +115,9 @@ export function IntentionDetailPage({ intention }: { intention: IntentionDetail 
         {w.back}
       </Link>
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] xl:items-start">
-        <div className="min-w-0 space-y-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-shell-line">
+        {/* Laid out by the room each column has, not the screen's (container
+            queries): the same blocks read well beside a panel, on a phone. */}
+        <div className="@container min-w-0 space-y-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-shell-line">
           <Exchange intention={intention} offer={offer.data} hasProposal={Boolean(proposal)} />
           <UnderstandingCard intention={intention} offer={offer.data} chosen={chosen} onChoose={setChosen} />
           {executing ? (
@@ -272,7 +274,7 @@ function UnderstandingCard({
         <Target className="size-5 text-[#f97316]" aria-hidden="true" />
         {w.understanding}
       </h2>
-      <div className="grid gap-3 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+      <div className="grid gap-3 @xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <div className="rounded-xl bg-shell-canvas px-4 py-3">
           <p className="text-[0.8125rem] font-semibold text-brand-navy">{w.objective}</p>
           <p className="mt-1 text-[0.8125rem] text-shell-muted" dir="auto">
@@ -310,7 +312,7 @@ function UnderstandingCard({
               </span>
             ) : null}
           </div>
-          <ul className="grid gap-3 sm:grid-cols-2 min-[1800px]:grid-cols-4">
+          <ul className="grid gap-3 @lg:grid-cols-2 @6xl:grid-cols-4">
             {agents.map((agent) => (
               <AgentCard
                 key={agent.key}
@@ -564,7 +566,7 @@ function OfferCard({
           </span>
         ) : null}
       </h2>
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+      <div className="grid gap-4 @3xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
         <div className="relative rounded-xl px-4 pt-6 pb-4 ring-1 ring-brand-violet/40" data-testid="detail-plan">
           {offer.change_plan ? (
             <span className="absolute -top-3 left-4 rounded-md bg-brand-violet px-2.5 py-0.5 text-xs font-semibold text-white">
@@ -604,10 +606,10 @@ function OfferCard({
           </Link>
         </div>
       </div>
-      <div className="grid gap-4 min-[1700px]:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+      <div className="grid gap-4 @5xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
         <div className="rounded-xl p-4 ring-1 ring-shell-line" data-testid="detail-summary">
           <p className="mb-2 text-[0.875rem] font-semibold text-brand-navy">{w.summary}</p>
-          <ul className="grid gap-x-8 gap-y-1.5 md:grid-cols-2">
+          <ul className="grid gap-x-8 gap-y-1.5 @2xl:grid-cols-2">
             {offer.lines.map((line) => (
               <li key={`${line.kind}:${line.key}`} className="flex items-center justify-between gap-2 text-[0.8125rem]">
                 <span className="text-brand-navy">
@@ -706,9 +708,10 @@ function SidePanel({ intention, offer }: { intention: IntentionDetail; offer: In
   const [tab, setTab] = useState<Tab>("plan");
   const tabs: Tab[] = ["plan", "result", "sources", "technical"];
   return (
-    <aside className="min-w-0 space-y-4" aria-label={w.tabs.plan}>
+    <aside className="@container min-w-0 space-y-4" aria-label={w.tabs.plan}>
       <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-shell-line">
-        <div role="tablist" className="mb-4 flex justify-between overflow-x-auto border-b border-shell-line">
+        {/* Narrow (a phone): the tabs go on two lines, never cut. */}
+        <div role="tablist" className="mb-4 flex flex-wrap justify-between gap-x-2 border-b border-shell-line">
           {tabs.map((each) => (
             <button
               key={each}
@@ -899,7 +902,7 @@ function TechnicalLinks({ intention }: { intention: IntentionDetail }) {
   return (
     <section className="space-y-2" data-testid="detail-technical">
       <p className="text-[0.8125rem] text-shell-muted">{w.technicalLead}</p>
-      <ul className="grid gap-1.5 sm:grid-cols-2">
+      <ul className="grid gap-1.5 @md:grid-cols-2">
         {views.map((view) => (
           <li key={view}>
             <Link
