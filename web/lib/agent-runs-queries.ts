@@ -44,7 +44,19 @@ export function useAgentRun(id: string | null) {
     queryFn: () => agentRuns.one(id ?? ""),
     enabled: Boolean(id),
     refetchInterval: (query) =>
-      query.state.data && MOVING.has(query.state.data.status) ? FOLLOW_MS : false,
+      query.state.data &&
+      (MOVING.has(query.state.data.status) || (query.state.data.drawing ?? []).length > 0)
+        ? FOLLOW_MS
+        : false,
+  });
+}
+
+/** Its files drawn after it: the run read again until they are there. */
+export function useDrawFiles(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (formats: string[]) => agentRuns.drawFiles(id, formats),
+    onSuccess: () => client.invalidateQueries({ queryKey: agentRunKeys.one(id) }),
   });
 }
 

@@ -640,6 +640,14 @@ class AgentRunCreate(BaseModel):
     )
 
 
+class AgentRunFiles(BaseModel):
+    """The files a finished run is to have drawn after it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    formats: list[Literal["pdf", "pptx"]] = Field(min_length=1)
+
+
 class AgentRunDecision(BaseModel):
     """A held run approved or rejected (LEKA-406) — why, if said."""
 
@@ -687,6 +695,14 @@ class AgentRunRead(BaseModel):
         default_factory=list,
         description="The files it is to deliver (pdf, pptx), as asked when it was launched "
         "(2026-10-14) — none when only its report.",
+    )
+    drawable: list[str] = Field(
+        default_factory=list,
+        description="Finished, the files its agent draws that it does not have yet: drawn "
+        "after it on asking (POST /agent-runs/{id}/files), the run never done again.",
+    )
+    drawing: list[str] = Field(
+        default_factory=list, description="The files being drawn after it, by a worker."
     )
     error: str | None = Field(
         description="Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, "

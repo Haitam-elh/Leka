@@ -4508,6 +4508,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agent-runs/{run_id}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draw a finished run's files
+         * @description Its deck drawn as PDF or PowerPoint from the analysis it delivered —
+         *     the run never done again (2026-10-16: launched without asking, the
+         *     architect gave its report alone). 202, a worker draws it; 409 when it
+         *     is not finished, or is being drawn; 422 when its agent draws no file.
+         */
+        post: operations["draw_run_files_api_v1_agent_runs__run_id__files_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agent-runs/{run_id}/cancel": {
         parameters: {
             query?: never;
@@ -6999,6 +7022,16 @@ export interface components {
              */
             expected?: string[];
             /**
+             * Drawable
+             * @description Finished, the files its agent draws that it does not have yet: drawn after it on asking (POST /agent-runs/{id}/files), the run never done again.
+             */
+            drawable?: string[];
+            /**
+             * Drawing
+             * @description The files being drawn after it, by a worker.
+             */
+            drawing?: string[];
+            /**
              * Error
              * @description Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, invalid_output, abandoned, error.
              */
@@ -7061,6 +7094,14 @@ export interface components {
             detail: {
                 [key: string]: unknown;
             };
+        };
+        /**
+         * AgentRunFiles
+         * @description The files a finished run is to have drawn after it.
+         */
+        AgentRunFiles: {
+            /** Formats */
+            formats: ("pdf" | "pptx")[];
         };
         /**
          * AgentRunRead
@@ -7127,6 +7168,16 @@ export interface components {
              * @description The files it is to deliver (pdf, pptx), as asked when it was launched (2026-10-14) — none when only its report.
              */
             expected?: string[];
+            /**
+             * Drawable
+             * @description Finished, the files its agent draws that it does not have yet: drawn after it on asking (POST /agent-runs/{id}/files), the run never done again.
+             */
+            drawable?: string[];
+            /**
+             * Drawing
+             * @description The files being drawn after it, by a worker.
+             */
+            drawing?: string[];
             /**
              * Error
              * @description Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, invalid_output, abandoned, error.
@@ -45979,6 +46030,104 @@ export interface operations {
                 content: {
                     "application/vnd.openxmlformats-officedocument.presentationml.presentation": unknown;
                     "application/pdf": unknown;
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    draw_run_files_api_v1_agent_runs__run_id__files_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentRunFiles"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunRead"];
                 };
             };
             /** @description The request could not be understood. */

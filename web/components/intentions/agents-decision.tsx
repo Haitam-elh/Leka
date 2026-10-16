@@ -235,7 +235,15 @@ function initial(agent: ProposedAgent): Choice {
     const said = agent.inputs[field.name];
     if (typeof said === "string") inputs[field.name] = said;
   }
-  return { on: agent.available, inputs, formats: [...agent.asked], sources: [] };
+  // The files it draws: what the request named, else every one — ticked, to
+  // untick (2026-10-16: unticked by default, the architect gave no deck).
+  const drawn = agent.deliverables.filter((d) => DRAWN.has(d));
+  return {
+    on: agent.available,
+    inputs,
+    formats: agent.asked.length ? [...agent.asked] : drawn,
+    sources: [],
+  };
 }
 
 /** What it pays for (2026-10-14): the plan first on Free; else the agent —

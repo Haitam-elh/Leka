@@ -119,7 +119,15 @@ from leka.capabilities.registry import (
 from leka.capabilities.repository import CapabilityRunRepository
 from leka.capabilities.review import review_of, without_block
 from leka.capabilities.router import ROUTING_VERSION, RouteQuery, Routing, route
-from leka.capabilities.runs import capability_resource, execute_run, queue_run, sweep_runs
+from leka.capabilities.runs import (
+    DECK_FILES,
+    capability_resource,
+    execute_run,
+    queue_files,
+    queue_run,
+    redraw,
+    sweep_runs,
+)
 from leka.capabilities.runtime import (
     AgentTool,
     Refusal,
@@ -141,6 +149,7 @@ from leka.capabilities.schemas import (
     AgentRunDecision,
     AgentRunDetail,
     AgentRunEventRead,
+    AgentRunFiles,
     AgentRunRead,
     AgentRunUsage,
     CapabilityDayUse,
@@ -246,6 +255,7 @@ from leka.capabilities.workflow_runs import (
 __all__ = [
     "AGENT_TOOLS",
     "CATEGORIES",
+    "DECK_FILES",
     "ROUTING_VERSION",
     "Agent",
     "AgentFrontMatter",
@@ -260,6 +270,7 @@ __all__ = [
     "AgentRunDetail",
     "AgentRunEvent",
     "AgentRunEventRead",
+    "AgentRunFiles",
     "AgentRunRead",
     "AgentRunUsage",
     "AgentRuntime",
@@ -435,10 +446,12 @@ __all__ = [
     "parse_agent",
     "permitted",
     "provide",
+    "queue_files",
     "queue_run",
     "queue_workflow",
     "read_deliverable",
     "read_index",
+    "redraw",
     "register",
     "register_step",
     "review_of",
