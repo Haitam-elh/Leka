@@ -328,9 +328,10 @@ export function FreshnessNotice({
   const w = t.intelligence.explained.freshness;
   if (read === null || now === null || now <= read) return null;
   return (
+    <div className="@container">
     <div
       role="status"
-      className="flex flex-col gap-3 rounded-xl bg-state-warning-soft px-4 py-3 text-[0.8125rem] sm:flex-row sm:items-center"
+      className="flex flex-col gap-3 rounded-xl bg-state-warning-soft px-4 py-3 text-[0.8125rem] @md:flex-row @md:items-center"
       data-testid="analysis-freshness"
     >
       <Clock className="size-4 shrink-0 text-state-warning" aria-hidden="true" />
@@ -339,6 +340,7 @@ export function FreshnessNotice({
         <p className="text-shell-muted">{fill(w.body, { read, now })}</p>
       </div>
       {action}
+    </div>
     </div>
   );
 }

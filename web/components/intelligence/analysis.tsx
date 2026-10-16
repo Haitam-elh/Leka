@@ -66,9 +66,12 @@ export function AnalysisSummary({
   const id = useId();
   const Heading = level === 2 ? "h2" : "h3";
   return (
+    // Laid out by the room it has, not the screen's: in a side panel of a
+    // wide screen, one column (container queries).
+    <div className="@container">
     <section
       aria-labelledby={id}
-      className="grid gap-4 rounded-xl border border-shell-line bg-white p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,17rem)]"
+      className="grid gap-4 rounded-xl border border-shell-line bg-white p-4 @2xl:grid-cols-[minmax(0,1fr)_minmax(0,17rem)]"
       data-testid="analysis-summary"
     >
       <div className="flex items-start gap-3">
@@ -95,7 +98,7 @@ export function AnalysisSummary({
           )}
         </div>
       </div>
-      <div className="space-y-3 md:border-s md:border-shell-line md:ps-4">
+      <div className="space-y-3 @2xl:border-s @2xl:border-shell-line @2xl:ps-4">
         <ConfidenceBadge
           score={analysis.confidence}
           // How sure, as the analysis says it and why (LEKA-441): a word.
@@ -105,6 +108,7 @@ export function AnalysisSummary({
         {action}
       </div>
     </section>
+    </div>
   );
 }
 
@@ -145,7 +149,8 @@ export function AnalysisView({
     n > 0 ? fill(said, { count: n }) : undefined;
   return (
     <div
-      className="space-y-4"
+      // Its columns follow the room it has, not the screen (a side panel).
+      className="@container space-y-4"
       data-testid="analysis"
       data-status={analysis.status}
     >
@@ -165,7 +170,7 @@ export function AnalysisView({
       {analysis.status === "failed" || analysis.status === "pending" ? (
         explained ? (
           // What stopped it, and what to do: never a bare « failed ».
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid gap-4 @3xl:grid-cols-2">
             <NextStepPanel next={explained.next} level={level} />
             <AnalysisLimits explanation={explained} level={level} />
           </div>
@@ -175,7 +180,7 @@ export function AnalysisView({
           {synthesis ? (
             <AnalysisSummary analysis={analysis} level={level} said={said} />
           ) : null}
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] xl:items-start">
+          <div className="grid gap-4 @4xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] @4xl:items-start">
             <div className="min-w-0 space-y-4">
               <IntelligenceSection
                 kind="fact"

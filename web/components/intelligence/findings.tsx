@@ -82,8 +82,9 @@ function InsightRow({
   const [open, setOpen] = useState(false);
   const list = useId();
   return (
-    <li className={cn("rounded-lg border p-3", ROW_TONES[tone])} data-testid={testId}>
-      <div className="flex flex-wrap items-start gap-3 sm:flex-nowrap">
+    // Its own width decides its layout (a side panel, a phone), not the screen's.
+    <li className={cn("@container rounded-lg border p-3", ROW_TONES[tone])} data-testid={testId}>
+      <div className="flex flex-wrap items-start gap-3 @md:flex-nowrap">
         <IconTile icon={icon} tone={tone} />
         <div className="min-w-0 flex-1 basis-48">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -115,7 +116,7 @@ function InsightRow({
           />
         ) : null}
       </div>
-      {open ? <EvidenceList id={list} items={evidence} className="mt-3 sm:ms-13" /> : null}
+      {open ? <EvidenceList id={list} items={evidence} className="mt-3 @md:ms-13" /> : null}
     </li>
   );
 }
