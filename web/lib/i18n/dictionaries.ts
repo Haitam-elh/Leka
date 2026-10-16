@@ -39,10 +39,10 @@ const fr = {
     sources: "Sources",
     sourceDetail: "Source",
     welcome: "Bienvenue",
-    capabilities: "Capacités",
-    capabilityDetail: "Capacité",
-    governance: "Sécurité & gouvernance",
-    team: "Équipe & accès",
+    capabilities: "Compétences",
+    capabilityDetail: "Compétence",
+    governance: "Sécurité",
+    team: "Équipe",
     billing: "Facturation",
     settings: "Paramètres",
     // The sidebar's hierarchy (LEKA-428, config/navigation.ts).
@@ -56,10 +56,10 @@ const fr = {
     environmentEvents: "Événements",
     environmentDomains: "Domaines",
     environmentQuality: "Qualité",
-    capabilitiesAvailable: "Capacités disponibles",
-    capabilitiesMine: "Mes capacités",
-    capabilitiesConfiguration: "Configuration",
-    administration: "Administration",
+    capabilitiesAvailable: "Compétences disponibles",
+    capabilitiesMine: "Mes compétences",
+    capabilitiesConfiguration: "Réglages",
+    administration: "Configuration",
   },
   /** What each pillar is for, under its name (LEKA-428). */
   pillars: {
@@ -1076,7 +1076,7 @@ const fr = {
     rows: {
       intentions: "Intentions posées",
       analyses: "Analyses",
-      capability_runs: "Exécutions de capacités",
+      capability_runs: "Exécutions de compétences",
       plans: "Plans d'action exécutés",
     },
     versus: "{count} le mois dernier",
@@ -1416,7 +1416,7 @@ const fr = {
     denied: "Refusé",
     allowed: "Autorisé",
     someone: "Compte supprimé",
-    resources: { entity: "entité", capability: "capacité" },
+    resources: { entity: "entité", capability: "compétence" },
     reasons: {
       role_grants: "le rôle le permet",
       owner: "c'est le sien",
@@ -1559,7 +1559,7 @@ const fr = {
       stopped: "le workflow s'est arrêté avant",
       cancelled: "annulé",
       abandoned: "interrompu",
-      unavailable: "sa capacité ne peut pas s'exécuter ici",
+      unavailable: "sa compétence ne peut pas s'exécuter ici",
       needs_intention: "il lui faut une intention",
     },
     errors: {
@@ -1714,14 +1714,14 @@ const fr = {
     title: "Agents et bundles LEKA",
     views: {
       available: "Disponibles",
-      mine: "Mes capacités",
+      mine: "Mes compétences",
       configuration: "Configuration",
     },
     subtitle:
       "Des agents IA spécialisés pour comprendre, décider et agir sur votre environnement.",
     subtitleMore:
       "Choisissez les agents dont vous avez besoin ou un bundle pour encore plus de valeur.",
-    ask: "Demander une capacité",
+    ask: "Demander une compétence",
     /** The four figures beside the title (LEKA-460) — counted, never said ahead. */
     stats: {
       agents: "{count|agent spécialisé|agents spécialisés}",
@@ -1743,9 +1743,9 @@ const fr = {
     /** Said once, above the list: what keeps many from running here. */
     wide: {
       no_model:
-        "Aucun modèle de langage n'est configuré : {count} {count|capacité ne peut|capacités ne peuvent} pas s'exécuter ici.",
+        "Aucun modèle de langage n'est configuré : {count} {count|compétence ne peut|compétences ne peuvent} pas s'exécuter ici.",
       no_runtime:
-        "L'exécution des agents n'est pas disponible ici : {count} {count|capacité ne peut|capacités ne peuvent} pas s'exécuter.",
+        "L'exécution des agents n'est pas disponible ici : {count} {count|compétence ne peut|compétences ne peuvent} pas s'exécuter.",
       configure: "Configurer un modèle",
     },
     need: "Que voulez-vous faire ?",
@@ -1766,37 +1766,37 @@ const fr = {
       business: "Métier",
     },
     agentsTitle: "Agents",
-    ownTitle: "Capacités LEKA",
+    ownTitle: "Compétences LEKA",
     agentsCount: "{count} {count|agent|agents}",
-    ownCount: "{count} {count|capacité|capacités}",
+    ownCount: "{count} {count|compétence|compétences}",
     show: "Afficher",
-    shows: { all: "Tout", agents: "Agents", capabilities: "Capacités LEKA" },
+    shows: { all: "Tout", agents: "Agents", capabilities: "Compétences LEKA" },
     allCategories: "Toutes les catégories",
     category: "Catégorie",
     versus: "vs semaine précédente",
     all: "Toutes",
-    search: "Rechercher une capacité…",
+    search: "Rechercher une compétence…",
     sort: "Tri",
     sorts: {
       relevant: "Plus pertinentes",
       name: "Nom",
       recent: "Plus récentes",
     },
-    usage: "Utilisation des capacités",
+    usage: "Utilisation des compétences",
     usageEmpty:
-      "Aucune capacité n'a encore tourné cette semaine : posez une question à LEKA.",
-    top: "Top capacités",
+      "Aucune compétence n'a encore tourné cette semaine : posez une question à LEKA.",
+    top: "Top compétences",
     topEmpty: "Rien encore cette semaine.",
-    latest: "Dernières capacités ajoutées",
+    latest: "Dernières compétences ajoutées",
     latestEmpty: "Le catalogue n'a pas encore été enregistré.",
     seeAll: "Voir tout",
     runs: "Lancée {count} {count|fois|fois} dans votre espace",
     noRun: "Pas encore exécutée",
-    empty: "Aucune capacité ne correspond.",
+    empty: "Aucune compétence ne correspond.",
     mineEmpty:
-      "Aucune capacité gardée sous la main : l'étoile d'une capacité l'ajoute ici.",
+      "Aucune compétence gardée sous la main : l'étoile d'une compétence l'ajoute ici.",
     favourite: "Garder sous la main",
-    unfavourite: "Retirer de mes capacités",
+    unfavourite: "Retirer de mes compétences",
     failed: "Le catalogue n'a pas pu être lu.",
     retry: "Réessayer",
     kinds: {
@@ -1868,7 +1868,7 @@ const fr = {
       ownedAgent: "Agent {name}",
       ownedNone: "Aucun agent pour l'instant : achetez-en un, ou un bundle, depuis Disponibles.",
       plan: "Votre plan : {plan}",
-      included: "les capacités d'analyse de LEKA sont incluses",
+      included: "les compétences d'analyse de LEKA sont incluses",
       bought: "Paiement reçu : votre achat est actif dans un instant.",
       cancelled: "Achat annulé : rien n'a été débité.",
       failed: "L'achat n'a pas pu commencer. Réessayez dans un instant.",
@@ -1940,7 +1940,7 @@ const fr = {
         "Les causes probables d'un service qui dysfonctionne, classées : ce qui a changé, ce dont il dépend.",
     },
     detail: {
-      back: "Toutes les capacités",
+      back: "Toutes les compétences",
       contract: "Ce qu'elle prend",
       noInputs: "Le contexte de votre demande, rassemblé par LEKA.",
       required: "obligatoire",
@@ -1993,12 +1993,12 @@ const fr = {
       origins: { internal: "LEKA", vendor: "Partenaire" },
     },
     configuration: {
-      title: "Configuration des capacités",
-      body: "Activez ou désactivez une capacité pour tout votre espace. Désactivée, elle ne tourne plus dans les analyses.",
-      readOnly: "Seuls les admins activent ou désactivent une capacité.",
+      title: "Configuration des compétences",
+      body: "Activez ou désactivez une compétence pour tout votre espace. Désactivée, elle ne tourne plus dans les analyses.",
+      readOnly: "Seuls les admins activent ou désactivent une compétence.",
       enable: "Activer",
       disable: "Désactiver",
-      disableTitle: "Désactiver cette capacité ?",
+      disableTitle: "Désactiver cette compétence ?",
       disableBody:
         "Elle ne tournera plus dans les analyses de votre espace, jusqu'à ce qu'un admin la réactive.",
       reason: "Pourquoi",
@@ -2602,14 +2602,14 @@ const fr = {
   },
   approvals: {
     subtitle:
-      "Ce que LEKA propose d'ajouter à votre modèle d'entreprise, et ce que ses sources contredisent : en attente de votre décision.",
+      "LEKA a déduit ces informations de vos sources, sans qu'elles le disent clairement : confirmez-les ou refusez-les, il ne s'en sert qu'une fois confirmées. Ici aussi, ce sur quoi vos sources se contredisent, et les décisions qui vous attendent.",
     stats: {
       proposed: "En attente",
       accepted: "Validés",
       rejected: "Refusés",
       withdrawn: "Retirés",
       byPolicy: "dont {count} automatiquement",
-      withdrawnNote: "Leurs preuves ont disparu",
+      withdrawnNote: "Ce qui les montrait a disparu de vos sources",
     },
     status: {
       proposed: "À valider",
@@ -2622,26 +2622,26 @@ const fr = {
     familiesLabel: "Type",
     families: {
       all: "Tous",
-      relationship: "Relations",
+      relationship: "Liens",
       organisation: "Organisation",
       business: "Métier",
-      semantic: "Sémantique",
-      conflict: "Conflits",
+      semantic: "Descriptions",
+      conflict: "Désaccords",
       action: "Actions",
     },
     family: {
-      relationship: "Relation",
+      relationship: "Lien",
       organisation: "Organisation",
       business: "Métier",
-      semantic: "Sémantique",
-      conflict: "Conflit",
+      semantic: "Description",
+      conflict: "Désaccord",
       action: "Action",
     },
     columns: {
-      caption: "Les enrichissements proposés par LEKA",
-      element: "Élément",
+      caption: "Ce que LEKA vous demande de confirmer",
+      element: "Ce que LEKA a déduit",
       type: "Type",
-      confidence: "Confiance",
+      confidence: "Certitude",
       impact: "Impact",
       date: "Date",
       status: "Statut",
@@ -2655,12 +2655,18 @@ const fr = {
       enrich_description: "Description",
       enrich_summary: "Résumé",
     },
-    search: "Rechercher un élément…",
+    search: "Rechercher…",
     noMatch: "Aucune proposition ne correspond.",
     none: "Aucune proposition dans cet état.",
     empty: {
       title: "Rien à valider pour le moment.",
-      body: "Quand LEKA trouve de quoi compléter votre modèle — une relation, un responsable, une criticité — il le propose ici avant de l'appliquer.",
+      body: "Quand LEKA déduit de vos sources ce qu'elles ne disent pas clairement — qui est responsable d'un service, de quelle application il fait partie, s'il est critique — il vous le soumet ici avant de s'en servir.",
+    },
+    /** How sure LEKA is, in words (2026-10-14). */
+    sure: {
+      high: "Quasi certain",
+      medium: "Probable",
+      low: "À vérifier",
     },
     words: {
       code: "{repository} est le code de {name}",
@@ -2697,10 +2703,10 @@ const fr = {
       history: "Décisions",
       description: "Description",
       type: "Type",
-      by: "Proposé par",
-      byValue: "LEKA · analyse « {analysis} »",
+      by: "Déduit par",
+      byValue: "LEKA, en cherchant : {analysis}",
       seen: "Vu",
-      confidence: "Confiance",
+      confidence: "Certitude",
       sources: "Sources",
       evidence: "Ce qui le montre",
       change: "Ce que ça change",
@@ -2711,20 +2717,20 @@ const fr = {
       nothing: "Rien",
       override:
         "Remplace ce qu'une source déclare : une personne seulement peut le valider.",
-      applied: "Appliqué au modèle à sa prochaine construction.",
+      applied: "Pris en compte à la prochaine mise à jour de votre environnement.",
       noHistory: "Aucune décision pour l'instant.",
       actions: "Actions",
       accept: "Valider",
       reject: "Refuser",
-      reprocess: "Retraiter",
+      reprocess: "Revérifier",
       reprocessHint:
-        "LEKA relit ses preuves et le propose à nouveau s'il tient toujours.",
+        "LEKA relit ce qui le montre dans vos sources, et vous le soumet à nouveau si c'est toujours vrai.",
       readOnly: "Seul un administrateur peut décider.",
       decided: {
         accepted: "Validé",
         rejected: "Refusé",
-        withdrawn: "Retiré : ses preuves ont disparu",
-        reprocessed: "Renvoyé à l'analyse",
+        withdrawn: "Retiré : ce qui le montrait a disparu de vos sources",
+        reprocessed: "Revérifié par LEKA",
       },
       via: {
         person: "par une personne",
@@ -2735,18 +2741,18 @@ const fr = {
     confirm: {
       overrideTitle: "Remplacer ce que dit la source ?",
       overrideBody:
-        "La valeur déclarée par la source sera remplacée dans le modèle, jusqu'à ce que vous refusiez cette proposition.",
+        "La valeur que donne la source sera remplacée dans votre environnement, jusqu'à ce que vous refusiez cette proposition.",
       overrideConfirm: "Valider et remplacer",
       rejectTitle: "Refuser cette proposition ?",
       rejectBody:
-        "LEKA ne la proposera plus. Si elle était appliquée, elle sera retirée du modèle.",
+        "LEKA ne la proposera plus. Si elle était prise en compte, elle sera retirée.",
       rejectConfirm: "Refuser",
       reason: "Pourquoi (facultatif)",
     },
     toast: {
       accepted: "Validé.",
       rejected: "Refusé.",
-      reprocessed: "Renvoyé à son analyse.",
+      reprocessed: "LEKA va le revérifier.",
       failed: "La décision n'a pas pu être prise.",
     },
     relationships: {
@@ -2804,10 +2810,10 @@ const fr = {
       panel: {
         label: "Conflit : {title}",
         sides: "Ce que disent les sources",
-        model: "Le modèle affiche",
+        model: "LEKA retient aujourd'hui",
         recommended: "Recommandé",
         kept: "Retenu",
-        authority: "Fiabilité {score} %",
+        authority: "Source fiable à {score} %",
         observed: "dit {when}",
         rule: { prefer: "source préférée", avoid: "source écartée" },
         noSource: "aucune source nommée",
@@ -2815,8 +2821,8 @@ const fr = {
         remember: "Préférer désormais la source retenue pour « {about} »",
         dismiss: "Ce n'est pas une contradiction",
         reopen: "Rouvrir",
-        applied: "Le modèle affichera ce choix à sa prochaine construction.",
-        refuted: "Les autres liens seront écartés du modèle.",
+        applied: "LEKA retiendra ce choix à la prochaine mise à jour de votre environnement.",
+        refuted: "Les autres liens seront écartés.",
         decided: {
           resolved: "Tranché",
           dismissed: "Écarté",
@@ -2832,7 +2838,7 @@ const fr = {
       confirm: {
         dismissTitle: "Ce n'est pas une contradiction ?",
         dismissBody:
-          "Le modèle continue d'afficher la valeur choisie automatiquement. LEKA le signalera à nouveau si une autre valeur apparaît.",
+          "LEKA garde la valeur choisie automatiquement. LEKA le signalera à nouveau si une autre valeur apparaît.",
         dismissConfirm: "Écarter",
         reason: "Pourquoi (facultatif)",
       },
@@ -3710,7 +3716,7 @@ const fr = {
         services: "Services",
         data: "Données",
         infrastructure: "Infrastructure",
-        capabilities: "Capacités",
+        capabilities: "Capacités métier",
         processes: "Processus",
         business: "Métier",
         code: "Code",
@@ -5709,7 +5715,7 @@ const fr = {
       },
       limits: {
         title: "Limites de l'analyse",
-        none: "Rien n'a manqué : chaque capacité a répondu, chaque source était à jour.",
+        none: "Rien n'a manqué : chaque compétence a répondu, chaque source était à jour.",
         silent: "Ce qui n'a pas répondu, et ce qu'on ne sait donc pas",
         stale: "Ce qui peut être daté",
         seeSources: "Voir les sources",
@@ -6273,7 +6279,7 @@ const fr = {
     },
     /** Where it goes (LEKA-398). */
     routing: {
-      title: "Capacité choisie",
+      title: "Compétence choisie",
       again: "Router à nouveau",
       outcomes: {
         routed: "Routée",
@@ -6283,12 +6289,12 @@ const fr = {
       routed: "LEKA la confie à : {titles}",
       fallbacks: {
         no_match:
-          "Aucune capacité ne correspond mieux : LEKA répond avec sa propre analyse.",
+          "Aucune compétence ne correspond mieux : LEKA répond avec sa propre analyse.",
         excluded:
-          "La capacité la plus adaptée ne peut pas être utilisée ici : LEKA répond avec sa propre analyse.",
+          "La compétence la plus adaptée ne peut pas être utilisée ici : LEKA répond avec sa propre analyse.",
       },
       clarifies: {
-        unclear: "La demande doit être précisée avant de choisir une capacité.",
+        unclear: "La demande doit être précisée avant de choisir une compétence.",
         no_goal: "LEKA ne sait pas encore ce que vous cherchez à obtenir.",
       },
       suggestions: "Elle pourrait concerner : {titles}",
@@ -6297,7 +6303,7 @@ const fr = {
       weak: "trop faible",
       excluded: "Écartées",
       policy:
-        "Une question n'est jamais confiée à une capacité qui propose des actions",
+        "Une question n'est jamais confiée à une compétence qui propose des actions",
       signals: {
         goal: "objectif",
         kind: "type de demande",
@@ -6419,7 +6425,7 @@ const fr = {
         },
         analysing: { default: "LEKA lit vos sources et analyse votre demande." },
         analysis_partial: {
-          partial: "Une partie des sources ou des capacités n'a pas répondu : le résultat est incomplet.",
+          partial: "Une partie des sources ou des compétences n'a pas répondu : le résultat est incomplet.",
           inconclusive: "L'analyse n'a rien trouvé de concluant dans vos sources.",
         },
         analysis_failed: {
@@ -6782,7 +6788,7 @@ const fr = {
           "Tout est prêt : votre offre et vos crédits couvrent cette demande.",
         prerequisites: "Une étape avant d'aller au bout :",
         over_quota: "Vos crédits IA ne suffisent pas pour aller au bout :",
-        impossible: "Aucune capacité de LEKA ne produit encore ce résultat.",
+        impossible: "Aucune compétence de LEKA ne produit encore ce résultat.",
       },
       offers: {
         included: "Inclus",
@@ -6802,7 +6808,7 @@ const fr = {
         connect_source: "Connecter une source : {sources}",
         configure_model: "Configurer un modèle de langage",
         ask_admin: "Demander l'accès à un administrateur",
-        enable: "Réactiver la capacité « {capability} »",
+        enable: "Réactiver la compétence « {capability} »",
         buy_add_on: "Ajouter l'option « {agent} » ({price} / mois)",
         buy_bundle: "Ajouter le pack « {bundle} » ({price} / mois)",
         change_plan: "Passer à {plan} ({price} / mois)",
@@ -6882,7 +6888,7 @@ const fr = {
       systems: "Modifie vos systèmes : soumis à validation",
       running: "LEKA analyse votre demande",
       runningBody:
-        "Ses capacités lisent le contexte assemblé. Cette page se met à jour d'elle-même.",
+        "Ses compétences lisent le contexte assemblé. Cette page se met à jour d'elle-même.",
       waiting: "Analyse en attente",
       waitingBody:
         "Le contexte est prêt : l'analyse démarre dans quelques instants.",
@@ -6910,9 +6916,9 @@ const fr = {
       took: "en {seconds} s",
       failed: "L'analyse n'a pas pu être lue.",
       steps: {
-        title: "Capacités mobilisées",
-        allDone: "Toutes les capacités ont abouti ({count}).",
-        someNot: "Une capacité n'a pas abouti : voici laquelle.",
+        title: "Compétences mobilisées",
+        allDone: "Toutes les compétences ont abouti ({count}).",
+        someNot: "Une compétence n'a pas abouti : voici laquelle.",
         show: "Détail",
         statuses: {
           succeeded: "Terminée",
@@ -7233,7 +7239,7 @@ const fr = {
         "stale.source": "{source} : peut être datée.",
         "why.failed_sources":
           "Elle n'a pas pu tourner, et ces sources sont en échec : {sources}.",
-        "why.failed": "Aucune capacité n'a répondu.",
+        "why.failed": "Aucune compétence n'a répondu.",
         "why.syncing":
           "Elle s'est terminée avant ces sources : ce qu'elles apportent n'a pas été lu ({sources}).",
         "why.unknown_subject": "LEKA ne connaît rien qui s'appelle {names}.",
@@ -7772,10 +7778,10 @@ const en: Dictionary = {
     sources: "Sources",
     sourceDetail: "Source",
     welcome: "Welcome",
-    capabilities: "Capabilities",
-    capabilityDetail: "Capability",
-    governance: "Security & governance",
-    team: "Team & access",
+    capabilities: "Skills",
+    capabilityDetail: "Skill",
+    governance: "Security",
+    team: "Team",
     billing: "Billing",
     settings: "Settings",
     myIntentions: "My intentions",
@@ -7788,10 +7794,10 @@ const en: Dictionary = {
     environmentEvents: "Events",
     environmentDomains: "Domains",
     environmentQuality: "Quality",
-    capabilitiesAvailable: "Available capabilities",
-    capabilitiesMine: "My capabilities",
-    capabilitiesConfiguration: "Configuration",
-    administration: "Administration",
+    capabilitiesAvailable: "Available skills",
+    capabilitiesMine: "My skills",
+    capabilitiesConfiguration: "Settings",
+    administration: "Configuration",
   },
   pillars: {
     intentions: "Tell LEKA what you want to achieve.",
@@ -8722,7 +8728,7 @@ const en: Dictionary = {
     rows: {
       intentions: "Intentions asked",
       analyses: "Analyses",
-      capability_runs: "Capability runs",
+      capability_runs: "Skill runs",
       plans: "Action plans run",
     },
     versus: "{count} last month",
@@ -9056,7 +9062,7 @@ const en: Dictionary = {
     denied: "Refused",
     allowed: "Allowed",
     someone: "Deleted account",
-    resources: { entity: "entity", capability: "capability" },
+    resources: { entity: "entity", capability: "skill" },
     reasons: {
       role_grants: "the role allows it",
       owner: "it is theirs",
@@ -9193,7 +9199,7 @@ const en: Dictionary = {
       stopped: "the workflow stopped before it",
       cancelled: "cancelled",
       abandoned: "interrupted",
-      unavailable: "its capability cannot run here",
+      unavailable: "its skill cannot run here",
       needs_intention: "it needs an intention",
     },
     errors: {
@@ -9344,13 +9350,13 @@ const en: Dictionary = {
     title: "LEKA agents and bundles",
     views: {
       available: "Available",
-      mine: "My capabilities",
+      mine: "My skills",
       configuration: "Configuration",
     },
     subtitle:
       "Specialised AI agents to understand, decide and act on your environment.",
     subtitleMore: "Choose the agents you need, or a bundle for even more value.",
-    ask: "Ask for a capability",
+    ask: "Ask for a skill",
     stats: {
       agents: "{count|specialised agent|specialised agents}",
       agentsLead: "Across your technical lifecycle",
@@ -9370,9 +9376,9 @@ const en: Dictionary = {
     /** Said once, above the list: what keeps many from running here. */
     wide: {
       no_model:
-        "No language model is configured: {count} {count|capability cannot|capabilities cannot} run here.",
+        "No language model is configured: {count} {count|skill cannot|skills cannot} run here.",
       no_runtime:
-        "Agents cannot run here: {count} {count|capability cannot|capabilities cannot} run.",
+        "Agents cannot run here: {count} {count|skill cannot|skills cannot} run.",
       configure: "Configure a model",
     },
     need: "What do you want to do?",
@@ -9391,31 +9397,31 @@ const en: Dictionary = {
       business: "Business",
     },
     agentsTitle: "Agents",
-    ownTitle: "LEKA capabilities",
+    ownTitle: "LEKA skills",
     agentsCount: "{count} {count|agent|agents}",
-    ownCount: "{count} {count|capability|capabilities}",
+    ownCount: "{count} {count|skill|skills}",
     show: "Show",
-    shows: { all: "All", agents: "Agents", capabilities: "LEKA capabilities" },
+    shows: { all: "All", agents: "Agents", capabilities: "LEKA skills" },
     allCategories: "All categories",
     category: "Category",
     versus: "vs previous week",
     all: "All",
-    search: "Search a capability…",
+    search: "Search a skill…",
     sort: "Sort",
     sorts: { relevant: "Most relevant", name: "Name", recent: "Most recent" },
-    usage: "Capability usage",
-    usageEmpty: "No capability ran this week yet: ask LEKA a question.",
-    top: "Top capabilities",
+    usage: "Skill usage",
+    usageEmpty: "No skill ran this week yet: ask LEKA a question.",
+    top: "Top skills",
     topEmpty: "Nothing yet this week.",
-    latest: "Latest capabilities added",
+    latest: "Latest skills added",
     latestEmpty: "The catalogue has not been registered yet.",
     seeAll: "See all",
     runs: "Run {count} {count|time|times} in your workspace",
     noRun: "Not run yet",
-    empty: "No capability matches.",
-    mineEmpty: "No capability kept at hand: a capability's star adds it here.",
+    empty: "No skill matches.",
+    mineEmpty: "No skill kept at hand: a skill's star adds it here.",
     favourite: "Keep at hand",
-    unfavourite: "Remove from my capabilities",
+    unfavourite: "Remove from my skills",
     failed: "The catalogue could not be read.",
     retry: "Retry",
     kinds: {
@@ -9486,7 +9492,7 @@ const en: Dictionary = {
       ownedAgent: "Agent {name}",
       ownedNone: "No agent yet: buy one, or a bundle, from Available.",
       plan: "Your plan: {plan}",
-      included: "LEKA's analysis capabilities are included",
+      included: "LEKA's analysis skills are included",
       bought: "Payment received: your purchase is active in a moment.",
       cancelled: "Purchase cancelled: nothing was charged.",
       failed: "The purchase could not start. Try again in a moment.",
@@ -9555,7 +9561,7 @@ const en: Dictionary = {
         "A misbehaving service's likely causes, ranked: what changed, what it depends on.",
     },
     detail: {
-      back: "All capabilities",
+      back: "All skills",
       contract: "What it takes",
       noInputs: "Your request's context, gathered by LEKA.",
       required: "required",
@@ -9608,12 +9614,12 @@ const en: Dictionary = {
       origins: { internal: "LEKA", vendor: "Partner" },
     },
     configuration: {
-      title: "Capability configuration",
-      body: "Turn a capability on or off for your whole workspace. Off, it no longer runs in analyses.",
-      readOnly: "Only admins turn a capability on or off.",
+      title: "Skill configuration",
+      body: "Turn a skill on or off for your whole workspace. Off, it no longer runs in analyses.",
+      readOnly: "Only admins turn a skill on or off.",
       enable: "Turn on",
       disable: "Turn off",
-      disableTitle: "Turn this capability off?",
+      disableTitle: "Turn this skill off?",
       disableBody:
         "It will no longer run in your workspace's analyses, until an admin turns it on again.",
       reason: "Why",
@@ -10195,14 +10201,14 @@ const en: Dictionary = {
   },
   approvals: {
     subtitle:
-      "What LEKA proposes to add to your company model, and what its sources contradict: waiting for your decision.",
+      "LEKA worked these out from your sources, though they do not say it plainly: confirm or reject them — LEKA relies on them only once confirmed. Here too: what your sources contradict each other on, and the decisions waiting for you.",
     stats: {
       proposed: "Waiting",
       accepted: "Accepted",
       rejected: "Rejected",
       withdrawn: "Withdrawn",
       byPolicy: "{count} of them automatically",
-      withdrawnNote: "Their evidence went",
+      withdrawnNote: "What showed them left your sources",
     },
     status: {
       proposed: "To approve",
@@ -10215,26 +10221,26 @@ const en: Dictionary = {
     familiesLabel: "Type",
     families: {
       all: "All",
-      relationship: "Relationships",
+      relationship: "Links",
       organisation: "Organisation",
       business: "Business",
-      semantic: "Semantic",
-      conflict: "Conflicts",
+      semantic: "Descriptions",
+      conflict: "Disagreements",
       action: "Actions",
     },
     family: {
-      relationship: "Relationship",
+      relationship: "Link",
       organisation: "Organisation",
       business: "Business",
-      semantic: "Semantic",
-      conflict: "Conflict",
+      semantic: "Description",
+      conflict: "Disagreement",
       action: "Action",
     },
     columns: {
-      caption: "The enrichments LEKA proposes",
-      element: "Item",
+      caption: "What LEKA asks you to confirm",
+      element: "What LEKA worked out",
       type: "Type",
-      confidence: "Confidence",
+      confidence: "Certainty",
       impact: "Impact",
       date: "Date",
       status: "Status",
@@ -10248,12 +10254,18 @@ const en: Dictionary = {
       enrich_description: "Description",
       enrich_summary: "Summary",
     },
-    search: "Search an item…",
+    search: "Search…",
     noMatch: "No proposal matches.",
     none: "No proposal in this state.",
     empty: {
       title: "Nothing to approve right now.",
-      body: "When LEKA finds something to complete your model with — a relationship, an owner, a criticality — it proposes it here before applying it.",
+      body: "When LEKA works out from your sources what they do not say plainly — who owns a service, which application it is part of, whether it is critical — it asks you here before relying on it.",
+    },
+    /** How sure LEKA is, in words (2026-10-14). */
+    sure: {
+      high: "Almost certain",
+      medium: "Likely",
+      low: "To check",
     },
     words: {
       code: "{repository} is the code of {name}",
@@ -10289,10 +10301,10 @@ const en: Dictionary = {
       history: "Decisions",
       description: "Description",
       type: "Type",
-      by: "Proposed by",
-      byValue: "LEKA · “{analysis}” analysis",
+      by: "Worked out by",
+      byValue: "LEKA, looking for: {analysis}",
       seen: "Seen",
-      confidence: "Confidence",
+      confidence: "Certainty",
       sources: "Sources",
       evidence: "What shows it",
       change: "What it changes",
@@ -10302,20 +10314,20 @@ const en: Dictionary = {
       proposed: "Proposed",
       nothing: "Nothing",
       override: "Replaces what a source states: only a person may accept it.",
-      applied: "Applied to the model at its next build.",
+      applied: "Taken into account at your environment's next update.",
       noHistory: "No decision yet.",
       actions: "Actions",
       accept: "Accept",
       reject: "Reject",
-      reprocess: "Reprocess",
+      reprocess: "Check again",
       reprocessHint:
-        "LEKA reads its evidence again and proposes it again if it still holds.",
+        "LEKA reads again what shows it in your sources, and asks you again if it still holds.",
       readOnly: "Only an admin may decide.",
       decided: {
         accepted: "Accepted",
         rejected: "Rejected",
-        withdrawn: "Withdrawn: its evidence went",
-        reprocessed: "Sent back to its analysis",
+        withdrawn: "Withdrawn: what showed it left your sources",
+        reprocessed: "Checked again by LEKA",
       },
       via: { person: "by a person", policy: "by the workspace's policy" },
       reasonSaid: "“{reason}”",
@@ -10323,18 +10335,18 @@ const en: Dictionary = {
     confirm: {
       overrideTitle: "Replace what the source says?",
       overrideBody:
-        "The value the source states will be replaced in the model, until you reject this proposal.",
+        "The value the source gives will be replaced in your environment, until you reject this proposal.",
       overrideConfirm: "Accept and replace",
       rejectTitle: "Reject this proposal?",
       rejectBody:
-        "LEKA will not propose it again. If it was applied, it is withdrawn from the model.",
+        "LEKA will not propose it again. If it was taken into account, it is withdrawn.",
       rejectConfirm: "Reject",
       reason: "Why (optional)",
     },
     toast: {
       accepted: "Accepted.",
       rejected: "Rejected.",
-      reprocessed: "Sent back to its analysis.",
+      reprocessed: "LEKA will check it again.",
       failed: "The decision could not be taken.",
     },
     relationships: {
@@ -10391,10 +10403,10 @@ const en: Dictionary = {
       panel: {
         label: "Conflict: {title}",
         sides: "What the sources say",
-        model: "The model shows",
+        model: "LEKA holds today",
         recommended: "Recommended",
         kept: "Kept",
-        authority: "Reliability {score}%",
+        authority: "Source {score}% reliable",
         observed: "said {when}",
         rule: { prefer: "preferred source", avoid: "avoided source" },
         noSource: "no source named",
@@ -10402,8 +10414,8 @@ const en: Dictionary = {
         remember: "From now on, prefer the source kept on “{about}”",
         dismiss: "Not a contradiction",
         reopen: "Reopen",
-        applied: "The model shows this choice from its next build.",
-        refuted: "The other ties will be left out of the model.",
+        applied: "LEKA holds this choice from your environment's next update.",
+        refuted: "The other links will be left out.",
         decided: {
           resolved: "Settled",
           dismissed: "Dismissed",
@@ -10419,7 +10431,7 @@ const en: Dictionary = {
       confirm: {
         dismissTitle: "Not a contradiction?",
         dismissBody:
-          "The model keeps showing the value chosen automatically. LEKA will say it again if another value appears.",
+          "LEKA keeps the value chosen automatically. LEKA will say it again if another value appears.",
         dismissConfirm: "Dismiss",
         reason: "Why (optional)",
       },
@@ -11271,7 +11283,7 @@ const en: Dictionary = {
         services: "Services",
         data: "Data",
         infrastructure: "Infrastructure",
-        capabilities: "Capabilities",
+        capabilities: "Business capabilities",
         processes: "Processes",
         business: "Business",
         code: "Code",
@@ -11294,7 +11306,7 @@ const en: Dictionary = {
         infra_resource: "{count} {count|resource|resources}",
         team: "{count} {count|team|teams}",
         person: "{count} {count|person|persons}",
-        business_capability: "{count} {count|capabilityy|capabilityies}",
+        business_capability: "{count} business {count|capability|capabilities}",
         business_process: "{count} {count|process|processes}",
       },
       countsMixed: "{count} {count|item|items}",
@@ -13218,7 +13230,7 @@ const en: Dictionary = {
       },
       limits: {
         title: "Limits of the analysis",
-        none: "Nothing was missing: every capability answered, every source was up to date.",
+        none: "Nothing was missing: every skill answered, every source was up to date.",
         silent: "What did not answer, and what is therefore not known",
         stale: "What may be out of date",
         seeSources: "See the sources",
@@ -13764,7 +13776,7 @@ const en: Dictionary = {
       waySelf: "by you, with the plan",
     },
     routing: {
-      title: "Chosen capability",
+      title: "Chosen skill",
       again: "Route again",
       outcomes: {
         routed: "Routed",
@@ -13774,12 +13786,12 @@ const en: Dictionary = {
       routed: "LEKA hands it to: {titles}",
       fallbacks: {
         no_match:
-          "No capability fits better: LEKA answers with its own analysis.",
+          "No skill fits better: LEKA answers with its own analysis.",
         excluded:
-          "The best-suited capability cannot be used here: LEKA answers with its own analysis.",
+          "The best-suited skill cannot be used here: LEKA answers with its own analysis.",
       },
       clarifies: {
-        unclear: "The request must be clarified before a capability is chosen.",
+        unclear: "The request must be clarified before a skill is chosen.",
         no_goal: "LEKA cannot tell yet what you want to achieve.",
       },
       suggestions: "It could be about: {titles}",
@@ -13788,7 +13800,7 @@ const en: Dictionary = {
       weak: "too weak",
       excluded: "Left out",
       policy:
-        "A question is never handed to a capability that proposes actions",
+        "A question is never handed to a skill that proposes actions",
       signals: {
         goal: "goal",
         kind: "kind of request",
@@ -13904,7 +13916,7 @@ const en: Dictionary = {
         },
         analysing: { default: "LEKA reads your sources and analyses your request." },
         analysis_partial: {
-          partial: "Some sources or capabilities did not answer: the result is incomplete.",
+          partial: "Some sources or skills did not answer: the result is incomplete.",
           inconclusive: "The analysis found nothing conclusive in your sources.",
         },
         analysis_failed: {
@@ -14257,7 +14269,7 @@ const en: Dictionary = {
         ready: "All set: your plan and your credits cover this request.",
         prerequisites: "One step before carrying it through:",
         over_quota: "Your AI credits are not enough to carry it through:",
-        impossible: "None of LEKA's capabilities makes this result yet.",
+        impossible: "None of LEKA's skills makes this result yet.",
       },
       offers: {
         included: "Included",
@@ -14348,7 +14360,7 @@ const en: Dictionary = {
       seeResults: "See the results",
       running: "LEKA is analysing your request",
       runningBody:
-        "Its capabilities are reading the assembled context. This page updates by itself.",
+        "Its skills are reading the assembled context. This page updates by itself.",
       waiting: "Analysis waiting",
       waitingBody:
         "The context is ready: the analysis starts in a few moments.",
@@ -14376,9 +14388,9 @@ const en: Dictionary = {
       took: "in {seconds} s",
       failed: "The analysis could not be read.",
       steps: {
-        title: "Capabilities used",
-        allDone: "Every capability got through ({count}).",
-        someNot: "A capability did not get through: here is which.",
+        title: "Skills used",
+        allDone: "Every skill got through ({count}).",
+        someNot: "A skill did not get through: here is which.",
         show: "Detail",
         statuses: {
           succeeded: "Done",
@@ -14557,7 +14569,7 @@ const en: Dictionary = {
         followedSome: ", {count} followed by an incident",
         someCritical: ", some critical",
         business:
-          ", {count} business {count|capabilityy|capabilityies} or {count|process|processes}",
+          ", {count} business {count|capability|capabilities} or {count|process|processes}",
         yes: "yes",
         no: "no",
       },
@@ -14687,7 +14699,7 @@ const en: Dictionary = {
         "stale.source": "{source}: may be out of date.",
         "why.failed_sources":
           "It could not run, and these sources are failing: {sources}.",
-        "why.failed": "No capability answered.",
+        "why.failed": "No skill answered.",
         "why.syncing":
           "It finished before these sources: what they bring was not read ({sources}).",
         "why.unknown_subject": "LEKA knows nothing called {names}.",

@@ -257,7 +257,7 @@ describe("the catalogue", () => {
     );
     expect(within(architect).getByTestId("capability-reasons")).not.toHaveTextContent("modèle");
     expect(screen.getByTestId("catalogue-wide")).toHaveTextContent(
-      "Aucun modèle de langage n'est configuré : 1 capacité ne peut pas s'exécuter ici.",
+      "Aucun modèle de langage n'est configuré : 1 compétence ne peut pas s'exécuter ici.",
     );
     // Not run yet: nothing said about it.
     expect(architect).not.toHaveTextContent("Pas encore exécutée");
@@ -269,7 +269,7 @@ describe("the catalogue", () => {
   });
 
   it("shows one box per domain, its agents apart from LEKA's own capabilities", async () => {
-    // 2026-10-14: « une case avec les agents et capacités sur le code, pareil
+    // 2026-10-14: « une case avec les agents et compétences sur le code, pareil
     // pour les autres » — never mixed.
     const user = userEvent.setup();
     show(<CatalogueScreen />);
@@ -287,7 +287,7 @@ describe("the catalogue", () => {
     expect(
       within(within(knowledge).getByTestId("catalogue-domain-own")).getByTestId("capability-card"),
     ).toHaveAttribute("data-key", "ownership");
-    expect(within(knowledge).getByTestId("catalogue-domain-count")).toHaveTextContent("1 capacité");
+    expect(within(knowledge).getByTestId("catalogue-domain-count")).toHaveTextContent("1 compétence");
 
     // The agents only, then LEKA's own only.
     await user.click(screen.getByTestId("catalogue-show-agents"));
@@ -335,8 +335,8 @@ describe("the catalogue", () => {
     expect(screen.queryByTestId("catalogue-wide")).not.toBeInTheDocument();
   });
 
-  it("shows « Mes capacités »: what the workspace owns, LEKA's own with it", async () => {
-    // 2026-10-14: « l'onglet Mes capacités ne sert strictement à rien ».
+  it("shows « Mes compétences »: what the workspace owns, LEKA's own with it", async () => {
+    // 2026-10-14: « l'onglet Mes compétences ne sert strictement à rien ».
     route.search = "tab=mine";
     sold.entitlements.mockResolvedValue([]);
     show(<CatalogueScreen />);
@@ -409,7 +409,7 @@ describe("the catalogue", () => {
     route.search = "tab=configuration";
     show(<CatalogueScreen />);
     expect(await screen.findByTestId("catalogue-configuration")).toHaveTextContent(
-      "Seuls les admins activent ou désactivent une capacité.",
+      "Seuls les admins activent ou désactivent une compétence.",
     );
     await screen.findAllByTestId("configuration-row");
     expect(screen.queryByTestId("configuration-toggle")).not.toBeInTheDocument();

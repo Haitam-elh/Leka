@@ -3,7 +3,7 @@
  *
  * What these protect (LEKA-428): the way home, then three pillars, each
  * saying what it is for, their pages under them; Activité and À valider
- * across all three; Administration. Intentions starts open, the others
+ * across all three; Configuration. Intentions starts open, the others
  * closed; sections open and close, say so, and are remembered; the section
  * you are in opens on arrival, and closes again when you leave it. The
  * current page is marked machine-readably and only once, its section with
@@ -113,7 +113,7 @@ describe("the three pillars", () => {
     for (const [id, label, sentence] of [
       ["intentions", "Intentions", "Dites à LEKA ce que vous voulez accomplir."],
       ["environment", "Mon environnement", "Le système vivant de votre entreprise."],
-      ["capabilities", "Capacités", "Votre équipe technologique à la demande."],
+      ["capabilities", "Compétences", "Votre équipe technologique à la demande."],
     ]) {
       const section = screen.getByTestId(`nav-section-${id}`);
       expect(section).toHaveTextContent(label);
@@ -155,12 +155,12 @@ describe("the three pillars", () => {
       // Its views are chosen on its page (2026-10-14): under it, what happened.
       ENVIRONMENT,
       "Activité",
-      "Capacités disponibles",
-      "Mes capacités",
-      "Configuration",
+      "Compétences disponibles",
+      "Mes compétences",
+      "Réglages",
       "Sources",
-      "Sécurité & gouvernance",
-      "Équipe & accès",
+      "Sécurité",
+      "Équipe",
       "Facturation",
       "Paramètres",
     ]);
@@ -198,8 +198,8 @@ describe("a section", () => {
     expect(lines).toBeVisible();
     expect(within(lines as HTMLElement).getAllByRole("link").map((link) => link.textContent)).toEqual([
       "Sources",
-      "Sécurité & gouvernance",
-      "Équipe & accès",
+      "Sécurité",
+      "Équipe",
       "Facturation",
       "Paramètres",
     ]);
@@ -350,9 +350,9 @@ describe("availability", () => {
     // (route-views.test.tsx). The line in the list stays a plain line.
     expect(screen.queryByText("Bientôt")).not.toBeInTheDocument();
     expect(screen.getByTestId("nav-capabilities-available")).toHaveTextContent(
-      /^Capacités disponibles$/,
+      /^Compétences disponibles$/,
     );
-    expect(screen.getByTestId("nav-governance")).toHaveTextContent(/^Sécurité & gouvernance$/);
+    expect(screen.getByTestId("nav-governance")).toHaveTextContent(/^Sécurité$/);
   });
 
   it("gives the role in words, not the API's", async () => {

@@ -21,13 +21,13 @@ const sections = NAVIGATION.flatMap((group) =>
 const leaves = navLeaves().map(({ leaf }) => leaf);
 
 describe("the navigation", () => {
-  it("has exactly three pillars: Intentions, Mon environnement, Capacités", () => {
+  it("has exactly three pillars: Intentions, Mon environnement, Compétences", () => {
     const pillars = sections.filter((section) => section.tier === "pillar");
 
     expect(pillars.map((pillar) => DICTIONARIES.fr.nav[pillar.labelKey])).toEqual([
       "Intentions",
       "Mon environnement",
-      "Capacités",
+      "Compétences",
     ]);
     // Each says what it is for.
     expect(pillars.every((pillar) => pillar.hintKey !== undefined)).toBe(true);

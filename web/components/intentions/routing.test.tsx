@@ -147,7 +147,7 @@ describe("where an intention goes", () => {
     );
     expect(ranked).toHaveTextContent("score 8");
     expect(within(panel).getByTestId("routing-excluded")).toHaveTextContent(
-      "Une question n'est jamais confiée à une capacité qui propose des actions",
+      "Une question n'est jamais confiée à une compétence qui propose des actions",
     );
     // The chosen agent, to run for the intention: what it names, suggested;
     // its runs, followed here.
@@ -162,7 +162,7 @@ describe("where an intention goes", () => {
     );
     show();
     const panel = await screen.findByTestId("intention-routing");
-    expect(panel).toHaveTextContent("La capacité la plus adaptée ne peut pas être utilisée ici");
+    expect(panel).toHaveTextContent("La compétence la plus adaptée ne peut pas être utilisée ici");
     expect(screen.queryByTestId("agent-run-form")).not.toBeInTheDocument();
   });
 
