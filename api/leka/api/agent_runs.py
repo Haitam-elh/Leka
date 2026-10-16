@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator, Mapping
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 from urllib.parse import quote
 
@@ -38,6 +39,7 @@ from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
 from leka.capabilities import (
     DECK_FILES,
+    DRAWING_LOST,
     AgentRun,
     AgentRunCreate,
     AgentRunDecision,
@@ -196,6 +198,22 @@ def _drawable(run: AgentRun, definition: Definition | None, files: list[object])
     return [f for f in DECK_FILES if f not in have]
 
 
+def _drawing(run: AgentRun, now: datetime | None = None) -> list[str]:
+    """The files a worker is drawing — none once asked so long ago it is
+    lost (a worker gone): asked again."""
+    drawing = run.detail.get("drawing")
+    if not isinstance(drawing, list) or not drawing:
+        return []
+    since = run.detail.get("drawing_since")
+    try:
+        asked = datetime.fromisoformat(str(since)) if since else None
+    except ValueError:
+        asked = None
+    if asked is None or (now or datetime.now(UTC)) - asked > DRAWING_LOST:
+        return []
+    return [str(f) for f in drawing]
+
+
 def run_read(run: AgentRun, principal: Principal) -> AgentRunRead:
     definition = find(run.key)
     failure = run.detail.get("failure")
@@ -219,9 +237,8 @@ def run_read(run: AgentRun, principal: Principal) -> AgentRunRead:
         pending=[str(p) for p in pending] if isinstance(pending, list) else [],
         expected=_expected(run, definition),
         drawable=_drawable(run, definition, files),
-        drawing=[str(f) for f in drawing]
-        if isinstance(drawing := run.detail.get("drawing"), list)
-        else [],
+        drawing=_drawing(run),
+        draw_failed=str(failed) if (failed := run.detail.get("deliverables_error")) else None,
         deliverables=[
             DeliverableRead(
                 format=f["format"],
@@ -439,10 +456,18 @@ async def draw_run_files(
             "This agent draws no more file.",
             details=[FieldError(field="formats", message="not_drawn")],
         )
-    if run.detail.get("drawing"):
+    if _drawing(run):
         raise ApiError(status.HTTP_409_CONFLICT, ErrorCode.CONFLICT, "Its files are being drawn.")
     wanted = [f for f in dict.fromkeys(body.formats) if f in DECK_FILES]
-    run.detail = {**run.detail, "drawing": wanted}
+    run.detail = {
+        **{
+            k: v
+            for k, v in run.detail.items()
+            if k not in ("deliverables_error", "deliverables_said")
+        },
+        "drawing": wanted,
+        "drawing_since": datetime.now(UTC).isoformat(),
+    }
     audit_as(
         session,
         principal,

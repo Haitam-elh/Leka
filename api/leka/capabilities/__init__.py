@@ -121,6 +121,7 @@ from leka.capabilities.review import review_of, without_block
 from leka.capabilities.router import ROUTING_VERSION, RouteQuery, Routing, route
 from leka.capabilities.runs import (
     DECK_FILES,
+    DRAWING_LOST,
     capability_resource,
     execute_run,
     queue_files,
@@ -256,6 +257,7 @@ __all__ = [
     "AGENT_TOOLS",
     "CATEGORIES",
     "DECK_FILES",
+    "DRAWING_LOST",
     "ROUTING_VERSION",
     "Agent",
     "AgentFrontMatter",

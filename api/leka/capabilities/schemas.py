@@ -704,6 +704,11 @@ class AgentRunRead(BaseModel):
     drawing: list[str] = Field(
         default_factory=list, description="The files being drawn after it, by a worker."
     )
+    draw_failed: str | None = Field(
+        default=None,
+        description="Why its files could not be drawn last time (no_model, timeout, error…) — "
+        "or none.",
+    )
     error: str | None = Field(
         description="Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, "
         "invalid_output, abandoned, error."

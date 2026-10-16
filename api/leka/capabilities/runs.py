@@ -101,6 +101,8 @@ RUN_JOB = "leka.capabilities.runs.run_agent"
 FILES_JOB = "leka.capabilities.runs.draw_files"
 # The files a deck may be drawn as.
 DECK_FILES = ("pdf", "pptx")
+# Asked longer ago and still not drawn: lost (a worker gone) — asked again.
+DRAWING_LOST = timedelta(minutes=20)
 # How long a run may take, all of it: its context, its tools, its model.
 RUN_BUDGET = 15 * 60.0
 # A run found running this long had its worker go away; one queued this
@@ -649,46 +651,83 @@ async def redraw(
     workspace_id: uuid.UUID, run_id: uuid.UUID, formats: Sequence[str]
 ) -> dict[str, object]:
     """A finished run's deck drawn as `formats`, from the analysis it
-    delivered, and kept beside the files it has — said as a step of it."""
+    delivered, and kept beside the files it has — said as a step of it.
+
+    As a run draws (execute_run): what it needs read and committed first —
+    no transaction, no lock held while the model writes the deck, minutes
+    long — then the files kept. Whatever goes wrong, « being drawn » ends,
+    said why: never left waiting (2026-10-16: it stayed « en préparation »)."""
     with workspace_scope(workspace_id):
         async with session_factory() as session:
-            runs = CapabilityRunRepository(session, workspace_id)
-            run = await runs.run(run_id, lock=True)
-            if run is None or run.status != RunStatus.SUCCEEDED or not run.output:
-                return {"drawn": [], "skipped": "not_finished"}
-            subject = await subject_of(session, workspace_id, run.requested_by)
-            permissions = (
-                frozenset(p.value for p in subject.permissions) if subject else frozenset()
-            )
-            entry = await CatalogueService(session, workspace_id).entry(
-                run.key, permissions=permissions
-            )
-            steps = Steps(session, run, await runs.last_seq(run_id))
-            if entry is None or entry.definition.renders != "architecture_deck":
-                run.detail = {**run.detail, "drawing": None}
-                await session.commit()
-                return {"drawn": [], "skipped": "not_drawn"}
-            drawn = await draw(session, run, entry.definition, run.output, formats=formats)
-            had = run.detail.get("deliverables")
-            kept = [
-                f
-                for f in (had if isinstance(had, list) else [])
-                if isinstance(f, dict) and f.get("format") not in formats
-            ]
-            if drawn.error is None:
-                steps.add(drawn.step, **drawn.said())
-                files = kept + list(drawn.files)
-                run.detail = {
-                    **run.detail,
-                    "deliverables": files,
-                    "formats": sorted({str(f["format"]) for f in files}),
-                    "drawing": None,
-                }
-            else:
-                steps.add("render_failed", code=drawn.error, said=drawn.refusal)
-                run.detail = {**run.detail, **drawn.detail(), "drawing": None}
-            await session.commit()
-            return {"drawn": [f["format"] for f in drawn.files], "error": drawn.error}
+            try:
+                return await _redraw(session, workspace_id, run_id, formats)
+            except Exception:
+                logger.exception("run_files_not_drawn", run=str(run_id))
+                await session.rollback()
+                runs = CapabilityRunRepository(session, workspace_id)
+                run = await runs.run(run_id, lock=True)
+                if run is not None:
+                    Steps(session, run, await runs.last_seq(run_id)).add(
+                        "render_failed", code="error"
+                    )
+                    run.detail = {
+                        **run.detail,
+                        "drawing": None,
+                        "drawing_since": None,
+                        "deliverables_error": "error",
+                    }
+                    await session.commit()
+                return {"drawn": [], "error": "error"}
+
+
+async def _redraw(
+    session: AsyncSession, workspace_id: uuid.UUID, run_id: uuid.UUID, formats: Sequence[str]
+) -> dict[str, object]:
+    runs = CapabilityRunRepository(session, workspace_id)
+    run = await runs.run(run_id)
+    if run is None or run.status != RunStatus.SUCCEEDED or not run.output:
+        return {"drawn": [], "skipped": "not_finished"}
+    subject = await subject_of(session, workspace_id, run.requested_by)
+    permissions = frozenset(p.value for p in subject.permissions) if subject else frozenset()
+    entry = await CatalogueService(session, workspace_id).entry(run.key, permissions=permissions)
+    if entry is None or entry.definition.renders != "architecture_deck":
+        run.detail = {**run.detail, "drawing": None, "drawing_since": None}
+        await session.commit()
+        return {"drawn": [], "skipped": "not_drawn"}
+    output = run.output
+    # Nothing held while the model writes: minutes.
+    await session.commit()
+    drawn = await draw(session, run, entry.definition, output, formats=formats)
+    # Then kept, the run read again as it is now.
+    run = await runs.run(run_id, lock=True)
+    if run is None:
+        return {"drawn": [], "skipped": "gone"}
+    steps = Steps(session, run, await runs.last_seq(run_id))
+    had = run.detail.get("deliverables")
+    kept = [
+        f
+        for f in (had if isinstance(had, list) else [])
+        if isinstance(f, dict) and f.get("format") not in formats
+    ]
+    done = {"drawing": None, "drawing_since": None}
+    if drawn.error is None:
+        steps.add(drawn.step, **drawn.said())
+        files = kept + list(drawn.files)
+        run.detail = {
+            **{
+                k: v
+                for k, v in run.detail.items()
+                if k not in ("deliverables_error", "deliverables_said")
+            },
+            "deliverables": files,
+            "formats": sorted({str(f["format"]) for f in files}),
+            **done,
+        }
+    else:
+        steps.add("render_failed", code=drawn.error, said=drawn.refusal)
+        run.detail = {**run.detail, **drawn.detail(), **done}
+    await session.commit()
+    return {"drawn": [f["format"] for f in drawn.files], "error": drawn.error}
 
 
 def draw_files(workspace_id: str, run_id: str, formats: str) -> dict[str, object]:
