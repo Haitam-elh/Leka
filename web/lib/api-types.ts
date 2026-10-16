@@ -6969,6 +6969,11 @@ export interface components {
              * @description Its category in the marketplace (the reference's: product, architecture, testing, incident, security, performance, frontend, mobile…) — none outside it.
              */
             market?: string | null;
+            /**
+             * Included From
+             * @description The least plan that includes it, whatever this workspace's plan.
+             */
+            included_from?: string | null;
         };
         /**
          * AgentProposalRead

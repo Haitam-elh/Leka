@@ -174,6 +174,10 @@ class AgentOfferRead(_Read):
         description="Its category in the marketplace (the reference's: product, architecture, "
         "testing, incident, security, performance, frontend, mobile…) — none outside it.",
     )
+    included_from: str | None = Field(
+        default=None,
+        description="The least plan that includes it, whatever this workspace's plan.",
+    )
 
 
 class BundleMemberRead(_Read):

@@ -19,7 +19,6 @@ from leka.capabilities.definition import Kind
 from leka.capabilities.registry import agents as registry_agents
 from leka.core.config import settings
 
-PLANS = ("free", "starter", "growth", "business", "enterprise")
 DOCUMENT = Path(__file__).resolve().parents[3] / "docs" / "billing" / "agents-inventory.md"
 
 
@@ -48,11 +47,10 @@ def rows(offer: Catalogue | None = None) -> list[Row]:
     """Every agent: the reference's, then the registry's it does not name."""
     sold = (offer or catalogue()).add_ons
     known = {d.key: d for d in registry_agents(settings.agents_dir) if d.kind is Kind.AGENT}
-    included = {p: sold.included_in(p) for p in PLANS}
 
     def plans_of(key: str | None) -> tuple[str, ...]:
         """The least plan that includes it — and every one above."""
-        first = next((p for p in PLANS if key is not None and key in included[p]), None)
+        first = sold.included_from(key) if key is not None else None
         return (f"{first} +",) if first else ()
 
     found: list[Row] = []
