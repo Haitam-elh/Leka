@@ -16,8 +16,9 @@ import type { IntentionRequest } from "@/lib/validation/intentions";
  * only when someone chose it: its default is no choice, and « depuis
  * hier » in the question says more than a preset nobody touched.
  *
- * TODO: attachments are names here. Uploading them is a separate call to
- * object storage, and the request should carry the ids it returns.
+ * ITS FILES are uploaded on their own before (lib/intentions/attachments):
+ * the request carries the ids the uploads answered, and the server links
+ * them — or refuses the intention, nothing kept.
  */
 
 const HOUR = 3_600_000;
@@ -85,7 +86,11 @@ export type OfferAgent = components["schemas"]["OfferAgentRead"];
 export type OfferLine = components["schemas"]["OfferLineRead"];
 export type PathStep = components["schemas"]["PathStepRead"];
 /** An intention asked, with what its asker answered. */
-export type AskWithAnswers = IntentAsk & { answers?: IntentionAnswer[] };
+export type AskWithAnswers = IntentAsk & {
+  answers?: IntentionAnswer[];
+  /** The files kept for it, by their ids. */
+  attachments?: string[];
+};
 
 /** What LEKA proposes to get it done (2026-10-14): the agents, the plan. */
 export type AgentProposal = components["schemas"]["AgentProposalRead"];
@@ -118,7 +123,7 @@ export const intentions = {
    * Sent again with the same key — a click twice, a request retried after
    * the network gave up — it answers the intention it made, never a second
    * one (LEKA-443). */
-  create: (ask: IntentAsk, key?: string) =>
+  create: (ask: AskWithAnswers, key?: string) =>
     apiFetch<IntentionCreated>(BASE, {
       method: "POST",
       body: JSON.stringify(ask),

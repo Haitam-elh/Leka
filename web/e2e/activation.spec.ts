@@ -72,18 +72,14 @@ test("a new account goes from its workspace to a first analysis", async ({
     "LEKA pourra y répondre une fois une source lue",
   );
 
-  // One asked all the same, carried from the home's bar to the full step by
-  // the paperclip: with nothing to read, why nothing starts is said.
+  // One asked all the same, on the full step — reached from the list, the
+  // page live: with nothing to read, why nothing starts is said.
+  await page.goto("/intentions");
+  await page.getByRole("link", { name: "Nouvelle intention" }).first().click();
+  await expect(page).toHaveURL(/\/intentions\/new$/);
   await page
     .getByTestId("intention-input")
     .fill("Qu'est-ce qui a changé dans le code cette semaine ?");
-  await page
-    .getByRole("button", { name: "Joindre un fichier (à l'étape suivante)" })
-    .click();
-  await expect(page).toHaveURL(/\/intentions\/new\?q=/);
-  await expect(page.getByTestId("intention-input")).toHaveValue(
-    "Qu'est-ce qui a changé dans le code cette semaine ?",
-  );
   await page.getByTestId("intention-submit").click();
   await expect(
     page.getByRole("alert").filter({ hasText: "Aucune source connectée" }),

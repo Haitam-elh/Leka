@@ -28,6 +28,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -193,6 +194,36 @@ class IntentionLink(Base, WorkspaceScopedMixin):
     linked_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+
+
+class IntentionAttachment(Base, WorkspaceScopedMixin):
+    """A file its asker attached: its bytes in object storage, what was
+    measured of them here. Uploaded before the intention is asked, linked to
+    it when it is — never said attached unless kept; one never linked is
+    removed within a day (leka.intentions.attachments)."""
+
+    __tablename__ = "intention_attachments"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "intention_id"],
+            ["intentions.workspace_id", "intentions.id"],
+            ondelete="CASCADE",
+            name="fk_intention_attachments_intention",
+        ),
+        Index("ix_intention_attachments_intention", "workspace_id", "intention_id"),
+    )
+
+    # None until the intention it came with is asked.
+    intention_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    uploaded_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    # Measured by the store as the bytes went past, never what was claimed.
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    checksum_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    storage_key: Mapped[str] = mapped_column(String(500), nullable=False)
 
 
 ANALYSIS_STATUSES = (

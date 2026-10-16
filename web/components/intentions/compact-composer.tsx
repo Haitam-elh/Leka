@@ -6,6 +6,7 @@ import { useRef } from "react";
 
 import { Form } from "@/components/forms/form";
 import { FormAlert } from "@/components/forms/form-alert";
+import { useAttachments } from "@/components/intentions/attachments";
 import { IntentionComposer } from "@/components/intentions/intention-composer";
 import { routes } from "@/config/routes";
 import { ApiError } from "@/lib/api";
@@ -23,15 +24,17 @@ import { type IntentionDraft, intentionDraftSchema } from "@/lib/validation/inte
  * made — every source, every environment, as the full step does by
  * default — and its page opens on its analysis. A request LEKA cannot take
  * — about anything but technology, or naming nothing it knows — is said
- * above the box. The paperclip still carries the sentence to the full step,
- * where files are attached.
+ * above the box. Its files are attached here: sent as they are chosen, and
+ * only those kept go with it — refused, the words and the files stay.
  */
 export function CompactIntentionComposer() {
   const router = useRouter();
   const t = useDictionary();
   const client = useQueryClient();
-  // One key per sentence (LEKA-443): pressed twice, it is one intention.
-  const requestKey = useRef<{ text: string; key: string } | null>(null);
+  // One key per request — its words and its files (LEKA-443): pressed
+  // twice, it is one intention.
+  const requestKey = useRef<{ said: string; key: string } | null>(null);
+  const files = useAttachments();
 
   const form = useLekaForm<IntentionDraft>({
     schema: intentionDraftSchema,
@@ -48,11 +51,17 @@ export function CompactIntentionComposer() {
         },
         { everySource: true, periodChosen: false },
       );
-      if (requestKey.current?.text !== ask.text) {
-        requestKey.current = { text: ask.text, key: crypto.randomUUID() };
+      const attachments = files.ids;
+      const said = JSON.stringify([ask.text, attachments]);
+      if (requestKey.current?.said !== said) {
+        requestKey.current = { said, key: crypto.randomUUID() };
       }
       try {
-        const made = await submitIntention(ask, requestKey.current.key);
+        const made = await submitIntention(
+          attachments.length ? { ...ask, attachments } : ask,
+          requestKey.current.key,
+        );
+        files.clear();
         client.setQueryData(intentionKeys.one(made.intention.id), made.intention);
         void client.invalidateQueries({ queryKey: intentionKeys.all });
         router.push(`${routes.intentions()}/${made.intention.id}`);
@@ -60,7 +69,12 @@ export function CompactIntentionComposer() {
         if (caught instanceof ApiError && caught.status === 422) {
           form.setError("root", {
             type: "server",
-            message: caught.code === "off_topic" ? t.intentions.brief.offTopic : t.intent.nothing,
+            message:
+              caught.fieldErrors?.attachments === "attachment_unknown"
+                ? t.composer.files.unknown
+                : caught.code === "off_topic"
+                  ? t.intentions.brief.offTopic
+                  : t.intent.nothing,
           });
           return;
         }
@@ -77,14 +91,7 @@ export function CompactIntentionComposer() {
         onSubmit={() => void form.submit()}
         // Creating the intention takes seconds: the button says it is working.
         submitting={form.formState.isSubmitting}
-        // Files are attached on the full step, where there is room to list
-        // them; the paperclip carries the sentence there as it is.
-        onAttachRequest={() => {
-          const text = form.getValues("text");
-          router.push(
-            text ? `${routes.intentionNew()}?q=${encodeURIComponent(text)}` : routes.intentionNew(),
-          );
-        }}
+        files={files}
       />
     </Form>
   );

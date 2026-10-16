@@ -88,6 +88,7 @@ describe("the shell, when another tab changed the session (LEKA-469)", () => {
     const reload = vi.fn();
     vi.stubGlobal("location", { ...window.location, reload });
     me.mockReset().mockResolvedValueOnce(session("u1")).mockResolvedValueOnce(session("u1"));
+    const listening = vi.spyOn(document, "addEventListener");
     render(
       <LocaleProvider>
         <ShellProvider>
@@ -98,16 +99,23 @@ describe("the shell, when another tab changed the session (LEKA-469)", () => {
       </LocaleProvider>,
     );
     expect(await screen.findByText("the page")).toBeInTheDocument();
+    // Listening once the session is known — an event before is no one's: a
+    // busy machine showed the page before its effect had run.
+    await vi.waitFor(
+      () => expect(listening).toHaveBeenCalledWith("visibilitychange", expect.any(Function)),
+      { timeout: 5_000 },
+    );
 
     // Back on the tab, the same person: nothing happens.
     document.dispatchEvent(new Event("visibilitychange"));
-    await vi.waitFor(() => expect(me).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(me).toHaveBeenCalledTimes(2), { timeout: 5_000 });
     expect(reload).not.toHaveBeenCalled();
 
     // Back on the tab, another tab signed in as someone else: the whole tab reloads.
     me.mockResolvedValueOnce(session("u2"));
     document.dispatchEvent(new Event("visibilitychange"));
-    await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1), { timeout: 5_000 });
+    listening.mockRestore();
     vi.unstubAllGlobals();
   });
 });
