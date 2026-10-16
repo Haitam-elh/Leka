@@ -84,6 +84,7 @@ from leka.intentions import (
     IntentionAnswers,
     IntentionArchivedError,
     IntentionAsked,
+    IntentionAttachmentRead,
     IntentionContext,
     IntentionCounts,
     IntentionCreated,
@@ -124,7 +125,6 @@ from leka.intentions.attachments import read as read_attachment
 from leka.intentions.brief import brief_of, tidy
 from leka.intentions.feasibility import Feasibility, feasibility_of
 from leka.intentions.offer import offer_for
-from leka.intentions.schemas import IntentionAttachmentRead
 from leka.knowledge import GraphRepository, GraphService
 from leka.platform.storage import ObjectNotFoundError, ObjectStoreError, ObjectTooLargeError
 
