@@ -781,6 +781,7 @@ function Insights() {
 
 function Sources({ lines }: { lines: SourceLine[] | null }) {
   const t = useDictionary();
+  const canConnect = usePermissions()?.includes("source:manage") ?? false;
   return (
     <Card
       title={t.overview.sourcesTitle}
@@ -793,13 +794,16 @@ function Sources({ lines }: { lines: SourceLine[] | null }) {
       ) : (
         <SourceLines lines={lines ?? []} max={SOURCE_ROWS} />
       )}
-      <Link
-        href={routes.sources()}
-        className="mt-3 flex items-center justify-center gap-2 rounded-lg border border-shell-line px-4 py-2 text-sm font-medium text-brand-navy outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
-      >
-        <Plus className="size-4" aria-hidden="true" />
-        {t.overview.addSource}
-      </Link>
+      {/* Offered to whoever may connect one, as the page's header does. */}
+      {canConnect ? (
+        <Link
+          href={routes.sources()}
+          className="mt-3 flex items-center justify-center gap-2 rounded-lg border border-shell-line px-4 py-2 text-sm font-medium text-brand-navy outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+        >
+          <Plus className="size-4" aria-hidden="true" />
+          {t.overview.addSource}
+        </Link>
+      ) : null}
     </Card>
   );
 }

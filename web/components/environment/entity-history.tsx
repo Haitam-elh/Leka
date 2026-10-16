@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { cn } from "cn";
@@ -34,6 +35,7 @@ import {
 import { useEntityAt, useEntityHistory, useOperations } from "@/lib/evolution-queries";
 import { type Dictionary, fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
+import { useNamePage } from "@/lib/navigation/page-name";
 import { notify } from "@/lib/notify";
 
 /**
@@ -494,8 +496,10 @@ export function RemovedEntity({
   const w = t.environment.sheet.history;
   const { format: locale } = useLocale();
   const history = useEntityHistory(entityId);
-  if (history.isError) return <>{fallback}</>;
   const data = history.data;
+  // Its name in the breadcrumb, not its id.
+  useNamePage(usePathname() ?? "/", data?.entity.name);
+  if (history.isError) return <>{fallback}</>;
   if (!data) {
     return <div className="h-96 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />;
   }

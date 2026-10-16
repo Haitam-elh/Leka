@@ -347,6 +347,8 @@ const fr = {
     allServices: "Tous les services",
     noSources:
       "Aucune source connectée : LEKA n'a encore rien à lire pour vous répondre.",
+    noReadable:
+      "{count} {count|source connectée est|sources connectées sont} en erreur : LEKA ne peut rien lire pour vous répondre.",
     connectSource: "Connecter une source",
   },
   /**
@@ -376,6 +378,7 @@ const fr = {
       incidents: "{count} {count|incident ouvert|incidents ouverts}",
       measured: "État connu pour {known} {known|élément|éléments} sur {total}",
       troubled: "{count} {count|élément dégradé ou indisponible|éléments dégradés ou indisponibles}",
+      sourcesFailing: "{count} {count|source en erreur|sources en erreur} — voir les sources",
       lastSync: "Dernière synchronisation",
       neverSynced: "Aucune source lue pour l'instant",
       history: "Historique des analyses",
@@ -737,7 +740,7 @@ const fr = {
   activity: {
     title: "Activité",
     subtitle:
-      "Suivez en temps réel ce qui se passe dans votre environnement et les actions de LEKA.",
+      "Ce qui se passe dans votre environnement et les actions de LEKA, à chaque lecture de vos sources.",
     periods: {
       "7": "7 derniers jours",
       "30": "30 derniers jours",
@@ -1144,6 +1147,7 @@ const fr = {
     invoices: "Historique des factures",
     invoicesNone:
       "Aucune facture : LEKA n'en émet pas encore, votre offre est attribuée par votre interlocuteur LEKA.",
+    invoicesStripe: "Vos factures sont émises par Stripe : retrouvez-les avec « Carte et factures », dans Votre formule.",
     credits: {
       title: "Crédits IA du mois",
       explain:
@@ -3556,6 +3560,7 @@ const fr = {
       legend: { inferred: "Lien déduit" },
       figures: {
         modules: "{count} {count|module|modules} de code",
+        applications: "+ {count} {count|application|applications}",
         tables: "{count} {count|table|tables}",
         services: "Services",
         repositories: "Repositories",
@@ -6292,7 +6297,7 @@ const fr = {
         title: "Action",
         hint: "Mise en œuvre",
         heading: "Action",
-        lead: "Les actions validées sont en cours d'exécution. Vous pouvez suivre leur avancement en temps réel.",
+        lead: "Les actions validées sont en cours d'exécution. Leur avancement s'affiche au fur et à mesure.",
       },
       notNeeded:
         "Aucune action n'est à décider pour cette demande : LEKA y a répondu.",
@@ -7753,12 +7758,12 @@ const fr = {
     },
     approve: "Valider et passer à l'action",
     approveTitle: "Appliquer les actions sélectionnées ?",
-    approveBody: "LEKA appliquera ces changements sur votre infrastructure.",
+    approveBody: "C'est un exemple : rien ne sera appliqué sur votre infrastructure.",
     reject: "Refuser la sélection",
     rejectTitle: "Refuser la sélection ?",
     rejectBody: "Ces recommandations ne seront pas appliquées.",
     rejectReason: "Raison du refus",
-    approved: "Actions envoyées",
+    approved: "Exemple : aucune action n'a été envoyée",
     rejected: "Sélection refusée",
   },
   /**
@@ -8233,6 +8238,8 @@ const en: Dictionary = {
     allServices: "All services",
     noSources:
       "No source connected: LEKA has nothing to read to answer you yet.",
+    noReadable:
+      "{count} connected {count|source is|sources are} in error: LEKA cannot read anything to answer you.",
     connectSource: "Connect a source",
   },
   overview: {
@@ -8255,6 +8262,7 @@ const en: Dictionary = {
       incidents: "{count} {count|open incident|open incidents}",
       measured: "State known for {known} of {total} {total|thing|things}",
       troubled: "{count} {count|thing|things} degraded or unavailable",
+      sourcesFailing: "{count} {count|source in error|sources in error} — see the sources",
       lastSync: "Last synchronisation",
       neverSynced: "No source read yet",
       history: "Analyses history",
@@ -8596,7 +8604,7 @@ const en: Dictionary = {
   activity: {
     title: "Activity",
     subtitle:
-      "Follow what happens in your environment and what LEKA does, as it happens.",
+      "What happens in your environment and what LEKA does, as each read of your sources brings it.",
     periods: { "7": "Last 7 days", "30": "Last 30 days", "90": "Last 90 days" },
     period: "Period",
     type: "Type",
@@ -8980,6 +8988,7 @@ const en: Dictionary = {
     invoices: "Invoice history",
     invoicesNone:
       "No invoice: LEKA issues none yet — your plan is set by your LEKA contact.",
+    invoicesStripe: "Your invoices are issued by Stripe: find them under « Card and invoices », in Your plan.",
     credits: {
       title: "This month's AI credits",
       explain:
@@ -11313,6 +11322,7 @@ const en: Dictionary = {
       legend: { inferred: "Inferred link" },
       figures: {
         modules: "{count} code {count|module|modules}",
+        applications: "+ {count} {count|application|applications}",
         tables: "{count} {count|table|tables}",
         services: "Services",
         repositories: "Repositories",
@@ -13974,7 +13984,7 @@ const en: Dictionary = {
         title: "Action",
         hint: "Carrying it out",
         heading: "Action",
-        lead: "The approved actions are running. Follow their progress in real time.",
+        lead: "The approved actions are running. Their progress shows as it comes.",
       },
       notNeeded: "Nothing needs deciding for this request: LEKA answered it.",
       skipped: "Not needed",
@@ -15377,12 +15387,12 @@ const en: Dictionary = {
     },
     approve: "Approve and act",
     approveTitle: "Apply the selected actions?",
-    approveBody: "LEKA will apply these changes to your infrastructure.",
+    approveBody: "This is an example: nothing will be applied to your infrastructure.",
     reject: "Reject the selection",
     rejectTitle: "Reject the selection?",
     rejectBody: "These recommendations will not be applied.",
     rejectReason: "Reason for rejecting",
-    approved: "Actions sent",
+    approved: "Example: no action was sent",
     rejected: "Selection rejected",
   },
   auth: {

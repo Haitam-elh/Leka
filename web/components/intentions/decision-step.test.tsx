@@ -22,6 +22,7 @@ import { LocaleProvider } from "@/lib/i18n/locale-provider";
 vi.mock("@/lib/notify", () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 const { DecisionStep } = await import("@/components/intentions/decision-step");
+const { notify } = await import("@/lib/notify");
 
 function show() {
   return render(
@@ -96,6 +97,12 @@ describe("the decision step", () => {
     expect(screen.getAllByTestId("recommendation")[0].className).toContain("border-state-danger");
 
     await user.click(screen.getByRole("button", { name: "Valider et passer à l'action" }));
-    expect(await screen.findByRole("alertdialog")).toHaveTextContent("3 services concernés");
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("3 services concernés");
+    // An example: it says nothing will be applied, then claims no success.
+    expect(dialog).toHaveTextContent("rien ne sera appliqué");
+    await user.click(within(dialog).getByRole("button", { name: "Valider et passer à l'action" }));
+    expect(await screen.findByTestId("decision-settled")).toHaveTextContent("aucune action n'a été envoyée");
+    expect(notify.success).not.toHaveBeenCalled();
   });
 });

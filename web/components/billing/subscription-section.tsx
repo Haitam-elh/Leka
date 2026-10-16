@@ -184,7 +184,11 @@ export function SubscriptionSection() {
                 onClick={() => setInterval(each)}
                 className={`rounded-full px-3 py-1 text-[0.8125rem] font-medium ${interval === each ? "bg-brand-navy text-white" : "bg-shell-canvas text-shell-muted"}`}
               >
-                {each === "month" ? w.monthlyWord : fill(w.yearlyChoice, { percent: pricing?.annual_discount_percent ?? 20 })}
+                {each === "month"
+                  ? w.monthlyWord
+                  : pricing?.annual_discount_percent
+                    ? fill(w.yearlyChoice, { percent: pricing.annual_discount_percent })
+                    : w.yearlyWord}
               </button>
             ))}
           </div>

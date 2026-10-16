@@ -224,6 +224,19 @@ class SourceService:
             capabilities=source.capabilities,
             warnings=result.warnings,
         )
+        # A test that passed proves the source answers now: a failed health
+        # check from before it is stale, not « En panne » beside « Connexion
+        # réussie » until the next scheduled check (LEKA-469).
+        if source.health_status is HealthStatus.UNHEALTHY:
+            source.health_status = HealthStatus.HEALTHY
+            source.last_health_check_at = datetime.now(UTC)
+            self._record(
+                source,
+                SourceEventType.HEALTH_CHANGED,
+                previous=HealthStatus.UNHEALTHY.value,
+                current=HealthStatus.HEALTHY.value,
+                code=None,
+            )
         return result, None
 
     async def scope_options(self, source: Source) -> tuple[ScopeListing | None, Diagnostic | None]:

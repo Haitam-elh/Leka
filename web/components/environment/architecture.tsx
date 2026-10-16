@@ -329,8 +329,11 @@ export function ArchitectureFigures({ data }: { data: Architecture | undefined }
     {
       id: "services",
       icon: <IconTile icon={Boxes} tone="info" className="size-9" />,
-      value: value(figures ? figures.services + figures.applications : undefined),
+      // Services alone, as the home and the twin count them (LEKA-469); the
+      // applications beside, not added in.
+      value: value(figures?.services),
       label: w.figures.services,
+      sub: figures?.applications ? fill(w.figures.applications, { count: figures.applications }) : undefined,
     },
     {
       id: "repositories",

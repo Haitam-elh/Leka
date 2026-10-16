@@ -75,3 +75,38 @@ describe("the shell, when the session cannot be checked", () => {
     expect(me).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("the shell, when another tab changed the session (LEKA-469)", () => {
+  const session = (id: string) => ({
+    user: { id, email: `${id}@acme.example`, email_verified_at: null, last_login_at: null },
+    workspaces: [{ id: "w1", name: "Acme Corp", slug: "acme", role: "owner" }],
+    active_workspace_id: "w1",
+  });
+
+  it("reloads the tab when it is someone else's now, not when it is still the same", async () => {
+    const reload = vi.fn();
+    vi.stubGlobal("location", { ...window.location, reload });
+    me.mockReset().mockResolvedValueOnce(session("u1")).mockResolvedValueOnce(session("u1"));
+    render(
+      <LocaleProvider>
+        <ShellProvider>
+          <AppShell>
+            <p>the page</p>
+          </AppShell>
+        </ShellProvider>
+      </LocaleProvider>,
+    );
+    expect(await screen.findByText("the page")).toBeInTheDocument();
+
+    // Back on the tab, the same person: nothing happens.
+    document.dispatchEvent(new Event("visibilitychange"));
+    await vi.waitFor(() => expect(me).toHaveBeenCalledTimes(2));
+    expect(reload).not.toHaveBeenCalled();
+
+    // Back on the tab, another tab signed in as someone else: the whole tab reloads.
+    me.mockResolvedValueOnce(session("u2"));
+    document.dispatchEvent(new Event("visibilitychange"));
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+    vi.unstubAllGlobals();
+  });
+});

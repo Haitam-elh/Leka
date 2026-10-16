@@ -59,6 +59,13 @@ describe("the document title", () => {
     expect(documentTitle("/environment/services/payment-api", fr)).toBe("Payment API · LEKA");
   });
 
+  it("never prints a UUID made readable — the route's name until the page names itself (LEKA-469)", () => {
+    const id = "a9a859cb-66f7-4f5c-917f-7ad3bc9ba229";
+    const title = documentTitle(`/sources/${id}`, fr);
+    expect(title).not.toMatch(/A9a859cb/i);
+    expect(title).toMatch(/· LEKA$/);
+  });
+
   it("says so when the address matches nothing", () => {
     expect(documentTitle("/nowhere", fr)).toBe("Page introuvable · LEKA");
   });

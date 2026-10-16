@@ -24,7 +24,7 @@ import { FeasibilityPanel } from "@/components/intentions/feasibility";
 import { ControlNotice } from "@/components/intelligence";
 import { IntentContext } from "@/components/intentions/intent-context";
 import type { Step } from "@/components/intentions/intention-stepper";
-import { useCurrentWorkspace } from "@/components/shell/shell-provider";
+import { useCurrentWorkspace, usePermissions } from "@/components/shell/shell-provider";
 import { SourceLogo, sourceTitle } from "@/components/sources/source-logo";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,7 +51,7 @@ import {
 } from "@/lib/intentions/api";
 import { intentionKeys, useIntention } from "@/lib/intentions/queries";
 import { notify } from "@/lib/notify";
-import { KIND_CATEGORY, type Source } from "@/lib/sources";
+import { isConnected, KIND_CATEGORY, type Source } from "@/lib/sources";
 import { useSources } from "@/lib/sources-queries";
 import {
   type IntentionRequest,
@@ -221,6 +221,9 @@ export function IntentionForm({
   useUnsavedChangesGuard(form.formState.isDirty && assembled === null);
 
   const sources = useSources();
+  const canConnect = usePermissions()?.includes("source:manage") ?? false;
+  // Connected yet unreadable (in error): said, not « Aucune source connectée ».
+  const failing = (sources.data ?? []).filter((source) => isConnected(source) && !readable(source)).length;
   const environment = useEnvironment();
   const sourceItems = useMemo(
     () =>
@@ -475,13 +478,17 @@ export function IntentionForm({
               className="space-y-2 text-sm"
               data-testid="intention-no-sources"
             >
-              <p className="text-shell-muted">{t.composer.noSources}</p>
+              <p className="text-shell-muted">
+                {failing > 0 ? fill(t.composer.noReadable, { count: failing }) : t.composer.noSources}
+              </p>
+              {canConnect ? (
               <Link
                 href={routes.sources()}
                 className="font-medium text-brand-violet underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-brand-violet/40"
               >
                 {t.composer.connectSource}
               </Link>
+              ) : null}
             </div>
           ) : (
             <SelectableListField<IntentionRequest, "sources">

@@ -14,7 +14,7 @@
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -433,6 +433,9 @@ describe("Mon environnement", () => {
     expect(await screen.findByTestId("arch-column-services")).toBeInTheDocument();
     // The overview's: a column's first cards, no flows.
     expect(graphApi.architecture).toHaveBeenCalledWith(null, false);
+    // A reader (no source:manage) is not offered to add a source (LEKA-469).
+    expect(await screen.findByText("Sources connectées")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Ajouter une source" })).not.toBeInTheDocument();
     expect(graphApi.view).not.toHaveBeenCalled();
     // Under it, the mockup's foot (LEKA-459): the overall state, the
     // sources, the alerts, what moved — what needs a look is on Incidents.
@@ -783,6 +786,10 @@ describe("an entity's sheet", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "redis-sessions" })).toBeVisible();
     expect(screen.getByText(/Aucune source ne le montre plus depuis le/)).toBeInTheDocument();
     expect(screen.getByTestId("history-version-2")).toHaveTextContent("Retiré");
+    // The breadcrumb names it, not its id.
+    await waitFor(() =>
+      expect(screen.getByRole("navigation", { name: "Fil d'Ariane" })).toHaveTextContent("redis-sessions"),
+    );
     // Gone: nothing of it is restored.
     expect(screen.queryByRole("button", { name: "Restaurer" })).not.toBeInTheDocument();
   });

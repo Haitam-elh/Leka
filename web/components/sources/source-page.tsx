@@ -35,6 +35,7 @@ import { routes } from "@/config/routes";
 import { ApiError } from "@/lib/api";
 import { isCustom } from "@/lib/custom-connectors";
 import { buildBreadcrumb } from "@/lib/navigation/breadcrumb";
+import { useNamePage } from "@/lib/navigation/page-name";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 import { notify } from "@/lib/notify";
@@ -58,6 +59,8 @@ export function SourcePage({ sourceId }: { sourceId: string }) {
   const t = useDictionary();
   const pathname = usePathname() ?? routes.source(sourceId);
   const query = useSource(sourceId);
+  // The tab's title says its name, not its id (LEKA-469).
+  useNamePage(pathname, query.data?.display_name);
 
   if (query.isPending) return <LoadingState size="page" />;
   if (query.error instanceof ApiError && query.error.status === 404) {

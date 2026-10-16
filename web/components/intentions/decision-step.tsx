@@ -166,7 +166,8 @@ export function DecisionStep() {
       impact: chosen.map((item) => item.effect ?? item.title),
     });
     if (!ok) return;
-    notify.success({ title: w.approved });
+    // An example: nothing was sent, so no success.
+    notify.info({ title: w.approved });
     setSettled("approved");
   }
 

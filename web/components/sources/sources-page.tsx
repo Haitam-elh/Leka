@@ -271,7 +271,16 @@ function Stats({
         tone="violet"
         value={synced ? timeAgo(t, synced) : s.neverSynced}
         label={s.lastSync}
-        foot={synced ? (toWatch > 0 ? fill(s.toWatch, { count: toWatch }) : s.upToDate) : undefined}
+        // Never « Tout est à jour » beside a source in error: its own tile says it.
+        foot={
+          synced
+            ? toWatch > 0
+              ? fill(s.toWatch, { count: toWatch })
+              : errors === 0
+                ? s.upToDate
+                : undefined
+            : undefined
+        }
       />
     </StatGrid>
   );

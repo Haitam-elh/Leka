@@ -16,6 +16,8 @@ const env = vi.hoisted(() => ({ data: undefined as unknown }));
 const offers = vi.hoisted(() => ({ data: undefined as unknown }));
 const list = vi.hoisted(() => ({ value: { isPending: false, data: undefined as unknown } }));
 vi.mock("@/lib/environment-queries", () => ({ useEnvironment: () => env }));
+const listed = vi.hoisted(() => ({ data: undefined as unknown }));
+vi.mock("@/lib/sources-queries", () => ({ useSources: () => listed }));
 const buy = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }));
 const permissions = vi.hoisted(() => ({ value: [] as string[] }));
 vi.mock("@/lib/billing-queries", () => ({ useAddOns: () => offers, useBuy: () => buy }));
@@ -97,6 +99,15 @@ describe("the analyses already asked", () => {
   it("« Historique des analyses » opens the list of every intention", () => {
     show(<HistoryLink />);
     expect(screen.getByRole("link", { name: "Historique des analyses" })).toHaveAttribute("href", "/intentions");
+  });
+
+  it("says a source in error, as Mon environnement does, and leads to Sources", () => {
+    env.data = measured;
+    listed.data = [{ status: "error" }];
+    show(<EnvironmentCard />);
+    expect(screen.getByTestId("home-sources-failing")).toHaveTextContent("1 source en erreur — voir les sources");
+    expect(screen.getByTestId("home-sources-failing")).toHaveAttribute("href", "/sources");
+    listed.data = undefined;
   });
 });
 

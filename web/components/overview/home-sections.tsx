@@ -24,8 +24,10 @@ import { routes } from "@/config/routes";
 import { euros } from "@/lib/billing";
 import { useAddOns } from "@/lib/billing-queries";
 import { useEnvironment } from "@/lib/environment-queries";
+import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import { useIntentions } from "@/lib/intentions/queries";
+import { useSources } from "@/lib/sources-queries";
 import { type Health, overallOf } from "@/lib/twin";
 
 /**
@@ -67,6 +69,7 @@ export function EnvironmentCard() {
   const w = t.overview.home;
   const { format } = useLocale();
   const env = useEnvironment().data;
+  const failing = useSources().data?.filter((source) => source.status === "error").length ?? 0;
   if (!env) {
     return (
       <div
@@ -157,6 +160,15 @@ export function EnvironmentCard() {
           </p>
         </div>
       </div>
+      {failing > 0 ? (
+        <Link
+          href={routes.sources()}
+          className="mt-3 block rounded text-center text-xs font-medium text-state-danger outline-none hover:underline focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+          data-testid="home-sources-failing"
+        >
+          {fill(w.sourcesFailing, { count: failing })}
+        </Link>
+      ) : null}
     </section>
   );
 }

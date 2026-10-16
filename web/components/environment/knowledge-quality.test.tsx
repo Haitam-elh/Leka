@@ -159,6 +159,14 @@ describe("the tab Qualité", () => {
     expect(screen.getByTestId("quality-dimension-confidence")).toHaveTextContent("Non mesurée");
   });
 
+  it("claims no « Stable sur 7 jours » before there is a score from 7 days ago", async () => {
+    api.summary.mockResolvedValue(summary({ change: null }));
+    mount(<QualityTab />);
+
+    expect(await screen.findByTestId("quality-workspace-score")).toHaveTextContent("72 %");
+    expect(screen.queryByTestId("quality-change")).not.toBeInTheDocument();
+  });
+
   it("says every point of the trend, and reads one by keyboard", async () => {
     mount(<QualityTab />);
     const trend = await screen.findByTestId("quality-trend");
