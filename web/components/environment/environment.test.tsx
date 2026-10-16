@@ -433,6 +433,9 @@ describe("Mon environnement", () => {
     expect(await screen.findByTestId("arch-column-services")).toBeInTheDocument();
     // The overview's: a column's first cards, no flows.
     expect(graphApi.architecture).toHaveBeenCalledWith(null, false);
+    // A reader (no source:manage) is not offered to add a source (LEKA-469).
+    expect(await screen.findByText("Sources connectées")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Ajouter une source" })).not.toBeInTheDocument();
     expect(graphApi.view).not.toHaveBeenCalled();
     // Under it, the mockup's foot (LEKA-459): the overall state, the
     // sources, the alerts, what moved — what needs a look is on Incidents.

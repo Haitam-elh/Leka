@@ -29,7 +29,9 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
+const permissions = vi.hoisted(() => ({ value: ["source:manage"] as string[] }));
 vi.mock("@/components/shell/shell-provider", () => ({
+  usePermissions: () => permissions.value,
   useCurrentWorkspace: () => ({
     id: "ws-1",
     name: "Acme",
@@ -275,6 +277,21 @@ describe("the new intention's context and scope", () => {
     expect(screen.getByTestId("selectable-more")).toHaveTextContent(
       "Voir moins",
     );
+  });
+
+  it("says a connected source in error is unreadable, and offers no connecting to a member (LEKA-469)", async () => {
+    permissions.value = ["workspace:read"];
+    sourcesApi.list.mockResolvedValue({
+      data: [{ id: "s3", type: "github", display_name: "CPP00", status: "error" }],
+      next_cursor: null,
+    });
+    show();
+
+    const empty = await screen.findByTestId("intention-no-sources");
+    expect(empty).toHaveTextContent("1 source connectée est en erreur");
+    expect(empty).not.toHaveTextContent("Aucune source connectée");
+    expect(within(empty).queryByRole("link")).not.toBeInTheDocument();
+    permissions.value = ["source:manage"];
   });
 
   it("says when none is connected, and leads to connecting one", async () => {

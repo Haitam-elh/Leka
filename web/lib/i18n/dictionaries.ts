@@ -347,6 +347,8 @@ const fr = {
     allServices: "Tous les services",
     noSources:
       "Aucune source connectée : LEKA n'a encore rien à lire pour vous répondre.",
+    noReadable:
+      "{count} {count|source connectée est|sources connectées sont} en erreur : LEKA ne peut rien lire pour vous répondre.",
     connectSource: "Connecter une source",
   },
   /**
@@ -8179,6 +8181,8 @@ const en: Dictionary = {
     allServices: "All services",
     noSources:
       "No source connected: LEKA has nothing to read to answer you yet.",
+    noReadable:
+      "{count} connected {count|source is|sources are} in error: LEKA cannot read anything to answer you.",
     connectSource: "Connect a source",
   },
   overview: {
