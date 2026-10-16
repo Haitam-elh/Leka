@@ -2,7 +2,14 @@
 prices, discounts and trial, what each includes — one catalogue
 (catalogue.yaml) — and the pricing page's own analytics."""
 
-from leka.billing.add_ons import AddOn, add_on, checkout_add_on, launch_bought, marked
+from leka.billing.add_ons import (
+    AddOn,
+    add_on,
+    add_on_renewal,
+    checkout_add_on,
+    launch_bought,
+    marked,
+)
 from leka.billing.catalogue import (
     INTERVALS,
     Catalogue,
@@ -97,6 +104,7 @@ __all__ = [
     "SubscriptionRead",
     "account_of",
     "add_on",
+    "add_on_renewal",
     "catalogue",
     "checkout",
     "checkout_add_on",

@@ -242,3 +242,12 @@ class EntitlementRead(_Read):
     origin: Literal["purchase", "grant"]
     started_at: datetime
     agents: list[str] = Field(description="The agents it gives.")
+    subscription: str | None = Field(
+        default=None, description="Bought: its Stripe subscription, to cancel or renew."
+    )
+    cancel_at_period_end: bool = Field(
+        default=False, description="Cancelled: kept until current_period_end, then not renewed."
+    )
+    current_period_end: datetime | None = Field(
+        default=None, description="When its paid period ends, as Stripe last said it."
+    )

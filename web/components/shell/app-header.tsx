@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { Wordmark } from "@/components/brand/logo";
 import { NotificationBell } from "@/components/notifications/bell";
+import { RunningIntentions } from "@/components/shell/running-intentions";
 import { useShell } from "@/components/shell/shell-provider";
 import { UserMenu } from "@/components/shell/user-menu";
 import { WorkspaceSwitcher } from "@/components/shell/workspace-switcher";
@@ -47,6 +48,7 @@ export function AppHeader({ onOpenNavigation, onOpenSearch, searchTriggerRef }: 
         <Wordmark className="h-[23px]" priority />
       </Link>
 
+      {ready && <RunningIntentions />}
       <button
         ref={searchTriggerRef}
         type="button"

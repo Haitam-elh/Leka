@@ -8,8 +8,14 @@ monthly subscription of its own, beside the plan's — never instead of it.
                         chosen there are kept, launched once it is paid.
     apply_add_on()      what Stripe's verified events change: paid, it is
                         owned (an entitlement, its subscription said);
-                        cancelled or unpaid, no longer. The plan is never
-                        touched by an add-on's events.
+                        cancelled or unpaid, no longer; its renewal as
+                        Stripe says it. The plan is never touched by an
+                        add-on's events.
+    add_on_renewal()    « Annuler l'abonnement » / « Réactiver le
+                        renouvellement » of one add-on's subscription
+                        (LEKA-474): kept until its period's end either
+                        way; only a subscription this workspace bought an
+                        add-on with — never the plan's, never another's.
 
 What a person buys is what the page shows: each agent and bundle is a
 Stripe price made from catalogue.yaml by the catalogue sync, found by its
@@ -30,10 +36,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.background import JobQueue, enqueue_job
 from leka.billing.catalogue import catalogue
-from leka.billing.entitlements import end, grant, owned, plan_runs_agents
-from leka.billing.models import AddOnCheckout
+from leka.billing.entitlements import end, entitlements, grant, owned, plan_runs_agents
+from leka.billing.models import AddOnCheckout, AgentEntitlement
 from leka.billing.stripe import Stripe
-from leka.billing.subscriptions import CheckoutRefusedError, _customer, _price, account_of
+from leka.billing.subscriptions import (
+    CheckoutRefusedError,
+    _customer,
+    _period_end,
+    _price,
+    account_of,
+)
 from leka.billing.sync import add_on_lookup_key
 from leka.core.config import settings
 
@@ -212,8 +224,49 @@ async def apply_add_on(
         if kind.endswith(".deleted") or status in ENDING:
             ended = await end(session, workspace_id, subscription=str(data.get("id") or ""))
             return f"add_on_ended:{ended}"
+        # Cancelled or renewed from Stripe's portal too: said as Stripe says it.
+        # shortcut: no ordering of these events — a late older one can say an
+        # older renewal until the next; upgrade with an applied_at like the plan's.
+        for bought in await _bought(session, workspace_id, str(data.get("id") or "")):
+            bought.cancel_at_period_end = bool(data.get("cancel_at_period_end"))
+            bought.current_period_end = _period_end(dict(data)) or bought.current_period_end
         return "add_on_kept"
     return "ignored"
+
+
+async def _bought(
+    session: AsyncSession, workspace_id: uuid.UUID, subscription: str
+) -> list[AgentEntitlement]:
+    """What this workspace bought with this subscription, still owned."""
+    return [
+        row
+        for row in await entitlements(session, workspace_id)
+        if subscription and row.origin == "purchase" and row.stripe_subscription_id == subscription
+    ]
+
+
+async def add_on_renewal(
+    session: AsyncSession,
+    workspace_id: uuid.UUID,
+    subscription: str,
+    *,
+    renew: bool,
+    client: Stripe,
+) -> list[AgentEntitlement]:
+    """Renewed at its period's end, or not — what it grants kept until then
+    either way. CheckoutRefusedError when this workspace bought nothing with
+    it: the plan's subscription, or another workspace's, is never touched."""
+    rows = await _bought(session, workspace_id, subscription)
+    if not rows:
+        raise CheckoutRefusedError("not_subscribed", "No agent or bundle bought with it here.")
+    made = await client.post(
+        f"/v1/subscriptions/{subscription}", {"cancel_at_period_end": not renew}
+    )
+    for row in rows:
+        row.cancel_at_period_end = bool(made.get("cancel_at_period_end"))
+        row.current_period_end = _period_end(made) or row.current_period_end
+    await session.commit()
+    return rows
 
 
 async def launch_bought(session: AsyncSession, workspace_id: uuid.UUID, session_id: str) -> bool:

@@ -191,9 +191,8 @@ describe("your plan", () => {
     await waitFor(() => expect(api.portal).toHaveBeenCalled());
   });
 
-  it("stops the renewal in plain words, its end date said, and renews again", async () => {
-    // 2026-10-14: Stripe's « Cancel subscription », in English, only stopped
-    // the renewal.
+  it("« Annuler l'abonnement » while it renews; cancelled, its end date said and « Réactiver » (LEKA-474)", async () => {
+    // At its period's end, as Stripe's portal does: nothing stops before.
     const active = account({
       plan: "growth",
       interval: "month",
@@ -206,17 +205,24 @@ describe("your plan", () => {
     const user = userEvent.setup();
     show();
     const subscribed = await screen.findByTestId("billing-subscribed");
-    await user.click(within(subscribed).getByTestId("billing-stop-renewal"));
+    expect(within(subscribed).queryByTestId("billing-renew")).toBeNull();
+    const cancel = within(subscribed).getByTestId("billing-stop-renewal");
+    expect(cancel).toHaveTextContent("Annuler l'abonnement");
+    await user.click(cancel);
     const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("Annuler votre abonnement ?");
     expect(dialog).toHaveTextContent("Votre formule reste active jusqu'au 10 novembre 2026");
-    await user.click(within(dialog).getByRole("button", { name: "Ne pas renouveler" }));
+    // Never « Annuler » beside « Annuler l'abonnement ».
+    expect(within(dialog).getByRole("button", { name: "Garder l'abonnement" })).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Annuler l'abonnement" }));
     await waitFor(() => expect(api.renewal).toHaveBeenCalledWith(false));
     expect(await screen.findByTestId("billing-renew")).toHaveTextContent(
       "Réactiver le renouvellement",
     );
-    expect(subscribed).toHaveTextContent(
-      "Ne sera pas renouvelée : votre formule reste active jusqu'au 10 novembre 2026",
+    expect(screen.getByTestId("billing-period")).toHaveTextContent(
+      "Résiliation programmée : votre formule reste active jusqu'au 10 novembre 2026",
     );
+    expect(screen.queryByTestId("billing-stop-renewal")).toBeNull();
     api.renewal.mockResolvedValue(active);
     await user.click(screen.getByTestId("billing-renew"));
     await waitFor(() => expect(api.renewal).toHaveBeenCalledWith(true));

@@ -109,7 +109,32 @@ describe("the figures", () => {
 });
 
 describe("the board", () => {
-  it("draws each column, each card's kind and state in words, the API chosen first", () => {
+  it("opens on no card chosen, its panel closed; a click opens that card's (LEKA-473)", async () => {
+    const user = userEvent.setup();
+    mount(<ArchitectureBoard data={ARCHITECTURE} />);
+    expect(screen.queryByTestId("architecture-panel")).not.toBeInTheDocument();
+    expect(screen.queryAllByRole("button", { pressed: true })).toHaveLength(0);
+    const api = screen.getByRole("button", { name: /^Leka API, Backend/ });
+    expect(api).toHaveAttribute("aria-pressed", "false");
+
+    await user.click(api);
+    expect(api).toHaveAttribute("aria-pressed", "true");
+    expect(
+      within(screen.getByTestId("architecture-panel")).getByRole("heading", { name: "Leka API" }),
+    ).toBeInTheDocument();
+
+    // Closed, it stays closed — and the next card clicked is the one shown.
+    await user.click(screen.getByRole("button", { name: "Fermer le détail" }));
+    expect(screen.queryByTestId("architecture-panel")).not.toBeInTheDocument();
+    expect(api).toHaveAttribute("aria-pressed", "false");
+    await user.click(screen.getByRole("button", { name: /^PostgreSQL, Base de données/ }));
+    expect(within(screen.getByTestId("architecture-panel")).getByRole("heading")).toHaveTextContent(
+      "PostgreSQL",
+    );
+  });
+
+  it("draws each column, each card's kind and state in words, the API's panel once chosen", async () => {
+    const user = userEvent.setup();
     mount(<ArchitectureBoard data={ARCHITECTURE} />);
 
     const column = (name: string) => within(screen.getByTestId(`arch-column-${name}`));
@@ -138,6 +163,7 @@ describe("the board", () => {
     const api = column("services").getByRole("button", {
       name: "Leka API, Backend, En bonne santé (Déduit)",
     });
+    await user.click(api);
     expect(api).toHaveAttribute("aria-pressed", "true");
 
     const panel = within(screen.getByTestId("architecture-panel"));
