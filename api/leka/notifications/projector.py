@@ -207,6 +207,7 @@ async def _alerts(
             select(func.count())
             .select_from(MonitoringAlert)
             .where(
+                MonitoringAlert.workspace_id == workspace_id,
                 MonitoringAlert.subject_id == alert.subject_id,
                 MonitoringAlert.family == alert.family,
                 MonitoringAlert.id != alert.id,

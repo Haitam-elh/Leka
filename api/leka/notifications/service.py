@@ -53,14 +53,19 @@ class Notifications:
         self._principal = principal
 
     def _visible(self) -> ColumnElement[bool]:
-        """Theirs: them by name, a permission they hold, or every member."""
+        """Theirs: of their workspace — said here, not left to the session's
+        guard, which a count over no mapped column escapes — and them by
+        name, a permission they hold, or every member."""
         held = sorted(str(p.value) for p in self._principal.permissions)
-        return or_(
-            Notification.audience_user_id == self._principal.user_id,
-            Notification.audience_permission.in_(held),
-            and_(
-                Notification.audience_user_id.is_(None),
-                Notification.audience_permission.is_(None),
+        return and_(
+            Notification.workspace_id == self._principal.workspace_id,
+            or_(
+                Notification.audience_user_id == self._principal.user_id,
+                Notification.audience_permission.in_(held),
+                and_(
+                    Notification.audience_user_id.is_(None),
+                    Notification.audience_permission.is_(None),
+                ),
             ),
         )
 

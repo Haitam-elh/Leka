@@ -422,6 +422,11 @@ async def test_another_workspace_sees_none_and_an_empty_centre_says_so(
 ) -> None:
     workspace = acme["acme"]
     await _kept(workspace, _warning(workspace), _alert(workspace, uuid.uuid4()))
+    # Told in Acme first: kept, unread there, for every member.
+    _as(identity, acme, "admin")
+    assert await _unread(client) > 0
+    # Not counted elsewhere — the count is no mapped row, the session's
+    # guard would not have scoped it.
     _as(identity, acme, "other_admin")
     assert await _centre(client) == {"data": [], "next_cursor": None, "unread": 0}
     assert await _unread(client) == 0
