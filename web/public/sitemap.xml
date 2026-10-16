@@ -619,4 +619,92 @@
     <xhtml:link rel="alternate" hreflang="pt" href="https://leka-core.com/tarifs.html?lang=pt"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://leka-core.com/tarifs.html"/>
   </url>
+  <url>
+    <loc>https://leka-core.com/demo.html</loc>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://leka-core.com/demo.html?lang=fr"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://leka-core.com/demo.html?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://leka-core.com/demo.html?lang=de"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://leka-core.com/demo.html?lang=es"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://leka-core.com/demo.html?lang=it"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://leka-core.com/demo.html?lang=nl"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://leka-core.com/demo.html?lang=pt"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://leka-core.com/demo.html"/>
+  </url>
+  <url>
+    <loc>https://leka-core.com/demo.html?lang=fr</loc>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://leka-core.com/demo.html?lang=fr"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://leka-core.com/demo.html?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://leka-core.com/demo.html?lang=de"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://leka-core.com/demo.html?lang=es"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://leka-core.com/demo.html?lang=it"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://leka-core.com/demo.html?lang=nl"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://leka-core.com/demo.html?lang=pt"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://leka-core.com/demo.html"/>
+  </url>
+  <url>
+    <loc>https://leka-core.com/demo.html?lang=en</loc>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://leka-core.com/demo.html?lang=fr"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://leka-core.com/demo.html?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://leka-core.com/demo.html?lang=de"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://leka-core.com/demo.html?lang=es"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://leka-core.com/demo.html?lang=it"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://leka-core.com/demo.html?lang=nl"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://leka-core.com/demo.html?lang=pt"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://leka-core.com/demo.html"/>
+  </url>
+  <url>
+    <loc>https://leka-core.com/demo.html?lang=de</loc>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://leka-core.com/demo.html?lang=fr"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://leka-core.com/demo.html?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://leka-core.com/demo.html?lang=de"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://leka-core.com/demo.html?lang=es"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://leka-core.com/demo.html?lang=it"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://leka-core.com/demo.html?lang=nl"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://leka-core.com/demo.html?lang=pt"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://leka-core.com/demo.html"/>
+  </url>
+  <url>
+    <loc>https://leka-core.com/demo.html?lang=es</loc>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://leka-core.com/demo.html?lang=fr"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://leka-core.com/demo.html?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://leka-core.com/demo.html?lang=de"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://leka-core.com/demo.html?lang=es"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://leka-core.com/demo.html?lang=it"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://leka-core.com/demo.html?lang=nl"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://leka-core.com/demo.html?lang=pt"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://leka-core.com/demo.html"/>
+  </url>
+  <url>
+    <loc>https://leka-core.com/demo.html?lang=it</loc>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://leka-core.com/demo.html?lang=fr"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://leka-core.com/demo.html?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://leka-core.com/demo.html?lang=de"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://leka-core.com/demo.html?lang=es"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://leka-core.com/demo.html?lang=it"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://leka-core.com/demo.html?lang=nl"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://leka-core.com/demo.html?lang=pt"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://leka-core.com/demo.html"/>
+  </url>
+  <url>
+    <loc>https://leka-core.com/demo.html?lang=nl</loc>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://leka-core.com/demo.html?lang=fr"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://leka-core.com/demo.html?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://leka-core.com/demo.html?lang=de"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://leka-core.com/demo.html?lang=es"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://leka-core.com/demo.html?lang=it"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://leka-core.com/demo.html?lang=nl"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://leka-core.com/demo.html?lang=pt"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://leka-core.com/demo.html"/>
+  </url>
+  <url>
+    <loc>https://leka-core.com/demo.html?lang=pt</loc>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://leka-core.com/demo.html?lang=fr"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://leka-core.com/demo.html?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://leka-core.com/demo.html?lang=de"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://leka-core.com/demo.html?lang=es"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://leka-core.com/demo.html?lang=it"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://leka-core.com/demo.html?lang=nl"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://leka-core.com/demo.html?lang=pt"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://leka-core.com/demo.html"/>
+  </url>
 </urlset>

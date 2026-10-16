@@ -98,9 +98,20 @@ test("the site's pages, its video and what search engines read all answer", asyn
   expect(await (await request.get("/sitemap.xml")).text()).toContain(
     "https://leka-core.com/faq.html",
   );
+  // What a search engine is told (LEKA-432): the application out of reach,
+  // each public page its canonical address, the brand said in data.
+  const robots = await (await request.get("/robots.txt")).text();
+  expect(robots).toContain("Disallow: /overview");
+  const home = await (await request.get("/")).text();
+  expect(home).toContain('<link rel="canonical" href="https://leka-core.com/">');
+  expect(home).toContain('"@type":"Organization"');
+  expect(home).toContain('hreflang="x-default"');
+  expect(await (await request.get("/merci.html")).text()).toContain('content="noindex"');
 
   // The header above the sign-in leads to the site's sections as they are now.
   await page.goto("/login");
+  // The application is never in search results.
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
   const nav = page.locator("header nav");
   await expect(nav.locator('a[href="/#environnement"]')).toBeVisible();
   await expect(nav.locator('a[href="/#controle"]')).toBeVisible();
