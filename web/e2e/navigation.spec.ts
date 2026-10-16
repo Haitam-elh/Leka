@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { ask } from "./intention-helpers";
+import { ask, openStep } from "./intention-helpers";
 import { LANDING, openNavigation, signIn } from "./sign-in";
 
 /**
@@ -76,10 +76,10 @@ test.describe("the information architecture", () => {
     await signIn(page);
     const id = await ask(page, `Qui est responsable de auth-service ? (${Date.now()})`);
 
-    // Its bare address opens the step it is at.
-    await expect(page.getByTestId("tab-analysis")).toHaveAttribute("aria-current", "page");
+    // Its bare address opens its page (LEKA-458); each step's view, its own.
+    await expect(page.getByTestId("intention-detail-page")).toBeVisible();
 
-    await page.getByTestId("tab-evidence").click();
+    await openStep(page, "evidence");
 
     await expect(page).toHaveURL(`http://localhost:3000/intentions/${id}/evidence`);
     await expect(page.getByTestId("tab-evidence")).toHaveAttribute("aria-current", "page");

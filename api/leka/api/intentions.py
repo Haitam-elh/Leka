@@ -84,6 +84,7 @@ from leka.intentions import (
     IntentionFilters,
     IntentionLinkCreate,
     IntentionLinkRead,
+    IntentionOfferRead,
     IntentionPreview,
     IntentionRead,
     IntentionRepository,
@@ -104,6 +105,7 @@ from leka.intentions import (
 from leka.intentions import agents as agent_steps
 from leka.intentions.brief import brief_of, tidy
 from leka.intentions.feasibility import Feasibility, feasibility_of
+from leka.intentions.offer import offer_for
 from leka.knowledge import GraphRepository, GraphService
 
 router = APIRouter(prefix="/intentions", tags=["intentions"])
@@ -531,6 +533,25 @@ async def feasibility(
         now=datetime.now(UTC),
     )
     return feasibility_read(found)
+
+
+@router.get("/{intention_id}/offer", response_model=IntentionOfferRead)
+async def offer(
+    intention_id: uuid.UUID,
+    service: Asking,
+    principal: Reader,
+    session: SessionDep,
+    agents: str | None = None,
+) -> IntentionOfferRead:
+    """What carrying it through costs here (LEKA-458): its agents as this
+    workspace may run each, the capacity, the least plan, each line and the
+    total — before anything is consented to. `agents`: those chosen, by
+    key, comma-separated; every one available when absent."""
+    detail = await service.detail(intention_id)
+    if detail is None:
+        raise _missing()
+    chosen = [a for a in (agents or "").split(",") if a] if agents is not None else None
+    return await offer_for(session, principal.workspace_id, intention_id, chosen=chosen)
 
 
 @router.post("/{intention_id}/cancel", response_model=IntentionDetail)

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { analyse, ask } from "./intention-helpers";
+import { analyse, ask, openStep } from "./intention-helpers";
 import { signIn } from "./sign-in";
 
 /**
@@ -23,7 +23,7 @@ test.describe("Intention analysis", () => {
     const id = await ask(page, `Qui est responsable de auth-service ? (${Date.now()})`);
 
     // Not analysed yet: on its way, said so.
-    await page.getByTestId("tab-analysis").click();
+    await openStep(page, "analysis");
     await expect(page).toHaveURL(/\/analysis$/);
     const head = page.getByTestId("analysis-head");
     await expect(head).toHaveAttribute("data-live", "true");
@@ -49,7 +49,7 @@ test.describe("Intention analysis", () => {
     await expect(steps.nth(2)).toContainText("Synthèse · toujours");
 
     // Step 3, mockup 04: what it comes to.
-    await page.getByTestId("tab-results").click();
+    await openStep(page, "results");
     await expect(page).toHaveURL(/\/results$/);
     await expect(page.getByTestId("analysis-answer")).toContainText("Rédigée par Gemini 3.8 Flash");
     // What it found, worded — no proposal.
@@ -61,7 +61,7 @@ test.describe("Intention analysis", () => {
     await expect(page.getByTestId("intention-status")).toContainText("Décision requise");
 
     // Its evidence: the record that says who owns it, and where from.
-    await page.getByTestId("tab-evidence").click();
+    await openStep(page, "evidence");
     const evidence = page.getByTestId("intention-evidence");
     const owner = evidence
       .getByRole("listitem")
@@ -70,10 +70,10 @@ test.describe("Intention analysis", () => {
     await expect(owner).toContainText("acme/backend");
 
     // Its overview and history say it too.
-    await page.getByTestId("tab-overview").click();
+    await openStep(page, "overview");
     // What it came to: the answer the model wrote from it (LEKA-394).
     await expect(page.getByTestId("intention-summary")).toContainText("D'après l'analyse");
-    await page.getByTestId("tab-history").click();
+    await openStep(page, "history");
     // What happened to the intention itself (its whole story: LEKA-392).
     await page.getByTestId("timeline-category-intention").click();
     await expect(page.getByTestId("intention-event").last()).toContainText("LEKA a répondu");
@@ -90,7 +90,7 @@ test.describe("Intention analysis", () => {
     const action = page.locator('[data-testid="analysis-step"][data-name="action"]');
     await expect(action).toContainText("Action demandée");
     await expect(action).toHaveAttribute("data-status", "succeeded");
-    await page.getByTestId("tab-results").click();
+    await openStep(page, "results");
     // Its synthesis says it first; the finding, among all of them.
     await expect(page.getByTestId("analysis-summary")).toContainText(
       "Redémarrer demandé : une personne décide avant que quoi que ce soit ne soit fait.",

@@ -1775,3 +1775,74 @@ class TimelineItem(BaseModel):
         description="The version of the intention it belongs to: one more each time it was "
         "asked again (LEKA-443).",
     )
+
+
+# ── what it costs to carry it through (LEKA-458) ────────────────────────────
+
+
+class _Read(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+
+class OfferAgentRead(_Read):
+    """A proposed agent, as this workspace may run it."""
+
+    key: str
+    title: str
+    category: str
+    tier: str | None
+    monthly_price: int | None = Field(description="Cents a month, HT; none when not sold.")
+    status: Literal["included", "owned", "to_buy", "unavailable"]
+    reasons: list[str] = Field(description="Why it is unavailable: missing_source, not_for_sale…")
+    credits: float | None = Field(description="One run's cost here, estimated; none before one.")
+    chosen: bool
+
+
+class OfferPlanRead(_Read):
+    """A plan, as the catalogue sells it."""
+
+    key: str
+    name: str
+    monthly_price: int | None = Field(description="Its list price, cents HT; none by contract.")
+    launch_monthly: int | None = Field(description="With the launch offer, while it lasts.")
+    launch_months: int | None
+    trial_days: int | None
+    credits: int | None = Field(description="Its AI credits a month.")
+    users: int | None
+    sources: int | None
+    analyses: int | None = Field(description="Standard analyses a month it comes to.")
+    runs_agents: bool
+    contractual: bool
+
+
+class OfferLineRead(_Read):
+    """What is paid each month, once consented to."""
+
+    kind: Literal["plan", "agent", "bundle"]
+    key: str
+    label: str
+    monthly_price: int = Field(description="Cents a month, HT, now.")
+    then_monthly: int | None = Field(default=None, description="After the launch offer.")
+    for_months: int | None = None
+    agents: list[str] = Field(default_factory=list)
+
+
+class IntentionOfferRead(_Read):
+    """What it takes to carry an intention through here (LEKA-458): its
+    agents, the capacity, the least plan, the lines and their total — said
+    before anything is bought."""
+
+    plan_now: str
+    plan: OfferPlanRead
+    change_plan: bool
+    agents: list[OfferAgentRead]
+    lines: list[OfferLineRead]
+    total_monthly: int
+    then_monthly: int | None
+    used: float = Field(description="AI credits used this month: measured.")
+    allowance: int
+    estimate: float | None = Field(description="What the agents chosen will take: estimated.")
+    estimate_complete: bool
+    blocked: Literal["credits_exhausted"] | None
+    ready: bool = Field(description="Nothing to buy: it can be launched.")
+    provisional: bool

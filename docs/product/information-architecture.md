@@ -61,7 +61,10 @@ Every page, including those the sidebar does not list:
 /overview                                  the way home
 /intentions/new                            the composer
 /intentions                                the list
-│   └── /intentions/:id                    overview · analysis · evidence · actions · history
+│   └── /intentions/:id                    its page (LEKA-458): the request, what LEKA understood,
+│                                          the agents, the capacity, the plan and the total
+│       └── /intentions/:id/:step          each step's own view: overview · analysis · evidence
+│                                          · decision · actions · history…, from « Technique »
 /environment                               "Mon environnement", its view in ?tab=
 │   ├── /environment/graph                 the detailed map
 │   └── /environment/:type/:id             overview · metrics · dependencies · incidents

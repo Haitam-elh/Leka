@@ -80,6 +80,9 @@ export type IntentionAnswer = components["schemas"]["IntentionAnswer"];
 export type IntentionPreview = components["schemas"]["IntentionPreview"];
 /** What it takes to carry it through here (LEKA-439). */
 export type Feasibility = components["schemas"]["FeasibilityRead"];
+export type IntentionOffer = components["schemas"]["IntentionOfferRead"];
+export type OfferAgent = components["schemas"]["OfferAgentRead"];
+export type OfferLine = components["schemas"]["OfferLineRead"];
 export type PathStep = components["schemas"]["PathStepRead"];
 /** An intention asked, with what its asker answered. */
 export type AskWithAnswers = IntentAsk & { answers?: IntentionAnswer[] };
@@ -187,6 +190,14 @@ export const intentions = {
     }),
   /** What it takes to carry it through here, now. */
   feasibility: (id: string) => apiFetch<Feasibility>(`${BASE}/${id}/feasibility`),
+  /** What carrying it through costs here (LEKA-458), for the agents chosen —
+   * every one available when none is said. */
+  offer: (id: string, agents?: readonly string[]) =>
+    apiFetch<IntentionOffer>(
+      agents === undefined
+        ? `${BASE}/${id}/offer`
+        : `${BASE}/${id}/offer?agents=${encodeURIComponent(agents.join(","))}`,
+    ),
   /** « Lancer avec ces agents » (2026-10-14): those chosen, started on it. */
   launch: (id: string, agents: AgentLaunch[]) =>
     apiFetch<IntentionDetail>(`${BASE}/${id}/agents`, {

@@ -26,6 +26,8 @@ export const intentionKeys = {
   analyses: (id: string) => ["intentions", "analyses", id] as const,
   routing: (id: string) => ["intentions", "routing", id] as const,
   feasibility: (id: string) => ["intentions", "feasibility", id] as const,
+  offer: (id: string, agents?: readonly string[]) =>
+    ["intentions", "offer", id, agents?.join(",") ?? null] as const,
 };
 
 /** How often an analysis on its way is read again. */
@@ -158,6 +160,22 @@ export function useIntentionFeasibility(id: string, enabled = true) {
     queryKey: intentionKeys.feasibility(id),
     queryFn: () => intentions.feasibility(id),
     enabled: Boolean(id) && enabled,
+  });
+}
+
+/** What carrying it through costs here (LEKA-458) — read again when the
+ * agents chosen change, and while a payment is confirmed. */
+export function useIntentionOffer(
+  id: string,
+  agents: readonly string[] | undefined,
+  { enabled = true, following = false }: { enabled?: boolean; following?: boolean } = {},
+) {
+  return useQuery({
+    queryKey: intentionKeys.offer(id, agents),
+    queryFn: () => intentions.offer(id, agents),
+    enabled: Boolean(id) && enabled,
+    placeholderData: (previous) => previous,
+    refetchInterval: following ? 3_000 : false,
   });
 }
 

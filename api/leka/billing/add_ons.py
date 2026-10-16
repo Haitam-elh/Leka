@@ -49,7 +49,7 @@ PAID = frozenset({"paid", "no_payment_required"})
 
 @dataclass(frozen=True)
 class AddOn:
-    kind: str  # agent, bundle
+    kind: str  # agent, bundle, agents (several bought together, LEKA-458)
     key: str
     monthly_price: int  # cents
     agents: tuple[str, ...]
@@ -60,6 +60,11 @@ def add_on(kind: str, key: str) -> AddOn | None:
     sold = catalogue().add_ons
     if kind == "agent" and key in sold.agents:
         return AddOn("agent", key, sold.prices[key], (key,))
+    if kind == "agents":
+        keys = tuple(dict.fromkeys(k for k in key.split(",") if k))
+        if len(keys) >= 2 and all(k in sold.agents for k in keys):
+            return AddOn("agents", ",".join(keys), sum(sold.prices[k] for k in keys), keys)
+        return None
     bundle = sold.bundle(key) if kind == "bundle" else None
     # Sold only once every agent it names is (LEKA-454).
     if bundle is not None and bundle.sellable:
@@ -79,6 +84,7 @@ async def checkout_add_on(
     intention_id: uuid.UUID | None = None,
     launch: Sequence[Mapping[str, Any]] = (),
     locale: str = "fr",
+    titles: Mapping[str, str] | None = None,
 ) -> str:
     """A Checkout for an agent or a bundle — its URL. CheckoutRefusedError
     when it cannot be bought here."""
@@ -91,7 +97,10 @@ async def checkout_add_on(
         raise CheckoutRefusedError(
             "plan_required", f"Agents run from the {sold.minimum_plan.title()} plan."
         )
-    if has.every or all(a in has.agents or a in has.included for a in found.agents):
+    mine = [a for a in found.agents if a in has.agents or a in has.included]
+    # A bundle owned whole, or an agent — one of several — already here:
+    # never paid twice.
+    if has.every or (mine and found.kind != "bundle") or len(mine) == len(found.agents):
         raise CheckoutRefusedError("owned", "Already owned here.")
     account = await account_of(session, workspace_id)
     customer = await _customer(client, account)
@@ -100,10 +109,20 @@ async def checkout_add_on(
         "leka_add_on_kind": found.kind,
         "leka_add_on_key": found.key,
     }
+    # Back where it was bought: the intention's page (LEKA-458), or the
+    # catalogue.
     back = (
-        f"{settings.web_url}/intentions/{intention_id}/decision"
+        f"{settings.web_url}/intentions/{intention_id}"
         if intention_id is not None
         else f"{settings.web_url}/capabilities"
+    )
+    prices = sold.prices
+    # Several agents: a line each, one subscription.
+    named = titles or {}
+    lines = (
+        [(f"LEKA — {named.get(k) or _title_of(k)}", prices[k]) for k in found.agents]
+        if found.kind == "agents"
+        else [(name, found.monthly_price)]
     )
     made = await client.post(
         "/v1/checkout/sessions",
@@ -116,12 +135,13 @@ async def checkout_add_on(
                     "quantity": 1,
                     "price_data": {
                         "currency": catalogue().currency.lower(),
-                        "unit_amount": found.monthly_price,
+                        "unit_amount": amount,
                         "recurring": {"interval": "month"},
                         "tax_behavior": "exclusive",
-                        "product_data": {"name": name, "metadata": marks},
+                        "product_data": {"name": label, "metadata": marks},
                     },
                 }
+                for label, amount in lines
             ],
             "subscription_data": {"metadata": marks},
             "payment_method_collection": "always",
@@ -144,6 +164,12 @@ async def checkout_add_on(
     )
     await session.commit()
     return str(made["url"])
+
+
+def _title_of(key: str) -> str:
+    """An agent's name, as the registry says it: billing reads no registry,
+    so its key, made readable."""
+    return key.replace("-", " ").capitalize()
 
 
 def marked(data: Mapping[str, Any]) -> tuple[str, str] | None:
@@ -173,17 +199,22 @@ async def apply_add_on(
         if str(data.get("payment_status") or "") not in PAID:
             return "not_paid"
         subscription = str(data.get("subscription") or "") or None
-        await grant(
-            session,
-            workspace_id,
-            key=key,
-            kind=what,
-            origin="purchase",
-            by="stripe",
-            reason=f"Stripe {subscription}",
-            subscription=subscription,
-            now=made,
-        )
+        # Several agents bought together: each its own right, one
+        # subscription ending them all (LEKA-458).
+        for each_kind, each_key in (
+            [("agent", k) for k in key.split(",") if k] if what == "agents" else [(what, key)]
+        ):
+            await grant(
+                session,
+                workspace_id,
+                key=each_key,
+                kind=each_kind,
+                origin="purchase",
+                by="stripe",
+                reason=f"Stripe {subscription}",
+                subscription=subscription,
+                now=made,
+            )
         row = await session.scalar(
             select(AddOnCheckout).where(AddOnCheckout.stripe_session_id == str(data.get("id")))
         )

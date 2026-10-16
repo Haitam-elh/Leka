@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { analyse, ask } from "./intention-helpers";
+import { analyse, ask, openStep } from "./intention-helpers";
 import { signIn } from "./sign-in";
 
 /**
@@ -29,7 +29,7 @@ test.describe("LLM runtime", () => {
 
     // Read by the model: its goal settled, not stopped for a question —
     // what LEKA understood is step 1's.
-    await page.getByTestId("tab-overview").click();
+    await openStep(page, "overview");
     const understood = page.getByTestId("intention-brief");
     await expect(understood.locator('[data-testid="brief-slot"][data-slot="goal"]')).toContainText(
       "Trouver le responsable",

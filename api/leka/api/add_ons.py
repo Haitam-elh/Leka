@@ -179,6 +179,7 @@ async def buy_add_on(
             client=stripe(),
             intention_id=body.intention_id,
             launch=body.launch,
+            titles={k: _title(k) for k in body.key.split(",")} if body.kind == "agents" else None,
         )
     except BillingUnavailableError:
         raise _unavailable() from None

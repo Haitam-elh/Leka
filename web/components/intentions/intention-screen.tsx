@@ -41,6 +41,7 @@ import { JourneyNote, StopAnalysis, useRights } from "@/components/intentions/jo
 import { BriefView } from "@/components/intentions/brief";
 import { DeliverableView } from "@/components/intentions/deliverable";
 import { FeasibilityCard } from "@/components/intentions/feasibility";
+import { IntentionDetailPage } from "@/components/intentions/intention-detail";
 import { kindOf, StatusPill } from "@/components/intentions/intentions-list";
 import { ReadinessPanel } from "@/components/intentions/readiness";
 import { linkedLabel } from "@/components/intentions/link-words";
@@ -137,6 +138,17 @@ export function IntentionScreen() {
     body = <ActionStep intention={data} />;
   } else {
     body = <Overview intention={data} />;
+  }
+
+  // Its page (LEKA-458): what was asked, understood, the plan, the agents,
+  // the capacity and the offer — each step's view a click away, in
+  // « Détails techniques ».
+  if (!segment && data && !missing) {
+    return (
+      <PageContainer>
+        <IntentionDetailPage intention={data} />
+      </PageContainer>
+    );
   }
 
   const w = t.intentions.steps;
