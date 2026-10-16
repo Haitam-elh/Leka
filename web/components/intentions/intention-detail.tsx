@@ -475,6 +475,8 @@ function OfferCard({
   const chosen = proposal.filter((a) => offer.agents.some((o) => o.key === a.key && o.chosen));
   const incomplete = chosen.some((a) => a.missing.length > 0);
   const agentCount = offer.agents.filter((a) => a.chosen).length;
+  // What the total pays for: the agents bought, never those the plan includes.
+  const paidAgents = options.reduce((n, l) => n + (l.kind === "bundle" ? l.agents.length : 1), 0);
   const launchOf = (agents: ProposedAgent[]): AgentLaunch[] =>
     agents.map((a) => ({
       key: a.key,
@@ -544,7 +546,7 @@ function OfferCard({
       ].filter((f): f is string => Boolean(f));
   const parts = [
     planLine ? w.partPlan : null,
-    agentCount ? fill(w.partAgents, { count: agentCount }) : null,
+    paidAgents ? fill(w.partAgents, { count: paidAgents }) : null,
   ].filter(Boolean);
 
   return (

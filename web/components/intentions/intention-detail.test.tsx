@@ -183,6 +183,7 @@ describe("an intention's page", () => {
     expect(screen.getByTestId("detail-plan")).toHaveTextContent("Starter");
     const total = screen.getByTestId("detail-total");
     expect(total).toHaveTextContent("56,20 € / mois");
+    expect(total).toHaveTextContent("Abonnement + 1 agent");
     expect(screen.getByTestId("detail-then")).toHaveTextContent("puis 68 € / mois après 12 mois");
     expect(total).toHaveTextContent("renouvelé automatiquement jusqu'à résiliation");
     // No estimate before an agent ran here: said, never invented.
@@ -210,6 +211,8 @@ describe("an intention's page", () => {
     expect(agent).toHaveTextContent("Inclus avec Starter");
     expect(agent).not.toHaveTextContent("/ mois");
     expect(screen.getByTestId("detail-total")).toHaveTextContent("47,20 € / mois");
+    // The total pays for the plan alone: no agent counted in it.
+    expect(screen.getByTestId("detail-total")).not.toHaveTextContent("agent");
   });
 
   it("covered by the plan and its agents: launched as it is, nothing to pay", async () => {

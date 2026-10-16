@@ -140,6 +140,8 @@ test.describe("An intention's page", () => {
     const total = page.getByTestId("detail-total");
     // 47,20 € (Starter, −20 %) + 25 + 25: the two experts it does not include.
     await expect(total).toContainText("97,20 €");
+    // Paid for: the plan and the two it does not include, never the two it does.
+    await expect(total).toContainText("Abonnement + 2 agents");
     await expect(page.getByTestId("detail-then")).toContainText("puis 109 €");
     await expect(total).toContainText("renouvelé automatiquement");
     // The plan, step by step, each agent beside its step; LEKA Assistant
