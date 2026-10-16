@@ -39,7 +39,7 @@ function run(lines: string[], ...args: string[]): void {
 }
 
 /** Its analysis, proposing what a model would for a migration. */
-function propose(intentionId: string): void {
+function propose(intentionId: string, agents: Record<string, [string, string]> = AGENTS): void {
   run(
     [
       "import asyncio, json, sys, uuid",
@@ -69,7 +69,7 @@ function propose(intentionId: string): void {
       "asyncio.run(main(uuid.UUID(sys.argv[1])))",
     ],
     intentionId,
-    JSON.stringify(AGENTS),
+    JSON.stringify(agents),
   );
 }
 
@@ -160,5 +160,33 @@ test.describe("An intention's page", () => {
     await expect(dialog).toContainText("renouvelé automatiquement");
     await dialog.getByRole("button", { name: "Annuler" }).click();
     await expect(page).toHaveURL(new RegExp(`/intentions/${id}$`));
+  });
+
+  test("launched from its page: at work at once, kept through a reload, never launched twice (LEKA-465)", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await signIn(page);
+    const id = await ask(page, `Analyse les tests de payment-api (${Date.now()})`);
+    analyse(id);
+    propose(id, { "test-analysis": ["Analyse des tests", "development"] });
+    await page.goto(`/intentions/${id}`);
+
+    // The demo's plan covers it: launched as it is.
+    await expect(page.getByTestId("detail-covered")).toBeVisible();
+    await page.getByTestId("detail-launch").click();
+    // As soon as the server says the run is created: at work, said.
+    const working = page.getByTestId("working");
+    await expect(working).toHaveAttribute("data-phase", "agents");
+    await expect(working).toContainText("Vos agents travaillent");
+    await expect(working.getByTestId("working-run")).toHaveCount(1);
+    await expect(working).toContainText("Vous pouvez quitter cette page");
+    // Nothing to launch again.
+    await expect(page.getByTestId("detail-launch")).toHaveCount(0);
+
+    // Read again from the server: the same.
+    await page.reload();
+    await expect(page.getByTestId("working")).toHaveAttribute("data-phase", "agents");
+    await expect(page.getByTestId("journey-note")).toHaveAttribute("data-state", "action_running");
   });
 });

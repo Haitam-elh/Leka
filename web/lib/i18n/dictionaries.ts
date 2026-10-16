@@ -6082,6 +6082,33 @@ const fr = {
   intentions: {
     /** An intention's page (LEKA-458): what was asked, understood, the
      * plan, the agents, the capacity, the offer — before any consent. */
+    /** What LEKA is doing on it, now (LEKA-465): only what happened. */
+    working: {
+      analysing: "Analyse en cours",
+      agents: "Vos agents travaillent",
+      failed: "Le traitement n'a pas abouti",
+      leave: "Vous pouvez quitter cette page : LEKA continue, et le résultat vous attendra ici.",
+      recorded: "Demande enregistrée",
+      reading: "LEKA lit vos sources et analyse",
+      queued: "En file d'attente",
+      events: {
+        queued: "En file d'attente",
+        held: "En attente d'approbation",
+        approved: "Approuvé",
+        started: "Démarré",
+        context: "Contexte de votre environnement lu",
+        tool: "{count} {count|lecture|lectures} de vos sources",
+        answered: "Livrable rédigé",
+        reviewed: "Revue du code faite",
+        proposed: "Modification proposée",
+        rendered: "PDF et PowerPoint générés",
+        render_failed: "PDF et PowerPoint non générés",
+        succeeded: "Terminé",
+        failed: "Échec : {why}",
+        cancelled: "Annulé",
+        rejected: "Refusé",
+      },
+    },
     detail: {
       back: "Retour à l'accueil",
       mine: "Ma demande",
@@ -13712,6 +13739,32 @@ const en: Dictionary = {
   },
   intentions: {
     /** An intention's page (LEKA-458). */
+    working: {
+      analysing: "Analysis under way",
+      agents: "Your agents are at work",
+      failed: "It did not get through",
+      leave: "You may leave this page: LEKA goes on, and the result will wait for you here.",
+      recorded: "Request recorded",
+      reading: "LEKA is reading your sources and analysing",
+      queued: "Queued",
+      events: {
+        queued: "Queued",
+        held: "Waiting for approval",
+        approved: "Approved",
+        started: "Started",
+        context: "Your environment's context read",
+        tool: "{count} {count|read|reads} of your sources",
+        answered: "Deliverable written",
+        reviewed: "Code reviewed",
+        proposed: "Change proposed",
+        rendered: "PDF and PowerPoint drawn",
+        render_failed: "PDF and PowerPoint not drawn",
+        succeeded: "Done",
+        failed: "Failed: {why}",
+        cancelled: "Cancelled",
+        rejected: "Rejected",
+      },
+    },
     detail: {
       back: "Back home",
       mine: "My request",
