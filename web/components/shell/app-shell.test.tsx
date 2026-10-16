@@ -18,6 +18,8 @@ import { LocaleProvider } from "@/lib/i18n/locale-provider";
 // on it, and a new object on every render would re-run the check after each
 // one and hide the very failure this file is about.
 const router = { push: vi.fn(), replace: vi.fn(), back: vi.fn() };
+// The bell asks the API on its own (LEKA-476): not what these count.
+vi.mock("@/components/notifications/bell", () => ({ NotificationBell: () => null }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/overview",
   useSearchParams: () => new URLSearchParams(),

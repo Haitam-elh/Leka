@@ -26,6 +26,7 @@ import leka.intentions
 import leka.knowledge
 import leka.metering
 import leka.monitoring
+import leka.notifications
 import leka.platform  # noqa: F401
 from alembic import context
 from leka.core.config import settings

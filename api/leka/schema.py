@@ -34,6 +34,7 @@ import leka.intentions
 import leka.knowledge
 import leka.metering
 import leka.monitoring
+import leka.notifications
 import leka.platform  # noqa: F401
 from leka.db import Base
 

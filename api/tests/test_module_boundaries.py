@@ -55,7 +55,9 @@ LAYERS: dict[str, int] = {
     # Metering (LEKA-430): derives the usage ledger from the calls and runs.
     "metering": 11,
     "demo": 11,
-    "api": 12,
+    # The notification centre (LEKA-476): reads what every module kept.
+    "notifications": 12,
+    "api": 13,
 }
 
 # Files a module keeps to itself. Everything else imports the package.

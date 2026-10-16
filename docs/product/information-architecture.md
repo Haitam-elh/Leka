@@ -82,6 +82,8 @@ Every page, including those the sidebar does not list:
 /team
 /billing
 /settings
+/notifications                             the notification centre (LEKA-476), reached from
+                                           the bell in the header rather than the sidebar
 /welcome                                   a new workspace's first steps, reached from the
                                            workspace gate rather than the sidebar
 
@@ -107,6 +109,7 @@ has no entry that is "the one without a path of its own".
 | Administration › Équipe & accès | `/team` | `member:invite` | available |
 | Administration › Facturation | `/billing` | `workspace:update` | available |
 | Administration › Paramètres | `/settings` | `workspace:read` | available |
+| — (the bell, in the header) | `/notifications` | `workspace:read` | available |
 | — (workspace gate) | `/welcome` | `source:manage` | available |
 
 One of these is a choice rather than a fact, and Karim owns it: Sécurité &

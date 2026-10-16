@@ -271,6 +271,14 @@ export const ROUTES: readonly RouteEntry[] = [
     labelKey: "settings",
     requiredPermission: "workspace:read",
   },
+  {
+    // The notification centre (LEKA-476): reached from the bell in the
+    // header; every member reads their own.
+    id: "notifications",
+    path: "/notifications",
+    labelKey: "notifications",
+    requiredPermission: "workspace:read",
+  },
 ];
 
 const BY_ID = new Map(ROUTES.map((route) => [route.id, route]));
@@ -287,6 +295,7 @@ export function routeById(id: string): RouteEntry | undefined {
  */
 export const routes = {
   overview: () => "/overview",
+  notifications: () => "/notifications",
   intentions: () => "/intentions",
   intentionNew: () => "/intentions/new",
   intention: (intentionId: string, tab?: (typeof INTENTION_TABS)[number]) =>
