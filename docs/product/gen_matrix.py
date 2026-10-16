@@ -132,6 +132,7 @@ F = [
     ("ENV-09", "Environnement", "Fiche d'une entité (10 onglets)", "/environment/[entityType]/[entityId]", ["environment/entity-sheet"], ["/knowledge/entities"], "Sources", ENV, "LEKA-459", C, "Panneau de détail d'un service de la maquette.", ["/environment/services"]),
     ("ENV-10", "Environnement", "Explorateur du graphe (chemins)", "/environment/graph", ["environment/graph-explorer"], ["/knowledge/graph"], "—", ENV, "LEKA-459", C, "Cartographie zoom/recherche de la maquette.", []),
     ("ENV-11", "Environnement", "Contexte d'une entité (versions, conflits, éléments)", "/environment/[entityType]/[entityId]/context", ["environment/entity-context"], ["/context"], "—", ENV, "LEKA-459", C, "", []),
+    ("ENV-13", "Environnement", "Configuration (synchronisation des sources, alertes, couverture)", "/environment?tab=configuration", ["environment/environment-screen"], ["/environment", "/monitoring", "/sources"], "Sources", ENV, "LEKA-459", C, "Onglet « Configuration » de la maquette (#307) ; aucune règle d'alerte simulée (LEKA-463).", []),
     ("ENV-12", "Environnement", "Recherche globale ⌘K (palette)", "toutes", ["shell/command-palette"], ["/knowledge/search"], "—", "Shell", "LEKA-455", C, "", ["keyboard"]),
     # ── Sources ──
     ("SRC-01", "Sources", "Liste des sources, santé, synchro", "/sources", ["sources/sources-page"], ["/sources"], "Tous les connecteurs", ENV, "LEKA-459", D, "Onglet « Sources » de Mon environnement ; /sources reste joignable.", ["/sources\""]),
@@ -149,7 +150,7 @@ F = [
     ("CAP-05", "Capacités", "Lancer un agent + exécutions + livrables", "/capabilities/[capabilityId]", ["capabilities/agent-runs"], ["/agent-runs"], "Runtime agents", CAT, "LEKA-460", C, "", []),
     ("CAP-06", "Capacités", "Workflows (lancer, suivre)", "/capabilities/[capabilityId]", ["capabilities/workflow-runs"], ["/workflows"], "Runtime", CAT, "LEKA-460", C, "Quotas de workflows par plan (Growth 10, Business 50) inexistants.", []),
     ("CAP-07", "Capacités", "Demander une capacité", "/capabilities", ["capabilities/catalogue"], ["/capabilities"], "—", CAT, "LEKA-460", C, "", []),
-    ("CAP-08", "Capacités", "Acheter un agent / un bundle", "—", [], [], "Stripe", CAT, "LEKA-460 / 461 / 462", "Manquante", "add_ons.available: false, bundles: [], aucune route de checkout agent, aucun Price ID.", []),
+    ("CAP-08", "Capacités", "Acheter un agent / un bundle", "/capabilities", ["capabilities/offers"], ["/billing/add-ons"], "Stripe", CAT, "LEKA-460 / 461 / 462", C, "Livré (#299, #302) ; achat d'agent prouvé sur Stripe en mode test (LEKA-461, #305). Aucun bundle vendable tant que des membres manquent ; pas de Price ID agents/bundles (`price_data`).", []),
     # ── Hors maquette ──
     ("ACT-01", "Activité", "Journal d'activité, tendances, filtres", "/activity", ["activity/activity"], ["/intelligence/activity", "/intention-history"], "—", OUT, "LEKA-455", C, "Hors des 5 maquettes : accès conservé par la navigation.", ["/activity"]),
     ("APP-01", "À valider", "Candidats de connaissance, conflits, décisions", "/approvals", ["approvals/approvals-page"], ["/intelligence/enrichment/candidates", "/intelligence/conflicts", "/decisions"], "—", OUT, "LEKA-455", C, "Badge du menu conservé.", ["/approvals"]),

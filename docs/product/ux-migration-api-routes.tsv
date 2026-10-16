@@ -1,3 +1,4 @@
+2026-10-16 02:46:19 [info     ] identity_seam_wired
 GET	/api/v1/health	health	-	Health
 GET	/api/v1/jobs	jobs	job:read	List Job Runs
 GET	/api/v1/jobs/{run_id}	jobs	job:read	Get Job Run
@@ -21,6 +22,7 @@ GET	/api/v1/workspaces/current	workspaces	-	Read Current Workspace
 DELETE	/api/v1/workspaces/current	workspaces	workspace:delete	Request Workspace Deletion
 PATCH	/api/v1/workspaces/current	workspaces	workspace:update	Configure Current Workspace
 POST	/api/v1/workspaces/{workspace_id}/switch	workspaces	-	Switch Workspace
+POST	/api/v1/demo	demo	-	Open Demo
 GET	/api/v1/members	members	-	List Members
 POST	/api/v1/members/invite	members	member:invite	Invite Member
 GET	/api/v1/team/members	members	workspace:read	Team
@@ -266,6 +268,9 @@ POST	/api/v1/intentions/{intention_id}/answers	intentions	intention:create	Answe
 GET	/api/v1/intentions/{intention_id}/feasibility	intentions	intention:create,intention:read	Feasibility
 POST	/api/v1/intentions/{intention_id}/cancel	intentions	intention:approve,intention:create	Cancel
 POST	/api/v1/intentions/{intention_id}/stop	intentions	intention:create	Stop
+POST	/api/v1/intentions/{intention_id}/agents	intentions	intention:create	Launch Agents
+POST	/api/v1/intentions/{intention_id}/by-hand	intentions	intention:create	By Hand
+POST	/api/v1/intentions/{intention_id}/agents/retry	intentions	intention:create	Retry Agents
 POST	/api/v1/intentions/{intention_id}/archive	intentions	intention:create	Archive
 POST	/api/v1/intentions/{intention_id}/restore	intentions	intention:approve,intention:create	Restore
 POST	/api/v1/intentions/{intention_id}/links	intentions	intention:create	Link
@@ -311,3 +316,6 @@ GET	/api/v1/billing/subscription	billing	workspace:read	The subscription
 POST	/api/v1/billing/checkout	billing	workspace:update	Pay for a plan, with Stripe
 POST	/api/v1/billing/portal	billing	workspace:update	Stripe's customer portal
 POST	/api/v1/billing/stripe/webhook	billing	-	Stripe's events, verified by their signature
+GET	/api/v1/billing/add-ons	billing	workspace:read	Agents and bundles, sold
+GET	/api/v1/billing/entitlements	billing	workspace:read	What it owns
+POST	/api/v1/billing/add-ons/checkout	billing	workspace:update	Buy an agent or a bundle, with Stripe
