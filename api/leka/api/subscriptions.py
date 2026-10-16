@@ -6,8 +6,11 @@
                                       and what will be charged — the page's
                                       price (workspace:update)
     POST /billing/portal              Stripe's customer portal: card, invoices,
-                                      plan change, cancellation
-                                      (workspace:update)
+                                      plan change, cancellation — in the
+                                      person's language (workspace:update)
+    POST /billing/subscription/renewal  « Ne pas renouveler » / « Réactiver le
+                                      renouvellement »: kept until its period's
+                                      end either way (workspace:update)
     POST /billing/stripe/webhook      Stripe's events — no session: believed
                                       only when signed (400 otherwise), kept
                                       once by id
@@ -23,6 +26,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, status
+from pydantic import BaseModel, ConfigDict
 
 from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
@@ -42,10 +46,13 @@ from leka.billing import (
     payments_open,
     portal,
     receive,
+    renewal,
     stripe,
+    stripe_locale,
 )
 from leka.core.errors import ErrorCode, FieldError
 from leka.governance import Permission, Principal, require_permission
+from leka.identity import spoken_language
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -102,6 +109,11 @@ async def read_subscription(principal: Reader, session: SessionDep) -> Subscript
     )
 
 
+async def _locale(session: SessionDep, principal: Principal) -> str:
+    """Stripe's pages in the person's language (2026-10-14)."""
+    return stripe_locale(await spoken_language(session, principal.user_id, principal.workspace_id))
+
+
 @router.post("/checkout", response_model=CheckoutRead, summary="Pay for a plan, with Stripe")
 async def start_checkout(
     body: CheckoutCreate, principal: Payer, session: SessionDep
@@ -115,6 +127,7 @@ async def start_checkout(
             client=stripe(),
             today=datetime.now(UTC).date(),
             intention_id=body.intention_id,
+            locale=await _locale(session, principal),
         )
     except BillingUnavailableError:
         raise _unavailable() from None
@@ -128,7 +141,12 @@ async def start_checkout(
 @router.post("/portal", response_model=PortalRead, summary="Stripe's customer portal")
 async def open_portal(principal: Payer, session: SessionDep) -> PortalRead:
     try:
-        url = await portal(session, principal.workspace_id, client=stripe())
+        url = await portal(
+            session,
+            principal.workspace_id,
+            client=stripe(),
+            locale=await _locale(session, principal),
+        )
     except BillingUnavailableError:
         raise _unavailable() from None
     except CheckoutRefusedError as error:
@@ -136,6 +154,31 @@ async def open_portal(principal: Payer, session: SessionDep) -> PortalRead:
     except StripeError as error:
         raise _stripe_failed(error) from None
     return PortalRead(url=url)
+
+
+class RenewalChange(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    renew: bool
+
+
+@router.post(
+    "/subscription/renewal",
+    response_model=SubscriptionRead,
+    summary="Renew at the period's end, or not",
+)
+async def change_renewal(
+    body: RenewalChange, principal: Payer, session: SessionDep
+) -> SubscriptionRead:
+    try:
+        await renewal(session, principal.workspace_id, renew=body.renew, client=stripe())
+    except BillingUnavailableError:
+        raise _unavailable() from None
+    except CheckoutRefusedError as error:
+        raise _refused(error) from None
+    except StripeError as error:
+        raise _stripe_failed(error) from None
+    return await read_subscription(principal, session)
 
 
 @router.post(

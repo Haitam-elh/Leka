@@ -56,7 +56,9 @@ from leka.billing.subscriptions import (
     payments_open,
     portal,
     receive,
+    renewal,
     stripe,
+    stripe_locale,
 )
 from leka.billing.sync import sync
 
@@ -114,6 +116,8 @@ __all__ = [
     "quote",
     "receive",
     "record",
+    "renewal",
     "stripe",
+    "stripe_locale",
     "sync",
 ]

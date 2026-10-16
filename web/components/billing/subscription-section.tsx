@@ -11,7 +11,8 @@ import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import { notify } from "@/lib/notify";
 import type { PricedPlan } from "@/lib/subscription";
-import { usePayment, usePricing, useSubscription } from "@/lib/subscription-queries";
+import { usePayment, usePricing, useRenewal, useSubscription } from "@/lib/subscription-queries";
+import { useConfirm } from "@/components/interactions/confirm";
 
 /**
  * Votre formule (LEKA-431): the plan the workspace pays for, as Stripe last
@@ -38,6 +39,8 @@ export function SubscriptionSection() {
   const said = useSubscription().data;
   const pricing = usePricing().data;
   const { checkout, portal } = usePayment();
+  const renewal = useRenewal();
+  const confirm = useConfirm();
   const [interval, setInterval] = useState<Interval>("month");
   const money = (cents: number) =>
     new Intl.NumberFormat(locale, {
@@ -123,8 +126,47 @@ export function SubscriptionSection() {
               {w.pastDue}
             </p>
           ) : null}
-          <div>
-            <Button type="button" variant="outline" disabled={portal.isPending} onClick={() => portal.mutate(undefined, { onError: failed })}>
+          <div className="flex flex-wrap gap-2">
+            {/* Said plainly (2026-10-14): Stripe's « Cancel subscription »
+                only stopped the renewal — the plan runs to its period's end. */}
+            {said.cancel_at_period_end ? (
+              <Button
+                type="button"
+                disabled={renewal.isPending}
+                onClick={() =>
+                  renewal.mutate(true, {
+                    onSuccess: () => notify.success({ title: w.resumed }),
+                    onError: failed,
+                  })
+                }
+                data-testid="billing-renew"
+              >
+                {w.resumeRenewal}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={renewal.isPending}
+                onClick={async () => {
+                  const end = said.current_period_end ? day(said.current_period_end) : "—";
+                  const ok = await confirm({
+                    title: w.stopTitle,
+                    description: fill(w.stopBody, { date: end }),
+                    confirmLabel: w.stopConfirm,
+                  });
+                  if (!ok) return;
+                  renewal.mutate(false, {
+                    onSuccess: () => notify.success({ title: fill(w.stopped, { date: end }) }),
+                    onError: failed,
+                  });
+                }}
+                data-testid="billing-stop-renewal"
+              >
+                {w.stopRenewal}
+              </Button>
+            )}
+            <Button type="button" variant="ghost" disabled={portal.isPending} onClick={() => portal.mutate(undefined, { onError: failed })}>
               <ExternalLink className="size-4" aria-hidden="true" />
               {w.manage}
             </Button>
