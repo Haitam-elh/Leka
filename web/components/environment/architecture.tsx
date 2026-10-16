@@ -441,25 +441,14 @@ export function ArchitectureFigures({ data }: { data: Architecture | undefined }
 
 // ── the board: the canvas, the chosen card, the widgets ────────────────────
 
-/** The card the screens open on: the API, as the mockup does. */
-export function firstCard(cards: readonly ArchitectureCard[]): ArchitectureCard | null {
-  return (
-    cards.find((card) => card.column === "services" && card.kind === "api") ??
-    cards.find((card) => card.column === "services") ??
-    null
-  );
-}
-
 /**
  * The architecture: its canvas, the chosen card's panel beside it, and the
  * four widgets under them.
  */
 export function ArchitectureBoard({ data }: { data: Architecture }) {
   const byId = useMemo(() => new Map(data.cards.map((card) => [card.id, card])), [data.cards]);
-  const first = useMemo(() => firstCard(data.cards), [data.cards]);
-  const [chosen, setChosen] = useState<string | null | undefined>(undefined);
-  // Nothing chosen yet: the API, as the mockup opens on it. Closed: none.
-  const selected = chosen === undefined ? (first?.id ?? null) : chosen;
+  // None until a card is clicked: never one chosen for the person (LEKA-473).
+  const [selected, setChosen] = useState<string | null>(null);
   const card = selected ? (byId.get(selected) ?? null) : null;
 
   if (data.cards.length === 0) return <Nothing />;
