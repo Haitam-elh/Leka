@@ -112,6 +112,7 @@ written.
 | `ops` | operations (LEKA-408): metrics, the health report, the alerts, backups proven to restore | every module, as operating data | see [operations.md](operations.md) |
 | `metering` | usage and cost metering (LEKA-430): each execution's usage and cost to LEKA, derived from the calls and runs; an intention's cost, end to end | `capabilities`, `intentions` | see [metering.md](metering.md) |
 | `monitoring` | watching the environment (LEKA-442): alerts on what the Digital Twin finds in trouble, deduplicated, resolved only by a fresh signal, for the plans that include them | `ingestion`, `billing`, `governance`, `identity` | see [enrichment.md](enrichment.md) § 12 bis |
+| `notifications` | the notification centre (LEKA-476): what every module kept — an intention's history, an agent run's end, an alert's life, a source's events, Stripe's events as applied, the credits, the audit trail — read into one notification per fact, its audience judged as it is read | `intentions`, `capabilities`, `monitoring`, `metering`, `billing`, `connectors`, `governance`, `ingestion` | the module's docstrings |
 | `api` | HTTP routes, one file per module | all of the above | health + 11 tenancy routes; other routers mounted and empty |
 
 ### The dependency rule

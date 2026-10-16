@@ -420,6 +420,34 @@ async def _apply(
     return "ignored"
 
 
+async def _standing(session: AsyncSession, workspace_id: uuid.UUID) -> dict[str, Any]:
+    """Where the workspace's subscription stands: what an event changed is
+    said by comparing it before and after (LEKA-476)."""
+    account = await session.scalar(
+        select(BillingAccount).where(BillingAccount.workspace_id == workspace_id)
+    )
+    if account is None:
+        return {"plan": "free", "cancel_at_period_end": False, "ends": None}
+    return {
+        "plan": account.plan,
+        "cancel_at_period_end": account.cancel_at_period_end,
+        "ends": account.current_period_end.isoformat() if account.current_period_end else None,
+    }
+
+
+def _changes(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
+    """What an applied event changed — the plan, the renewal — as
+    [before, after], and when the period ends."""
+    changed = {
+        key: [before[key], after[key]]
+        for key in ("plan", "cancel_at_period_end")
+        if before[key] != after[key]
+    }
+    if not changed:
+        return {}
+    return {"changes": changed | ({"ends": after["ends"]} if after["ends"] else {})}
+
+
 async def receive(
     payload: bytes, signature: str, *, now: datetime, client: Stripe | None = None
 ) -> str:
@@ -476,11 +504,24 @@ async def receive(
             except IntegrityError:
                 await session.rollback()
                 return "duplicate"
+            before = await _standing(session, workspace_id)
             said = await _apply(session, event, workspace_id, client)
+            after = await _standing(session, workspace_id)
             row = await session.scalar(select(StripeEvent).where(StripeEvent.event_id == event_id))
             if row is not None:
                 row.outcome = "ignored" if said in ("ignored", "stale", "not_paid") else "applied"
-                row.detail = {"said": said}
+                # What it changed, kept with it: the notification centre
+                # tells it from here (LEKA-476) — a renewal, a cancellation,
+                # a plan — never from a guess.
+                row.detail = (
+                    {"said": said}
+                    | _changes(before, after)
+                    | (
+                        {"reason": data.get("billing_reason")}
+                        if kind.startswith("invoice.") and data.get("billing_reason")
+                        else {}
+                    )
+                )
             await session.commit()
             if said.startswith("add_on:"):
                 from leka.billing.add_ons import launch_bought

@@ -36,6 +36,7 @@ from leka.api import (
     knowledge,
     model_gateway,
     monitoring,
+    notifications,
     ops,
     outcomes,
     platform,
@@ -100,5 +101,7 @@ api_router.include_router(pricing.router)
 # Paying for it: Stripe Checkout, the portal, Stripe's verified events.
 api_router.include_router(subscriptions.router)
 api_router.include_router(add_ons.router)
+# The notification centre (LEKA-476).
+api_router.include_router(notifications.router)
 
 __all__ = ["api_router"]

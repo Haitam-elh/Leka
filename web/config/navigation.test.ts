@@ -73,8 +73,10 @@ describe("the navigation", () => {
   it("reaches every page of the product — none lost by the reorganisation", () => {
     const opened = new Set(leaves.map((leaf) => leaf.routeId));
     // Reached from the workspace gate, by a new workspace, not from the
-    // sidebar: its place is before there is anything to navigate.
-    const elsewhere = new Set(["welcome"]);
+    // sidebar: its place is before there is anything to navigate. The
+    // notification centre (LEKA-476): from the bell in the header, on every
+    // page.
+    const elsewhere = new Set(["welcome", "notifications"]);
     const reachable = (id: string | undefined): boolean => {
       if (id === undefined) return false;
       if (opened.has(id)) return true;

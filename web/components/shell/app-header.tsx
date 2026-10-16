@@ -4,6 +4,7 @@ import { Crown, LayoutGrid, Search } from "lucide-react";
 import Link from "next/link";
 
 import { Wordmark } from "@/components/brand/logo";
+import { NotificationBell } from "@/components/notifications/bell";
 import { RunningIntentions } from "@/components/shell/running-intentions";
 import { useShell } from "@/components/shell/shell-provider";
 import { UserMenu } from "@/components/shell/user-menu";
@@ -67,6 +68,9 @@ export function AppHeader({ onOpenNavigation, onOpenSearch, searchTriggerRef }: 
       >
         <LayoutGrid className="size-5" aria-hidden="true" />
       </button>
+
+      {/* What happened, told (LEKA-476): once the session is known. */}
+      {ready ? <NotificationBell className={ICON_BUTTON} /> : null}
 
       <div className="hidden sm:block">
         <WorkspaceSwitcher />
