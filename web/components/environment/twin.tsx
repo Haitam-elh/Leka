@@ -19,7 +19,7 @@ import { Card, CardLink, entityHref, IconTile, typeLabel } from "@/components/en
 import { KnowledgeTable, type KnowledgeColumn } from "@/components/knowledge/knowledge-table";
 import { StatusBadge } from "@/components/knowledge/status-badge";
 import { TONES } from "@/components/knowledge/status";
-import { exactDate, timeAgo } from "@/components/knowledge/time";
+import { timeAgo } from "@/components/knowledge/time";
 import { useCurrentUser, usePermissions } from "@/components/shell/shell-provider";
 import { Button } from "@/components/ui/button";
 import { routes } from "@/config/routes";
@@ -485,7 +485,10 @@ function Capacity({ credits }: { credits: Credits }) {
   const w = t.environment.twin.alerts.capacity;
   const { format: locale } = useLocale();
   const spent = credits.state === "exhausted";
-  const date = exactDate(locale, credits.period_end);
+  // The day it renews, as the month counts it (UTC) — no hour.
+  const date = new Intl.DateTimeFormat(locale, { day: "numeric", month: "long", timeZone: "UTC" }).format(
+    new Date(credits.period_end),
+  );
   return (
     <div
       className={cn(
