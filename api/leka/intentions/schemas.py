@@ -495,9 +495,28 @@ class IntentionAnswer(BaseModel):
 
 class IntentionRequest(IntentAsk):
     """An intention asked, with what its asker answered to LEKA's questions
-    (LEKA-439): kept, and read again with it."""
+    (LEKA-439): kept, and read again with it — and the files attached to it,
+    uploaded before (POST /intentions/attachments)."""
 
     answers: list[IntentionAnswer] = Field(default_factory=list, max_length=20)
+    attachments: list[uuid.UUID] = Field(
+        default_factory=list,
+        max_length=5,
+        description="The files attached, by the ids their upload answered: linked to it, "
+        "or the intention is refused (422) and nothing kept.",
+    )
+
+
+class IntentionAttachmentRead(BaseModel):
+    """A file attached to an intention: what the store measured of it."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    content_type: str
+    size_bytes: int
+    created_at: datetime
 
 
 class BriefSlotRead(BaseModel):
@@ -660,6 +679,9 @@ class IntentionDetail(IntentionRead):
     )
     brief: IntentionBrief | None = Field(
         default=None, description="What LEKA knows and asks of it (LEKA-439)."
+    )
+    attachments: list[IntentionAttachmentRead] = Field(
+        default_factory=list, description="The files its asker attached, as kept."
     )
 
 

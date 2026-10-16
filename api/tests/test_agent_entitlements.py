@@ -471,3 +471,12 @@ async def test_each_plan_runs_the_agents_it_includes_and_those_of_the_plans_belo
     # Free runs none.
     await _on(globex, "free")
     assert await _why(client, "code-review") == {"plan_required"}
+    # Whatever its plan, each agent says the least plan that includes it.
+    sold = (await client.get(f"{API}/billing/add-ons")).json()
+    assert not any(a["included"] for a in sold["agents"])
+    since = {a["key"]: a["included_from"] for a in sold["agents"]}
+    assert (since["code-review"], since["debug-assistant"], since["security-review"]) == (
+        "starter",
+        "growth",
+        "business",
+    )

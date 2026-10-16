@@ -13,11 +13,8 @@ import { Form } from "@/components/forms/form";
 import { FormAlert } from "@/components/forms/form-alert";
 import { SelectableListField } from "@/components/forms/selectable-list-field";
 import { useConfirm } from "@/components/interactions/confirm";
-import {
-  type Attachment,
-  clearDraft,
-  IntentionComposer,
-} from "@/components/intentions/intention-composer";
+import { useAttachments } from "@/components/intentions/attachments";
+import { clearDraft, IntentionComposer } from "@/components/intentions/intention-composer";
 import { BriefView } from "@/components/intentions/brief";
 import { DecisionStep } from "@/components/intentions/decision-step";
 import { FeasibilityPanel } from "@/components/intentions/feasibility";
@@ -148,7 +145,8 @@ export function IntentionForm({
   // example (LEKA-341) does not earn an entry in it. Decisions do
   // (LEKA-390).
   const onDecision = params.get("step") === "decision";
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  // Its files, sent as they are chosen: only those kept go with it.
+  const files = useAttachments();
   const [assembled, setAssembled] = useState<AssembledContext | null>(null);
   useEffect(() => {
     onStep?.(assembled ? "analysis" : "intention");
@@ -185,7 +183,13 @@ export function IntentionForm({
       attachments: [],
     },
     onSubmit: async (values) => {
-      const ask = { ...askOf(values), answers };
+      // A file on its way: asked once it is kept, or let go.
+      if (files.uploading) {
+        form.setError("root", { type: "server", message: t.composer.files.waiting });
+        return;
+      }
+      // Its files, when it has some: without, the request is as it was.
+      const ask = { ...askOf(values), answers, ...(files.ids.length ? { attachments: files.ids } : {}) };
       const said = JSON.stringify(ask);
       if (requestKey.current?.ask !== said) {
         requestKey.current = { ask: said, key: crypto.randomUUID() };
@@ -195,6 +199,8 @@ export function IntentionForm({
           ? await reaskIntention(reasking, ask)
           : await submitIntention(ask, requestKey.current.key);
         clearDraft(workspace?.id);
+        // Kept with it now: no longer the form's to remove.
+        if (!reasking) files.clear();
         // What every list and page says of it is now this.
         client.setQueryData(
           intentionKeys.one(made.intention.id),
@@ -209,7 +215,12 @@ export function IntentionForm({
         if (caught instanceof ApiError && caught.status === 422) {
           form.setError("root", {
             type: "server",
-            message: caught.code === "off_topic" ? t.intentions.brief.offTopic : t.intent.nothing,
+            message:
+              caught.fieldErrors?.attachments === "attachment_unknown"
+                ? t.composer.files.unknown
+                : caught.code === "off_topic"
+                  ? t.intentions.brief.offTopic
+                  : t.intent.nothing,
           });
           return;
         }
@@ -381,8 +392,7 @@ export function IntentionForm({
       <div className="space-y-4">
         <FormAlert />
         <IntentionComposer
-          attachments={attachments}
-          onAttachmentsChange={setAttachments}
+          files={files}
           onSubmit={() => void review()}
           submitting={reviewing}
           submitLabel={

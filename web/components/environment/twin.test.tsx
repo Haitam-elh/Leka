@@ -24,7 +24,9 @@ import {
   TwinCounts,
   TwinLegend,
   TwinList,
+  twinHow,
 } from "@/components/environment/twin";
+import { DICTIONARIES } from "@/lib/i18n/dictionaries";
 import type { EnvironmentNode } from "@/lib/environment";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import type { Credits } from "@/lib/billing";
@@ -194,7 +196,7 @@ describe("the Digital Twin", () => {
       "normal",
     ]);
     expect(rows[0]).toHaveTextContent("Indisponible");
-    expect(rows[0]).toHaveTextContent("incident OPS-9 ouvert · mesuré");
+    expect(rows[0]).toHaveTextContent("incident « OPS-9 » ouvert · mesuré");
     expect(rows[1]).toHaveTextContent("Dégradé");
     expect(rows[1]).toHaveTextContent("état déduit · déduit de ce qui le fait tourner · soupçonné");
     expect(rows[2]).toHaveTextContent("Données obsolètes");
@@ -329,5 +331,21 @@ describe("the Digital Twin", () => {
     show(<AlertsCard monitoring={watch("starter", ["in_app"])} />);
     expect(screen.getByText("dans LEKA")).toBeVisible();
     expect(screen.getByText("Aucune alerte ouverte.")).toBeVisible();
+  });
+});
+
+describe("how a state is known", () => {
+  it("names an incident whose key is LEKA's own by its name, never « incident:datadog:0000… » (LEKA-469)", () => {
+    const twin = {
+      state: "degraded",
+      basis: "measured",
+      reason: "incident_open",
+      signal: ["Datadog Nova"],
+      certainty: "confirmed",
+      incident: { id: "i", key: "incident:datadog:00000000-0000-0000-0000-000000000042", name: "Paiements refusés en hausse", severity: null },
+    } as unknown as TwinState;
+    const said = twinHow(DICTIONARIES.fr, twin);
+    expect(said).toContain("incident « Paiements refusés en hausse » ouvert");
+    expect(said).not.toContain("incident:datadog");
   });
 });

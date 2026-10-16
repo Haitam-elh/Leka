@@ -4915,6 +4915,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/intentions/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A file attached before asking
+         * @description A file, its bytes the body: checked — a type LEKA reads, bytes that
+         *     are what it says, 10 MB at most — kept in object storage, and its id
+         *     answered for the intention to carry when it is asked. 415, 413 or 422
+         *     when refused, 503 when the store does not answer: nothing is kept of a
+         *     file refused.
+         */
+        post: operations["upload_attachment_api_v1_intentions_attachments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intentions/attachments/{attachment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * A file removed before asking
+         * @description One's own file, not attached yet: removed, bytes and all. 404 for
+         *     any other — someone else's, or one already kept with its intention.
+         */
+        delete: operations["remove_attachment_api_v1_intentions_attachments__attachment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/intentions": {
         parameters: {
             query?: never;
@@ -5025,6 +5070,27 @@ export interface paths {
          *     never left executing (2026-10-14).
          */
         get: operations["intention_api_v1_intentions__intention_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intentions/{intention_id}/attachments/{attachment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A file attached to an intention
+         * @description Its bytes, as an attachment — for whoever reads the intention. 404
+         *     when it is not a file of this intention, or no longer kept.
+         */
+        get: operations["attachment_content_api_v1_intentions__intention_id__attachments__attachment_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -7011,6 +7077,11 @@ export interface components {
              * @description Its category in the marketplace (the reference's: product, architecture, testing, incident, security, performance, frontend, mobile…) — none outside it.
              */
             market?: string | null;
+            /**
+             * Included From
+             * @description The least plan that includes it, whatever this workspace's plan.
+             */
+            included_from?: string | null;
         };
         /**
          * AgentProposalRead
@@ -15912,6 +15983,28 @@ export interface components {
             context: components["schemas"]["AssembledContext"];
         };
         /**
+         * IntentionAttachmentRead
+         * @description A file attached to an intention: what the store measured of it.
+         */
+        IntentionAttachmentRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Content Type */
+            content_type: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
          * IntentionBrief
          * @description An intention's brief (LEKA-439): the contract of what LEKA must know,
          *     each part's state, its questions in order, and what follows — analyse,
@@ -16074,6 +16167,11 @@ export interface components {
             answers?: components["schemas"]["IntentionAnswer"][];
             /** @description What LEKA knows and asks of it (LEKA-439). */
             brief?: components["schemas"]["IntentionBrief"] | null;
+            /**
+             * Attachments
+             * @description The files its asker attached, as kept.
+             */
+            attachments?: components["schemas"]["IntentionAttachmentRead"][];
         };
         /**
          * IntentionEventRead
@@ -16454,7 +16552,8 @@ export interface components {
         /**
          * IntentionRequest
          * @description An intention asked, with what its asker answered to LEKA's questions
-         *     (LEKA-439): kept, and read again with it.
+         *     (LEKA-439): kept, and read again with it — and the files attached to it,
+         *     uploaded before (POST /intentions/attachments).
          */
         IntentionRequest: {
             /**
@@ -16503,6 +16602,11 @@ export interface components {
             limit: number;
             /** Answers */
             answers?: components["schemas"]["IntentionAnswer"][];
+            /**
+             * Attachments
+             * @description The files attached, by the ids their upload answered: linked to it, or the intention is refused (422) and nothing kept.
+             */
+            attachments?: string[];
         };
         /**
          * IntentionStatus
@@ -48617,6 +48721,205 @@ export interface operations {
             };
         };
     };
+    upload_attachment_api_v1_intentions_attachments_post: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Its name, percent-encoded. */
+                "X-File-Name": string;
+                "Content-Type"?: string;
+                "Content-Length"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "text/plain": string;
+                "text/csv": string;
+                "text/markdown": string;
+                "application/json": string;
+                "application/pdf": string;
+                "image/png": string;
+                "image/jpeg": string;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntentionAttachmentRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    remove_attachment_api_v1_intentions_attachments__attachment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     intentions_api_v1_intentions_get: {
         parameters: {
             query?: {
@@ -49139,6 +49442,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IntentionDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    attachment_content_api_v1_intentions__intention_id__attachments__attachment_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intention_id: string;
+                attachment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": unknown;
+                    "text/csv": unknown;
+                    "text/markdown": unknown;
+                    "application/json": unknown;
+                    "application/pdf": unknown;
+                    "image/png": unknown;
+                    "image/jpeg": unknown;
                 };
             };
             /** @description The request could not be understood. */

@@ -29,6 +29,11 @@
     POST   /intentions/{id}/links        linked to a context, a finding, an
                                          entity
     DELETE /intentions/{id}/links/{link_id}
+    POST   /intentions/attachments       a file attached before asking: the
+                                         body the file itself, its name in
+                                         X-File-Name — its id answered
+    DELETE /intentions/attachments/{id}  removed before asking
+    GET    /intentions/{id}/attachments/{attachment_id}   its bytes
 
 Read by every member (`intention:read`); asking, and handling what one
 asked, is `intention:create` — handling another's intention is its asker's
@@ -44,10 +49,13 @@ payload (rule 3).
 from __future__ import annotations
 
 import uuid
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Annotated, Literal
+from urllib.parse import quote, unquote
 
-from fastapi import APIRouter, Depends, Header, Query, status
+from fastapi import APIRouter, Depends, Header, Query, Request, Response, status
+from fastapi.responses import StreamingResponse
 
 from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
@@ -103,10 +111,22 @@ from leka.intentions import (
     route_intention,
 )
 from leka.intentions import agents as agent_steps
+from leka.intentions.attachments import (
+    ACCEPTED,
+    MAX_BYTES,
+    AttachmentRefusedError,
+    AttachmentRepository,
+    AttachmentUnknownError,
+    drop,
+    keep,
+)
+from leka.intentions.attachments import read as read_attachment
 from leka.intentions.brief import brief_of, tidy
 from leka.intentions.feasibility import Feasibility, feasibility_of
 from leka.intentions.offer import offer_for
+from leka.intentions.schemas import IntentionAttachmentRead
 from leka.knowledge import GraphRepository, GraphService
+from leka.platform.storage import ObjectNotFoundError, ObjectStoreError, ObjectTooLargeError
 
 router = APIRouter(prefix="/intentions", tags=["intentions"])
 
@@ -184,6 +204,13 @@ def _refused(error: Exception) -> ApiError:
         )
     if isinstance(error, NothingToStartError | ContextRefusedError):
         return ApiError(status.HTTP_422_UNPROCESSABLE_CONTENT, ErrorCode.VALIDATION_FAILED, NOTHING)
+    if isinstance(error, AttachmentUnknownError):
+        return ApiError(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ErrorCode.VALIDATION_FAILED,
+            "A file it was asked with is not one you uploaded here, or is already attached.",
+            details=[FieldError(field="attachments", message="attachment_unknown")],
+        )
     if isinstance(error, LinkRefusedError):
         return ApiError(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -203,7 +230,100 @@ REFUSED = (
     ContextRefusedError,
     NotYoursError,
     LinkRefusedError,
+    AttachmentUnknownError,
 )
+
+# What each refusal of a file answers: a type LEKA does not read, or bytes
+# that are not what they say, 415; too large, 413; the rest, 422.
+FILE_STATUS = {
+    "file_type_refused": status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+    "file_content_mismatch": status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+    "file_too_large": status.HTTP_413_CONTENT_TOO_LARGE,
+}
+
+
+def _file_refused(code: str) -> ApiError:
+    return ApiError(
+        FILE_STATUS.get(code, status.HTTP_422_UNPROCESSABLE_CONTENT),
+        ErrorCode.VALIDATION_FAILED,
+        "This file is not kept: text, CSV, Markdown, JSON, PDF, PNG or JPEG, 10 MB at most.",
+        details=[FieldError(field="file", message=code)],
+    )
+
+
+@router.post(
+    "/attachments",
+    response_model=IntentionAttachmentRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="A file attached before asking",
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                media: {"schema": {"type": "string", "format": "binary"}} for media in ACCEPTED
+            },
+        }
+    },
+)
+async def upload_attachment(
+    request: Request,
+    principal: Asker,
+    session: SessionDep,
+    file_name: Annotated[
+        str,
+        Header(alias="X-File-Name", max_length=1024, description="Its name, percent-encoded."),
+    ],
+    content_type: Annotated[str, Header(alias="Content-Type")] = "",
+    content_length: Annotated[int | None, Header(alias="Content-Length")] = None,
+) -> IntentionAttachmentRead:
+    """A file, its bytes the body: checked — a type LEKA reads, bytes that
+    are what it says, 10 MB at most — kept in object storage, and its id
+    answered for the intention to carry when it is asked. 415, 413 or 422
+    when refused, 503 when the store does not answer: nothing is kept of a
+    file refused."""
+    if content_length is not None and content_length > MAX_BYTES:
+        raise _file_refused("file_too_large")
+    try:
+        row = await keep(
+            AttachmentRepository(session, principal.workspace_id),
+            by=principal.user_id,
+            name=unquote(file_name),
+            content_type=content_type,
+            chunks=request.stream(),
+        )
+    except AttachmentRefusedError as error:
+        raise _file_refused(error.code) from error
+    except ObjectTooLargeError as error:
+        raise _file_refused("file_too_large") from error
+    except ObjectStoreError as error:
+        raise ApiError(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            ErrorCode.SERVICE_UNAVAILABLE,
+            "The file could not be kept now: try again.",
+        ) from error
+    await session.flush()
+    return IntentionAttachmentRead.model_validate(row)
+
+
+@router.delete(
+    "/attachments/{attachment_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+    summary="A file removed before asking",
+)
+async def remove_attachment(
+    attachment_id: uuid.UUID, principal: Asker, session: SessionDep
+) -> Response:
+    """One's own file, not attached yet: removed, bytes and all. 404 for
+    any other — someone else's, or one already kept with its intention."""
+    removed = await drop(
+        AttachmentRepository(session, principal.workspace_id), attachment_id, by=principal.user_id
+    )
+    if not removed:
+        raise ApiError(
+            status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such file of yours to remove."
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("", response_model=IntentionCreated, status_code=status.HTTP_201_CREATED)
@@ -393,6 +513,48 @@ async def intention(
     if found is None:
         raise _missing()
     return found
+
+
+@router.get(
+    "/{intention_id}/attachments/{attachment_id}",
+    response_class=StreamingResponse,
+    summary="A file attached to an intention",
+    responses={200: {"content": {media: {} for media in ACCEPTED}}},
+)
+async def attachment_content(
+    intention_id: uuid.UUID, attachment_id: uuid.UUID, principal: Reader, session: SessionDep
+) -> StreamingResponse:
+    """Its bytes, as an attachment — for whoever reads the intention. 404
+    when it is not a file of this intention, or no longer kept."""
+    row = await AttachmentRepository(session, principal.workspace_id).one(attachment_id)
+    if row is None or row.intention_id != intention_id:
+        raise ApiError(
+            status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such file for this intention."
+        )
+    chunks = read_attachment(row)
+    try:
+        first = await anext(chunks)
+    except (StopAsyncIteration, ObjectNotFoundError):
+        raise ApiError(
+            status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "This file is no longer kept."
+        ) from None
+
+    async def body() -> AsyncIterator[bytes]:
+        yield first
+        async for chunk in chunks:
+            yield chunk
+
+    ascii_name = row.name.encode("ascii", "replace").decode().replace("?", "_").replace('"', "")
+    return StreamingResponse(
+        body(),
+        media_type=row.content_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{ascii_name}"; '
+            f"filename*=UTF-8''{quote(row.name)}",
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.get("/{intention_id}/history", response_model=list[IntentionEventRead])

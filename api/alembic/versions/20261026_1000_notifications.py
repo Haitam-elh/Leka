@@ -2,7 +2,7 @@
 read it, what each person mutes, how far each family of facts was read.
 
 Revision ID: d5f1b8c3a940
-Revises: 8a4c1e7b2d95
+Revises: c7e2a91f4b36
 Create Date: 2026-10-16 23:30:00
 
 LEKA-476. `notifications` keeps one row per fact told — unique by the
@@ -23,7 +23,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "d5f1b8c3a940"
-down_revision: str | None = "8a4c1e7b2d95"
+down_revision: str | None = "c7e2a91f4b36"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

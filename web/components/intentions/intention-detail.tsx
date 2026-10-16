@@ -16,6 +16,7 @@ import {
   Lock,
   type LucideIcon,
   Network,
+  Paperclip,
   Server,
   ShieldCheck,
   Siren,
@@ -33,6 +34,7 @@ import { summaryOf } from "@/components/capabilities/catalogue";
 import { entityHref } from "@/components/environment/parts";
 import { AgentsAction, useProposal } from "@/components/intentions/agents-decision";
 import { AnalysisResults, EvidenceTab } from "@/components/intentions/analysis-tab";
+import { sizeOf } from "@/components/intentions/attachments";
 import { JourneyNote } from "@/components/intentions/journey";
 import { phaseOf, Working } from "@/components/intentions/working";
 import { useConfirm } from "@/components/interactions/confirm";
@@ -52,6 +54,7 @@ import type {
   OfferAgent,
   ProposedAgent,
 } from "@/lib/intentions/api";
+import { attachmentAddress } from "@/lib/intentions/attachments";
 import { intentionKeys, useDecide, useIntentionAnalysis, useIntentionOffer } from "@/lib/intentions/queries";
 import { notify } from "@/lib/notify";
 import { useSources } from "@/lib/sources-queries";
@@ -234,6 +237,31 @@ function Exchange({
           >
             {intention.text}
           </p>
+          {intention.attachments?.length ? (
+            // The files it was asked with, as kept — each to read.
+            <ul
+              className="mt-2 flex flex-wrap gap-2"
+              aria-label={t.composer.files.label}
+              data-testid="detail-attachments"
+            >
+              {intention.attachments.map((file) => (
+                <li key={file.id}>
+                  <a
+                    href={attachmentAddress(intention.id, file.id)}
+                    className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-shell-line bg-white px-2.5 py-1 text-xs text-brand-navy outline-none hover:border-brand-violet focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+                    data-testid="detail-attachment"
+                  >
+                    <Paperclip className="size-3.5 shrink-0 text-shell-muted" aria-hidden="true" />
+                    <span className="truncate font-medium">{file.name}</span>
+                    <span className="shrink-0 text-shell-muted">
+                      · {(t.composer.files.kinds as Record<string, string>)[file.content_type] ?? file.content_type} ·{" "}
+                      {sizeOf(file.size_bytes, format)}
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       </div>
       <div className="flex items-start gap-4" data-testid="detail-leka">
