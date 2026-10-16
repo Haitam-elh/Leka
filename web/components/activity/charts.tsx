@@ -70,7 +70,6 @@ export function niceTop(max: number): number {
 
 const WIDTH = 640;
 const HEIGHT = 200;
-const LEFT = 32;
 const BOTTOM = 24;
 const TOP = 8;
 
@@ -78,8 +77,11 @@ export function StackedBars({ data, className }: { data: readonly Column[]; clas
   const t = useDictionary();
   const { format: locale } = useLocale();
   const top = niceTop(Math.max(0, ...data.map(total)));
+  const tick = (value: number) => (Number.isInteger(value) ? String(value) : value.toFixed(1));
+  // Room for the longest tick (« 4000 »), at about 7 units a digit at 11px.
+  const left = 12 + 7 * tick(top).length;
   const plot = HEIGHT - BOTTOM - TOP;
-  const slot = (WIDTH - LEFT) / Math.max(1, data.length);
+  const slot = (WIDTH - left) / Math.max(1, data.length);
   const bar = Math.min(36, slot * 0.55);
   const y = (value: number) => TOP + plot - (value / top) * plot;
   const every = Math.ceil(data.length / 8);
@@ -101,7 +103,7 @@ export function StackedBars({ data, className }: { data: readonly Column[]; clas
         return (
           <g key={step}>
             <line
-              x1={LEFT}
+              x1={left}
               x2={WIDTH}
               y1={y(value)}
               y2={y(value)}
@@ -109,18 +111,18 @@ export function StackedBars({ data, className }: { data: readonly Column[]; clas
               strokeDasharray={step ? "3 4" : undefined}
             />
             <text
-              x={LEFT - 8}
+              x={left - 8}
               y={y(value) + 4}
               textAnchor="end"
               className="fill-shell-muted text-[11px]"
             >
-              {Number.isInteger(value) ? value : value.toFixed(1)}
+              {tick(value)}
             </text>
           </g>
         );
       })}
       {data.map((column, index) => {
-        const x = LEFT + slot * index + (slot - bar) / 2;
+        const x = left + slot * index + (slot - bar) / 2;
         let base = 0;
         return (
           <g key={column.day} data-testid="activity-bar">
