@@ -53,11 +53,6 @@ Reader = Annotated[Principal, Depends(require_permission(Permission.WORKSPACE_RE
 Payer = Annotated[Principal, Depends(require_permission(Permission.WORKSPACE_UPDATE))]
 
 
-def _title(key: str) -> str:
-    found = find(key)
-    return found.title if found is not None else key
-
-
 @router.get("/add-ons", response_model=AddOnsRead, summary="Agents and bundles, sold")
 async def read_add_ons(principal: Reader, session: SessionDep) -> AddOnsRead:
     sold = catalogue().add_ons
@@ -166,20 +161,16 @@ async def buy_add_on(
         raise ApiError(
             status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such agent or bundle on sale."
         )
-    bundle = sold.bundle(body.key) if body.kind == "bundle" else None
-    name = f"LEKA — {bundle.name.fr}" if bundle is not None else f"LEKA — {_title(body.key)}"
     try:
         url = await checkout_add_on(
             session,
             principal.workspace_id,
             kind=body.kind,
             key=body.key,
-            name=name,
             by=principal.user_id,
             client=stripe(),
             intention_id=body.intention_id,
             launch=body.launch,
-            titles={k: _title(k) for k in body.key.split(",")} if body.kind == "agents" else None,
             locale=await _locale(session, principal),
         )
     except BillingUnavailableError:

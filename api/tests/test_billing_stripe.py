@@ -237,7 +237,7 @@ async def _count(workspace: uuid.UUID, table: type[Any]) -> int:
 async def test_the_catalogue_is_made_in_stripe_once() -> None:
     fake = FakeStripe()
     done = await sync(fake.client(), catalogue(), today=date(2026, 10, 17))
-    assert set(done.prices) == {
+    assert {k for k in done.prices if k.startswith("leka_core_")} == {
         "leka_core_starter_month_5900",
         "leka_core_starter_year_49560",
         "leka_core_growth_month_17900",
@@ -245,7 +245,24 @@ async def test_the_catalogue_is_made_in_stripe_once() -> None:
         "leka_core_business_month_59900",
         "leka_core_business_year_503160",
     }
-    assert fake.products == {"leka_core_starter", "leka_core_growth", "leka_core_business"}
+    assert {p for p in fake.products if p.startswith("leka_core_")} == {
+        "leka_core_starter",
+        "leka_core_growth",
+        "leka_core_business",
+    }
+    # Each agent and bundle a product and a monthly price (LEKA-461), found
+    # by a key that says its amount.
+    assert "leka_addon_agent_security-review" in fake.products
+    assert "leka_addon_agent_security-review_month_2500" in done.prices
+    assert "leka_addon_bundle_engineering_month_5900" in done.prices
+    agent = next(
+        p for p in fake.posted("/v1/prices") if p["lookup_key"].startswith("leka_addon_agent_")
+    )
+    assert (agent["recurring[interval]"], agent["tax_behavior"], agent["currency"]) == (
+        "month",
+        "exclusive",
+        "eur",
+    )
     assert fake.coupons == {"leka_launch_20_12m"}
     [coupon] = fake.posted("/v1/coupons")
     assert (coupon["percent_off"], coupon["duration"], coupon["duration_in_months"]) == (

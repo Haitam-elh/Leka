@@ -38,7 +38,15 @@ from leka.core.config import settings
 from leka.db import session_factory, workspace_scope
 from leka.governance import set_plan
 from tests.conftest import FakeIdentity
-from tests.test_billing_stripe import SECRET, FakeStripe, _deliver, _event, _plan, stripe
+from tests.test_billing_stripe import (
+    SECRET,
+    FakeStripe,
+    _deliver,
+    _event,
+    _plan,
+    _synced,
+    stripe,
+)
 from tests.test_capabilities_api import _connect
 from tests.test_sources_api import _as, acme, fake_connector  # noqa: F401
 
@@ -181,15 +189,22 @@ async def test_bought_paid_owned_cancelled_no_longer_the_plan_untouched(
     _as(identity, acme, "other_admin")
     assert await _why(client, "security-review") == {"not_owned"}
 
+    # Not in Stripe yet: refused, never a price made up.
+    unsynced = await client.post(
+        f"{API}/billing/add-ons/checkout", json={"kind": "bundle", "key": "review-pair"}
+    )
+    assert unsynced.json()["error"]["details"][0]["message"] == "not_synced"
+    await _synced(selling)
     bought = await client.post(
         f"{API}/billing/add-ons/checkout", json={"kind": "bundle", "key": "review-pair"}
     )
     assert bought.status_code == 200, bought.text
     assert bought.json()["url"] == "https://checkout.stripe.test/cs_1"
     [opened] = selling.posted("/v1/checkout/sessions")
-    # The catalogue's price, a subscription of its own, marked as the bundle.
-    assert opened["line_items[0][price_data][unit_amount]"] == "4500"
-    assert opened["line_items[0][price_data][recurring][interval]"] == "month"
+    # Its Stripe price (LEKA-461), a subscription of its own, marked as the bundle.
+    assert (
+        opened["line_items[0][price]"] == selling.prices["leka_addon_bundle_review-pair_month_4500"]
+    )
     assert opened["subscription_data[metadata][leka_add_on_key]"] == "review-pair"
     assert opened["success_url"] == "https://leka.test/capabilities?bought=review-pair"
     # Coming back from Checkout owns nothing: only Stripe's event does.
@@ -251,6 +266,7 @@ async def test_opened_from_a_decision_its_agents_are_launched_once_paid(
     globex = acme["globex"]
     await _on(globex, "starter")
     _as(identity, acme, "other_admin")
+    await _synced(selling)
     intention = uuid.uuid4()
     launch = [{"key": "security-review", "inputs": {}, "formats": []}]
     bought = await client.post(

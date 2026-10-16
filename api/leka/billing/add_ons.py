@@ -11,8 +11,9 @@ monthly subscription of its own, beside the plan's — never instead of it.
                         cancelled or unpaid, no longer. The plan is never
                         touched by an add-on's events.
 
-What a person buys is what the page shows: the amount comes from
-catalogue.yaml, sent as the line's price — no price id configured anywhere.
+What a person buys is what the page shows: each agent and bundle is a
+Stripe price made from catalogue.yaml by the catalogue sync, found by its
+lookup key (LEKA-461) — no price id configured anywhere.
 """
 
 from __future__ import annotations
@@ -32,7 +33,8 @@ from leka.billing.catalogue import catalogue
 from leka.billing.entitlements import end, grant, owned, plan_runs_agents
 from leka.billing.models import AddOnCheckout
 from leka.billing.stripe import Stripe
-from leka.billing.subscriptions import CheckoutRefusedError, _customer, account_of
+from leka.billing.subscriptions import CheckoutRefusedError, _customer, _price, account_of
+from leka.billing.sync import add_on_lookup_key
 from leka.core.config import settings
 
 logger = structlog.get_logger(__name__)
@@ -78,13 +80,11 @@ async def checkout_add_on(
     *,
     kind: str,
     key: str,
-    name: str,
     by: uuid.UUID,
     client: Stripe,
     intention_id: uuid.UUID | None = None,
     launch: Sequence[Mapping[str, Any]] = (),
     locale: str = "auto",
-    titles: Mapping[str, str] | None = None,
 ) -> str:
     """A Checkout for an agent or a bundle — its URL. CheckoutRefusedError
     when it cannot be bought here."""
@@ -117,32 +117,21 @@ async def checkout_add_on(
         else f"{settings.web_url}/capabilities"
     )
     prices = sold.prices
-    # Several agents: a line each, one subscription.
-    named = titles or {}
+    # Each at its Stripe price, found by its lookup key (LEKA-461) — several
+    # agents a line each, one subscription.
     lines = (
-        [(f"LEKA — {named.get(k) or _title_of(k)}", prices[k]) for k in found.agents]
+        [add_on_lookup_key("agent", k, prices[k]) for k in found.agents]
         if found.kind == "agents"
-        else [(name, found.monthly_price)]
+        else [add_on_lookup_key(found.kind, found.key, found.monthly_price)]
     )
+    items = [{"quantity": 1, "price": await _price(client, each)} for each in lines]
     made = await client.post(
         "/v1/checkout/sessions",
         {
             "mode": "subscription",
             "customer": customer,
             "client_reference_id": str(workspace_id),
-            "line_items": [
-                {
-                    "quantity": 1,
-                    "price_data": {
-                        "currency": catalogue().currency.lower(),
-                        "unit_amount": amount,
-                        "recurring": {"interval": "month"},
-                        "tax_behavior": "exclusive",
-                        "product_data": {"name": label, "metadata": marks},
-                    },
-                }
-                for label, amount in lines
-            ],
+            "line_items": items,
             "subscription_data": {"metadata": marks},
             "payment_method_collection": "always",
             "metadata": marks,
@@ -164,12 +153,6 @@ async def checkout_add_on(
     )
     await session.commit()
     return str(made["url"])
-
-
-def _title_of(key: str) -> str:
-    """An agent's name, as the registry says it: billing reads no registry,
-    so its key, made readable."""
-    return key.replace("-", " ").capitalize()
 
 
 def marked(data: Mapping[str, Any]) -> tuple[str, str] | None:
