@@ -89,6 +89,17 @@ describe("the figures", () => {
     expect(health.getAllByText(/13\s%/)).toHaveLength(2);
   });
 
+  it("count services as the home does, the applications said beside (LEKA-469)", () => {
+    mount(
+      <ArchitectureFigures
+        data={{ ...ARCHITECTURE, figures: { ...ARCHITECTURE.figures, services: 4, applications: 1 } }}
+      />,
+    );
+    const services = within(screen.getByTestId("arch-figure-services"));
+    expect(services.getByText("4")).toBeInTheDocument();
+    expect(services.getByText("+ 1 application")).toBeInTheDocument();
+  });
+
   it("say nothing they do not know", () => {
     mount(<ArchitectureFigures data={undefined} />);
 

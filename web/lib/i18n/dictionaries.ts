@@ -3528,6 +3528,7 @@ const fr = {
       legend: { inferred: "Lien déduit" },
       figures: {
         modules: "{count} {count|module|modules} de code",
+        applications: "+ {count} {count|application|applications}",
         tables: "{count} {count|table|tables}",
         services: "Services",
         repositories: "Repositories",
@@ -11231,6 +11232,7 @@ const en: Dictionary = {
       legend: { inferred: "Inferred link" },
       figures: {
         modules: "{count} code {count|module|modules}",
+        applications: "+ {count} {count|application|applications}",
         tables: "{count} {count|table|tables}",
         services: "Services",
         repositories: "Repositories",
