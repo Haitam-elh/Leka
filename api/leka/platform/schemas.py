@@ -122,7 +122,9 @@ class InvitationCreate(BaseModel):
     def _looks_like_an_address(cls, value: str) -> str:
         candidate = value.strip().lower()
         local, separator, domain = candidate.partition("@")
-        if not separator or not local or "." not in domain or domain.startswith("."):
+        # No whitespace inside: « a@b.com\nxyz » was taken, then mailed (LEKA-469).
+        blank = any(char.isspace() or not char.isprintable() for char in candidate)
+        if blank or not separator or not local or "." not in domain or domain.startswith("."):
             msg = f"{value!r} is not an email address"
             raise ValueError(msg)
         return candidate
