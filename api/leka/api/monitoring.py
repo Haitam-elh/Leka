@@ -5,9 +5,21 @@
     POST /monitoring/alerts/{id}/acknowledge
                        taken in hand (LEKA-463): by whom, when — the first
                        only; it stays open until the trouble ends
+    GET    /monitoring/rules            the alert rules people set (LEKA-477),
+                                        what may be watched, the channels and
+                                        where each stands, the plan's limit
+    POST   /monitoring/rules            one more — checked here: its subject
+                                        watched, its conditions seen there,
+                                        its channels integrated and in the
+                                        plan, its recipients members, the
+                                        plan's limit (403 plan_limit)
+    PATCH  /monitoring/rules/{id}       changed, turned off or on
+    DELETE /monitoring/rules/{id}       removed
+    POST   /monitoring/rules/{id}/test  each of its channels tried now, each
+                                        telling kept — a failure said
 
-Read by every member (`source:read`), as the environment is; acknowledged
-by who manages the sources (`source:manage`). A Free
+Read by every member (`source:read`), as the environment is; acknowledged,
+and its rules set, by who manages the sources (`source:manage`). A Free
 workspace reads what its plan includes and no alert — never one simulated.
 A route validates, calls one service, and returns (architecture rule 6).
 """
@@ -19,18 +31,29 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
+from sqlalchemy import select
 
 from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
-from leka.core.errors import ErrorCode
+from leka.billing.limits import PlanLimitError, room_for_alert_rule
+from leka.core.errors import ErrorCode, FieldError
 from leka.governance import Permission, Principal, require_permission
 from leka.monitoring import (
+    AlertDeliveryRead,
     AlertRead,
     AlertRepository,
+    AlertRule,
+    AlertRuleChange,
+    AlertRuleRead,
+    AlertRulesRead,
+    AlertRuleWrite,
+    ChannelRead,
     MonitoringEntitlementRead,
     MonitoringRead,
+    WatchableRead,
     entitled,
 )
+from leka.monitoring import rules as alert_rules
 
 router = APIRouter(prefix="/monitoring", tags=["monitoring"])
 
@@ -68,3 +91,152 @@ async def acknowledge(alert_id: uuid.UUID, session: SessionDep, principal: Manag
         raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such alert.")
     await session.commit()
     return AlertRead.model_validate(row, from_attributes=True)
+
+
+# ── the rules a person sets (LEKA-477) ──────────────────────────────────────
+
+
+def _rule_refused(error: alert_rules.RuleRefusedError) -> ApiError:
+    if error.code == "not_found":
+        return ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, str(error))
+    return ApiError(
+        422,
+        ErrorCode.VALIDATION_FAILED,
+        str(error),
+        details=[FieldError(field="rule", message=error.code)],
+    )
+
+
+def _limited(error: PlanLimitError) -> ApiError:
+    return ApiError(status.HTTP_403_FORBIDDEN, ErrorCode.PLAN_LIMIT, str(error))
+
+
+async def _rule_read(
+    session: SessionDep, principal: Principal, rows: list[AlertRule]
+) -> list[AlertRuleRead]:
+    told = await alert_rules.deliveries(session, principal.workspace_id, [r.id for r in rows])
+    return [
+        AlertRuleRead.model_validate(row, from_attributes=True).model_copy(
+            update={
+                "deliveries": [
+                    AlertDeliveryRead.model_validate(d, from_attributes=True) for d in told[row.id]
+                ]
+            }
+        )
+        for row in rows
+    ]
+
+
+@router.get("/rules", response_model=AlertRulesRead)
+async def read_rules(session: SessionDep, principal: Reader) -> AlertRulesRead:
+    now = datetime.now(UTC)
+    workspace = principal.workspace_id
+    rows = list(
+        (
+            await session.scalars(
+                select(AlertRule)
+                .where(AlertRule.workspace_id == workspace)
+                .order_by(AlertRule.created_at)
+            )
+        ).all()
+    )
+    limit, used = await alert_rules.quota(session, workspace)
+    upgrade = None
+    if limit is not None and used >= limit:
+        try:
+            await room_for_alert_rule(session, workspace, used)
+        except PlanLimitError as error:
+            upgrade = error.upgrade
+    return AlertRulesRead(
+        limit=limit,
+        used=used,
+        upgrade=upgrade,
+        channels=[
+            ChannelRead(key=c.key, status=c.status)
+            for c in await alert_rules.channels(session, workspace)
+        ],
+        watchable=[
+            WatchableRead(
+                subject_type=w.subject_type,
+                subject_id=w.subject_id,
+                name=w.name,
+                kind=w.kind,
+                conditions=list(w.conditions),
+                state=w.state,
+                fresh=w.fresh,
+                observed_at=w.observed_at,
+            )
+            for w in await alert_rules.watchable(session, workspace, now)
+        ],
+        rules=await _rule_read(session, principal, rows),
+    )
+
+
+@router.post("/rules", response_model=AlertRuleRead, status_code=status.HTTP_201_CREATED)
+async def create_rule(
+    body: AlertRuleWrite, session: SessionDep, principal: Manager
+) -> AlertRuleRead:
+    spec = alert_rules.RuleSpec(
+        name=body.name.strip(),
+        subject_type=body.subject_type,
+        subject_id=body.subject_id,
+        conditions=tuple(body.conditions),
+        severity=body.severity,
+        confirm_minutes=body.confirm_minutes,
+        repeat_hours=body.repeat_hours,
+        channels=tuple(body.channels),
+        recipients=tuple(body.recipients),
+        enabled=body.enabled,
+    )
+    try:
+        row = await alert_rules.create(
+            session, principal.workspace_id, spec, by=principal.user_id, now=datetime.now(UTC)
+        )
+    except alert_rules.RuleRefusedError as error:
+        raise _rule_refused(error) from None
+    except PlanLimitError as error:
+        raise _limited(error) from None
+    return (await _rule_read(session, principal, [row]))[0]
+
+
+@router.patch("/rules/{rule_id}", response_model=AlertRuleRead)
+async def change_rule(
+    rule_id: uuid.UUID, body: AlertRuleChange, session: SessionDep, principal: Manager
+) -> AlertRuleRead:
+    asked = body.model_dump(exclude_unset=True)
+    # Only « tell again » may be emptied: none, once per episode.
+    changes: dict[str, object] = {
+        key: value for key, value in asked.items() if value is not None or key == "repeat_hours"
+    }
+    for key in ("conditions", "channels", "recipients"):
+        if key in changes:
+            changes[key] = tuple(changes[key])  # type: ignore[arg-type]
+    if "name" in changes:
+        changes["name"] = str(changes["name"]).strip()
+    try:
+        row = await alert_rules.change(
+            session, principal.workspace_id, rule_id, changes, now=datetime.now(UTC)
+        )
+    except alert_rules.RuleRefusedError as error:
+        raise _rule_refused(error) from None
+    except PlanLimitError as error:
+        raise _limited(error) from None
+    return (await _rule_read(session, principal, [row]))[0]
+
+
+@router.delete("/rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_rule(rule_id: uuid.UUID, session: SessionDep, principal: Manager) -> None:
+    try:
+        await alert_rules.remove(session, principal.workspace_id, rule_id)
+    except alert_rules.RuleRefusedError as error:
+        raise _rule_refused(error) from None
+
+
+@router.post("/rules/{rule_id}/test", response_model=AlertRuleRead)
+async def test_rule(rule_id: uuid.UUID, session: SessionDep, principal: Manager) -> AlertRuleRead:
+    try:
+        await alert_rules.test(session, principal.workspace_id, rule_id, now=datetime.now(UTC))
+        row = await alert_rules.one(session, principal.workspace_id, rule_id)
+    except alert_rules.RuleRefusedError as error:
+        raise _rule_refused(error) from None
+    return (await _rule_read(session, principal, [row]))[0]

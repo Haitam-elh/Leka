@@ -45,6 +45,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 
 import { cn } from "cn";
 
+import { AlertOnThing } from "@/components/environment/alert-rules";
 import {
   CardLink,
   EventList,
@@ -1496,6 +1497,8 @@ export function DetailPanel({
             ))
           : null}
       </div>
+      {/* An alert on it, when its state is read (LEKA-477). */}
+      <AlertOnThing entityId={card.entity_id} />
       {tab === "overview" ? (
         <Overview card={card} data={data} byId={byId} onSelect={onSelect} href={href} />
       ) : tab === "relations" ? (

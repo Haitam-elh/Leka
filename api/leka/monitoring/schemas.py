@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 
 class MonitoringEntitlementRead(BaseModel):
@@ -53,3 +53,105 @@ class MonitoringRead(BaseModel):
     entitlement: MonitoringEntitlementRead
     open: list[AlertRead]
     ended: list[AlertRead] = Field(description="Resolved or closed in the last 7 days.")
+
+
+# ── the rules a person sets (LEKA-477) ──────────────────────────────────────
+
+Condition = Literal["unavailable", "degraded", "source_failing"]
+ChannelKey = Literal["in_app", "email", "sms", "whatsapp", "slack", "teams", "discord"]
+Severity = Literal["high", "medium", "low"]
+
+
+class WatchableRead(BaseModel):
+    """What a rule may be set on: its state read by a source, and when."""
+
+    subject_type: Literal["entity", "source"]
+    subject_id: uuid.UUID
+    name: str
+    kind: str = Field(description="service, database, infra_resource, source.")
+    conditions: list[Condition] = Field(description="The troubles LEKA can see on it.")
+    state: str
+    fresh: bool
+    observed_at: datetime | None
+
+
+class ChannelRead(BaseModel):
+    """A way to tell, and where it stands here: operational only once a
+    delivery went — never said so before."""
+
+    key: ChannelKey
+    status: Literal["operational", "untested", "failing", "not_in_plan", "unavailable"]
+
+
+class AlertDeliveryRead(BaseModel):
+    """One telling: sent, or failed and why."""
+
+    id: uuid.UUID
+    alert_id: uuid.UUID | None = Field(description="None: a test.")
+    channel: ChannelKey
+    recipient: str
+    round: int
+    status: Literal["sent", "failed"]
+    error: str | None
+    at: datetime
+
+
+class AlertRuleRead(BaseModel):
+    id: uuid.UUID
+    name: str
+    subject_type: Literal["entity", "source"]
+    subject_id: uuid.UUID
+    subject_name: str
+    conditions: list[Condition]
+    severity: Severity
+    confirm_minutes: int
+    repeat_hours: int | None
+    channels: list[ChannelKey]
+    recipients: list[uuid.UUID]
+    enabled: bool
+    created_at: datetime
+    deliveries: list[AlertDeliveryRead] = Field(
+        default_factory=list, description="Its latest tellings, the latest first."
+    )
+
+
+class AlertRulesRead(BaseModel):
+    """The rules, and all a screen needs to set one: what may be watched,
+    the channels, the plan's limit and how many are on."""
+
+    limit: int | None = Field(description="The plan's alert rules; None: no limit.")
+    used: int = Field(description="Those on now.")
+    upgrade: str | None = Field(description="The cheapest plan that allows more, at the limit.")
+    channels: list[ChannelRead]
+    watchable: list[WatchableRead]
+    rules: list[AlertRuleRead]
+
+
+class AlertRuleWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=120)
+    subject_type: Literal["entity", "source"]
+    subject_id: uuid.UUID
+    conditions: list[Condition] = Field(min_length=1, max_length=3)
+    severity: Severity = "medium"
+    confirm_minutes: int = Field(default=0, ge=0, le=1440)
+    repeat_hours: int | None = Field(default=None, ge=1, le=168)
+    channels: list[ChannelKey] = Field(min_length=1, max_length=7)
+    recipients: list[uuid.UUID] = Field(default_factory=list, max_length=50)
+    enabled: bool = True
+
+
+class AlertRuleChange(BaseModel):
+    """Any of it; what is left out stays as it was."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    conditions: list[Condition] | None = Field(default=None, min_length=1, max_length=3)
+    severity: Severity | None = None
+    confirm_minutes: int | None = Field(default=None, ge=0, le=1440)
+    repeat_hours: int | None = Field(default=None, ge=1, le=168)
+    channels: list[ChannelKey] | None = Field(default=None, min_length=1, max_length=7)
+    recipients: list[uuid.UUID] | None = Field(default=None, max_length=50)
+    enabled: bool | None = None

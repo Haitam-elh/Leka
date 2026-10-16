@@ -14,7 +14,8 @@ workspaces whose plan watches proactively.
                                                  silence resolves nothing
                     a thing gone from the model  closed, said why
     sweep()       judged and kept, per workspace — and those just opened
-                  told by e-mail when the plan includes it
+                  told by e-mail when the plan includes it; then the alert
+                  rules people set, told as they asked (rules.py, LEKA-477)
 
 What is not included is never simulated: a Free workspace's states are seen
 on its screens; no alert is opened for it.
@@ -326,6 +327,10 @@ async def watch(workspace_id: uuid.UUID, now: datetime) -> int:
             await session.commit()
             if fresh and "email" in entitlement.monitoring.alerts:
                 await _tell(session, workspace_id, fresh, now)
+            # The rules people set (LEKA-477): theirs told as they asked.
+            from leka.monitoring.rules import deliver
+
+            await deliver(session, workspace_id, now)
             return len(fresh)
 
 

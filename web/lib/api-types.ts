@@ -1036,6 +1036,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/monitoring/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Rules */
+        get: operations["read_rules_api_v1_monitoring_rules_get"];
+        put?: never;
+        /** Create Rule */
+        post: operations["create_rule_api_v1_monitoring_rules_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/monitoring/rules/{rule_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Rule */
+        delete: operations["remove_rule_api_v1_monitoring_rules__rule_id__delete"];
+        options?: never;
+        head?: never;
+        /** Change Rule */
+        patch: operations["change_rule_api_v1_monitoring_rules__rule_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/monitoring/rules/{rule_id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Test Rule */
+        post: operations["test_rule_api_v1_monitoring_rules__rule_id__test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/governance/data-protection": {
         parameters: {
             query?: never;
@@ -7268,6 +7321,43 @@ export interface components {
             agents: components["schemas"]["AgentLaunch"][];
         };
         /**
+         * AlertDeliveryRead
+         * @description One telling: sent, or failed and why.
+         */
+        AlertDeliveryRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Alert Id
+             * @description None: a test.
+             */
+            alert_id: string | null;
+            /**
+             * Channel
+             * @enum {string}
+             */
+            channel: "in_app" | "email" | "sms" | "whatsapp" | "slack" | "teams" | "discord";
+            /** Recipient */
+            recipient: string;
+            /** Round */
+            round: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "sent" | "failed";
+            /** Error */
+            error: string | null;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+        };
+        /**
          * AlertRead
          * @description An alert: on what, what is wrong, how sure, from when to when, and
          *     what ended it.
@@ -7347,6 +7437,144 @@ export interface components {
              * @description By whom.
              */
             acknowledged_by?: string | null;
+        };
+        /**
+         * AlertRuleChange
+         * @description Any of it; what is left out stays as it was.
+         */
+        AlertRuleChange: {
+            /** Name */
+            name?: string | null;
+            /** Conditions */
+            conditions?: ("unavailable" | "degraded" | "source_failing")[] | null;
+            /** Severity */
+            severity?: ("high" | "medium" | "low") | null;
+            /** Confirm Minutes */
+            confirm_minutes?: number | null;
+            /** Repeat Hours */
+            repeat_hours?: number | null;
+            /** Channels */
+            channels?: ("in_app" | "email" | "sms" | "whatsapp" | "slack" | "teams" | "discord")[] | null;
+            /** Recipients */
+            recipients?: string[] | null;
+            /** Enabled */
+            enabled?: boolean | null;
+        };
+        /** AlertRuleRead */
+        AlertRuleRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Subject Type
+             * @enum {string}
+             */
+            subject_type: "entity" | "source";
+            /**
+             * Subject Id
+             * Format: uuid
+             */
+            subject_id: string;
+            /** Subject Name */
+            subject_name: string;
+            /** Conditions */
+            conditions: ("unavailable" | "degraded" | "source_failing")[];
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "high" | "medium" | "low";
+            /** Confirm Minutes */
+            confirm_minutes: number;
+            /** Repeat Hours */
+            repeat_hours: number | null;
+            /** Channels */
+            channels: ("in_app" | "email" | "sms" | "whatsapp" | "slack" | "teams" | "discord")[];
+            /** Recipients */
+            recipients: string[];
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Deliveries
+             * @description Its latest tellings, the latest first.
+             */
+            deliveries?: components["schemas"]["AlertDeliveryRead"][];
+        };
+        /** AlertRuleWrite */
+        AlertRuleWrite: {
+            /** Name */
+            name: string;
+            /**
+             * Subject Type
+             * @enum {string}
+             */
+            subject_type: "entity" | "source";
+            /**
+             * Subject Id
+             * Format: uuid
+             */
+            subject_id: string;
+            /** Conditions */
+            conditions: ("unavailable" | "degraded" | "source_failing")[];
+            /**
+             * Severity
+             * @default medium
+             * @enum {string}
+             */
+            severity: "high" | "medium" | "low";
+            /**
+             * Confirm Minutes
+             * @default 0
+             */
+            confirm_minutes: number;
+            /** Repeat Hours */
+            repeat_hours?: number | null;
+            /** Channels */
+            channels: ("in_app" | "email" | "sms" | "whatsapp" | "slack" | "teams" | "discord")[];
+            /** Recipients */
+            recipients?: string[];
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+        };
+        /**
+         * AlertRulesRead
+         * @description The rules, and all a screen needs to set one: what may be watched,
+         *     the channels, the plan's limit and how many are on.
+         */
+        AlertRulesRead: {
+            /**
+             * Limit
+             * @description The plan's alert rules; None: no limit.
+             */
+            limit: number | null;
+            /**
+             * Used
+             * @description Those on now.
+             */
+            used: number;
+            /**
+             * Upgrade
+             * @description The cheapest plan that allows more, at the limit.
+             */
+            upgrade: string | null;
+            /** Channels */
+            channels: components["schemas"]["ChannelRead"][];
+            /** Watchable */
+            watchable: components["schemas"]["WatchableRead"][];
+            /** Rules */
+            rules: components["schemas"]["AlertRuleRead"][];
         };
         /**
          * AmbiguityChoice
@@ -9976,6 +10204,23 @@ export interface components {
             requester: components["schemas"]["EntityBrief"] | null;
             /** Incident Count */
             incident_count: number;
+        };
+        /**
+         * ChannelRead
+         * @description A way to tell, and where it stands here: operational only once a
+         *     delivery went — never said so before.
+         */
+        ChannelRead: {
+            /**
+             * Key
+             * @enum {string}
+             */
+            key: "in_app" | "email" | "sms" | "whatsapp" | "slack" | "teams" | "discord";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "operational" | "untested" | "failing" | "not_in_plan" | "unavailable";
         };
         /** CheckoutCreate */
         CheckoutCreate: {
@@ -23003,6 +23248,40 @@ export interface components {
             entities: number;
         };
         /**
+         * WatchableRead
+         * @description What a rule may be set on: its state read by a source, and when.
+         */
+        WatchableRead: {
+            /**
+             * Subject Type
+             * @enum {string}
+             */
+            subject_type: "entity" | "source";
+            /**
+             * Subject Id
+             * Format: uuid
+             */
+            subject_id: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @description service, database, infra_resource, source.
+             */
+            kind: string;
+            /**
+             * Conditions
+             * @description The troubles LEKA can see on it.
+             */
+            conditions: ("unavailable" | "degraded" | "source_failing")[];
+            /** State */
+            state: string;
+            /** Fresh */
+            fresh: boolean;
+            /** Observed At */
+            observed_at: string | null;
+        };
+        /**
          * WebhookDeliveryRead
          * @description One delivery a webhook source received, signed (LEKA-350) — never its body.
          */
@@ -29267,6 +29546,478 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AlertRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    read_rules_api_v1_monitoring_rules_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertRulesRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    create_rule_api_v1_monitoring_rules_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertRuleWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertRuleRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    remove_rule_api_v1_monitoring_rules__rule_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    change_rule_api_v1_monitoring_rules__rule_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertRuleChange"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertRuleRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    test_rule_api_v1_monitoring_rules__rule_id__test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertRuleRead"];
                 };
             };
             /** @description The request could not be understood. */
