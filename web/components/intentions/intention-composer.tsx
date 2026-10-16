@@ -259,7 +259,8 @@ export function IntentionComposer({
   if (compact) {
     // The home's hero (LEKA-456, the sprint's mockup): the question as the
     // page's title, a white field — the spark, the paperclip, a round
-    // violet button to send — and the suggestions centred under it.
+    // violet button to send. No suggestion under it (LEKA-470): the
+    // question is one's own.
     return (
       <section aria-labelledby="compact-composer-title" className={cn("text-center", className)}>
         <h1
@@ -339,19 +340,6 @@ export function IntentionComposer({
                   })
                 : null}
           </p>
-        </div>
-        <div className="mt-4 flex flex-wrap justify-center gap-2.5">
-          {suggestions.map(({ icon: Icon, label, template }) => (
-            <button
-              key={label}
-              type="button"
-              onClick={() => void applySuggestion(template)}
-              className="flex items-center gap-2 rounded-xl border border-shell-line bg-white px-3.5 py-2 text-[0.8125rem] font-medium text-brand-navy shadow-xs transition-colors outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
-            >
-              <Icon className="size-4 text-brand-violet" aria-hidden="true" />
-              {label}
-            </button>
-          ))}
         </div>
       </section>
     );

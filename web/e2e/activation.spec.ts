@@ -67,14 +67,18 @@ test("a new account goes from its workspace to a first analysis", async ({
     "href",
     "/welcome",
   );
-  // Nothing read: the questions are said to be examples, not the workspace's.
-  await expect(steps).toContainText("Exemples seulement");
+  // Nothing read: said that LEKA cannot answer yet — no example (LEKA-470).
+  await expect(page.getByTestId("first-steps-ask")).toContainText(
+    "LEKA pourra y répondre une fois une source lue",
+  );
 
-  // One asked as it is: with nothing to read, why nothing starts is said.
+  // One asked all the same, carried from the home's bar to the full step by
+  // the paperclip: with nothing to read, why nothing starts is said.
   await page
-    .getByTestId("first-steps-examples")
-    .getByRole("link")
-    .first()
+    .getByTestId("intention-input")
+    .fill("Qu'est-ce qui a changé dans le code cette semaine ?");
+  await page
+    .getByRole("button", { name: "Joindre un fichier (à l'étape suivante)" })
     .click();
   await expect(page).toHaveURL(/\/intentions\/new\?q=/);
   await expect(page.getByTestId("intention-input")).toHaveValue(
@@ -92,7 +96,9 @@ test("a new account goes from its workspace to a first analysis", async ({
   await expect(page.getByTestId("first-steps-stage")).toContainText(
     "Prêt : LEKA lit développement.",
   );
-  await expect(steps).not.toContainText("Exemples seulement");
+  await expect(page.getByTestId("first-steps-ask")).toContainText(
+    "Écrivez-la dans la barre ci-dessous",
+  );
 
   // A question of its own, from the overview's box, at any moment.
   await page

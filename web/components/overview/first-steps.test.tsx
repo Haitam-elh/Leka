@@ -1,8 +1,8 @@
 /**
  * « Premiers pas » (LEKA-445): where a new workspace stands, read from its
  * sources — empty, connected, a first read under way, failing, ready —
- * a failing source said with its cause and what to do, the examples
- * following what is read or said to be examples only, and a card that
+ * a failing source said with its cause and what to do, the first question
+ * asked in the bar — no example (LEKA-470) — and a card that
  * blocks nothing: put away, or gone once a source is read and a first
  * question asked.
  */
@@ -23,7 +23,7 @@ vi.mock("@/lib/intentions/api", async (original) => {
   };
 });
 
-const { examplesOf, FirstStepsCard, firstStepsOf } =
+const { FirstStepsCard, firstStepsOf } =
   await import("@/components/overview/first-steps");
 
 function source(overrides: Partial<Source>): Source {
@@ -88,15 +88,6 @@ describe("firstStepsOf", () => {
     expect(steps.failing.map((s) => s.display_name)).toEqual(["Jira Acme"]);
     expect(steps.read).toEqual(["code", "observability"]);
   });
-
-  it("gives examples only for what is read", () => {
-    expect(examplesOf([])).toBeNull();
-    expect(examplesOf(["chat"])).toBeNull();
-    expect(examplesOf(["observability", "code"])).toEqual([
-      "code",
-      "observability",
-    ]);
-  });
 });
 
 function renderCard(sources: Source[]) {
@@ -126,7 +117,7 @@ describe("FirstStepsCard", () => {
     counts.mockResolvedValue(asked(0));
   });
 
-  it("an empty workspace: what LEKA does, connect first, examples said to be examples", async () => {
+  it("an empty workspace: what LEKA does, connect first, no answer before a read", async () => {
     renderCard([]);
     const card = await screen.findByTestId("first-steps");
     expect(card).toHaveAttribute("data-stage", "empty");
@@ -138,12 +129,12 @@ describe("FirstStepsCard", () => {
       "href",
       "/welcome",
     );
-    expect(card).toHaveTextContent("Exemples seulement");
-    // An example opens the composer with its words, to ask or change.
-    const first = within(
-      screen.getByTestId("first-steps-examples"),
-    ).getAllByRole("link")[0];
-    expect(first.getAttribute("href")).toMatch(/^\/intentions\/new\?q=/);
+    expect(screen.getByTestId("first-steps-ask")).toHaveTextContent(
+      "LEKA pourra y répondre une fois une source lue.",
+    );
+    // No example of a question on the home (LEKA-470): one's own words.
+    expect(card).not.toHaveTextContent("Exemples");
+    expect(within(card).queryByRole("link", { name: /\?$/ })).toBeNull();
   });
 
   it("a failing source: its cause and what to do, the way to fix it", async () => {
@@ -158,17 +149,17 @@ describe("FirstStepsCard", () => {
     );
   });
 
-  it("ready: what is read said, examples for it", async () => {
+  it("ready: what is read said, the question asked in the bar", async () => {
     renderCard([source({})]);
     const card = await screen.findByTestId("first-steps");
     expect(card).toHaveAttribute("data-stage", "ready");
     expect(screen.getByTestId("first-steps-stage")).toHaveTextContent(
       "Prêt : LEKA lit développement.",
     );
-    expect(card).not.toHaveTextContent("Exemples seulement");
-    expect(screen.getByTestId("first-steps-examples")).toHaveTextContent(
-      "Qu'est-ce qui a changé dans le code cette semaine ?",
+    expect(screen.getByTestId("first-steps-ask")).toHaveTextContent(
+      "Écrivez-la dans la barre ci-dessous",
     );
+    expect(card).not.toHaveTextContent("Qu'est-ce qui a changé");
     expect(screen.queryByTestId("first-steps-action")).toBeNull();
   });
 
