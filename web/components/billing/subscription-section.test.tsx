@@ -161,6 +161,14 @@ describe("your plan", () => {
     vi.unstubAllGlobals();
   });
 
+  it("promises no annual discount before the pricing has said one", async () => {
+    api.read.mockResolvedValue(account());
+    api.pricing.mockReturnValue(new Promise(() => {}));
+    show();
+    const yearly = await screen.findByRole("radio", { name: "annuelle" });
+    expect(yearly).not.toHaveTextContent("%");
+  });
+
   it("no launch offer once the workspace has had it", async () => {
     api.read.mockResolvedValue(account({ launch_offer_available: false }));
     show();
