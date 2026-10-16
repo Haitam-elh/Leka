@@ -23,8 +23,9 @@ import { CompactIntentionComposer } from "@/components/intentions/compact-compos
 import { FirstStepsCard } from "@/components/overview/first-steps";
 import {
   AgentsSection,
-  BundlesBanner,
   EnvironmentCard,
+  HistoryLink,
+  HomeBundles,
   LatestAnalyses,
 } from "@/components/overview/home-sections";
 import { PageContainer } from "@/components/shell/page-container";
@@ -696,25 +697,33 @@ export function Overview() {
   // (LEKA-442: docs/frontend/overview-and-twin.md says each card's question).
   return (
     <PageContainer>
-      {/* The sprint's mockup (LEKA-456): the question, « Mon environnement »
-          beside it; the agents, the bundles, the latest analyses; then what
-          the home already said — nothing lost. The first steps stay above the
-          question (LEKA-445): below the agents, a newcomer never saw them. */}
+      {/* The sprint's mockup (LEKA-456), the question its focus (LEKA-470):
+          centred in the page, the way to the analyses already asked under
+          it, « Mon environnement » reduced to its state, top right — under
+          the question on a narrower screen; the agents, one link to them all
+          and the bundles; the latest analyses; the bundles' cards, no
+          banner; then what the home already said — nothing lost. The first steps stay above the question
+          (LEKA-445): below the agents, a newcomer never saw them. */}
       {load.status === "ready" ? (
         <FirstStepsCard sources={load.sources} />
       ) : null}
-      <div className="grid items-start gap-8 pt-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <CompactIntentionComposer />
-        <EnvironmentCard />
+      <div className="grid items-start gap-6 pt-4 xl:grid-cols-[16rem_minmax(0,1fr)_16rem] xl:gap-8">
+        <div className="min-w-0 xl:col-start-2 xl:row-start-1" data-testid="home-focus">
+          <CompactIntentionComposer />
+          <HistoryLink />
+        </div>
+        <div className="mx-auto w-full max-w-sm xl:col-start-3 xl:row-start-1 xl:max-w-none">
+          <EnvironmentCard />
+        </div>
       </div>
       <AgentsSection />
-      <BundlesBanner />
       <LatestAnalyses />
+      <HomeBundles />
       <div className="mt-10">
         <Greeting load={load} />
       </div>
       <div
-        className="mt-4 grid gap-4 xl:grid-cols-3"
+        className="mt-4 grid grid-cols-1 gap-4 *:min-w-0 xl:grid-cols-3"
         data-testid="overview-now"
       >
         <ApprovalsCard />
@@ -722,7 +731,7 @@ export function Overview() {
         <IntentionsCard />
       </div>
       <div
-        className="mt-4 grid gap-4 xl:grid-cols-3"
+        className="mt-4 grid grid-cols-1 gap-4 *:min-w-0 xl:grid-cols-3"
         data-testid="overview-context"
       >
         <ActivityCard />

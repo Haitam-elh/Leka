@@ -7,6 +7,7 @@ import {
   ArrowUp,
   BadgeCheck,
   BookOpen,
+  Bookmark,
   Bot,
   Briefcase,
   Cloud,
@@ -20,10 +21,11 @@ import {
   Plus,
   Search,
   ShieldCheck,
-  Star,
+  Smartphone,
   Target,
   TriangleAlert,
   Users,
+  Workflow,
   Zap,
 } from "lucide-react";
 import Link from "next/link";
@@ -32,7 +34,14 @@ import { useEffect, useState } from "react";
 
 import { cn } from "cn";
 
-import { AgentPrice, Bundles, Owned } from "@/components/capabilities/offers";
+import {
+  AgentOfferAction,
+  type AgentState,
+  agentStateOf,
+  AgentStateSaid,
+  Bundles,
+  Owned,
+} from "@/components/capabilities/offers";
 
 import { IconTile, type TileTone } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
@@ -116,6 +125,62 @@ const CATEGORY_FILL: Record<string, string> = {
   business: "fill-brand-navy",
   knowledge: "fill-chart-5",
 };
+/** The marketplace's categories (LEKA-467): the reference's, as the
+ * mockup lays the agents out — product first, then the code, its tests, its
+ * incidents… An agent outside the reference: by its registry's category. */
+const MARKETS = [
+  "product",
+  "architecture",
+  "testing",
+  "incident",
+  "security",
+  "performance",
+  "frontend",
+  "mobile",
+  "devops",
+  "network",
+  "documentation",
+  "orchestration",
+] as const;
+const MARKET_OF_CATEGORY: Record<string, string> = {
+  architecture: "architecture",
+  development: "architecture",
+  operations: "incident",
+  security: "security",
+  compliance: "security",
+  data: "performance",
+  infrastructure: "devops",
+  documentation: "documentation",
+};
+const MARKET_ICON: Record<string, LucideIcon> = {
+  product: Target,
+  architecture: Code,
+  testing: BadgeCheck,
+  incident: TriangleAlert,
+  security: ShieldCheck,
+  performance: Zap,
+  frontend: Layers,
+  mobile: Smartphone,
+  devops: Cloud,
+  network: Network,
+  documentation: FileText,
+  orchestration: Workflow,
+};
+const MARKET_TEXT: Record<string, string> = {
+  product: "text-blue-600",
+  architecture: "text-shell-nav-active",
+  testing: "text-state-success",
+  incident: "text-state-danger",
+  security: "text-chart-4",
+  performance: "text-state-warning",
+  frontend: "text-state-info",
+  mobile: "text-chart-1",
+  devops: "text-chart-3",
+  network: "text-chart-2",
+  documentation: "text-state-warning",
+  orchestration: "text-chart-5",
+};
+
 const CATEGORY_TEXT: Record<string, string> = {
   architecture: "text-shell-nav-active",
   development: "text-blue-600",
@@ -257,10 +322,15 @@ function Availability({ capability }: { capability: Capability }) {
   );
 }
 
+/** Kept at hand (LEKA-467): a favourite, said — its label and its tooltip
+ * name what it does, never a bare star. */
 function Favourite({ capability }: { capability: Capability }) {
   const t = useDictionary();
   const { favourite } = useCapabilityChange();
-  const label = capability.favourite ? t.catalogue.unfavourite : t.catalogue.favourite;
+  const name = titleOf(t, capability);
+  const label = fill(capability.favourite ? t.catalogue.unfavouriteNamed : t.catalogue.favouriteNamed, {
+    name,
+  });
   return (
     <button
       type="button"
@@ -272,8 +342,8 @@ function Favourite({ capability }: { capability: Capability }) {
       className="rounded p-1 text-shell-muted hover:bg-shell-canvas hover:text-shell-nav-active"
       data-testid="capability-favourite"
     >
-      <Star
-        className={cn("size-4", capability.favourite && "fill-state-warning text-state-warning")}
+      <Bookmark
+        className={cn("size-4", capability.favourite && "fill-shell-nav-active text-shell-nav-active")}
         aria-hidden="true"
       />
     </button>
@@ -318,10 +388,18 @@ function Row({ capability }: { capability: Capability }) {
               {fill(t.catalogue.runs, { count: capability.usage.runs })}
             </span>
           ) : null}
+          {agent ? (
+            <AgentStateSaid agentKey={capability.key} />
+          ) : (
+            <Pill tone="neutral" data-testid="skill-included">
+              {t.catalogue.skillIncluded}
+            </Pill>
+          )}
           {plain ? <span className="sr-only">{t.catalogue.available}</span> : <Availability capability={capability} />}
         </div>
       </div>
-      {agent ? <AgentPrice agentKey={capability.key} compact /> : null}
+      {/* Its price and action — a skill is never priced: it is not sold. */}
+      {agent ? <AgentOfferAction agentKey={capability.key} /> : null}
       <Favourite capability={capability} />
     </li>
   );
@@ -343,65 +421,43 @@ const DOMAINS = [
 ] as const;
 
 type Shown = "all" | "agents" | "capabilities";
+type Kind = "agent" | "skill";
 
-/** One box per domain (2026-10-14: « une case avec les agents et capacités
- * sur le code, pareil pour les autres ») — its agents first, then LEKA's own
- * capabilities, never mixed. */
-function Domain({ category, items }: { category: string; items: Capability[] }) {
+/** One box per domain — of one kind only (LEKA-467: agents, sold, and
+ * LEKA's skills, included, never in the same box). */
+function Domain({ category, items, kind }: { category: string; items: Capability[]; kind: Kind }) {
   const t = useDictionary();
   const w = t.catalogue;
-  const agents = items.filter((c) => c.kind === "agent");
-  const own = items.filter((c) => c.kind !== "agent");
-  const Icon = CATEGORY_ICON[category] ?? Lightbulb;
+  const agents = kind === "agent";
+  const Icon = (agents ? MARKET_ICON[category] : CATEGORY_ICON[category]) ?? Lightbulb;
+  const text = (agents ? MARKET_TEXT[category] : CATEGORY_TEXT[category]) ?? "text-brand-navy";
+  const label = agents
+    ? ((w.markets as Record<string, string>)[category] ?? categorySaid(t, category))
+    : ((w.domains as Record<string, string>)[category] ?? categorySaid(t, category));
   return (
     <section
       // In its column, whole, under the one before (2026-10-14: a grid of
       // rows left a short box's column white down to the next row).
       className="mb-4 flex break-inside-avoid flex-col overflow-hidden rounded-xl border border-shell-line bg-white"
-      aria-labelledby={`domain-${category}`}
+      aria-labelledby={`domain-${kind}-${category}`}
       data-testid="catalogue-domain"
       data-domain={category}
+      data-kind={kind}
     >
       <header className="flex items-center gap-2.5 border-b border-shell-line bg-shell-canvas/60 px-4 py-2.5">
-        <Icon className={cn("size-4.5 shrink-0", CATEGORY_TEXT[category] ?? "text-brand-navy")} aria-hidden="true" />
-        <h2
-          id={`domain-${category}`}
-          className={cn("min-w-0 flex-1 text-[0.9375rem] font-semibold", CATEGORY_TEXT[category] ?? "text-brand-navy")}
-        >
-          {(w.domains as Record<string, string>)[category] ?? categorySaid(t, category)}
-        </h2>
+        <Icon className={cn("size-4.5 shrink-0", text)} aria-hidden="true" />
+        <h3 id={`domain-${kind}-${category}`} className={cn("min-w-0 flex-1 text-[0.9375rem] font-semibold", text)}>
+          {label}
+        </h3>
         <span className="text-xs text-shell-muted" data-testid="catalogue-domain-count">
-          {[
-            agents.length ? fill(w.agentsCount, { count: agents.length }) : null,
-            own.length ? fill(w.ownCount, { count: own.length }) : null,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
+          {fill(kind === "agent" ? w.agentsCount : w.ownCount, { count: items.length })}
         </span>
       </header>
-      {agents.length ? (
-        <div className="px-4 pt-3" data-testid="catalogue-domain-agents">
-          <p className="text-xs font-semibold tracking-wide text-shell-nav-active uppercase">{w.agentsTitle}</p>
-          <ul className="divide-y divide-shell-line/70">
-            {agents.map((capability) => (
-              <Row key={capability.key} capability={capability} />
-            ))}
-          </ul>
-        </div>
-      ) : null}
-      {own.length ? (
-        <div
-          className={cn("px-4 pb-1", agents.length ? "border-t border-shell-line pt-3" : "pt-3")}
-          data-testid="catalogue-domain-own"
-        >
-          <p className="text-xs font-semibold tracking-wide text-shell-nav uppercase">{w.ownTitle}</p>
-          <ul className="divide-y divide-shell-line/70">
-            {own.map((capability) => (
-              <Row key={capability.key} capability={capability} />
-            ))}
-          </ul>
-        </div>
-      ) : null}
+      <ul className="divide-y divide-shell-line/70 px-4" data-testid={kind === "agent" ? "catalogue-domain-agents" : "catalogue-domain-own"}>
+        {items.map((capability) => (
+          <Row key={capability.key} capability={capability} />
+        ))}
+      </ul>
     </section>
   );
 }
@@ -550,23 +606,35 @@ function Latest({ summary }: { summary: CatalogueSummary }) {
 
 function Domains({
   list,
+  kind,
   goal,
-  shown,
   empty,
   category = null,
   tierOf,
+  stateOf,
   keep = () => true,
 }: {
   list: ReturnType<typeof useCapabilities>;
+  /** Agents or LEKA's skills: never mixed (LEKA-467). */
+  kind: Kind;
   category?: string | null;
   /** The level asked for, and each agent's — LEKA's own have none. */
   tierOf?: { tier: string; of: (key: string) => string | undefined };
+  /** The state asked for, and each agent's (LEKA-467). */
+  stateOf?: { state: AgentState; of: (key: string) => AgentState | null };
   goal: string | null;
-  shown: Shown;
   empty: string;
   keep?: (capability: Capability) => boolean;
 }) {
   const t = useDictionary();
+  const offers = useAddOns();
+  // An agent's group: its marketplace category; a skill's: its domain.
+  const groupOf = (capability: Capability): string =>
+    kind === "agent"
+      ? (offers.data?.agents.find((a) => a.key === capability.key)?.market ??
+        MARKET_OF_CATEGORY[capability.category] ??
+        capability.category)
+      : capability.category;
   if (list.isError) {
     return (
       <p className="rounded-xl border border-shell-line bg-white p-4 text-sm text-shell-muted" role="alert">
@@ -581,10 +649,11 @@ function Domains({
   const kept = list.data.filter(
     (capability) =>
       keep(capability) &&
-      (!category || capability.category === category) &&
+      (!category || groupOf(capability) === category) &&
       (!tierOf || tierOf.of(capability.key) === tierOf.tier) &&
+      (!stateOf || stateOf.of(capability.key) === stateOf.state) &&
       (!goal || capability.goals.includes(goal)) &&
-      (shown === "all" || (shown === "agents") === (capability.kind === "agent")),
+      (kind === "agent") === (capability.kind === "agent"),
   );
   if (!kept.length) {
     return (
@@ -593,16 +662,19 @@ function Domains({
       </p>
     );
   }
-  const known = DOMAINS as readonly string[];
+  const known = (kind === "agent" ? MARKETS : DOMAINS) as readonly string[];
   const order = [
     ...known,
-    ...[...new Set(kept.map((c) => c.category))].filter((c) => !known.includes(c)).sort(),
+    ...[...new Set(kept.map(groupOf))].filter((c) => !known.includes(c)).sort(),
   ];
   return (
-    <div className="gap-4 md:columns-2 lg:columns-3 xl:columns-4" data-testid="catalogue-grid">
+    <div
+      className="gap-4 md:columns-2 lg:columns-3 xl:columns-4"
+      data-testid={kind === "agent" ? "catalogue-grid" : "catalogue-skills-grid"}
+    >
       {order.map((category) => {
-        const items = kept.filter((c) => c.category === category);
-        return items.length ? <Domain key={category} category={category} items={items} /> : null;
+        const items = kept.filter((c) => groupOf(c) === category);
+        return items.length ? <Domain key={category} category={category} items={items} kind={kind} /> : null;
       })}
     </div>
   );
@@ -664,12 +736,16 @@ function Filters({
   setCategory,
   tier,
   setTier,
+  state,
+  setState,
 }: {
   capabilities: Capability[] | undefined;
   category: string | null;
   setCategory: (next: string | null) => void;
   tier: string | null;
   setTier: (next: string | null) => void;
+  state: AgentState | null;
+  setState: (next: AgentState | null) => void;
   goal: string | null;
   setGoal: (next: string | null) => void;
   shown: Shown;
@@ -685,8 +761,22 @@ function Filters({
     need,
     count: (capabilities ?? []).filter((c) => c.goals.includes(need)).length,
   })).filter((n) => n.count);
-  const categories = [...new Set((capabilities ?? []).map((c) => c.category))].sort((x, y) => {
-    const order = DOMAINS as readonly string[];
+  // The agents' categories, the marketplace's (LEKA-467): a category
+  // chosen narrows the agents; LEKA's skills, which have none, step aside.
+  const offers = useAddOns();
+  const categories = [
+    ...new Set(
+      (capabilities ?? [])
+        .filter((c) => c.kind === "agent")
+        .map(
+          (c) =>
+            offers.data?.agents.find((a) => a.key === c.key)?.market ??
+            MARKET_OF_CATEGORY[c.category] ??
+            c.category,
+        ),
+    ),
+  ].sort((x, y) => {
+    const order = MARKETS as readonly string[];
     return (order.indexOf(x) + 1 || 99) - (order.indexOf(y) + 1 || 99);
   });
   const tiers = t.catalogue.offers.tiers as Record<string, string>;
@@ -739,7 +829,7 @@ function Filters({
               { value: ALL, label: w.allCategories },
               ...categories.map((c) => ({
                 value: c,
-                label: (w.domains as Record<string, string>)[c] ?? categorySaid(t, c),
+                label: (w.markets as Record<string, string>)[c] ?? categorySaid(t, c),
               })),
             ],
             "catalogue-category",
@@ -750,6 +840,19 @@ function Filters({
             setTier,
             [{ value: ALL, label: w.allTiers }, ...Object.entries(tiers).map(([value, label]) => ({ value, label }))],
             "catalogue-tier",
+          )}
+          {pick(
+            w.states.all,
+            state,
+            (next) => setState(next as AgentState | null),
+            [
+              { value: ALL, label: w.states.all },
+              ...(["included", "owned", "option", "upgrade", "unavailable"] as const).map((value) => ({
+                value,
+                label: w.states[value],
+              })),
+            ],
+            "catalogue-state",
           )}
           {needs.length
             ? pick(
@@ -957,6 +1060,7 @@ export function CatalogueScreen() {
   const [goal, setGoal] = useState<string | null>(null);
   const [category, setCategory] = useState<string | null>(null);
   const [tier, setTier] = useState<string | null>(null);
+  const [state, setState] = useState<AgentState | null>(null);
   // « Mes capacités » (2026-10-14: « l'onglet ne sert strictement à rien »):
   // what this workspace owns — LEKA's own, and the agents it bought.
   const list = useCapabilities({ view: "all", q, sort });
@@ -1027,6 +1131,8 @@ export function CatalogueScreen() {
             setCategory={setCategory}
             tier={tier}
             setTier={setTier}
+            state={state}
+            setState={setState}
           />
           {view === "mine" ? <Owned /> : null}
           {view === "available" ? (
@@ -1044,20 +1150,43 @@ export function CatalogueScreen() {
               </Link>
             </div>
           ) : null}
-          <Domains
-            list={list}
-            goal={goal}
-            shown={shown}
-            empty={empty}
-            category={category}
-            tierOf={
-              tier
-                ? { tier, of: (key) => offers.data?.agents.find((a) => a.key === key)?.tier }
-                : undefined
-            }
-            keep={view === "mine" ? owned : undefined}
-          />
+          {shown !== "capabilities" ? (
+            <Domains
+              list={list}
+              kind="agent"
+              goal={goal}
+              empty={empty}
+              category={category}
+              tierOf={
+                tier
+                  ? { tier, of: (key) => offers.data?.agents.find((a) => a.key === key)?.tier }
+                  : undefined
+              }
+              stateOf={state ? { state, of: (key) => agentStateOf(offers.data, key) } : undefined}
+              keep={view === "mine" ? owned : undefined}
+            />
+          ) : null}
           {view === "available" && shown !== "capabilities" ? <Bundles /> : null}
+          {/* LEKA's own skills, apart (LEKA-467): what they are, never a
+              price — they are not sold. Hidden while a level or a state of
+              agents is asked: they have neither. */}
+          {shown !== "agents" && !tier && !state && !category ? (
+            <section className="flex flex-col gap-3" aria-labelledby="catalogue-skills-title" data-testid="catalogue-skills">
+              <div>
+                <h2 id="catalogue-skills-title" className="text-[1.25rem] font-bold text-brand-navy">
+                  {w.skillsTitle}
+                </h2>
+                <p className="text-[0.8125rem] text-shell-muted">{w.skillsLead}</p>
+              </div>
+              <Domains
+                list={list}
+                kind="skill"
+                goal={goal}
+                empty={w.empty}
+                category={category}
+              />
+            </section>
+          ) : null}
           {/* What ran this week, under what there is — nothing ran, nothing
               said. */}
           {summary.data?.runs ? (

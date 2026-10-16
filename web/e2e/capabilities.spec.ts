@@ -23,14 +23,17 @@ test.describe("Capabilities", () => {
     await expect(page.getByTestId("catalogue-grid")).toBeVisible();
     await expect(page.getByTestId("catalogue-wide")).toHaveCount(0);
 
-    // One box per domain, its agents apart (2026-10-14): code first, its
-    // agents — the code review among them — never mixed with LEKA's own.
-    const code = page.locator('[data-testid="catalogue-domain"][data-domain="development"]');
-    await expect(page.getByTestId("catalogue-domain").first()).toHaveAttribute("data-domain", "development");
-    await expect(
-      code.getByTestId("catalogue-domain-agents").locator('[data-testid="capability-card"][data-key="code-review"]'),
-    ).toContainText("Revue de code");
-    await expect(code.getByTestId("catalogue-domain-agents").locator('[data-kind]:not([data-kind="agent"])')).toHaveCount(0);
+    // The agents by the marketplace's categories (LEKA-467): « Architecture &
+    // Code » first here — the code review in it — never mixed with LEKA's
+    // own skills, which have their own section, never priced.
+    const code = page.locator('[data-testid="catalogue-domain"][data-kind="agent"][data-domain="architecture"]');
+    await expect(page.getByTestId("catalogue-domain").first()).toHaveAttribute("data-domain", "architecture");
+    await expect(code).toContainText("Architecture & Code");
+    await expect(code.locator('[data-testid="capability-card"][data-key="code-review"]')).toContainText("Revue de code");
+    await expect(code.locator('[data-testid="capability-card"]:not([data-kind="agent"])')).toHaveCount(0);
+    const skills = page.getByTestId("catalogue-skills");
+    await expect(skills).toContainText("Compétences LEKA, incluses dans toutes les formules");
+    await expect(skills.getByTestId("agent-price")).toHaveCount(0);
 
     const owner = page.locator('[data-testid="capability-card"][data-key="ownership"]');
     await expect(owner).toContainText("Responsabilités");
@@ -43,8 +46,8 @@ test.describe("Capabilities", () => {
     // Its price, owned here — LEKA's demo runs every agent (2026-10-14) —
     // and the bundles under the domains.
     await expect(architect.getByTestId("agent-price")).toContainText("25 € / mois");
-    // The demo's plan includes it (Karim's matrix, LEKA-454).
-    await expect(architect.getByTestId("agent-price")).toContainText("Inclus dans votre plan");
+    // The demo's plan includes it (Karim's matrix, LEKA-454), said in words.
+    await expect(architect.getByTestId("agent-state")).toHaveText("Inclus dans votre plan");
     await expect(page.getByTestId("bundle")).toHaveCount(5);
 
     // Its words find it.

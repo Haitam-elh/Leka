@@ -76,6 +76,7 @@ async def read_add_ons(principal: Reader, session: SessionDep) -> AddOnsRead:
                 bundles=[b.key for b in sold.bundles if key in b.agents],
                 reference=sold.reference[agent.reference].name if agent.reference else None,
                 included=key in has.included,
+                market=sold.reference[agent.reference].category if agent.reference else None,
             )
         )
     bundles = []

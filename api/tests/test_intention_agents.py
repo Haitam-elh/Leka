@@ -26,6 +26,7 @@ What these protect:
 # ruff: noqa: F811 — the fixtures of test_sources_api are imported to be requested by name.
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from collections.abc import Callable
@@ -523,3 +524,32 @@ def test_a_slash_word_names_one_agent_or_none() -> None:
     # A word two agents share names neither; no slash, no name.
     assert named("/revue du module", entries) is None
     assert named("architecte du parcours", entries) is None
+
+
+async def test_one_launch_one_set_of_runs_a_double_click_or_a_slow_network_alike(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[tuple[uuid.UUID, str]],
+    gemini: Callable[..., Gemini],
+    started: list[uuid.UUID],
+) -> None:
+    """LEKA-465: one submission starts one run — sent twice at once, or again
+    while it runs, refused, said why; the state kept on the server."""
+    await _ready(acme)
+    gemini()
+    _as(identity, acme, "member")
+    intention = await _proposed(client, acme)
+    url = f"{API}/{intention['id']}/agents"
+    first, second = await asyncio.gather(
+        client.post(url, json=LAUNCH), client.post(url, json=LAUNCH)
+    )
+    codes = sorted([first.status_code, second.status_code])
+    assert codes[0] == 200 and codes[1] in (409, 422), (first.text, second.text)
+    again = await client.post(url, json=LAUNCH)
+    assert again.status_code in (409, 422), again.text
+    assert len(await _runs(acme["acme"])) == 1
+    # Read again — a refresh, another tab: still at work, its run there.
+    read = await _get(client, f"/{intention['id']}")
+    assert (read["status"], read["journey"]["state"]) == ("executing", "action_running")

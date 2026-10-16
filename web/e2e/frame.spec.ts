@@ -78,8 +78,10 @@ test.describe("The frame", () => {
   test("Capacités: each domain's box right under the one before, in four columns (LEKA-460)", async ({ page }) => {
     await signIn(page);
     await page.goto("/capabilities");
-    await expect(page.getByTestId("catalogue-domain").nth(2)).toBeVisible();
-    const boxes = await page.getByTestId("catalogue-domain").evaluateAll((all) =>
+    // The agents' boxes (LEKA-467: LEKA's skills are a section of their own).
+    const agents = page.locator('[data-testid="catalogue-domain"][data-kind="agent"]');
+    await expect(agents.nth(2)).toBeVisible();
+    const boxes = await agents.evaluateAll((all) =>
       all.map((box) => {
         const r = box.getBoundingClientRect();
         return { left: Math.round(r.left), top: r.top, bottom: r.bottom };

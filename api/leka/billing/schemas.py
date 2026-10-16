@@ -169,6 +169,11 @@ class AgentOfferRead(_Read):
         default=None, description="Its name in the marketplace reference (LEKA-454)."
     )
     included: bool = Field(default=False, description="Its plan runs it, without an option.")
+    market: str | None = Field(
+        default=None,
+        description="Its category in the marketplace (the reference's: product, architecture, "
+        "testing, incident, security, performance, frontend, mobile…) — none outside it.",
+    )
 
 
 class BundleMemberRead(_Read):
