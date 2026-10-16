@@ -7,6 +7,14 @@ Ce document est le protocole écrit demandé par le ticket : il se suit tel
 quel le jour du test, et se rend rempli (grille d'observation et compte
 rendu) dans le ticket.
 
+**Les documents de la séance**, prêts à imprimer ou à remplir
+(`docs/product/user-test-450/`) :
+
+- `recette-445.md` — la liste de contrôle de la recette de Karim (critère 1) ;
+- `consentement.md` — l'accord de participation et d'enregistrement ;
+- `grille.md` — la grille d'observation d'une séance, avec la mesure ;
+- `compte-rendu-modele.md` — le compte rendu et la synthèse (critère 5).
+
 ---
 
 ## 1. Avant le test
