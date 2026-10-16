@@ -54,6 +54,8 @@ test.describe("the core screens", () => {
     "/governance",
     // An agent's product page (LEKA-471).
     "/capabilities/application-architecture",
+    // The notification centre (LEKA-476).
+    "/notifications",
   ]) {
     test(`${path} has no violation a machine can see`, async ({ page }) => {
       await signIn(page);
@@ -66,6 +68,15 @@ test.describe("the core screens", () => {
 });
 
 test.describe("what a screen opens", () => {
+  test("the bell's panel open, the latest told", async ({ page }) => {
+    await signIn(page);
+    await page.goto("/overview");
+    await page.getByTestId("notifications-bell").click();
+    await expect(page.getByTestId("notifications-panel")).toBeVisible();
+
+    await expectNoViolations(page, page.getByTestId("notifications-panel"));
+  });
+
   test("an agent's product page, a question of its FAQ and its technical details open", async ({ page }) => {
     await signIn(page);
     await page.goto("/capabilities/code-review#faq");
