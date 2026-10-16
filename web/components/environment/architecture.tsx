@@ -1468,28 +1468,30 @@ export function DetailPanel({
           <X className="size-4" aria-hidden="true" />
         </button>
       </div>
-      <div role="tablist" aria-label={p.label} className="flex gap-1 overflow-x-auto border-b border-shell-line">
-        {PANEL_TABS.map((key) => (
-          <button
-            key={key}
-            type="button"
-            role="tab"
-            aria-selected={tab === key}
-            onClick={() => setTab(key)}
-            data-testid={`architecture-panel-${key}`}
-            className={cn(
-              "-mb-px border-b-2 px-1.5 py-1 text-[0.78125rem] font-medium whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-brand-violet/40",
-              tab === key
-                ? "border-shell-nav-active text-shell-nav-active"
-                : "border-transparent text-shell-muted hover:text-brand-navy",
-            )}
-          >
-            {key === "relations"
-              ? fill(p.relationsTitle, { count: relations.length })
-              : p.tabs[key]}
-          </button>
-        ))}
-        {/* What only its sheet shows: there, at its tab. */}
+      <div className="flex gap-1 overflow-x-auto border-b border-shell-line">
+        <div role="tablist" aria-label={p.label} className="flex gap-1">
+          {PANEL_TABS.map((key) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={tab === key}
+              onClick={() => setTab(key)}
+              data-testid={`architecture-panel-${key}`}
+              className={cn(
+                "-mb-px border-b-2 px-1.5 py-1 text-[0.78125rem] font-medium whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-brand-violet/40",
+                tab === key
+                  ? "border-shell-nav-active text-shell-nav-active"
+                  : "border-transparent text-shell-muted hover:text-brand-navy",
+              )}
+            >
+              {key === "relations"
+                ? fill(p.relationsTitle, { count: relations.length })
+                : p.tabs[key]}
+            </button>
+          ))}
+        </div>
+        {/* What only its sheet shows: there, at its tab — links, beside the tabs. */}
         {href
           ? (["logs", "documentation"] as const).map((key) => (
               <Link
