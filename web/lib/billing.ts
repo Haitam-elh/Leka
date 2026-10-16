@@ -19,6 +19,13 @@ export const billing = {
   credits: () => apiFetch<Credits>("/billing/credits"),
   addOns: () => apiFetch<AddOns>("/billing/add-ons"),
   entitlements: () => apiFetch<Entitlement[]>("/billing/entitlements"),
+  /** « Annuler l'abonnement » / « Réactiver le renouvellement » of what was
+   * bought with this subscription (LEKA-474): what it owns, said again. */
+  addOnRenewal: (subscription: string, renew: boolean) =>
+    apiFetch<Entitlement[]>(`/billing/add-ons/${encodeURIComponent(subscription)}/renewal`, {
+      method: "POST",
+      body: JSON.stringify({ renew }),
+    }),
   /** Stripe's page for an agent or a bundle: where to go. */
   buy: (body: AddOnCheckout) =>
     apiFetch<{ url: string }>("/billing/add-ons/checkout", {
