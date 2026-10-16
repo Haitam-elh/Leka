@@ -9,7 +9,13 @@ from leka.metering import reports
 from leka.metering.credits import credits_now, run_credit_watch, watch_credits
 from leka.metering.models import CreditWarning, UsageRecord
 from leka.metering.repository import execution_of
-from leka.metering.schemas import CreditsRead, ExecutionCost, IntentionCost, StepCost
+from leka.metering.schemas import (
+    CreditsRead,
+    CreditWarningRead,
+    ExecutionCost,
+    IntentionCost,
+    StepCost,
+)
 from leka.metering.service import (
     WINDOW,
     Metering,
@@ -21,6 +27,7 @@ from leka.metering.service import (
 __all__ = [
     "WINDOW",
     "CreditWarning",
+    "CreditWarningRead",
     "CreditsRead",
     "ExecutionCost",
     "IntentionCost",

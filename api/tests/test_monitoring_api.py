@@ -13,6 +13,9 @@ What these protect:
   second; the incident closed and Datadog read since: resolved, said by
   what; the failing source, still open;
 - Starter: alerted in LEKA, never by e-mail.
+- An alert taken in hand (LEKA-463) by who manages the sources: by whom
+  and when, the first only — it stays open; a member may not; another
+  workspace's, or none, is not found.
 """
 
 from __future__ import annotations
@@ -31,7 +34,7 @@ from leka.identity import EmailMessage, User
 from leka.ingestion import ResolvedEntity
 from leka.monitoring import AlertRepository, watch
 from leka.monitoring import service as monitoring_service
-from leka.platform import Workspace
+from leka.platform import Membership, Role, Workspace
 from tests.conftest import FakeIdentity
 from tests.test_intention_benchmark import _seed_module
 
@@ -199,3 +202,56 @@ async def test_starter_is_alerted_in_leka_never_by_email(
     assert read["entitlement"]["alerts"] == ["in_app"]
     assert len(read["open"]) == 2
     assert outbox.sent == []
+
+
+async def test_an_alert_is_taken_in_hand_once_by_who_manages_and_stays_open(
+    client: AsyncClient, identity: FakeIdentity, outbox: Outbox
+) -> None:
+    workspace_id = await demo(identity)
+    await plan(workspace_id, "starter")
+    await incident(workspace_id, "open")
+    await watch(workspace_id, datetime.now(UTC))
+    alert = next(
+        a
+        for a in (await client.get("/api/v1/monitoring")).json()["open"]
+        if a["subject_name"] == "payment-api"
+    )
+    assert alert["acknowledged_at"] is None
+
+    first = await client.post(f"/api/v1/monitoring/alerts/{alert['id']}/acknowledge")
+    assert first.status_code == 200
+    taken = first.json()
+    assert taken["status"] == "open" and taken["acknowledged_at"] is not None
+    nora = await _nora()
+    assert taken["acknowledged_by"] == str(nora)
+    # Again: the first is kept.
+    again = (await client.post(f"/api/v1/monitoring/alerts/{alert['id']}/acknowledge")).json()
+    assert again["acknowledged_at"] == taken["acknowledged_at"]
+    read = (await client.get("/api/v1/monitoring")).json()
+    kept = next(a for a in read["open"] if a["id"] == alert["id"])
+    assert kept["acknowledged_by"] == str(nora)
+    # None of that id here.
+    missing = await client.post(f"/api/v1/monitoring/alerts/{uuid.uuid4()}/acknowledge")
+    assert missing.status_code == 404
+
+    # A member reads the alerts, and may not take one in hand.
+    with system_scope():
+        async with session_factory() as session:
+            member = User(email=f"member-{uuid.uuid4().hex[:8]}@acme.example")
+            session.add(member)
+            await session.flush()
+            session.add(Membership(workspace_id=workspace_id, user_id=member.id, role=Role.MEMBER))
+            await session.commit()
+            member_id = member.id
+    identity.sign_in(member_id, workspace_id)
+    assert (await client.get("/api/v1/monitoring")).status_code == 200
+    refused = await client.post(f"/api/v1/monitoring/alerts/{alert['id']}/acknowledge")
+    assert refused.status_code == 403
+
+
+async def _nora() -> uuid.UUID:
+    with system_scope():
+        async with session_factory() as session:
+            found = await session.scalar(select(User.id).where(User.email == "nora@acme.example"))
+    assert found is not None
+    return found

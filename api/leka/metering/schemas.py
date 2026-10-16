@@ -69,6 +69,15 @@ class IntentionCost(BaseModel):
     infra_cost: str = "unavailable"
 
 
+class CreditWarningRead(BaseModel):
+    """A share of this month's credits passed: when, and how much was used
+    then (LEKA-463) — once a month for each."""
+
+    threshold: int
+    at: datetime
+    used: float
+
+
 class CreditsRead(BaseModel):
     """A workspace's AI credits this month (LEKA-430): its plan's and its
     packs', what its work on LEKA's models used, what is left — and whether
@@ -88,3 +97,6 @@ class CreditsRead(BaseModel):
     warn_at: list[int] = Field(description="The percentages past which owners and admins are told.")
     enforced: bool = Field(description="Spent, LEKA's models are refused until the month ends.")
     credit_usd: float = Field(description="What a credit is worth of LEKA's model cost.")
+    warned: list[CreditWarningRead] = Field(
+        default_factory=list, description="The shares passed this month, each when (LEKA-463)."
+    )

@@ -3,6 +3,7 @@ those ended lately."""
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Sequence
 from datetime import datetime
 
@@ -28,3 +29,16 @@ class AlertRepository(WorkspaceScopedRepository):
             .limit(limit)
         )
         return list(rows.all())
+
+    async def acknowledge(
+        self, alert_id: uuid.UUID, *, by: uuid.UUID, at: datetime
+    ) -> MonitoringAlert | None:
+        """Taken in hand by someone (LEKA-463) — the first only: acknowledged
+        again, it keeps who did first and when. None: no such alert here."""
+        row = await self._session.scalar(
+            self.select(MonitoringAlert).where(MonitoringAlert.id == alert_id)
+        )
+        if row is not None and row.acknowledged_at is None:
+            row.acknowledged_at = at
+            row.acknowledged_by = by
+        return row

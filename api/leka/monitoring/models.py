@@ -74,3 +74,7 @@ class MonitoringAlert(Base, WorkspaceScopedMixin):
     resolution: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
     # Who was told, how, when: {"email": "<iso>"}.
     notified: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    # Seen and taken in hand (LEKA-463): by whom, when — the first only. An
+    # acknowledged alert stays open until a signal says the trouble ended.
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    acknowledged_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)

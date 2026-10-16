@@ -12,8 +12,10 @@
  * them; e-mail not included, said.
  */
 
+import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   AlertsCard,
@@ -25,10 +27,38 @@ import {
 } from "@/components/environment/twin";
 import type { EnvironmentNode } from "@/lib/environment";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
+import type { Credits } from "@/lib/billing";
+import { makeQueryClient } from "@/lib/query";
 import type { Monitoring, TwinSource, TwinState } from "@/lib/twin";
 
+// The month's credits (LEKA-463), as GET /billing/credits says them.
+const credits = vi.hoisted(() => ({ value: undefined as Credits | undefined }));
+vi.mock("@/lib/billing-queries", () => ({ useCredits: () => ({ data: credits.value }) }));
+// Who reads: an admin, who may take an alert in hand.
+const people = vi.hoisted(() => ({ permissions: ["source:read", "source:manage"] }));
+vi.mock("@/components/shell/shell-provider", async (original) => ({
+  ...(await original<typeof import("@/components/shell/shell-provider")>()),
+  usePermissions: () => people.permissions,
+  useCurrentUser: () => ({ id: "me" }),
+}));
+const acknowledge = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/twin", async (original) => {
+  const real = await original<typeof import("@/lib/twin")>();
+  return { ...real, monitoring: { ...real.monitoring, acknowledge } };
+});
+
+afterEach(() => {
+  credits.value = undefined;
+  people.permissions = ["source:read", "source:manage"];
+  acknowledge.mockReset();
+});
+
 function show(node: React.ReactNode) {
-  return render(<LocaleProvider>{node}</LocaleProvider>);
+  return render(
+    <QueryClientProvider client={makeQueryClient()}>
+      <LocaleProvider>{node}</LocaleProvider>
+    </QueryClientProvider>,
+  );
 }
 
 const read = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
@@ -245,6 +275,54 @@ describe("the Digital Twin", () => {
     expect(screen.getByText("dans LEKA et par e-mail")).toBeVisible();
     // Ended: resolved by what verified it.
     expect(screen.getByText(/résolue, vérifiée par acme-eu/)).toBeInTheDocument();
+  });
+
+  it("an alert taken in hand by who manages: by whom and since when; a member only reads", async () => {
+    acknowledge.mockResolvedValue({});
+    const user = userEvent.setup();
+    const { unmount } = show(<AlertsCard monitoring={watch("starter", ["in_app"], [alert({ id: "a1" })])} />);
+    await user.click(screen.getByTestId("alert-take"));
+    expect(acknowledge).toHaveBeenCalledWith("a1", expect.anything());
+    unmount();
+    show(
+      <AlertsCard
+        monitoring={watch("starter", ["in_app"], [alert({ acknowledged_at: read(5), acknowledged_by: "me" })])}
+      />,
+    );
+    expect(screen.getByTestId("alert")).toHaveTextContent("prise en charge par vous il y a 5 min");
+    expect(screen.queryByTestId("alert-take")).not.toBeInTheDocument();
+  });
+
+  it("a member reads the alerts and may not take one in hand", () => {
+    people.permissions = ["source:read"];
+    show(<AlertsCard monitoring={watch("starter", ["in_app"], [alert({})])} />);
+    expect(screen.getByTestId("alert")).toBeInTheDocument();
+    expect(screen.queryByTestId("alert-take")).not.toBeInTheDocument();
+  });
+
+  it("the month's AI capacity on every plan: each threshold passed and when; spent, why and the way to more", () => {
+    credits.value = {
+      plan: "free",
+      percent: 100,
+      state: "exhausted",
+      enforced: true,
+      period_end: "2026-11-01T00:00:00Z",
+      warned: [
+        { threshold: 80, at: read(120), used: 160 },
+        { threshold: 100, at: read(10), used: 200 },
+      ],
+    } as unknown as Credits;
+    show(<AlertsCard monitoring={watch("free", [])} />);
+    const capacity = screen.getByTestId("alerts-capacity");
+    expect(capacity).toHaveTextContent("100 % des crédits IA du mois utilisés (mesuré)");
+    const passed = screen.getAllByTestId("alerts-capacity-passed");
+    expect(passed[0]).toHaveTextContent("Seuil de 80 % franchi il y a 2 h.");
+    expect(passed[1]).toHaveTextContent("Seuil de 100 % franchi il y a 10 min.");
+    expect(capacity).toHaveTextContent("les analyses de LEKA sont suspendues");
+    expect(capacity).toHaveTextContent("Aucun dépassement n'est facturé");
+    expect(
+      screen.getByRole("link", { name: /Passer à un plan offrant plus de capacité/ }),
+    ).toHaveAttribute("href", "/billing");
   });
 
   it("e-mail not included is said: in LEKA only", () => {

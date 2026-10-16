@@ -42,6 +42,8 @@ class AlertRead(BaseModel):
         description="The signal that verified it ended — or why it was closed without one."
     )
     notified: dict[str, JsonValue]
+    acknowledged_at: datetime | None = Field(default=None, description="Taken in hand, when.")
+    acknowledged_by: uuid.UUID | None = Field(default=None, description="By whom.")
 
 
 class MonitoringRead(BaseModel):

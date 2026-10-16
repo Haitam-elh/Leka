@@ -83,4 +83,7 @@ export function byState<T extends { name: string; twin?: TwinState | null }>(
 
 export const monitoring = {
   get: () => apiFetch<Monitoring>("/monitoring"),
+  /** Taken in hand (LEKA-463): by whom, when — the first only. */
+  acknowledge: (id: string) =>
+    apiFetch<Alert>(`/monitoring/alerts/${encodeURIComponent(id)}/acknowledge`, { method: "POST" }),
 };
