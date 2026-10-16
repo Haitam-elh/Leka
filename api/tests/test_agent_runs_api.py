@@ -414,6 +414,59 @@ async def test_a_report_alone_then_its_deck_drawn_after_it_never_run_again(
     assert done_twice.status_code == 422
 
 
+async def test_files_drawn_after_never_left_waiting_failed_or_lost(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    leka_gemini: Callable[..., Script],
+    queued: list[uuid.UUID],
+    store: LocalObjectStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """2026-10-16: « en préparation » stayed forever. A deck the model cannot
+    write ends it, said why; a request lost (no worker) is asked again."""
+    await _ready(acme)
+    analysis = "# Architecture — Billing API\n\nRien de plus dans les sources."
+    leka_gemini(gemini(analysis), *[gemini("Voici le deck : pas de JSON.")] * 10)
+
+    async def files(workspace_id: uuid.UUID, run_id: uuid.UUID, formats: list[str]) -> bool:
+        return True
+
+    monkeypatch.setattr(agent_runs_api, "queue_files", files)
+    started = await _start(client)
+    await _sql(
+        acme["acme"],
+        "UPDATE agent_runs SET detail = detail || '{\"formats\": []}'::jsonb WHERE id = :id",
+        id=uuid.UUID(started["id"]),
+    )
+    assert await _run(acme, started["id"]) == {"status": "succeeded"}
+    asked = await client.post(f"{API}/{started['id']}/files", json={"formats": ["pdf", "pptx"]})
+    assert asked.status_code == 202, asked.text
+    said = await redraw(acme["acme"], uuid.UUID(started["id"]), ["pdf", "pptx"])
+    assert said["error"] == "unanswered"
+    after = await _detail(client, started["id"])
+    # No longer « en préparation »: why said, the way to ask again.
+    assert (after["drawing"], after["draw_failed"]) == ([], "unanswered")
+    assert after["drawable"] == ["pdf", "pptx"]
+
+    # Asked, and no worker ever drew it: lost after 20 minutes — asked again.
+    again = await client.post(f"{API}/{started['id']}/files", json={"formats": ["pdf"]})
+    assert again.status_code == 202 and again.json()["draw_failed"] is None
+    assert (await _detail(client, started["id"]))["drawing"] == ["pdf"]
+    await _sql(
+        acme["acme"],
+        "UPDATE agent_runs SET detail = detail || "
+        "jsonb_build_object('drawing_since', (now() - interval '25 minutes')::text) "
+        "WHERE id = :id",
+        id=uuid.UUID(started["id"]),
+    )
+    assert (await _detail(client, started["id"]))["drawing"] == []
+    assert (
+        await client.post(f"{API}/{started['id']}/files", json={"formats": ["pdf"]})
+    ).status_code == 202
+
+
 async def test_a_deck_the_model_cannot_write_never_fails_the_run(
     client: AsyncClient,
     identity: FakeIdentity,

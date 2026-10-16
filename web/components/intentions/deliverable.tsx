@@ -199,17 +199,27 @@ function DrawFiles({ run }: { run: AgentRunDetail }) {
     );
   }
   if (!drawable.length) return null;
+  const errors = t.agentRuns.errors as Record<string, string>;
+  const failed = run.draw_failed ?? null;
   return (
-    <Button
-      type="button"
-      size="sm"
-      disabled={draw.isPending}
-      onClick={() => draw.mutate(drawable)}
-      data-testid="deliverable-draw"
-    >
-      <FileText className="size-3.5" aria-hidden="true" />
-      {drawable.length > 1 ? w.drawBoth : drawable[0] === "pdf" ? w.drawPdf : w.drawPptx}
-    </Button>
+    <>
+      {failed ? (
+        // Never left waiting: why it did not come, and the way to ask again.
+        <span className="text-[0.8125rem] text-state-warning" role="status" data-testid="deliverable-draw-failed">
+          {fill(w.drawFailed, { why: errors[failed] ?? failed })}
+        </span>
+      ) : null}
+      <Button
+        type="button"
+        size="sm"
+        disabled={draw.isPending}
+        onClick={() => draw.mutate(drawable)}
+        data-testid="deliverable-draw"
+      >
+        <FileText className="size-3.5" aria-hidden="true" />
+        {failed ? w.drawAgain : drawable.length > 1 ? w.drawBoth : drawable[0] === "pdf" ? w.drawPdf : w.drawPptx}
+      </Button>
+    </>
   );
 }
 
