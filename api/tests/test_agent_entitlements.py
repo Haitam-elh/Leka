@@ -156,14 +156,16 @@ async def test_what_is_sold_its_prices_and_what_is_owned(
     assert agents["application-architecture"]["reference"] == "Architect"
     assert "engineering" in agents["code-review"]["bundles"]
     engineering = next(b for b in sold["bundles"] if b["key"] == "engineering")
-    # As the reference composes it: the agents built, and those not — not
-    # sold until they are; its saving computed from its members' prices.
-    assert engineering["agents"] == ["application-architecture", "code-review", "test-analysis"]
-    assert [m["agent"] for m in engineering["members"]].count(None) == 4
-    assert (engineering["sellable"], engineering["monthly_price"]) == (False, 5900)
+    # As the reference composes it, every one of its agents built (LEKA-461):
+    # sold; its saving computed from its members' prices.
+    assert len(engineering["agents"]) == 7
+    assert [m["agent"] for m in engineering["members"]].count(None) == 0
+    assert (engineering["sellable"], engineering["monthly_price"]) == (True, 5900)
     assert (engineering["alone_price"], engineering["discount_percent"]) == (9100, 35)
     ship_safe = next(b for b in sold["bundles"] if b["key"] == "ship-safe")
-    # Migration Planner has no price: no saving shown.
+    # Some of its agents not built — Migration Planner, with no price: not
+    # sold, no saving shown.
+    assert ship_safe["sellable"] is False
     assert (ship_safe["alone_price"], ship_safe["discount_percent"]) == (None, None)
     # Acme: every agent, granted by LEKA.
     assert (sold["every"], sold["runs_agents"]) == (True, True)
@@ -329,7 +331,7 @@ async def test_a_bundle_whose_agents_are_not_all_built_is_never_sold(
     await _on(acme["globex"], "growth")
     _as(identity, acme, "other_admin")
     refused = await client.post(
-        f"{API}/billing/add-ons/checkout", json={"kind": "bundle", "key": "engineering"}
+        f"{API}/billing/add-ons/checkout", json={"kind": "bundle", "key": "ship-safe"}
     )
     assert refused.status_code == 422
     assert refused.json()["error"]["details"][0]["message"] == "not_sold"
@@ -447,8 +449,18 @@ async def test_each_plan_runs_the_agents_it_includes_and_those_of_the_plans_belo
     assert await _why(client, "security-review") == set()
     sold = (await client.get(f"{API}/billing/add-ons")).json()
     # Business includes every agent of Karim's matrix (15/10); Frontend
-    # Craft's, built after it (LEKA-461), stay options until he says.
-    frontend = {"ui-quality-review", "accessibility-audit", "design-review", "motion-review"}
+    # Craft's and Engineering's, built after it (LEKA-461), stay options
+    # until he says.
+    frontend = {
+        "ui-quality-review",
+        "accessibility-audit",
+        "design-review",
+        "motion-review",
+        "codebase-explorer",
+        "test-generation",
+        "regression-analysis",
+        "change-impact-analysis",
+    }
     assert all(a["included"] for a in sold["agents"] if a["key"] not in frontend)
     assert not any(a["included"] for a in sold["agents"] if a["key"] in frontend)
     # Free runs none.

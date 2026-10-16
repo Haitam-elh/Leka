@@ -323,7 +323,7 @@ def body_of(change: CodeChange, *, by: str) -> str:
     )
     return (
         f"{change.summary}\n\n### Fichiers\n{files}\n\n---\n"
-        f"Proposée par LEKA (agent `code-change`), acceptée par {by}. "
+        f"Proposée par LEKA, acceptée par {by}. "
         "LEKA ouvre la pull request ; la relire et la fusionner reste votre décision."
     )
 

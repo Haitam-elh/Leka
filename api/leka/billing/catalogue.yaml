@@ -196,6 +196,11 @@ add_ons:
     accessibility-audit: { tier: standard, reference: accessibility-auditor }
     design-review: { tier: specialized, reference: design-reviewer }
     motion-review: { tier: specialized, reference: motion-animation-specialist }
+    # Engineering (LEKA-461): each its reference agent.
+    codebase-explorer: { tier: standard, reference: codebase-explorer }
+    test-generation: { tier: standard, reference: test-generator }
+    regression-analysis: { tier: specialized, reference: regression-analyst }
+    change-impact-analysis: { tier: specialized, reference: change-impact-analyst }
     # No equivalent in the reference: LEKA's tier, to validate.
     architecture-analysis: { tier: specialized }
     code-change: { tier: expert }
@@ -207,9 +212,11 @@ add_ons:
     starter: [code-review, test-analysis, documentation-assistant]
     growth: [architecture-analysis, infrastructure-analysis, data-analysis, debug-assistant, build-fixer]
     business: [application-architecture, code-change, security-review, incident-investigation, release-analysis]
-    # Enterprise, by contract, every one: Frontend Craft's too (LEKA-461) —
-    # built after Karim's matrix, options below until he says.
-    enterprise: [ui-quality-review, accessibility-audit, design-review, motion-review]
+    # Enterprise, by contract, every one: Frontend Craft's and Engineering's
+    # too (LEKA-461) — built after Karim's matrix, options below until he says.
+    enterprise:
+      [ui-quality-review, accessibility-audit, design-review, motion-review,
+       codebase-explorer, test-generation, regression-analysis, change-impact-analysis]
   reference:
     # product
     product-strategist: { name: "Product Strategist", category: product, tier: standard }

@@ -13,18 +13,18 @@ LEKA's own capabilities — understanding, the analysis, its answer (LEKA Assist
 | Product Reviewer | product | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
 | Research Specialist | product | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
 | Architect | architecture | `application-architecture` | active | expert | 25 € | Option payante, incluse dès le plan indiqué | business + | engineering |
-| Codebase Explorer | architecture | — | — | standard | 9 € | Référence seulement — non construit, jamais vendu | — | engineering |
+| Codebase Explorer | architecture | `codebase-explorer` | active | standard | 9 € | Option payante, incluse dès le plan indiqué | enterprise + | engineering |
 | Code Reviewer | architecture | `code-review` | active | standard | 9 € | Option payante, incluse dès le plan indiqué | starter + | engineering |
 | Code Simplifier | architecture | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
 | Refactoring Specialist | architecture | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
 | Test Strategist | testing | `test-analysis` | active | standard | 9 € | Option payante, incluse dès le plan indiqué | starter + | engineering, ship-safe |
-| Test Generator | testing | — | — | standard | 9 € | Référence seulement — non construit, jamais vendu | — | engineering |
+| Test Generator | testing | `test-generation` | active | standard | 9 € | Option payante, incluse dès le plan indiqué | enterprise + | engineering |
 | QA Analyst | testing | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
-| Regression Analyst | testing | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | engineering, ship-safe |
+| Regression Analyst | testing | `regression-analysis` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | enterprise + | engineering, ship-safe |
 | E2E Testing Specialist | testing | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
 | Bug Investigator | incident | `debug-assistant` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | growth + | incident-response |
 | Incident Investigator | incident | `incident-investigation` | active | expert | 25 € | Option payante, incluse dès le plan indiqué | business + | incident-response |
-| Change Impact Analyst | incident | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | engineering, incident-response |
+| Change Impact Analyst | incident | `change-impact-analysis` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | enterprise + | engineering, incident-response |
 | Build Error Resolver | incident | `build-fixer` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | growth + | — |
 | Silent Failure Hunter | incident | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
 | Security Reviewer | security | `security-review` | active | expert | 25 € | Option payante, incluse dès le plan indiqué | business + | ship-safe, security-reliability |
@@ -79,9 +79,9 @@ LEKA's own capabilities — understanding, the analysis, its answer (LEKA Assist
 
 | Bundle | Price HT / month | Members alone | Saving | Sold | Members not built |
 |---|---|---|---|---|---|
-| Engineering | 59 € | 91 € | 35 % | no | Codebase Explorer, Test Generator, Regression Analyst, Change Impact Analyst |
-| Ship Safe | 79 € | — | not shown | no | API Design Reviewer, Migration Planner, Regression Analyst |
-| Incident Response | 89 € | — | not shown | no | Dependency Analyst, Performance Analyst, Reliability Analyst, Change Impact Analyst |
+| Engineering | 59 € | 91 € | 35 % | yes | — |
+| Ship Safe | 79 € | — | not shown | no | API Design Reviewer, Migration Planner |
+| Incident Response | 89 € | — | not shown | no | Dependency Analyst, Performance Analyst, Reliability Analyst |
 | Security & Reliability | 69 € | — | not shown | no | Dependency Analyst, API Design Reviewer, Database Specialist, Reliability Analyst |
 | Frontend Craft | 29 € | 48 € | 40 % | yes | — |
 
