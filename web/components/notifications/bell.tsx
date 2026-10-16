@@ -8,7 +8,7 @@ import { cn } from "cn";
 
 import { NotificationRow } from "@/components/notifications/notification-row";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { routes } from "@/config/routes";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
@@ -55,7 +55,9 @@ export function NotificationBell({ className }: { className?: string }) {
         data-testid="notifications-panel"
       >
         <div className="flex items-center justify-between gap-3 border-b border-shell-line px-4 py-3">
-          <h2 className="text-[0.9375rem] font-semibold text-brand-navy">{w.latest}</h2>
+          <PopoverTitle render={<h2 />} className="text-[0.9375rem] font-semibold text-brand-navy">
+            {w.latest}
+          </PopoverTitle>
           <Button
             type="button"
             variant="ghost"

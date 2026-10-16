@@ -10,7 +10,7 @@ import { signIn } from "./sign-in";
  * - An intention asked is told to its asker: the bell counts it; opened,
  *   the panel says it in words and leads to it — opened, it is read.
  * - The centre: by category, the unread only, all read at once — the bell
- *   then says nothing unread; a category hidden is neither shown nor
+ *   then says nothing unread (once what other specs tell has landed too); a category hidden is neither shown nor
  *   counted, and shown again.
  * - On a phone: the bell in the header, its panel inside the screen, the
  *   centre never wider than it.
@@ -66,10 +66,15 @@ test.describe("The notification centre", () => {
     await page.getByRole("switch", { name: "Non lues" }).click();
     await expect(rows.first()).toHaveAttribute("data-read", "false");
     await page.getByRole("button", { name: "Toutes", exact: true }).click();
-    await page.getByTestId("notifications-read-all").click();
-    await expect(page.getByTestId("notifications-empty")).toContainText("Tout est lu.");
-    await expect(page.getByTestId("notifications-count")).toHaveCount(0);
-    await expect(page.getByTestId("notifications-bell")).toHaveAccessibleName("Notifications");
+    // The other specs, run alongside, ask too: what they tell may land
+    // between the click and the bell's next count — read all again then.
+    const readAll = page.getByTestId("notifications-read-all");
+    await expect(async () => {
+      if (await readAll.isEnabled()) await readAll.click();
+      await expect(page.getByTestId("notifications-empty")).toContainText("Tout est lu.", { timeout: 2_000 });
+      await expect(page.getByTestId("notifications-count")).toHaveCount(0, { timeout: 2_000 });
+      await expect(page.getByTestId("notifications-bell")).toHaveAccessibleName("Notifications", { timeout: 1_000 });
+    }).toPass({ timeout: 30_000 });
 
     // A category hidden: neither shown nor counted — then shown again.
     await page.getByRole("switch", { name: "Non lues" }).click();

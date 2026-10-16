@@ -64,7 +64,7 @@ export function NotificationsScreen() {
         }
       />
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_19rem]">
-        <section className="min-w-0 space-y-4" aria-label={w.title}>
+        <section className="min-w-0 space-y-4">
           <div className="flex flex-wrap items-center gap-2" role="group" aria-label={w.filters}>
             <button
               type="button"
