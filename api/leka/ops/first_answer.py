@@ -27,7 +27,7 @@ from datetime import datetime
 
 from sqlalchemy import text
 
-from leka.db import session_factory, system_scope
+from leka.db import load_schema, session_factory, system_scope
 
 STEPS = ("signed_up", "email_confirmed", "workspace", "source_or_demo", "question", "answer")
 
@@ -134,4 +134,5 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    load_schema()
     raise SystemExit(main())
