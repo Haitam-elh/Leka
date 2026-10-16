@@ -2,7 +2,7 @@
 it is — never said attached unless kept.
 
 Revision ID: c7e2a91f4b36
-Revises: 8a4c1e7b2d95
+Revises: 5c2e9a7f1b44
 Create Date: 2026-10-16 23:00:00
 
 `intention_attachments`: what the store measured of each file (its size,
@@ -19,7 +19,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "c7e2a91f4b36"
-down_revision: str | None = "8a4c1e7b2d95"
+down_revision: str | None = "5c2e9a7f1b44"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
