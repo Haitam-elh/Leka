@@ -213,8 +213,15 @@ async def test_a_change_is_proposed_diffed_and_accepted_as_a_pull_request(
     run_id = started.json()["id"]
     assert await execute_run(acme["acme"], uuid.UUID(run_id)) == {"status": "succeeded"}
 
-    # Its own tools: the code tools, declared — never the others'.
-    assert set(script.declared()) == {"search_entities", "read_entity", "list_files", "read_file"}
+    # Its own tools: the code tools and its method's guides (an interface's
+    # change follows the designer's), declared — never the others'.
+    assert set(script.declared()) == {
+        "search_entities",
+        "read_entity",
+        "list_files",
+        "read_file",
+        "read_method",
+    }
     read = json.loads(
         script.asked[2]["contents"][-1]["parts"][0]["functionResponse"]["response"]["result"]
     )

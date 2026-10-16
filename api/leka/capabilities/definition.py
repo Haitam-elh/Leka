@@ -187,6 +187,9 @@ class Definition:
     renders: str | None = None
     # An agent's: its rounds of tool calls, when not the runtime's default.
     rounds: int | None = None
+    # An agent's: the library of guides it reads while it runs (read_method),
+    # a directory under agents/_library/.
+    method: str | None = None
 
     def fingerprint(self) -> str:
         """What it is and does, hashed: everything but where it stands in
@@ -213,6 +216,9 @@ class Definition:
         # Added with the architect's collection (2026-10-14): none, nothing new.
         if self.rounds is None:
             said.pop("rounds")
+        # Added with the designer's library: none, it says nothing new.
+        if self.method is None:
+            said.pop("method")
         said["goals"] = sorted(self.goals)
         said["kinds"] = sorted(self.kinds)
         canonical = json.dumps(said, sort_keys=True, ensure_ascii=False, default=str)

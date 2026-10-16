@@ -81,14 +81,18 @@ def parse_agent(path: Path) -> Agent:
 
 
 def discover(agents_dir: Path) -> list[Path]:
-    """Every SKILL.md under agents/, except the template.
+    """Every SKILL.md under agents/, except under a directory named `_…`.
 
     _template/ is skipped: it is a file to copy, not an agent, and its
     placeholder header would fail validation — which is what we want it to
-    do if someone forgets to fill it in.
+    do if someone forgets to fill it in. _library/ is skipped too: the
+    guides an agent reads while it runs (`method:`, `read_method`), never
+    agents of their own (agents/_library/README.md).
     """
     return sorted(
-        path for path in agents_dir.rglob(SKILL_FILENAME) if "_template" not in path.parts
+        path
+        for path in agents_dir.rglob(SKILL_FILENAME)
+        if not any(part.startswith("_") for part in path.relative_to(agents_dir).parts)
     )
 
 

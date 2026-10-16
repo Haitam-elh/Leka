@@ -34,6 +34,7 @@ from leka.capabilities.definition import (
     validated,
 )
 from leka.capabilities.loader import AgentLoadError, load_all, read_index
+from leka.capabilities.method_tools import METHOD_NAMES
 from leka.capabilities.schemas import Agent
 from leka.capabilities.tools import NAMES
 from leka.capabilities.workflow import Workflow, WorkflowError, build
@@ -43,8 +44,8 @@ from leka.core.config import settings
 from leka.governance import Permission
 from leka.knowledge import EntityType
 
-# Every tool an agent may name: the runtime's, and the code tools.
-TOOL_NAMES = NAMES | CODE_NAMES
+# Every tool an agent may name: the runtime's, the code tools, its method's.
+TOOL_NAMES = NAMES | CODE_NAMES | METHOD_NAMES
 
 Provider = Callable[[], Sequence[Definition]]
 _providers: dict[str, Provider] = {}
@@ -98,6 +99,7 @@ def agent_definition(agent: Agent, lifecycle: Lifecycle) -> Definition:
         skills=head.skills,
         renders=head.renders,
         rounds=head.rounds,
+        method=head.method,
     )
 
 
@@ -126,6 +128,15 @@ def agents(agents_dir: Path) -> list[Definition]:
         clash = set(agent.front_matter.skills) & TOOL_NAMES
         if clash:
             msg = f"{relative}: {sorted(clash)} is a tool, not a skill"
+            raise AgentLoadError(msg)
+        # Its method: a library that is there, read with read_method — and
+        # read_method only with one (agents/_library/README.md).
+        method = agent.front_matter.method
+        if method is not None and not (agents_dir / method).is_dir():
+            msg = f"{relative}: no library {method!r} under agents/"
+            raise AgentLoadError(msg)
+        if (method is None) == bool(METHOD_NAMES & set(agent.front_matter.tools)):
+            msg = f"{relative}: read_method and a method: library go together"
             raise AgentLoadError(msg)
         found.append(agent_definition(agent, lifecycle))
     return found

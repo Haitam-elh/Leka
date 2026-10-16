@@ -2,7 +2,7 @@
 name: ui-quality-review
 title: "Revue de qualité d'interface"
 description: "Use when someone asks whether the screens of a web application built from a connected GitHub repository are finished — their loading, empty and error states, their behaviour on a phone, what breaks with long or missing data — read from its front-end code."
-version: 1.0.0
+version: 1.1.0
 category: development
 entity_types: [repository, application, service, pull_request, release, deployment, team, person, document]
 requires: ["github"]
@@ -10,8 +10,9 @@ mode: read_only
 risk: low
 outputs: analysis
 deliverables: [markdown]
-tools: [search_entities, read_entity, list_files, read_file, list_pull_requests, read_pull_request]
+tools: [search_entities, read_entity, list_files, read_file, list_pull_requests, read_pull_request, read_method]
 skills: [repository-profile]
+method: _library/emilkowalski-skills
 inputs:
   - name: depot
     type: text
@@ -62,20 +63,38 @@ arrête-toi : ne devine pas.
 
 ## Sa méthode
 
+**Ses guides.** Le pire des cas et le téléphone suivent la méthode d'**Emil
+Kowalski**, reprise telle quelle de `emilkowalski/skills` (commit `2d22863`,
+MIT, © 2026 Emil Kowalski) : charge `skills/break-ui/SKILL.md`,
+`skills/break-ui/CATALOG.md` et, pour une application web,
+`skills/mobile-native/SKILL.md` avec `read_method` avant de juger. Écrits
+pour un agent qui code dans un éditeur, ils t'apprennent à juger : leur
+« Initial Response » ne s'applique pas, et tu n'écris, n'exécutes ni
+n'ouvres rien — l'interrupteur « Demo data / Worst case » qu'ils
+construiraient est décrit, avec le code, jamais dit en place.
+
 Pour chaque écran du périmètre, dans cet ordre :
 
 1. **Ses états.** Ce que l'écran montre pendant le chargement, sans donnée,
    en erreur, sans droit d'accès. Un appel de données sans état de
    chargement ou sans erreur traitée est un constat ; un état vide qui ne dit
    pas quoi faire ensuite en est un autre.
-2. **Les données du pire cas.** Un nom très long, une adresse sans espace,
-   un champ absent, zéro élément, des milliers d'éléments, un texte non
-   latin : ce que le code fait de chacun (troncature, retour à la ligne,
-   valeur par défaut, pagination). Un texte libre affiché sans troncature ni
-   retour à la ligne dans une largeur fixe est un constat.
+2. **Les données du pire cas** (`break-ui`). Chaque valeur que l'écran
+   affiche, avec sa source et sa limite (schéma de validation, colonne,
+   contrat d'API — « non bornée » sinon), puis les valeurs plausibles de
+   `CATALOG.md` : un nom très long, une adresse sans espace, un champ absent,
+   un compte à 1 (« 1 membres »), zéro élément, des milliers d'éléments, un
+   texte non latin ou de droite à gauche, un emoji en tête de nom. Ce que le
+   code fait de chacun, et la signature d'échec du guide qui le trahit
+   (`min-width: 0` absent, `flex-shrink` d'un avatar, `overflow-wrap`, pluriel
+   écrit en dur, nombre non formaté). Un texte libre affiché sans troncature
+   ni retour à la ligne dans une largeur fixe est un constat.
 3. **Le téléphone.** Largeurs et points de rupture : une largeur fixe plus
    grande qu'un écran de 375 px, un tableau sans défilement, une cible de
-   toucher sous 44 px, un contenu caché sans autre accès.
+   toucher sous 44 px, un contenu caché sans autre accès ; et pour une
+   application web, les symptômes de `mobile-native` : un survol qui reste
+   collé, un `100vh` sur une application, un champ sous 16 px qui fait zoomer
+   la page, le zoom interdit, un contenu sous l'encoche.
 4. **La cohérence.** Le même besoin réglé de deux façons (deux boutons
    primaires, des couleurs ou espacements écrits en dur à côté des
    variables du système de design), une action destructive sans

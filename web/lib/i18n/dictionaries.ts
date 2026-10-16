@@ -2202,7 +2202,7 @@ const fr = {
       "accessibility-audit":
         "L'accessibilité d'une application au clavier, aux lecteurs d'écran, en contraste — selon le WCAG 2.2 et le RGAA.",
       "design-review":
-        "Les écrans suivent-ils le design system : hiérarchie, espacements, typographie, couleurs, composants.",
+        "L'interface relue comme par un design engineer : design system, animations, téléphone, données réelles — avant, après, pourquoi.",
       "motion-review":
         "Les animations d'une application : utiles ou non, leur durée, le mouvement réduit respecté, leur fluidité.",
       "codebase-explorer":
@@ -10157,7 +10157,7 @@ const en: Dictionary = {
       "accessibility-audit":
         "An application's accessibility to the keyboard, screen readers and in contrast — against WCAG 2.2 and the RGAA.",
       "design-review":
-        "Whether the screens follow the design system: hierarchy, spacing, typography, colours, components.",
+        "The interface reviewed as a design engineer would: design system, animations, phone, real-world data — before, after, why.",
       "motion-review":
         "An application's animations: useful or not, their timing, reduced motion respected, their smoothness.",
       "codebase-explorer":
