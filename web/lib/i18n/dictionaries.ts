@@ -1160,6 +1160,7 @@ const fr = {
     invoices: "Historique des factures",
     invoicesNone:
       "Aucune facture : LEKA n'en émet pas encore, votre offre est attribuée par votre interlocuteur LEKA.",
+    invoicesStripe: "Vos factures sont émises par Stripe : retrouvez-les avec « Carte et factures », dans Votre formule.",
     credits: {
       title: "Crédits IA du mois",
       explain:
@@ -8943,6 +8944,7 @@ const en: Dictionary = {
     invoices: "Invoice history",
     invoicesNone:
       "No invoice: LEKA issues none yet — your plan is set by your LEKA contact.",
+    invoicesStripe: "Your invoices are issued by Stripe: find them under « Card and invoices », in Your plan.",
     credits: {
       title: "This month's AI credits",
       explain:

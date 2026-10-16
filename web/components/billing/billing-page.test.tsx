@@ -35,7 +35,13 @@ vi.mock("@/lib/billing", async (original) => ({
   },
 }));
 
+vi.mock("@/lib/subscription", async (original) => {
+  const real = await original<typeof import("@/lib/subscription")>();
+  return { ...real, subscription: { ...real.subscription, read: async () => subscribed } };
+});
+
 let credits: Record<string, unknown> = {};
+let subscribed: Record<string, unknown> | null = null;
 
 function held(over: Record<string, unknown> = {}) {
   return {
@@ -101,4 +107,13 @@ it("spent, says LEKA's AI is paused until the month ends — never billed past",
   expect(said).toHaveTextContent("suspendue jusqu'au 1 novembre 2026");
   expect(said).toHaveTextContent("Aucun dépassement n'est jamais facturé");
   expect(screen.getByTestId("billing-credits-remaining")).toHaveTextContent("dont 1 000 ajoutés ce mois-ci");
+});
+
+it("sends a workspace paying through Stripe to Stripe's invoices, not to « votre interlocuteur » (LEKA-469)", async () => {
+  credits = held();
+  subscribed = { available: true, plan: "growth", interval: "month", status: "trialing", current_period_end: null, cancel_at_period_end: false, launch_offer_available: false, trial_available: false, last_invoice: null, has_customer: true };
+  screenOf();
+  await screen.findByText(/Vos factures sont émises par Stripe/);
+  expect(screen.getByTestId("billing-invoices")).not.toHaveTextContent("interlocuteur");
+  subscribed = null;
 });

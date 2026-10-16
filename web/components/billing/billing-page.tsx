@@ -13,6 +13,7 @@ import { useCredits, useWorkspaceUsage } from "@/lib/billing-queries";
 import { fill } from "@/lib/i18n/dictionaries";
 import { buildBreadcrumb } from "@/lib/navigation/breadcrumb";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
+import { useSubscription } from "@/lib/subscription-queries";
 
 /**
  * Facturation, laid out as docs/product/mockups/16-facturation.jpeg with
@@ -28,6 +29,8 @@ export function BillingScreen() {
   const pathname = usePathname();
   const { format: locale } = useLocale();
   const w = t.billing;
+  // Paying through Stripe: its invoices are Stripe's, not « attribuée par votre interlocuteur ».
+  const stripe = useSubscription().data?.has_customer ?? false;
   const usage = useWorkspaceUsage();
   const credits = useCredits().data;
   const data = usage.data;
@@ -110,7 +113,7 @@ export function BillingScreen() {
             </section>
             <section className="rounded-xl border border-shell-line bg-white p-4" data-testid="billing-invoices">
               <h2 className="mb-2 font-semibold text-brand-navy">{w.invoices}</h2>
-              <p className="text-[0.8125rem] text-shell-muted">{w.invoicesNone}</p>
+              <p className="text-[0.8125rem] text-shell-muted">{stripe ? w.invoicesStripe : w.invoicesNone}</p>
             </section>
           </div>
         </div>
