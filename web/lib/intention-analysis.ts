@@ -150,6 +150,23 @@ function values(t: Dictionary, code: string, params: Params, links: Links) {
         ? fill(w.parts.followedSome, { count: text(p.followed) })
         : "";
       break;
+    case "learned.summary":
+      // What moved, counted in the interface's words — never the API's English.
+      said.details = Object.entries(w.learned)
+        .filter(([change]) => Number(p[change]) > 0)
+        .map(([change, words]) => fill(words, { count: text(p[change]) }))
+        .join(", ");
+      break;
+    case "learned.appeared":
+    case "learned.changed":
+    case "learned.went":
+    case "learned.came_back":
+      said.type = links.typeName(text(p.type));
+      said.at = typeof p.at === "string" ? links.date(p.at) : "";
+      said.fields = Array.isArray(p.fields) && p.fields.length
+        ? fill(w.learnedFields, { fields: p.fields.map(text).join(", ") })
+        : "";
+      break;
     case "dependency.risk":
       said.critical = p.critical ? w.parts.someCritical : "";
       said.business = p.business

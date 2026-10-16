@@ -319,6 +319,21 @@ describe("an intention's analysis", () => {
     ).toBe(
       "Déploiement v2.8.4 le 2026-10-08 en production : touche 3 éléments, suivi de 1 incident.",
     );
+    // What LEKA learned (LEKA-450's recette: it came out in the API's English).
+    expect(
+      noteSaid(
+        fr,
+        { code: "learned.summary", text: "LEKA learned 18 thing(s)…", params: { count: 18, went: 17, appeared: 1, where: "in the workspace" } },
+        links,
+      ),
+    ).toBe("LEKA a appris 18 nouveautés sur la période : 1 apparu, 17 disparus.");
+    expect(
+      noteSaid(
+        fr,
+        { code: "learned.changed", text: "…", params: { name: "CPP00", type: "repository", at: "2026-10-16T14:48:00Z", fields: ["description"] } },
+        links,
+      ),
+    ).toMatch(/^CPP00 \(.+\) a changé le 2026-10-16 : description\.$/);
   });
 
   it("opens each finding's evidence: where it came from, its record, who cites it", () => {

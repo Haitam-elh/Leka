@@ -7186,6 +7186,13 @@ const fr = {
         limited: "utilisable avec des réserves",
         blocked: "bloqué",
       },
+      learned: {
+        appeared: "{count} {count|apparu|apparus}",
+        changed: "{count} {count|modifié|modifiés}",
+        went: "{count} {count|disparu|disparus}",
+        came_back: "{count} {count|revenu|revenus}",
+      },
+      learnedFields: " : {fields}",
       changeKinds: {
         deployment: "Déploiement",
         change: "Changement",
@@ -7434,6 +7441,13 @@ const fr = {
         "change.made":
           "{kind} {name} le {at}{environment} : touche {reached} {reached|élément|éléments}{incidents}.",
         "change.none": "Aucun changement connu sur la période.",
+        "learned.none": "LEKA n'a rien appris de nouveau sur la période.",
+        "learned.summary":
+          "LEKA a appris {count} {count|nouveauté|nouveautés} sur la période : {details}.",
+        "learned.appeared": "{name} ({type}) est apparu le {at}.",
+        "learned.changed": "{name} ({type}) a changé le {at}{fields}.",
+        "learned.went": "{name} ({type}) a disparu le {at}.",
+        "learned.came_back": "{name} ({type}) est revenu le {at}.",
         "change.summary":
           "{count} {count|changement|changements} sur la période{followed}.",
         "documentation.found": "{name} est décrit par {documents}.",
@@ -14766,6 +14780,13 @@ const en: Dictionary = {
         limited: "usable with reservations",
         blocked: "blocked",
       },
+      learned: {
+        appeared: "{count} appeared",
+        changed: "{count} changed",
+        went: "{count} went",
+        came_back: "{count} came back",
+      },
+      learnedFields: ": {fields}",
       changeKinds: {
         deployment: "Deployment",
         change: "Change",
@@ -14995,6 +15016,13 @@ const en: Dictionary = {
         "change.made":
           "{kind} {name} on {at}{environment}: reaches {reached} {reached|thing|things}{incidents}.",
         "change.none": "No change is known in the period.",
+        "learned.none": "LEKA learned nothing new in the period.",
+        "learned.summary":
+          "LEKA learned {count} new {count|thing|things} in the period: {details}.",
+        "learned.appeared": "{name} ({type}) appeared on {at}.",
+        "learned.changed": "{name} ({type}) changed on {at}{fields}.",
+        "learned.went": "{name} ({type}) went on {at}.",
+        "learned.came_back": "{name} ({type}) came back on {at}.",
         "change.summary":
           "{count} {count|change|changes} in the period{followed}.",
         "documentation.found": "{name} is described by {documents}.",
