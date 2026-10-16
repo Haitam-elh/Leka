@@ -35,9 +35,9 @@ import {
  *   ready      at least one source read
  *
  * A failing source is said with its cause and remedy whatever the stage.
- * The examples follow what is read: a code source, questions on code. Until
- * something is read they are said to be examples — LEKA cannot answer them
- * yet — never shown as the workspace's own.
+ * The first question is asked in the bar below, in one's own words — no
+ * example on the home (LEKA-470); until something is read, it is said that
+ * LEKA cannot answer yet.
  */
 
 export type Stage = "empty" | "connected" | "syncing" | "failed" | "ready";
@@ -80,24 +80,6 @@ export function firstStepsOf(all: readonly Source[]): FirstSteps {
   };
 }
 
-/** The examples, by what is read; the general ones until something is. */
-const EXAMPLE_CATEGORIES = [
-  "code",
-  "project",
-  "docs",
-  "cloud",
-  "observability",
-  "data",
-] as const;
-type ExampleCategory = (typeof EXAMPLE_CATEGORIES)[number];
-
-export function examplesOf(
-  read: readonly ConnectorCategory[],
-): ExampleCategory[] | null {
-  const mine = EXAMPLE_CATEGORIES.filter((c) => read.includes(c));
-  return mine.length > 0 ? mine.slice(0, 3) : null;
-}
-
 const HIDDEN_KEY = "leka.first-steps.hidden";
 
 export function FirstStepsCard({ sources }: { sources: readonly Source[] }) {
@@ -129,10 +111,6 @@ export function FirstStepsCard({ sources }: { sources: readonly Source[] }) {
     }
   }
 
-  const mine = examplesOf(steps.read);
-  const examples = (mine ?? ["code", "project", "observability"]).map(
-    (c) => w.examples[c],
-  );
   const action =
     steps.stage === "empty"
       ? { label: w.connect, href: routes.welcome() }
@@ -233,24 +211,12 @@ export function FirstStepsCard({ sources }: { sources: readonly Source[] }) {
         </li>
         <li className="rounded-lg border border-shell-line bg-white p-3">
           <StepHead done={asked} label={w.step2} />
-          <p className="mt-1 text-[0.8125rem] text-shell-muted">
-            {mine ? w.examplesMine : w.examplesOnly}
-          </p>
-          <ul
-            className="mt-2 flex flex-col gap-1.5"
-            data-testid="first-steps-examples"
+          <p
+            className="mt-1 text-[0.8125rem] text-shell-muted"
+            data-testid="first-steps-ask"
           >
-            {examples.map((words) => (
-              <li key={words}>
-                <Link
-                  href={`${routes.intentionNew()}?q=${encodeURIComponent(words)}`}
-                  className="block rounded-md border border-shell-line px-2.5 py-1.5 text-[0.8125rem] text-brand-navy outline-none hover:border-brand-violet focus-visible:ring-2 focus-visible:ring-brand-violet/40"
-                >
-                  {words}
-                </Link>
-              </li>
-            ))}
-          </ul>
+            {steps.stage === "ready" ? w.ask : w.askFirst}
+          </p>
         </li>
       </ol>
     </section>

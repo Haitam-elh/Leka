@@ -159,6 +159,32 @@ export function AgentOfferAction({ agentKey }: { agentKey: string }) {
   );
 }
 
+/** The home's « + » on an agent (LEKA-470, its mockup): bought from there,
+ * where it is an option this person may buy — anywhere else, nothing. */
+export function AgentAdd({ agentKey }: { agentKey: string }) {
+  const t = useDictionary();
+  const w = t.catalogue.offers;
+  const offers = useAddOns();
+  const buy = useBuy();
+  const may = useMayBuy();
+  const offer = offers.data?.agents.find((a) => a.key === agentKey);
+  if (!offer || !may || agentStateOf(offers.data, agentKey) !== "option") return null;
+  const named = fill(w.buyNamed, { name: offer.title });
+  return (
+    <button
+      type="button"
+      className="flex size-8 shrink-0 items-center justify-center rounded-full border border-shell-line text-shell-nav-active outline-none hover:bg-brand-violet-soft focus-visible:ring-3 focus-visible:ring-brand-violet/40 disabled:opacity-50"
+      disabled={buy.isPending}
+      aria-label={named}
+      title={named}
+      onClick={() => buy.mutate({ kind: "agent", key: offer.key }, { onError: (error) => bought(t, error) })}
+      data-testid="agent-buy"
+    >
+      <Plus className="size-4" aria-hidden="true" />
+    </button>
+  );
+}
+
 /** An agent's price and standing, on its line of the catalogue — `compact`:
  * the price, then one round mark, as the catalogue's mockup (LEKA-460). */
 export function AgentPrice({ agentKey, compact = false }: { agentKey: string; compact?: boolean }) {
