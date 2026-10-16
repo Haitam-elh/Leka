@@ -64,8 +64,12 @@ export function EntityPicker({
       >
         {label}
       </label>
-      <div className="flex items-center gap-2 rounded-lg border border-shell-line bg-white px-3 focus-within:ring-3 focus-within:ring-brand-violet/40">
-        <Search className="size-4 text-shell-muted" aria-hidden="true" />
+      {/* The ring on the field itself, where the focus is. */}
+      <div className="relative">
+        <Search
+          className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-shell-muted"
+          aria-hidden="true"
+        />
         <input
           id={id}
           type="search"
@@ -98,14 +102,14 @@ export function EntityPicker({
               setOpen(false);
             }
           }}
-          className="h-9 min-w-0 flex-1 bg-transparent text-sm text-brand-navy outline-none placeholder:text-shell-muted"
+          className="h-9 w-full min-w-0 rounded-lg border border-shell-line bg-white ps-9 pe-8 text-sm text-brand-navy outline-none placeholder:text-shell-muted focus-visible:ring-3 focus-visible:ring-brand-violet/40"
         />
         {typed ? (
           <button
             type="button"
             onClick={() => setTyped("")}
             aria-label={t.environment.explorer.clear}
-            className="text-shell-muted outline-none hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+            className="absolute end-2.5 top-1/2 -translate-y-1/2 text-shell-muted outline-none hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-violet/40"
           >
             <X className="size-4" aria-hidden="true" />
           </button>
