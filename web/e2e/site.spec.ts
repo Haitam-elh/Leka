@@ -78,8 +78,10 @@ test("on a phone, the site's sign-in is still there", async ({ page }) => {
   await signIn.click();
 
   await expect(page).toHaveURL(/\/login$/);
-  // And the sign-in's own header keeps it too.
-  await expect(page.locator("header").getByRole("link", { name: "Se connecter" })).toBeVisible();
+  // There the header offers the sign-up instead — the page is the sign-in —
+  // and holds on the phone's width (LEKA-450: both actions widened it to 471px).
+  await expect(page.getByTestId("site-signup")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 
 test("the site's pages, its video and what search engines read all answer", async ({
