@@ -87,7 +87,7 @@ const fr = {
     workspace: "Workspace",
     switchWorkspace: "Changer de workspace",
     switchFailed: "Impossible d'ouvrir ce workspace. Réessayez.",
-    noWorkspace: "Aucun workspace",
+    noWorkspace: "Aucun espace de travail",
     /** Someone signed in who belongs to no workspace yet — a new account. */
     firstWorkspace: {
       title: "Créez votre espace de travail",
@@ -7749,7 +7749,7 @@ const fr = {
     passwordRuleShort: "Au moins {min} caractères.",
     checkInbox: "Consultez votre boîte de réception",
     registerSent:
-      "Si cette adresse peut être inscrite, un lien de confirmation est en route.",
+      "Si l'adresse {email} peut être inscrite, un lien de confirmation y est en route.",
     registerLinkLife: "Le lien est valable 24 heures, une seule fois.",
     backToSignIn: "Retour à la connexion",
     forgotTitle: "Réinitialiser votre mot de passe",
@@ -7772,7 +7772,7 @@ const fr = {
     verifyingBody: "Cela prend un instant.",
     verifiedTitle: "Adresse confirmée",
     verifiedDescription: "Votre compte est prêt.",
-    verifiedBody: "Vous pourrez fermer cet onglet une fois connecté.",
+    verifiedBody: "Connectez-vous pour commencer.",
     verifyInvalidTitle: "Ce lien n'est plus valable",
     verifyInvalidDescription:
       "Les liens de confirmation durent 24 heures et ne servent qu'une fois.",
@@ -15295,7 +15295,7 @@ const en: Dictionary = {
     passwordRuleShort: "At least {min} characters.",
     checkInbox: "Check your inbox",
     registerSent:
-      "If that address can be registered, a confirmation link is on its way.",
+      "If {email} can be registered, a confirmation link is on its way there.",
     registerLinkLife: "The link works for 24 hours, and once only.",
     backToSignIn: "Back to sign in",
     forgotTitle: "Reset your password",
@@ -15318,7 +15318,7 @@ const en: Dictionary = {
     verifyingBody: "This takes a moment.",
     verifiedTitle: "Address confirmed",
     verifiedDescription: "Your account is ready.",
-    verifiedBody: "You can close this tab once you have signed in.",
+    verifiedBody: "Sign in to begin.",
     verifyInvalidTitle: "This link is no longer valid",
     verifyInvalidDescription: "Confirmation links last 24 hours and work once.",
     verifyInvalidBody:
