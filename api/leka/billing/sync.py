@@ -5,6 +5,9 @@ from catalogue.yaml, never typed into Stripe's dashboard.
 A price is found by its lookup key, which says what it is:
 
     leka_core_<plan>_<interval>_<cents>     e.g. leka_core_growth_year_150360
+    leka_addon_<kind>_<key>_month_<cents>   e.g. leka_addon_agent_security-review_month_2500
+
+and each agent and bundle sold a product and a monthly price (LEKA-461),
 
 so a price changed in the catalogue is a new Stripe price — Stripe's are
 never rewritten — and what checkout charges is always what the page shows.
@@ -55,6 +58,38 @@ def sold(offer: Catalogue) -> list[tuple[Plan, Interval]]:
         for interval in INTERVALS
         if interval == "month" or plan.annual
     ]
+
+
+def add_on_product_id(kind: str, key: str) -> str:
+    return f"leka_addon_{kind}_{key}"
+
+
+def add_on_lookup_key(kind: str, key: str, cents: int) -> str:
+    """What an agent's or a bundle's Stripe price is called: monthly, at its
+    catalogue price — a price changed is a new Stripe price."""
+    return f"leka_addon_{kind}_{key}_month_{cents}"
+
+
+def sold_add_ons(offer: Catalogue) -> list[tuple[str, str, str, int]]:
+    """Each agent and bundle the catalogue prices — kind, key, name, cents a
+    month. Bundles not yet sellable are priced all the same: checkout still
+    refuses them until every agent they name is sold."""
+    sold = offer.add_ons
+    if not sold.available:
+        return []
+    prices = sold.prices
+    agents = [
+        (
+            "agent",
+            key,
+            sold.reference[agent.reference].name if agent.reference else key,
+            prices[key],
+        )
+        for key, agent in sorted(sold.agents.items())
+        if key in prices
+    ]
+    bundles = [("bundle", b.key, f"Bundle {b.name.en}", b.monthly_price) for b in sold.bundles]
+    return agents + bundles
 
 
 # The customer portal LEKA sends a subscriber to, found by this mark.
@@ -121,6 +156,41 @@ async def sync(stripe: Stripe, offer: Catalogue, *, today: date) -> Synced:
         )
         prices[key] = str(made["id"])
         created.append(key)
+    for kind, key, name, cents in sold_add_ons(offer):
+        product = add_on_product_id(kind, key)
+        try:
+            await stripe.get(f"/v1/products/{product}")
+        except StripeError as error:
+            if error.status != 404:
+                raise
+            await stripe.post(
+                "/v1/products",
+                {
+                    "id": product,
+                    "name": f"LEKA — {name}",
+                    "metadata": {"leka_add_on_kind": kind, "leka_add_on_key": key},
+                },
+            )
+            created.append(product)
+        price_key = add_on_lookup_key(kind, key, cents)
+        found = await stripe.get("/v1/prices", [("lookup_keys[]", price_key), ("active", "true")])
+        if found.get("data"):
+            prices[price_key] = str(found["data"][0]["id"])
+            continue
+        made = await stripe.post(
+            "/v1/prices",
+            {
+                "product": product,
+                "currency": offer.currency.lower(),
+                "unit_amount": cents,
+                "recurring": {"interval": "month"},
+                "lookup_key": price_key,
+                "tax_behavior": "exclusive",
+                "metadata": {"leka_add_on_kind": kind, "leka_add_on_key": key},
+            },
+        )
+        prices[price_key] = str(made["id"])
+        created.append(price_key)
     coupon = coupon_id(offer)
     try:
         await stripe.get(f"/v1/coupons/{coupon}")
@@ -182,11 +252,14 @@ async def sync(stripe: Stripe, offer: Catalogue, *, today: date) -> Synced:
 __all__ = [
     "PORTAL",
     "Synced",
+    "add_on_lookup_key",
+    "add_on_product_id",
     "coupon_id",
     "lookup_key",
     "portal_configuration",
     "product_id",
     "sold",
+    "sold_add_ons",
     "sync",
     "unit_amount",
 ]

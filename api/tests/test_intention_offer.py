@@ -44,7 +44,14 @@ from leka.intentions.schemas import CreditsLeftRead
 from tests.conftest import FakeIdentity
 from tests.test_agent_entitlements import _offer as _catalogued
 from tests.test_agent_runs_api import _ready
-from tests.test_billing_stripe import SECRET, FakeStripe, _deliver, _event, _synced, stripe
+from tests.test_billing_stripe import (
+    SECRET,
+    FakeStripe,
+    _deliver,
+    _event,
+    _synced,
+    stripe,
+)
 from tests.test_context_engine import model
 from tests.test_intention_agents import ARCHITECT, Gemini, _proposed, gemini, started
 from tests.test_intention_analysis_api import API, queued  # noqa: F401
@@ -208,6 +215,7 @@ async def test_several_agents_bought_together_back_to_the_intention_each_owned(
     await _on(acme["globex"], "starter", ungranted=False)
     _as(identity, acme, "other_admin")
     intention = uuid.uuid4()
+    await _synced(paying)
     # Neither included in Starter (Karim's matrix): both options.
     keys = f"{ARCHITECT},debug-assistant"
     bought = await client.post(
@@ -216,9 +224,14 @@ async def test_several_agents_bought_together_back_to_the_intention_each_owned(
     )
     assert bought.status_code == 200, bought.text
     [opened] = paying.posted("/v1/checkout/sessions")
-    # One subscription, a line each, at the catalogue's prices.
-    assert opened["line_items[0][price_data][unit_amount]"] == "2500"
-    assert opened["line_items[1][price_data][unit_amount]"] == "1500"
+    # One subscription, a line each, at its Stripe price (LEKA-461).
+    assert (
+        opened["line_items[0][price]"] == paying.prices[f"leka_addon_agent_{ARCHITECT}_month_2500"]
+    )
+    assert (
+        opened["line_items[1][price]"]
+        == paying.prices["leka_addon_agent_debug-assistant_month_1500"]
+    )
     assert opened["subscription_data[metadata][leka_add_on_kind]"] == "agents"
     assert opened["success_url"] == f"https://leka.test/intentions/{intention}?bought={keys}"
 

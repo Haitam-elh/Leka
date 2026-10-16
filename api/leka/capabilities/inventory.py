@@ -116,8 +116,9 @@ def markdown(offer: Catalogue | None = None) -> str:
         "`tests/test_agents_inventory.py` fails when it differs.",
         "",
         "LEKA's own capabilities — understanding, the analysis, its answer (LEKA Assistant) — "
-        "are every plan's: its fundamental agents, not listed here. Stripe charges an option "
-        "with the catalogue's amount (`price_data`) on a monthly subscription of its own; "
+        "are every plan's: its fundamental agents, not listed here. Each agent and bundle is a "
+        "Stripe product and monthly price made by `stripe-sync`, found by its lookup key "
+        "(`leka_addon_<kind>_<key>_month_<cents>`), on a subscription of its own; "
         "an option is granted only once Stripe confirms its payment.",
         "",
         "## Agents",

@@ -133,7 +133,7 @@ test.describe("the three pillars (LEKA-428)", () => {
     await openNavigation(page);
     await page.getByTestId("nav-environment-overview").click();
     await expect(page).toHaveURL("http://localhost:3000/environment");
-    await expect(page.getByRole("tab", { name: "Vue d'ensemble" })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tablist", { name: "Vue de l'environnement" }).getByRole("tab", { name: "Vue d'ensemble" })).toHaveAttribute("aria-selected", "true");
     await openNavigation(page);
     await expect(page.getByTestId("nav-section-environment-toggle")).toHaveAttribute("aria-expanded", "true");
     await expect(page.getByTestId("nav-activity")).toBeVisible();
@@ -144,9 +144,9 @@ test.describe("the three pillars (LEKA-428)", () => {
 
     // A view chosen on the page (LEKA-459: its tabs): in the address, the
     // menu still on its page.
-    await page.getByRole("tab", { name: "Services" }).click();
+    await page.getByRole("tablist", { name: "Vue de l'environnement" }).getByRole("tab", { name: "Services" }).click();
     await expect(page).toHaveURL("http://localhost:3000/environment?tab=applications");
-    await expect(page.getByRole("tab", { name: "Services" })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tablist", { name: "Vue de l'environnement" }).getByRole("tab", { name: "Services" })).toHaveAttribute("aria-selected", "true");
     await openNavigation(page);
     await expect(page.getByTestId("nav-environment-overview")).toHaveAttribute("aria-current", "page");
     await page.keyboard.press("Escape");

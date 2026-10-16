@@ -26,7 +26,12 @@ const SCREENS: readonly [path: string, primary: (page: Page) => ReturnType<Page[
   ["/intentions/new?step=decision", (page) => page.getByRole("checkbox").first()],
   ["/settings", (page) => page.getByRole("button", { name: "Enregistrer" })],
   ["/sources", (page) => page.getByRole("heading", { level: 1 })],
-  ["/environment", (page) => page.getByRole("tab", { name: "Vue d'ensemble" })],
+  // Its views' tab bar — not the detail panel's own tabs.
+  [
+    "/environment",
+    (page) =>
+      page.getByRole("tablist", { name: "Vue de l'environnement" }).getByRole("tab", { name: "Vue d'ensemble" }),
+  ],
   ["/environment/graph", (page) => page.getByRole("combobox", { name: "Centrer sur" })],
 ];
 
