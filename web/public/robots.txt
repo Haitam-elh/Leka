@@ -1,4 +1,20 @@
+# leka-core.com: the public site is open to search engines; the application
+# (signed-in pages) is not — and each of its pages also says noindex
+# (app/layout.tsx), for one reached through a link. LEKA-432.
 User-agent: *
 Allow: /
+Disallow: /overview
+Disallow: /intentions
+Disallow: /environment
+Disallow: /capabilities
+Disallow: /sources
+Disallow: /activity
+Disallow: /approvals
+Disallow: /governance
+Disallow: /team
+Disallow: /billing
+Disallow: /settings
+Disallow: /welcome
+Disallow: /_dev
 
 Sitemap: https://leka-core.com/sitemap.xml

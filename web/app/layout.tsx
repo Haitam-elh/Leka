@@ -24,6 +24,9 @@ const geistMono = Geist_Mono({
 // its own <title>, which React 19 hoists into the head.
 export const metadata: Metadata = {
   description: "Understand. Decide. Act.",
+  // The application is never in search results (LEKA-432): only the public
+  // site is — static pages in public/, which this layout does not render.
+  robots: { index: false, follow: false },
 };
 
 export default async function RootLayout({
