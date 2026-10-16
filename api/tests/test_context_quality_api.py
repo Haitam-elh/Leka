@@ -47,8 +47,11 @@ def _gaps(quality: dict[str, Any]) -> dict[str, str]:
 
 
 async def test_a_context_is_judged_when_made_kept_with_it_and_inspected(
-    client: AsyncClient, model: dict[str, uuid.UUID]
+    client: AsyncClient, model: dict[str, uuid.UUID], acme: dict[str, uuid.UUID]
 ) -> None:
+    # Shown by its sources today: the fixture's dates age, and by 2026-10-16
+    # their freshness had left the score at 0.8499, under « high ».
+    await _sql(acme["acme"], "UPDATE entities SET last_seen_at = now()")
     made = await _create(client, model)
     quality = made["quality"]
 
