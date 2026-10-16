@@ -191,6 +191,11 @@ function analysisFixture(
           text: "changes did not finish: timed out.",
           params: { capability: "changes", error: "TimeoutError" },
         },
+        {
+          code: "analysis.sources_pending",
+          text: "Not every source answered: Runbooks space.",
+          params: { sources: ["Runbooks space"] },
+        },
       ],
       confidence: 0.9,
       support: [
@@ -433,6 +438,8 @@ describe("an intention's analysis", () => {
     });
     expect(analysis.missing).toEqual([
       "Changements n'a pas abouti : délai dépassé.",
+      // Said in the interface's language, never the API's English.
+      "Toutes les sources n'ont pas répondu : Runbooks space.",
     ]);
     expect(analysis.uncertainties).toEqual([
       "Plusieurs responsables sont nommés pour Billing API (Payments, Platform) : qui décide n'est pas dit.",

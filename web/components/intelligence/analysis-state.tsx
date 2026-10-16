@@ -45,6 +45,8 @@ export function AnalysisState({
   if (status === "complete") return null;
   const w = t.intelligence.status[status];
   const { icon: Icon, tone } = LOOK[status];
+  // Said once: two capabilities lacking the same thing say it the same way.
+  const lacking = [...new Set(missing)];
   return (
     <div
       role={status === "failed" ? "alert" : "status"}
@@ -59,9 +61,9 @@ export function AnalysisState({
       <div className="min-w-0 flex-1 text-brand-navy">
         <p className="font-semibold">{w.title}</p>
         <p className="text-shell-muted">{w.body}</p>
-        {missing.length > 0 ? (
+        {lacking.length > 0 ? (
           <ul className="mt-1 list-disc ps-5 text-shell-muted">
-            {missing.map((item) => (
+            {lacking.map((item) => (
               <li key={item}>{item}</li>
             ))}
           </ul>

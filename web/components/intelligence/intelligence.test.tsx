@@ -456,7 +456,7 @@ describe("how an analysis went", () => {
       <>
         <AnalysisState status="running" />
         <AnalysisState status="partial" missing={["ce qui l'a causé"]} />
-        <AnalysisState status="inconclusive" />
+        <AnalysisState status="inconclusive" missing={["rien à lire", "rien à lire"]} />
         <AnalysisState status="failed" onRetry={retry} />
         <AnalysisState status="pending" />
         <AnalysisState status="complete" />
@@ -474,6 +474,8 @@ describe("how an analysis went", () => {
     expect(states[1]).toHaveTextContent("Analyse partielle");
     expect(states[1]).toHaveTextContent("ce qui l'a causé");
     expect(states[2]).toHaveTextContent("Analyse non concluante");
+    // Two capabilities lacking the same thing: said once.
+    expect(within(states[2]).getAllByRole("listitem")).toHaveLength(1);
     expect(screen.getByRole("alert")).toHaveTextContent("L'analyse a échoué");
     await user.click(screen.getByRole("button", { name: "Réessayer" }));
     expect(retry).toHaveBeenCalledOnce();
