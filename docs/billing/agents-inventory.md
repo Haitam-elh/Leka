@@ -37,10 +37,10 @@ LEKA's own capabilities — understanding, the analysis, its answer (LEKA Assist
 | API Design Reviewer | performance | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | ship-safe, security-reliability |
 | Data Analyst | performance | `data-analysis` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | growth + | — |
 | Benchmark Analyst | performance | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
-| UI Quality Reviewer | frontend | — | — | standard | 9 € | Référence seulement — non construit, jamais vendu | — | frontend-craft |
-| Accessibility Auditor | frontend | — | — | standard | 9 € | Référence seulement — non construit, jamais vendu | — | frontend-craft |
-| Design Reviewer | frontend | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | frontend-craft |
-| Motion & Animation Specialist | frontend | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | frontend-craft |
+| UI Quality Reviewer | frontend | `ui-quality-review` | active | standard | 9 € | Option payante, incluse dès le plan indiqué | — | frontend-craft |
+| Accessibility Auditor | frontend | `accessibility-audit` | active | standard | 9 € | Option payante, incluse dès le plan indiqué | — | frontend-craft |
+| Design Reviewer | frontend | `design-review` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | — | frontend-craft |
+| Motion & Animation Specialist | frontend | `motion-review` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | — | frontend-craft |
 | Prototype Designer | frontend | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
 | iOS Specialist | mobile | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
 | Android Specialist | mobile | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
@@ -83,6 +83,6 @@ LEKA's own capabilities — understanding, the analysis, its answer (LEKA Assist
 | Ship Safe | 79 € | — | not shown | no | API Design Reviewer, Migration Planner, Regression Analyst |
 | Incident Response | 89 € | — | not shown | no | Dependency Analyst, Performance Analyst, Reliability Analyst, Change Impact Analyst |
 | Security & Reliability | 69 € | — | not shown | no | Dependency Analyst, API Design Reviewer, Database Specialist, Reliability Analyst |
-| Frontend Craft | 29 € | 48 € | 40 % | no | UI Quality Reviewer, Accessibility Auditor, Design Reviewer, Motion & Animation Specialist |
+| Frontend Craft | 29 € | 48 € | 40 % | yes | — |
 
 A bundle is sold once every member is an agent of the registry on sale; its saving is computed from its members' prices, and shown only when every member has one.

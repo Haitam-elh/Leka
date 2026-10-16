@@ -77,6 +77,26 @@ agents:
     version: 0.1.0
     status: draft
 
+  - path: frontend/accessibility-audit/SKILL.md
+    name: accessibility-audit
+    version: 1.0.0
+    status: active
+
+  - path: frontend/design-review/SKILL.md
+    name: design-review
+    version: 1.0.0
+    status: active
+
+  - path: frontend/motion-review/SKILL.md
+    name: motion-review
+    version: 1.0.0
+    status: active
+
+  - path: frontend/ui-quality-review/SKILL.md
+    name: ui-quality-review
+    version: 1.0.0
+    status: active
+
   - path: incident/correlate-deploy-with-latency/SKILL.md
     name: correlate-deploy-with-latency
     version: 0.1.0

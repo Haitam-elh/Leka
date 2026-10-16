@@ -191,6 +191,11 @@ add_ons:
     infrastructure-analysis: { tier: specialized, reference: infrastructure-architect }
     data-analysis: { tier: specialized, reference: data-analyst }
     documentation-assistant: { tier: standard, reference: documentation-specialist }
+    # Frontend Craft (LEKA-461): each its reference agent.
+    ui-quality-review: { tier: standard, reference: ui-quality-reviewer }
+    accessibility-audit: { tier: standard, reference: accessibility-auditor }
+    design-review: { tier: specialized, reference: design-reviewer }
+    motion-review: { tier: specialized, reference: motion-animation-specialist }
     # No equivalent in the reference: LEKA's tier, to validate.
     architecture-analysis: { tier: specialized }
     code-change: { tier: expert }
