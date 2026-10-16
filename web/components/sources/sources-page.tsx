@@ -60,7 +60,9 @@ function categoryOf(source: Source): Category {
   return KIND_CATEGORY[source.type] ?? "other";
 }
 
-export function SourcesPage() {
+/** `embedded`: the « Sources » view of Mon environnement (LEKA-459) — no
+ * page around it, and the address left to that page. */
+export function SourcesPage({ embedded = false }: { embedded?: boolean } = {}) {
   const t = useDictionary();
   const pathname = usePathname() ?? "/sources";
   const list = useSources();
@@ -71,11 +73,12 @@ export function SourcesPage() {
   // — so a link, a reload or Back lands on it open.
   const setSelectedId = (id: string | null) => {
     setOpened(id);
+    if (embedded) return;
     window.history.replaceState(null, "", id ? `${routes.sources()}?source=${id}` : routes.sources());
   };
   useEffect(() => {
-    setOpened(new URLSearchParams(window.location.search).get("source"));
-  }, []);
+    if (!embedded) setOpened(new URLSearchParams(window.location.search).get("source"));
+  }, [embedded]);
   // On a wide screen, a source in error opens beside the list on arrival:
   // what broke and how to mend it, rather than a red word among twelve
   // (LEKA-438). Once, unless the address named one; the address untouched.
@@ -114,14 +117,18 @@ export function SourcesPage() {
   );
   const selected = all.find((source) => source.id === selectedId) ?? null;
 
-  return (
-    <PageContainer>
-      <PageHeader
-        title={t.sources.title}
-        subtitle={t.sources.subtitle}
-        breadcrumb={buildBreadcrumb(pathname, t)}
-        actions={all.length > 0 ? addButton : null}
-      />
+  const body = (
+    <>
+      {embedded ? (
+        all.length > 0 && addButton ? <div className="mb-4 flex justify-end">{addButton}</div> : null
+      ) : (
+        <PageHeader
+          title={t.sources.title}
+          subtitle={t.sources.subtitle}
+          breadcrumb={buildBreadcrumb(pathname, t)}
+          actions={all.length > 0 ? addButton : null}
+        />
+      )}
       <AddSourceDialog
         open={adding !== null}
         start={adding ?? "native"}
@@ -170,8 +177,9 @@ export function SourcesPage() {
           </div>
         </div>
       )}
-    </PageContainer>
+    </>
   );
+  return embedded ? body : <PageContainer>{body}</PageContainer>;
 }
 
 function matches(source: Source, search: string): boolean {

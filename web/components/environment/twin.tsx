@@ -161,10 +161,13 @@ export function TwinCounts({
   states,
   active,
   onPick,
+  column = false,
 }: {
   states: Readonly<Record<string, number>>;
   active?: TwinStateName | null;
   onPick?: (state: TwinStateName | null) => void;
+  /** One state a line, unboxed — the overall state's legend (LEKA-459). */
+  column?: boolean;
 }) {
   const t = useDictionary();
   const w = t.environment.twin;
@@ -173,7 +176,11 @@ export function TwinCounts({
     return <p className="text-[0.8125rem] text-shell-muted">{w.counts.empty}</p>;
   }
   return (
-    <ul className="flex flex-wrap gap-2" aria-label={w.counts.title} data-testid="twin-counts">
+    <ul
+      className={column ? "flex flex-col gap-0.5" : "flex flex-wrap gap-2"}
+      aria-label={w.counts.title}
+      data-testid="twin-counts"
+    >
       {TWIN_STATES.map((state) => {
         const count = states[state] ?? 0;
         const body = (
@@ -185,7 +192,12 @@ export function TwinCounts({
         );
         const look = cn(
           "flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[0.8125rem] text-brand-navy",
-          active === state ? "border-brand-violet/60 bg-brand-violet-soft" : "border-shell-line bg-white",
+          active === state
+            ? "border-brand-violet/60 bg-brand-violet-soft"
+            : column
+              ? "border-transparent bg-white"
+              : "border-shell-line bg-white",
+          column && "w-full py-0.5",
           count === 0 && "opacity-60",
         );
         return (
