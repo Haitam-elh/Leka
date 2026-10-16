@@ -30,8 +30,8 @@ Intentions            Dites à LEKA ce que vous voulez accomplir.
                                                               conflicts (LEKA-382) waiting —
                                                               on the section, when folded
 Mon environnement     Le système vivant de votre entreprise.   /environment  — its name opens
-                                                              its Vue globale; its views are
-                                                              chosen on the page, top right
+                                                              its Vue d'ensemble; its views
+                                                              are tabs on the page (LEKA-459)
   Activité                                       /activity
 Capacités             Votre équipe technologique à la demande.
   Capacités disponibles                          /capabilities
@@ -167,7 +167,10 @@ the address with no tab. The Capacités views are read by its catalogue
 Its name in the sidebar opens `/environment` — the Vue globale — and
 unfolds it. Its other views are chosen on the page, in a menu at the top
 right: Vue globale, Applications, Infrastructure, Données, Dépendances,
-Équipes, Événements, Domaines, Qualité. Under it, the sidebar keeps
+Équipes, Événements, Domaines, Qualité. Since LEKA-459 (Karim's mockup),
+they are tabs under the figures, in the mockup's order — Vue d'ensemble,
+Services, Dépendances, Sources, Équipes, Incidents, Configuration — and
+Infrastructure, Données, Domaines, Qualité in a menu after them. Under it, the sidebar keeps
 Activité only. A view chosen on the page marks Mon environnement as the
 current page. The palette (⌘K) still finds each view by its name
 (`views:` in config/navigation.ts).

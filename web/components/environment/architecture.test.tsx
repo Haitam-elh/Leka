@@ -135,7 +135,11 @@ describe("the board", () => {
     expect(panel.getByTestId("architecture-health")).toHaveTextContent(
       "Déduit de leka-prod (EC2 · Machine virtuelle) : En bonne santé · dernier déploiement réussi",
     );
-    expect(panel.getByText("Disponibilité : non mesurée")).toBeInTheDocument();
+    // Its figures (LEKA-459), each only as a source knows it.
+    const figures = panel.getByTestId("architecture-figures");
+    expect(figures).toHaveTextContent("Disponibiliténon mesurée");
+    expect(figures).toHaveTextContent("Dernier déploiementréussi");
+    expect(panel.getByTestId("architecture-state")).toHaveTextContent("En bonne santé");
     expect(panel.getByText("Python · FastAPI")).toBeInTheDocument();
     expect(panel.getByRole("button", { name: "Haitam-elh/Leka" })).toBeInTheDocument();
     expect(panel.getByRole("link", { name: "api.leka-core.com" })).toHaveAttribute(

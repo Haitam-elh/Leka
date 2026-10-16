@@ -1,18 +1,21 @@
 "use client";
 
 import {
+  ArrowLeft,
   ArrowRight,
   CircleHelp,
-  Layers,
   Lightbulb,
   List,
   Map as MapIcon,
+  Maximize2,
   Network,
   Plus,
+  RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
+import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 
 import { cn } from "cn";
 
@@ -24,6 +27,7 @@ import { LekaInsights } from "@/components/insights/leka-insights";
 import { Cartography } from "@/components/environment/cartography";
 import { QualityTab } from "@/components/environment/knowledge-quality";
 import { CoveragePanel } from "@/components/environment/coverage";
+import { EntityPicker } from "@/components/environment/entity-picker";
 import {
   AttentionList,
   type AttentionRow,
@@ -38,12 +42,17 @@ import {
   typeLabel,
 } from "@/components/environment/parts";
 import { PageContainer } from "@/components/shell/page-container";
+import { usePermissions } from "@/components/shell/shell-provider";
+import { AddSourceDialog } from "@/components/sources/add-source-dialog";
+import { SourcesPage } from "@/components/sources/sources-page";
 import {
   type SourceLine,
   SourceLines,
   sourceLines,
 } from "@/components/sources/connected-sources";
 import { ErrorState } from "@/components/states/error-state";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTab } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -65,7 +74,7 @@ import {
 } from "@/components/environment/twin";
 import type { LandscapeView, ViewName, ViewNode } from "@/lib/knowledge-graph";
 import { useArchitecture, useLandscapeView } from "@/lib/knowledge-graph-queries";
-import { useDictionary } from "@/lib/i18n/locale-provider";
+import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import type { Source } from "@/lib/sources";
 import { useSources } from "@/lib/sources-queries";
 
@@ -223,10 +232,6 @@ export function EnvironmentScreen() {
       <ErrorState error={architecture.error} onRetry={() => void architecture.refetch()} />
     ) : architecture.data ? (
       <div className="flex flex-col gap-3">
-        {/* How many things in each state — each the way to the list of them. */}
-        <Card title={t.environment.twin.counts.title}>
-          <TwinCounts states={environment.data?.states ?? {}} active={only} onPick={pick} />
-        </Card>
         {view === "list" ? (
           // The readable alternative to the map (LEKA-442).
           <Card title={t.environment.twin.list.caption}>
@@ -235,7 +240,46 @@ export function EnvironmentScreen() {
         ) : (
           <ArchitectureBoard data={architecture.data} />
         )}
-        <div className="grid gap-4 xl:grid-cols-2">
+        {/* The mockup's foot (LEKA-459): the overall state — each state the
+            way to the list of its things —, the sources, the alerts, what
+            changed. */}
+        <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
+          <Overall states={environment.data?.states ?? {}} active={only} onPick={pick} />
+          <Sources lines={model?.sources ?? null} />
+          <AlertsCard monitoring={monitoring.data} />
+          <Card
+            title={w.events.title}
+            action={<CardLink href={routes.activity()}>{w.kpi.seeAll}</CardLink>}
+          >
+            <EventList rows={model?.events ?? []} empty={w.events.empty} />
+          </Card>
+        </div>
+      </div>
+    ) : (
+      <div className="h-96 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />
+    );
+  } else if (tab === "quality") {
+    // How far what LEKA knows can be trusted (LEKA-381).
+    body = <QualityTab />;
+  } else if (tab === "sources") {
+    // The sources, moved here from their own page, which stays (LEKA-459).
+    body = <SourcesPage embedded />;
+  } else if (tab === "configuration") {
+    // What sets what this screen shows — never a setting it does not have:
+    // the alerts are the common service's (LEKA-463).
+    body = (
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card
+          title={w.configuration.sync}
+          action={<CardLink href={routes.sources()}>{w.kpi.seeAll}</CardLink>}
+        >
+          <p className="mb-3 text-[0.8125rem] text-shell-muted">{w.configuration.syncBody}</p>
+          {environment.data?.freshness ? <FreshnessLine freshness={environment.data.freshness} /> : null}
+          <div className="mt-3">
+            <SourceLines lines={model?.sources ?? []} max={50} />
+          </div>
+        </Card>
+        <div className="flex flex-col gap-4">
           <AlertsCard monitoring={monitoring.data} />
           {environment.data ? (
             <SourcesCoverage
@@ -244,15 +288,8 @@ export function EnvironmentScreen() {
             />
           ) : null}
         </div>
-        {/* What moved and what needs a look, as the mockup's foot (LEKA-438). */}
-        <Recent model={model} />
       </div>
-    ) : (
-      <div className="h-96 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />
     );
-  } else if (tab === "quality") {
-    // How far what LEKA knows can be trusted (LEKA-381).
-    body = <QualityTab />;
   } else if (tab === "events") {
     body = (
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
@@ -295,39 +332,78 @@ export function EnvironmentScreen() {
 
   return (
     <PageContainer>
-      <Header
-        model={model}
-        freshness={environment.data?.freshness}
-        environments={environments}
-        view={view}
-        onView={viewName || tab === "architecture" ? setView : null}
-        scope={scope}
-        onScope={setScope}
-        tab={tab}
-        onTab={setTab}
-      />
-
-      <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-shell-line pb-2">
-        {tab === "architecture" ? (
-          // The architecture says its states under its canvas: here, the way to the detail.
-          <div className="ms-auto shrink-0">
-            <DetailedLink />
-          </div>
-        ) : (
-          // The six states, each defined (LEKA-442).
-          <TwinLegend className="px-2.5" />
-        )}
-      </div>
+      <Header model={model} freshness={environment.data?.freshness} />
 
       {error ? (
         <ErrorState error={error} onRetry={retry} />
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-4">
           <ArchitectureFigures data={architecture.data} />
+          <ViewBar
+            tab={tab}
+            onTab={setTab}
+            environments={environments}
+            scope={scope}
+            onScope={setScope}
+            view={view}
+            onView={viewName || tab === "architecture" ? setView : null}
+          />
+          {tab !== "architecture" && viewName ? <TwinLegend className="px-2.5" /> : null}
           {body}
         </div>
       )}
     </PageContainer>
+  );
+}
+
+/** The overall state (LEKA-459): the share of what is tracked that is
+ * operational, and each state counted — each the way to its list. */
+function Overall({
+  states,
+  active,
+  onPick,
+}: {
+  states: Readonly<Record<string, number>>;
+  active: TwinStateName | null;
+  onPick: (state: TwinStateName | null) => void;
+}) {
+  const t = useDictionary();
+  const w = t.environment.overall;
+  const { format: locale } = useLocale();
+  const total = Object.values(states).reduce((sum, n) => sum + n, 0);
+  const share = total ? (states.operational ?? 0) / total : 0;
+  return (
+    <Card title={w.title}>
+      <div className="flex flex-wrap items-center gap-4" data-testid="overall">
+        {total ? (
+          <div className="relative size-24 shrink-0">
+            <svg viewBox="0 0 36 36" className="size-24 -rotate-90" aria-hidden="true">
+              <circle cx="18" cy="18" r="15.5" fill="none" strokeWidth="4" className="stroke-shell-canvas" />
+              <circle
+                cx="18"
+                cy="18"
+                r="15.5"
+                fill="none"
+                strokeWidth="4"
+                strokeLinecap="round"
+                pathLength={100}
+                strokeDasharray={`${share * 100} 100`}
+                className="stroke-state-success"
+              />
+            </svg>
+            <span className="absolute inset-0 flex flex-col items-center justify-center text-center">
+              <span className="text-lg font-bold text-brand-navy" data-testid="overall-share">
+                {new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 0 }).format(share)}
+              </span>
+              <span className="text-[0.6875rem] text-shell-muted">{w.operational}</span>
+            </span>
+          </div>
+        ) : null}
+        <div className="min-w-0 flex-1">
+          {total ? <TwinCounts states={states} active={active} onPick={onPick} column /> : <p className="text-[0.8125rem] text-shell-muted">{w.empty}</p>}
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -345,108 +421,184 @@ function Recent({ model }: { model: Model | undefined }) {
   );
 }
 
-function DetailedLink() {
-  const t = useDictionary();
-  return (
-    <Link
-      href={routes.environmentGraph()}
-      className="flex items-center gap-1.5 rounded-lg border border-shell-line px-3 py-1 text-[0.8125rem] font-medium whitespace-nowrap text-shell-nav-active outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
-    >
-      {t.environment.map.detailed}
-      <ArrowRight className="rtl:-scale-x-100 size-3.5" aria-hidden="true" />
-    </Link>
-  );
-}
-
 function Header({
   model,
   freshness,
-  environments,
-  view,
-  onView,
-  scope,
-  onScope,
-  tab,
-  onTab,
 }: {
   model: Model | undefined;
   freshness: Environment["freshness"] | undefined;
-  environments: readonly string[];
-  view: "map" | "list";
-  /** None: the tab has no list to switch to. */
-  onView: ((view: "map" | "list") => void) | null;
-  scope: string;
-  onScope: (scope: string) => void;
-  tab: Tab;
-  onTab: (tab: Tab) => void;
 }) {
   const t = useDictionary();
   const w = t.environment;
-  const tabs = TABS.map((key) => ({ value: key, label: w.tabs[key] }));
+  const router = useRouter();
+  const client = useQueryClient();
+  const fetching = useIsFetching() > 0;
+  const canConnect = usePermissions()?.includes("source:manage") ?? false;
+  const [connecting, setConnecting] = useState(false);
+  return (
+    <div className="mb-4 flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link
+          href={routes.overview()}
+          className="flex items-center gap-2 rounded-lg bg-shell-canvas px-3 py-1.5 text-[0.8125rem] font-medium text-brand-navy outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+        >
+          <ArrowLeft className="rtl:-scale-x-100 size-4" aria-hidden="true" />
+          {w.back}
+        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          {freshness ? (
+            // When it was really read, how often — never « temps réel » (LEKA-442).
+            <div aria-live="polite">
+              <FreshnessLine freshness={freshness} />
+            </div>
+          ) : (
+            <p className="flex items-center gap-2 text-xs text-shell-muted" aria-live="polite">
+              <span
+                aria-hidden="true"
+                className={cn(
+                  "size-2.5 rounded-full",
+                  model?.updatedAt ? "bg-state-success" : "bg-shell-muted",
+                )}
+              />
+              <span>
+                {w.updated}{" "}
+                <span className="font-medium text-brand-navy">
+                  {model?.updatedAt ? timeAgo(t, model.updatedAt) : w.neverUpdated}
+                </span>
+              </span>
+            </p>
+          )}
+          {/* What LEKA knows, read again — the sources are read at their own pace. */}
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label={w.refresh}
+            title={w.refresh}
+            disabled={fetching}
+            onClick={() => void client.invalidateQueries()}
+            data-testid="env-refresh"
+          >
+            <RefreshCw className={cn(fetching && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
+          </Button>
+          {canConnect ? (
+            <Button type="button" onClick={() => setConnecting(true)} data-testid="env-connect">
+              <Plus aria-hidden="true" />
+              {w.connect}
+            </Button>
+          ) : null}
+        </div>
+      </div>
+      <div>
+        <h1 className="text-[1.875rem] leading-tight font-bold tracking-[-0.02em] text-brand-navy">
+          {w.title}
+        </h1>
+        <p className="mt-1 text-[0.9375rem] text-shell-accent-muted">{w.subtitle}</p>
+      </div>
+      <AddSourceDialog
+        open={connecting}
+        onOpenChange={setConnecting}
+        onDone={(done) => router.push(`${routes.sources()}?source=${done.id}`)}
+      />
+    </div>
+  );
+}
+
+/** The mockup's views, as tabs; the others, in a menu after them. */
+const MAIN_TABS = [
+  "architecture",
+  "applications",
+  "dependencies",
+  "sources",
+  "organisation",
+  "events",
+  "configuration",
+] as const satisfies readonly Tab[];
+const MORE_TABS = TABS.filter((key) => !(MAIN_TABS as readonly Tab[]).includes(key));
+
+function ViewBar({
+  tab,
+  onTab,
+  environments,
+  scope,
+  onScope,
+  view,
+  onView,
+}: {
+  tab: Tab;
+  onTab: (tab: Tab) => void;
+  environments: readonly string[];
+  scope: string;
+  onScope: (scope: string) => void;
+  view: "map" | "list";
+  /** None: the tab has no list to switch to. */
+  onView: ((view: "map" | "list") => void) | null;
+}) {
+  const t = useDictionary();
+  const w = t.environment;
+  const router = useRouter();
+  const main = (MAIN_TABS as readonly Tab[]).includes(tab);
+  const more = MORE_TABS.map((key) => ({ value: key, label: w.tabs[key] }));
   const scopes = [
     { value: GLOBAL, label: w.global },
     ...environments.map((name) => ({ value: name, label: name })),
   ];
   return (
-    <div className="mb-3 flex flex-col gap-3 xl:flex-row xl:items-end">
-      <div className="min-w-0 flex-1">
-        <nav aria-label={t.shell.breadcrumb} className="mb-1">
-          <ol className="flex items-center gap-2 text-[0.8125rem] text-shell-muted">
-            <li className="flex items-center gap-2">
-              <Layers className="size-4 text-shell-nav-active" aria-hidden="true" />
-              <span aria-current="page">{t.nav.environment}</span>
-            </li>
-          </ol>
-        </nav>
-        <h1 className="text-[1.625rem] leading-tight font-bold tracking-[-0.02em] text-brand-navy">
-          {w.title}
-        </h1>
-        <p className="text-[0.9375rem] text-shell-accent-muted">{w.subtitle}</p>
-      </div>
-      <div className="flex flex-wrap items-center gap-3">
-        {freshness ? (
-          // When it was really read, how often — never « temps réel » (LEKA-442).
-          <div aria-live="polite">
-            <FreshnessLine freshness={freshness} />
-          </div>
-        ) : (
-          <p className="flex items-center gap-2 text-xs text-shell-muted" aria-live="polite">
-            <span
-              aria-hidden="true"
-              className={cn(
-                "size-2.5 rounded-full",
-                model?.updatedAt ? "bg-state-success" : "bg-shell-muted",
-              )}
-            />
-            <span>
-              <span className="block">{w.updated}</span>
-              <span className="block font-medium text-brand-navy">
-                {model?.updatedAt ? timeAgo(t, model.updatedAt) : w.neverUpdated}
-              </span>
-            </span>
-          </p>
-        )}
-        {/* Its views — the overall one, then applications to quality —
-            chosen here, top right (2026-10-14: the sidebar keeps only
-            Activité under Mon environnement). */}
-        <Select value={tab} onValueChange={(value) => onTab(isTab(value as string | null) ? (value as Tab) : FIRST_TAB)} items={tabs}>
-          <SelectTrigger className="min-w-44 bg-white" aria-label={w.tabsLabel} data-testid="env-view">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {tabs.map((option) => (
-              <SelectItem key={option.value} value={option.value} data-testid={`env-tab-${option.value}`}>
-                {option.label}
-              </SelectItem>
+    <div className="flex flex-col gap-3 border-b border-shell-line xl:flex-row xl:items-end">
+      <div className="flex min-w-0 flex-1 items-end gap-2 overflow-x-auto">
+        <Tabs value={main ? tab : null} onValueChange={(value) => onTab(value as Tab)} className="gap-0">
+          <TabsList aria-label={w.tabsLabel} className="gap-1 rounded-none bg-transparent p-0">
+            {MAIN_TABS.map((key) => (
+              <TabsTab
+                key={key}
+                value={key}
+                data-testid={`env-tab-${key}`}
+                className="h-10 flex-none rounded-none border-b-2 border-transparent px-3 text-[0.9375rem] font-medium text-shell-muted hover:text-brand-navy data-[active]:border-shell-nav-active data-[active]:bg-transparent data-[active]:text-shell-nav-active data-[active]:shadow-none"
+              >
+                {w.tabs[key]}
+              </TabsTab>
             ))}
-          </SelectContent>
-        </Select>
+          </TabsList>
+        </Tabs>
+        <div className="mb-1.5 shrink-0">
+          <Select
+            value={main ? null : tab}
+            onValueChange={(value) => isTab(value as string | null) && onTab(value as Tab)}
+            items={more}
+          >
+            <SelectTrigger
+              className={cn("h-8 min-w-32", !main && "border-brand-violet/60 bg-brand-violet-soft")}
+              aria-label={w.more}
+              data-testid="env-more"
+            >
+              <SelectValue placeholder={w.more} />
+            </SelectTrigger>
+            <SelectContent>
+              {more.map((option) => (
+                <SelectItem key={option.value} value={option.value} data-testid={`env-tab-${option.value}`}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 pb-2">
+        <div className="w-full sm:w-72">
+          <EntityPicker
+            label={w.search}
+            placeholder={w.searchPlaceholder}
+            hideLabel
+            onPick={(hit) => router.push(entityHref(hit.entity))}
+            testId="env-search"
+          />
+        </div>
         <Select
           value={scope}
           onValueChange={(value) => onScope((value as string | null) ?? GLOBAL)}
           items={scopes}
         >
-          <SelectTrigger className="min-w-40" aria-label={w.scope}>
+          <SelectTrigger className="min-w-44" aria-label={w.scope}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -477,7 +629,7 @@ function Header({
                 title={label}
                 onClick={() => onView(key)}
                 className={cn(
-                  "flex size-10 items-center justify-center outline-none focus-visible:ring-3 focus-visible:ring-brand-violet/40",
+                  "flex size-9 items-center justify-center outline-none focus-visible:ring-3 focus-visible:ring-brand-violet/40",
                   view === key
                     ? "bg-brand-violet-soft text-shell-nav-active"
                     : "bg-white text-brand-navy",
@@ -486,6 +638,14 @@ function Header({
                 <Icon className="size-5" aria-hidden="true" />
               </button>
             ))}
+            <Link
+              href={routes.environmentGraph()}
+              aria-label={w.map.detailed}
+              title={w.map.detailed}
+              className="flex size-9 items-center justify-center border-s border-shell-line bg-white text-brand-navy outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+            >
+              <Maximize2 className="size-4" aria-hidden="true" />
+            </Link>
           </div>
         ) : null}
       </div>
