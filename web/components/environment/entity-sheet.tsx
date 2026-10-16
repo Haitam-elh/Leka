@@ -41,7 +41,7 @@ import {
   typeIcon,
   typeLabel,
 } from "@/components/environment/parts";
-import { PageContainer } from "@/components/shell/page-container";
+import { BackHome, PageContainer } from "@/components/shell/page-container";
 import {
   ActivityCard,
   ConfigurationTab,
@@ -165,6 +165,7 @@ export function EntitySheetScreen() {
 
   return (
     <PageContainer>
+      <BackHome />
       <nav aria-label={t.shell.breadcrumb} className="mb-3">
         <ol className="flex flex-wrap items-center gap-2 text-[0.8125rem] text-shell-muted">
           {crumbs.map((crumb, index) => (

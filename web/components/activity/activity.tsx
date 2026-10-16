@@ -37,7 +37,7 @@ import { CATEGORY_DOT, columns, Donut, StackedBars } from "@/components/activity
 import { IconTile, type TileTone, typeIcon } from "@/components/environment/parts";
 import { hrefOf, word } from "@/components/insights/leka-insights";
 import { shortWhen } from "@/components/knowledge/time";
-import { PageContainer } from "@/components/shell/page-container";
+import { BackHome, PageContainer } from "@/components/shell/page-container";
 import { StatCard, StatGrid } from "@/components/shell/stat-card";
 import { usePermissions } from "@/components/shell/shell-provider";
 import {
@@ -144,6 +144,7 @@ export function ActivityScreen() {
 
   return (
     <PageContainer>
+      <BackHome />
       <div className="mb-5 flex flex-col gap-4 2xl:flex-row 2xl:items-start">
         <div className="min-w-0 flex-1">
           <h1 className="text-[2.125rem] leading-tight font-bold tracking-[-0.02em] text-brand-navy">

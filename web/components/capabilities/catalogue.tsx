@@ -37,7 +37,7 @@ import { AgentPrice, Bundles, Owned } from "@/components/capabilities/offers";
 import { IconTile, type TileTone } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
 import { useConfirm } from "@/components/interactions/confirm";
-import { PageContainer } from "@/components/shell/page-container";
+import { BackHome, PageContainer } from "@/components/shell/page-container";
 import { hasSourceLogo, sourceTitle } from "@/components/sources/source-logo";
 import { usePermissions } from "@/components/shell/shell-provider";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -969,6 +969,7 @@ export function CatalogueScreen() {
 
   return (
     <PageContainer>
+      <BackHome />
       <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1">
           <h1 className="text-[2.125rem] leading-tight font-bold tracking-[-0.02em] text-brand-navy">{w.title}</h1>
