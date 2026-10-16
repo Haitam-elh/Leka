@@ -12,8 +12,20 @@ export const environmentKeys = {
   activity: (id: string, days: number) => [...environmentKeys.all, "activity", id, days] as const,
 };
 
+/** Sources there, never read yet (a demo just opened, a first source just
+ * connected): the first reading lands in seconds — asked again until it does. */
+export function untilFirstReading(
+  env: { sources?: readonly unknown[]; freshness?: { last_read_at?: string | null } | null } | undefined,
+): number | false {
+  return env && (env.sources?.length ?? 0) > 0 && !env.freshness?.last_read_at ? 5000 : false;
+}
+
 export function useEnvironment() {
-  return useQuery({ queryKey: environmentKeys.all, queryFn: environment.get });
+  return useQuery({
+    queryKey: environmentKeys.all,
+    queryFn: environment.get,
+    refetchInterval: (query) => untilFirstReading(query.state.data),
+  });
 }
 
 /** An id that is not an entity's asks nothing: the page says it found none. */
