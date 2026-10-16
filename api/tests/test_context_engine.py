@@ -49,6 +49,10 @@ async def model(
     client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
 ) -> dict[str, uuid.UUID]:
     ids = await _acme(acme["acme"])
+    # Shown by their sources today: the fixture's dates age, and their age
+    # alone would lower a context's freshness — its level with it — the
+    # longer after they were written the tests run.
+    await _sql(acme["acme"], "UPDATE entities SET last_seen_at = now()")
     _as(identity, acme, "member")
     return ids
 
