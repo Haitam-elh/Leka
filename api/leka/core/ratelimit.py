@@ -58,7 +58,9 @@ class LimitVerdict:
 # trying one.
 LOGIN_PER_IP = Limit(attempts=5, window_seconds=60)
 LOGIN_PER_ACCOUNT = Limit(attempts=10, window_seconds=3600)
-REGISTER_PER_IP = Limit(attempts=3, window_seconds=3600)
+# Ten, not three: testers in one office share an address (LEKA-450's session
+# was blocked at the fourth), and each account still needs its e-mail confirmed.
+REGISTER_PER_IP = Limit(attempts=10, window_seconds=3600)
 PASSWORD_RESET_PER_IP = Limit(attempts=3, window_seconds=3600)
 PASSWORD_RESET_PER_EMAIL = Limit(attempts=3, window_seconds=3600)
 VERIFICATION_RESEND_PER_ACCOUNT = Limit(attempts=3, window_seconds=3600)

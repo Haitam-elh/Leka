@@ -87,7 +87,7 @@ const fr = {
     workspace: "Workspace",
     switchWorkspace: "Changer de workspace",
     switchFailed: "Impossible d'ouvrir ce workspace. Réessayez.",
-    noWorkspace: "Aucun workspace",
+    noWorkspace: "Aucun espace de travail",
     /** Someone signed in who belongs to no workspace yet — a new account. */
     firstWorkspace: {
       title: "Créez votre espace de travail",
@@ -375,7 +375,7 @@ const fr = {
       },
       incidents: "{count} {count|incident ouvert|incidents ouverts}",
       measured: "{known} {known|service mesuré|services mesurés} sur {total}",
-      sources: "sources connectées",
+      sources: "{count|source connectée|sources connectées}",
       lastSync: "Dernière synchronisation",
       services: "services analysés",
       agents: "Agents disponibles",
@@ -2011,6 +2011,22 @@ const fr = {
         "Pourquoi un build casse, et une correction proposée — jamais appliquée sans vous.",
       "debug-assistant":
         "Les causes probables d'un service qui dysfonctionne, classées : ce qui a changé, ce dont il dépend.",
+      "ui-quality-review":
+        "Les écrans d'une application sont-ils finis : chargement, vide, erreur, téléphone, textes longs.",
+      "accessibility-audit":
+        "L'accessibilité d'une application au clavier, aux lecteurs d'écran, en contraste — selon le WCAG 2.2 et le RGAA.",
+      "design-review":
+        "Les écrans suivent-ils le design system : hiérarchie, espacements, typographie, couleurs, composants.",
+      "motion-review":
+        "Les animations d'une application : utiles ou non, leur durée, le mouvement réduit respecté, leur fluidité.",
+      "codebase-explorer":
+        "Se repérer dans le code d'un dépôt : son organisation, où vit une fonctionnalité, comment le construire, le lancer, le tester.",
+      "test-generation":
+        "Les tests qui manquent, écrits par LEKA : un diff relu par une personne, puis la pull request.",
+      "regression-analysis":
+        "Ce qu'un changement peut casser qui marchait : les comportements touchés, ce qui en dépend, les tests qui les gardent.",
+      "change-impact-analysis":
+        "Jusqu'où va un changement : services, données, équipes et processus touchés, et qui doit le savoir.",
     },
     detail: {
       back: "Toutes les compétences",
@@ -7733,7 +7749,7 @@ const fr = {
     passwordRuleShort: "Au moins {min} caractères.",
     checkInbox: "Consultez votre boîte de réception",
     registerSent:
-      "Si cette adresse peut être inscrite, un lien de confirmation est en route.",
+      "Si l'adresse {email} peut être inscrite, un lien de confirmation y est en route.",
     registerLinkLife: "Le lien est valable 24 heures, une seule fois.",
     backToSignIn: "Retour à la connexion",
     forgotTitle: "Réinitialiser votre mot de passe",
@@ -7756,7 +7772,7 @@ const fr = {
     verifyingBody: "Cela prend un instant.",
     verifiedTitle: "Adresse confirmée",
     verifiedDescription: "Votre compte est prêt.",
-    verifiedBody: "Vous pourrez fermer cet onglet une fois connecté.",
+    verifiedBody: "Connectez-vous pour commencer.",
     verifyInvalidTitle: "Ce lien n'est plus valable",
     verifyInvalidDescription:
       "Les liens de confirmation durent 24 heures et ne servent qu'une fois.",
@@ -7769,6 +7785,8 @@ const fr = {
         "Confirmez votre adresse e-mail avant de vous connecter. Consultez votre boîte de réception : nous pouvons renvoyer un lien.",
       rateLimited:
         "Trop de tentatives. Patientez quelques minutes avant de réessayer.",
+      rateLimitedFor:
+        "Trop de tentatives depuis ce réseau. Réessayez dans {minutes} min.",
       tokenInvalid: "Ce lien n'est plus valable. Demandez-en un nouveau.",
       passwordTooShort:
         "Ce mot de passe est trop court : au moins {min} caractères.",
@@ -8165,7 +8183,7 @@ const en: Dictionary = {
       },
       incidents: "{count} {count|open incident|open incidents}",
       measured: "{known} of {total} services measured",
-      sources: "connected sources",
+      sources: "{count|connected source|connected sources}",
       lastSync: "Last synchronisation",
       services: "services analysed",
       agents: "Available agents",
@@ -9726,6 +9744,22 @@ const en: Dictionary = {
         "Why a build breaks, and a fix proposed — never applied without you.",
       "debug-assistant":
         "A misbehaving service's likely causes, ranked: what changed, what it depends on.",
+      "ui-quality-review":
+        "Whether an application's screens are finished: loading, empty, error, on a phone, with long text.",
+      "accessibility-audit":
+        "An application's accessibility to the keyboard, screen readers and in contrast — against WCAG 2.2 and the RGAA.",
+      "design-review":
+        "Whether the screens follow the design system: hierarchy, spacing, typography, colours, components.",
+      "motion-review":
+        "An application's animations: useful or not, their timing, reduced motion respected, their smoothness.",
+      "codebase-explorer":
+        "Finding your way in a repository's code: how it is organised, where a feature lives, how to build, run and test it.",
+      "test-generation":
+        "The missing tests, written by LEKA: a diff a person reviews, then the pull request.",
+      "regression-analysis":
+        "What a change could break that used to work: the behaviours it alters, what depends on them, the tests guarding them.",
+      "change-impact-analysis":
+        "How far a change reaches: the services, data, teams and processes it touches, and who must know.",
     },
     detail: {
       back: "All skills",
@@ -15263,7 +15297,7 @@ const en: Dictionary = {
     passwordRuleShort: "At least {min} characters.",
     checkInbox: "Check your inbox",
     registerSent:
-      "If that address can be registered, a confirmation link is on its way.",
+      "If {email} can be registered, a confirmation link is on its way there.",
     registerLinkLife: "The link works for 24 hours, and once only.",
     backToSignIn: "Back to sign in",
     forgotTitle: "Reset your password",
@@ -15286,7 +15320,7 @@ const en: Dictionary = {
     verifyingBody: "This takes a moment.",
     verifiedTitle: "Address confirmed",
     verifiedDescription: "Your account is ready.",
-    verifiedBody: "You can close this tab once you have signed in.",
+    verifiedBody: "Sign in to begin.",
     verifyInvalidTitle: "This link is no longer valid",
     verifyInvalidDescription: "Confirmation links last 24 hours and work once.",
     verifyInvalidBody:
@@ -15297,6 +15331,8 @@ const en: Dictionary = {
       accountUnverified:
         "Confirm your email address before signing in. Check your inbox — we can send another link.",
       rateLimited: "Too many attempts. Wait a few minutes before trying again.",
+      rateLimitedFor:
+        "Too many attempts from this network. Try again in {minutes} min.",
       tokenInvalid: "This link is no longer valid. Ask for a new one.",
       passwordTooShort:
         "This password is too short: at least {min} characters.",

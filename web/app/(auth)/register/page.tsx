@@ -74,7 +74,7 @@ export default function RegisterPage() {
     return (
       <AuthCard
         title={t.auth.checkInbox}
-        description={t.auth.registerSent}
+        description={fill(t.auth.registerSent, { email })}
         footer={
           <Link href="/login" className="underline underline-offset-4">
             {t.auth.backToSignIn}

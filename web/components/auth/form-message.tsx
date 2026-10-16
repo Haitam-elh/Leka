@@ -64,8 +64,11 @@ export function authErrorMessage(t: Dictionary, error: unknown, online: boolean)
         return errors.invalidCredentials;
       case "account_unverified":
         return errors.accountUnverified;
-      case "rate_limited":
-        return errors.rateLimited;
+      case "rate_limited": {
+        // The API says how long: "Wait 3170 seconds…" — a window of an hour is not « quelques minutes ».
+        const seconds = Number(/(\d+) seconds/.exec(error.message)?.[1]);
+        return seconds > 0 ? fill(errors.rateLimitedFor, { minutes: Math.ceil(seconds / 60) }) : errors.rateLimited;
+      }
       case "token_invalid":
       case "token_expired":
         return errors.tokenInvalid;
