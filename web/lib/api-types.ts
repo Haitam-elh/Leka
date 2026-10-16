@@ -6898,6 +6898,11 @@ export interface components {
              * @default false
              */
             included: boolean;
+            /**
+             * Market
+             * @description Its category in the marketplace (the reference's: product, architecture, testing, incident, security, performance, frontend, mobile…) — none outside it.
+             */
+            market?: string | null;
         };
         /**
          * AgentProposalRead

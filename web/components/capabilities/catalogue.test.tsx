@@ -73,8 +73,10 @@ function addOns(owned: boolean, plan = "starter") {
         tier: "expert",
         monthly_price: 2500,
         owned,
-        why: owned ? null : plan === "free" ? "plan_required" : "not_owned",
+        why: owned ? null : plan === "free" ? "plan_required" : "not_owned" as string | null,
         bundles: ["architecture"],
+        included: false,
+        market: "architecture" as string | null,
       },
     ],
     bundles: [
@@ -268,32 +270,87 @@ describe("the catalogue", () => {
     expect(screen.getByTestId("catalogue-ask")).toHaveAttribute("href", "/intentions/new");
   });
 
-  it("shows one box per domain, its agents apart from LEKA's own capabilities", async () => {
-    // 2026-10-14: « une case avec les agents et compétences sur le code, pareil
-    // pour les autres » — never mixed.
+  it("never puts agents and LEKA's skills in the same box — the skills apart, never priced (LEKA-467)", async () => {
     const user = userEvent.setup();
     show(<CatalogueScreen />);
     await screen.findAllByTestId("capability-card");
-    const domains = screen.getAllByTestId("catalogue-domain");
-    expect(domains.map((d) => d.dataset.domain)).toEqual(["architecture", "knowledge"]);
-    const [architecture, knowledge] = domains;
-    expect(within(architecture).getByRole("heading", { level: 2 })).toHaveTextContent("Architecture");
-    expect(within(architecture).getByTestId("catalogue-domain-count")).toHaveTextContent("1 agent");
-    expect(
-      within(within(architecture).getByTestId("catalogue-domain-agents")).getByTestId("capability-card"),
-    ).toHaveAttribute("data-key", "application-architecture");
-    expect(within(architecture).queryByTestId("catalogue-domain-own")).not.toBeInTheDocument();
-    expect(within(knowledge).getByRole("heading", { level: 2 })).toHaveTextContent("Connaissance");
-    expect(
-      within(within(knowledge).getByTestId("catalogue-domain-own")).getByTestId("capability-card"),
-    ).toHaveAttribute("data-key", "ownership");
-    expect(within(knowledge).getByTestId("catalogue-domain-count")).toHaveTextContent("1 compétence");
+    const agents = screen.getAllByTestId("catalogue-domain").filter((d) => d.dataset.kind === "agent");
+    // The marketplace's categories, as the mockup lays them out.
+    expect(agents.map((d) => d.dataset.domain)).toEqual(["architecture"]);
+    expect(within(agents[0]).getByRole("heading", { level: 3 })).toHaveTextContent("Architecture & Code");
+    expect(within(agents[0]).getByTestId("catalogue-domain-count")).toHaveTextContent("1 agent");
+    expect(within(agents[0]).getByTestId("capability-card")).toHaveAttribute("data-key", "application-architecture");
 
-    // The agents only, then LEKA's own only.
+    const skills = screen.getByTestId("catalogue-skills");
+    expect(skills).toHaveTextContent("Compétences LEKA, incluses dans toutes les formules");
+    expect(skills).toHaveTextContent("Elles ne s'achètent pas.");
+    const [knowledge] = within(skills).getAllByTestId("catalogue-domain");
+    expect(knowledge).toHaveAttribute("data-kind", "skill");
+    expect(within(knowledge).getByRole("heading", { level: 3 })).toHaveTextContent("Connaissance");
+    expect(within(knowledge).getByTestId("catalogue-domain-count")).toHaveTextContent("1 compétence");
+    const [skill] = within(knowledge).getAllByTestId("capability-card");
+    expect(skill).toHaveAttribute("data-key", "ownership");
+    expect(skill).toHaveTextContent("Incluse");
+    // Not sold: never a price, never a buy.
+    expect(within(skill).queryByTestId("agent-price")).not.toBeInTheDocument();
+    expect(skill).not.toHaveTextContent("€");
+
+    // The agents only, then LEKA's skills only: never mixed.
     await user.click(screen.getByTestId("catalogue-show-agents"));
     expect(screen.getAllByTestId("capability-card").map((c) => c.dataset.kind)).toEqual(["agent"]);
+    expect(screen.queryByTestId("catalogue-skills")).not.toBeInTheDocument();
     await user.click(screen.getByTestId("catalogue-show-capabilities"));
     expect(screen.getAllByTestId("capability-card").map((c) => c.dataset.key)).toEqual(["ownership"]);
+  });
+
+  it("says each agent's state in words, its price excluding VAT and its action (LEKA-467)", async () => {
+    permissions.value = ["workspace:read", "workspace:update"];
+    const cases: [ReturnType<typeof addOns>, string, string | null][] = [
+      [addOns(false), "Option payante", "agent-buy"],
+      [addOns(true), "Déjà acheté", "agent-manage"],
+      [{ ...addOns(false), agents: [{ ...addOns(false).agents[0], included: true, owned: true, why: null }] }, "Inclus dans votre plan", null],
+      [addOns(false, "free"), "Upgrade requis", "agent-upgrade"],
+      [{ ...addOns(false), agents: [{ ...addOns(false).agents[0], why: "not_for_sale" }] }, "Indisponible", null],
+    ];
+    for (const [offer, said, action] of cases) {
+      sold.addOns.mockResolvedValue(offer);
+      const { unmount } = show(<CatalogueScreen />);
+      const state = await screen.findByTestId("agent-state");
+      expect(state).toHaveTextContent(said);
+      const price = screen.getByTestId("agent-price");
+      if (said === "Indisponible") expect(price).not.toHaveTextContent("€");
+      else expect(price).toHaveTextContent("25 € / mois HT");
+      expect(price).toHaveTextContent("Expert");
+      for (const each of ["agent-buy", "agent-manage", "agent-upgrade"]) {
+        if (each === action) expect(within(price).getByTestId(each)).toBeVisible();
+        else expect(within(price).queryByTestId(each)).not.toBeInTheDocument();
+      }
+      unmount();
+    }
+    // Its action named for who cannot see the icon.
+    sold.addOns.mockResolvedValue(addOns(false));
+    show(<CatalogueScreen />);
+    expect(await screen.findByRole("button", { name: "Acheter Architecte applicatif" })).toBeVisible();
+  });
+
+  it("a favourite said, never a bare star; agents filtered by their state (LEKA-467)", async () => {
+    const user = userEvent.setup();
+    sold.addOns.mockResolvedValue(addOns(true));
+    show(<CatalogueScreen />);
+    await screen.findAllByTestId("agent-state");
+    const [favourite] = screen.getAllByTestId("capability-favourite");
+    expect(favourite).toHaveAccessibleName(/aux favoris$/);
+    expect(favourite).toHaveAttribute("title");
+    expect(favourite).toHaveAttribute("aria-pressed");
+    await user.click(screen.getByRole("combobox", { name: "Tous les états" }));
+    await user.click(await screen.findByRole("option", { name: "Options payantes" }));
+    await waitFor(() => expect(screen.queryAllByTestId("agent-state")).toHaveLength(0));
+    expect(screen.getByTestId("catalogue-empty")).toBeVisible();
+    // An agents' state asked: LEKA's skills, which have none, step aside.
+    expect(screen.queryByTestId("catalogue-skills")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("combobox", { name: "Tous les états" }));
+    await user.click(await screen.findByRole("option", { name: "Déjà achetés" }));
+    await waitFor(() => expect(screen.getAllByTestId("agent-state")).toHaveLength(1));
   });
 
   it("chooses by need and by words, and keeps one at hand", async () => {
@@ -354,7 +411,7 @@ describe("the catalogue", () => {
     const user = userEvent.setup();
     show(<CatalogueScreen />);
     const price = await screen.findByTestId("agent-price");
-    expect(price).toHaveTextContent("25 € / mois");
+    expect(price).toHaveTextContent("25 € / mois HT");
     const [bundle, soon] = await screen.findAllByTestId("bundle");
     expect(bundle).toHaveTextContent("Architecture");
     expect(bundle).toHaveTextContent("49 €");

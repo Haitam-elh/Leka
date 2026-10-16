@@ -11,7 +11,7 @@ import { usePermissions } from "@/components/shell/shell-provider";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { routes } from "@/config/routes";
 import { ApiError } from "@/lib/api";
-import { euros, type AgentOffer, type BundleOffer } from "@/lib/billing";
+import { euros, type AddOns, type AgentOffer, type BundleOffer } from "@/lib/billing";
 import { useAddOns, useBuy, useEntitlements } from "@/lib/billing-queries";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
@@ -41,6 +41,122 @@ function bought(t: ReturnType<typeof useDictionary>, error: unknown) {
   notify.error({
     title: error instanceof ApiError ? (said[error.code ?? ""] ?? error.message) : said.failed,
   });
+}
+
+/**
+ * Where an agent stands for this workspace (LEKA-467), the server's word —
+ * one of five, said in words, never a mark alone:
+ *
+ *     included     its plan includes it — or LEKA granted every agent
+ *     owned        bought: an option active
+ *     option       on sale, not bought: a paid monthly option
+ *     upgrade      its plan runs no agent: a higher plan first
+ *     unavailable  not on sale: nothing to buy
+ */
+export type AgentState = "included" | "owned" | "option" | "upgrade" | "unavailable";
+
+export function agentStateOf(offers: AddOns | undefined, key: string): AgentState | null {
+  if (!offers) return null;
+  const offer = offers.agents.find((a) => a.key === key);
+  if (!offer || offer.why === "not_for_sale") return "unavailable";
+  if (offer.included || offers.every) return "included";
+  if (offer.why === "plan_required") return "upgrade";
+  if (offer.owned) return "owned";
+  return "option";
+}
+
+const STATE_TONES: Record<AgentState, "success" | "violet" | "warning" | "neutral"> = {
+  included: "success",
+  owned: "success",
+  option: "violet",
+  upgrade: "warning",
+  unavailable: "neutral",
+};
+
+/** An agent's state, in words: what the line says before any action. */
+export function AgentStateSaid({ agentKey }: { agentKey: string }) {
+  const t = useDictionary();
+  const w = t.catalogue.offers;
+  const offers = useAddOns();
+  const state = agentStateOf(offers.data, agentKey);
+  if (!state) return null;
+  return (
+    <Pill tone={STATE_TONES[state]} data-testid="agent-state" data-state={state}>
+      {state === "included" && offers.data?.every && !offers.data.agents.find((a) => a.key === agentKey)?.included
+        ? w.states.granted
+        : w.states[state]}
+    </Pill>
+  );
+}
+
+/** An agent's price excluding VAT and the action its state allows
+ * (LEKA-467): « Acheter », « Gérer », « Voir les formules » — included or
+ * unavailable, none. Its price only when it is sold. */
+export function AgentOfferAction({ agentKey }: { agentKey: string }) {
+  const t = useDictionary();
+  const w = t.catalogue.offers;
+  const { format } = useLocale();
+  const offers = useAddOns();
+  const buy = useBuy();
+  const may = useMayBuy();
+  const offer = offers.data?.agents.find((a) => a.key === agentKey);
+  const state = agentStateOf(offers.data, agentKey);
+  if (!offers.data || !state) return null;
+  return (
+    <span
+      className="flex shrink-0 flex-col items-end gap-1"
+      data-testid="agent-price"
+      data-owned={offer?.owned ?? false}
+      data-state={state}
+    >
+      {offer && state !== "unavailable" ? (
+        <span className="text-[0.8125rem] font-semibold whitespace-nowrap tabular-nums text-brand-navy">
+          {euros(offer.monthly_price, format)}
+          <span className="text-[0.6875rem] font-normal text-shell-muted"> {w.monthHt}</span>
+        </span>
+      ) : null}
+      {offer ? (
+        <span className="text-[0.6875rem] text-shell-muted" data-testid="agent-tier">
+          {(w.tiers as Record<string, string>)[offer.tier] ?? offer.tier}
+        </span>
+      ) : null}
+      {state === "option" && offer ? (
+        may ? (
+          <Button
+            type="button"
+            size="xs"
+            disabled={buy.isPending}
+            aria-label={fill(w.buyNamed, { name: offer.title })}
+            onClick={() => buy.mutate({ kind: "agent", key: offer.key }, { onError: (error) => bought(t, error) })}
+            data-testid="agent-buy"
+          >
+            <Plus className="size-3" aria-hidden="true" />
+            {w.buy}
+          </Button>
+        ) : (
+          <span className="text-xs text-shell-muted" title={w.askAdmin}>
+            {w.askAdminShort}
+          </span>
+        )
+      ) : state === "owned" ? (
+        <Link
+          href={routes.billing()}
+          className="text-xs font-medium text-shell-nav-active hover:underline"
+          data-testid="agent-manage"
+        >
+          {w.manage}
+        </Link>
+      ) : state === "upgrade" ? (
+        <Link
+          href={routes.billingPlans()}
+          className="text-xs font-medium whitespace-nowrap text-shell-nav-active hover:underline"
+          data-testid="agent-upgrade"
+        >
+          {fill(w.fromPlan, { plan: planName(offers.data.minimum_plan) })}
+        </Link>
+      ) : null}
+    </span>
+  );
 }
 
 /** An agent's price and standing, on its line of the catalogue — `compact`:
