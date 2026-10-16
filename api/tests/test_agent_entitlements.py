@@ -446,7 +446,11 @@ async def test_each_plan_runs_the_agents_it_includes_and_those_of_the_plans_belo
     await _on(globex, "business")
     assert await _why(client, "security-review") == set()
     sold = (await client.get(f"{API}/billing/add-ons")).json()
-    assert all(a["included"] for a in sold["agents"])
+    # Business includes every agent of Karim's matrix (15/10); Frontend
+    # Craft's, built after it (LEKA-461), stay options until he says.
+    frontend = {"ui-quality-review", "accessibility-audit", "design-review", "motion-review"}
+    assert all(a["included"] for a in sold["agents"] if a["key"] not in frontend)
+    assert not any(a["included"] for a in sold["agents"] if a["key"] in frontend)
     # Free runs none.
     await _on(globex, "free")
     assert await _why(client, "code-review") == {"plan_required"}
