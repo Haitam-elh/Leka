@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { type AddOnCheckout, billing } from "@/lib/billing";
 
@@ -19,6 +19,17 @@ export function useAddOns() {
 
 export function useEntitlements() {
   return useQuery({ queryKey: ["billing", "entitlements"], queryFn: billing.entitlements });
+}
+
+/** An agent's or a bundle's subscription cancelled or renewed: what it owns,
+ * as the server says it after. */
+export function useAddOnRenewal() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ subscription, renew }: { subscription: string; renew: boolean }) =>
+      billing.addOnRenewal(subscription, renew),
+    onSuccess: (said) => client.setQueryData(["billing", "entitlements"], said),
+  });
 }
 
 /** Bought: off to Stripe's page — owned once Stripe says it is paid. */
