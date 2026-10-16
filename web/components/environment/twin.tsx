@@ -135,7 +135,9 @@ export function TwinBadge({ state, size = "md" }: { state: TwinStateName; size?:
 export function twinHow(t: ReturnType<typeof useDictionary>, twin: TwinState): string {
   const w = t.environment.twin;
   const reason = fill((w.reasons as Record<string, string>)[twin.reason] ?? twin.reason, {
-    key: twin.incident?.key ?? "",
+    // A key people use (« OPS-9 »), else its name: « incident:datadog:0000… »
+    // is LEKA's own, no word (LEKA-469).
+    key: twin.incident?.key.includes(":") ? twin.incident.name : (twin.incident?.key ?? ""),
   });
   return [
     reason,

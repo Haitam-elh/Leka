@@ -3202,7 +3202,7 @@ const fr = {
         unverified: "non vérifié",
       },
       reasons: {
-        incident_open: "incident {key} ouvert",
+        incident_open: "incident « {key} » ouvert",
         resource_failed: "en échec selon son fournisseur",
         resource_paused: "arrêté ou en transition selon son fournisseur",
         resource_running: "en marche selon son fournisseur",
@@ -10973,7 +10973,7 @@ const en: Dictionary = {
         unverified: "unverified",
       },
       reasons: {
-        incident_open: "incident {key} open",
+        incident_open: "incident « {key} » open",
         resource_failed: "failed, says its provider",
         resource_paused: "stopped or changing, says its provider",
         resource_running: "running, says its provider",
