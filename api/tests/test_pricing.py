@@ -74,7 +74,12 @@ def test_the_catalogue_lekas_ships_is_whole() -> None:
         "documentation-assistant",
     }
     assert len(sold_.included_in("growth")) == 8
-    assert sold_.included_in("business") == set(sold_.agents) == sold_.included_in("enterprise")
+    # Enterprise, by contract, every one; Business, every one of Karim's
+    # matrix — Frontend Craft's, built after it, options below Enterprise
+    # until he says (LEKA-461).
+    assert sold_.included_in("enterprise") == set(sold_.agents)
+    frontend = {"ui-quality-review", "accessibility-audit", "design-review", "motion-review"}
+    assert sold_.included_in("business") == set(sold_.agents) - frontend
     assert "core_agents" not in _raw()
     assert [p.key for p in offer.plans if p.own_llm] == ["enterprise"]
     assert all(p.managed_llm for p in offer.plans)
@@ -92,8 +97,9 @@ def test_the_catalogue_lekas_ships_is_whole() -> None:
     assert sold.tiers == {"standard": 900, "specialized": 1500, "expert": 2500}
     assert sold.prices["application-architecture"] == 2500
     assert sold.prices["code-review"] == 900
-    # The reference's bundles, at its prices (LEKA-454), none sold: each names
-    # agents not built yet. Their saving computed, shown only when it can be.
+    # The reference's bundles, at its prices (LEKA-454), sold once every
+    # agent they name is built: Frontend Craft only (LEKA-461). Their saving
+    # computed, shown only when it can be.
     assert {b.key: b.monthly_price for b in sold.bundles} == {
         "engineering": 5900,
         "ship-safe": 7900,
@@ -101,7 +107,7 @@ def test_the_catalogue_lekas_ships_is_whole() -> None:
         "security-reliability": 6900,
         "frontend-craft": 2900,
     }
-    assert not any(b.sellable for b in sold.bundles)
+    assert [b.key for b in sold.bundles if b.sellable] == ["frontend-craft"]
     assert {b.key: b.savings_percent for b in sold.bundles} == {
         "engineering": 35,
         "ship-safe": None,

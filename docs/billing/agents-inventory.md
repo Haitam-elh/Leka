@@ -37,10 +37,10 @@ LEKA's own capabilities — understanding, the analysis, its answer (LEKA Assist
 | API Design Reviewer | performance | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | ship-safe, security-reliability |
 | Data Analyst | performance | `data-analysis` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | growth + | — |
 | Benchmark Analyst | performance | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
-| UI Quality Reviewer | frontend | `ui-quality-review` | active | standard | 9 € | Option payante, incluse dès le plan indiqué | — | frontend-craft |
-| Accessibility Auditor | frontend | `accessibility-audit` | active | standard | 9 € | Option payante, incluse dès le plan indiqué | — | frontend-craft |
-| Design Reviewer | frontend | `design-review` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | — | frontend-craft |
-| Motion & Animation Specialist | frontend | `motion-review` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | — | frontend-craft |
+| UI Quality Reviewer | frontend | `ui-quality-review` | active | standard | 9 € | Option payante, incluse dès le plan indiqué | enterprise + | frontend-craft |
+| Accessibility Auditor | frontend | `accessibility-audit` | active | standard | 9 € | Option payante, incluse dès le plan indiqué | enterprise + | frontend-craft |
+| Design Reviewer | frontend | `design-review` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | enterprise + | frontend-craft |
+| Motion & Animation Specialist | frontend | `motion-review` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | enterprise + | frontend-craft |
 | Prototype Designer | frontend | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
 | iOS Specialist | mobile | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
 | Android Specialist | mobile | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
