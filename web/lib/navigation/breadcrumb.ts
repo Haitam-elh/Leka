@@ -44,8 +44,14 @@ export const defaultEntityLabel: EntityLabelResolver = ({ route, params }) => {
     .filter((segment) => segment.startsWith(":"))
     .map((segment) => segment.slice(1));
   const last = names.at(-1);
-  return last ? humaniseIdentifier(params[last] ?? "") : undefined;
+  const value = last ? (params[last] ?? "") : "";
+  // A UUID made readable is still noise (« A9a859cb 66f7 … »): the route's own
+  // label says more until the page names itself (LEKA-469).
+  if (!value || UUID.test(value)) return undefined;
+  return humaniseIdentifier(value);
 };
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function labelFor(
   route: RouteEntry,
