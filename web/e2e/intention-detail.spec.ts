@@ -104,7 +104,9 @@ function onPlan(plan: string, granted: boolean): void {
 }
 
 test.describe("An intention's page", () => {
-  test.afterEach(() => onPlan("growth", true));
+  // The demo as the seed leaves it — on Business, LEKA's grant given —
+  // for the specs after this one.
+  test.afterEach(() => onPlan("business", true));
 
   test("on Free: the agents, the least plan, the launch offer and the total — nothing bought unasked", async ({
     page,

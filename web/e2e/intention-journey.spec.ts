@@ -111,7 +111,8 @@ test.describe("An intention's journey", () => {
   test("stopped while analysed: kept, ready, resumed", async ({ page }) => {
     await signIn(page);
     const id = await ask(page, `Qui est responsable d'auth-service ? (${Date.now()})`);
-    await page.goto(`/intentions/${id}`);
+    // Its first step's view: stopped from there.
+    await page.goto(`/intentions/${id}/overview`);
     await page.getByTestId("intention-stop").click();
     const dialog = page.getByRole("alertdialog");
     await expect(dialog).toContainText("Les résultats partiels seront conservés");

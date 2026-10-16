@@ -74,7 +74,8 @@ test.describe("Intention decisions", () => {
     await signIn(page);
     const id = await ask(page, `Redémarre auth-service en production (${Date.now()})`);
     analyse(id);
-    await page.goto(`/intentions/${id}`);
+    // The decision step's own view.
+    await page.goto(`/intentions/${id}/decision`);
 
     const decision = page.getByTestId("decision");
     await expect(decision.getByTestId("decision-status")).toHaveText("À valider");
