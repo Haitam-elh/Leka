@@ -357,6 +357,11 @@ async def test_an_agent_its_plan_includes_runs_without_an_option_and_no_longer_b
     assert await _why(client, "code-review") == set()
     sold = {a["key"]: a for a in (await client.get(f"{API}/billing/add-ons")).json()["agents"]}
     assert (sold["code-review"]["included"], sold["code-review"]["owned"]) == (True, True)
+    # Its category in the marketplace, the reference's (LEKA-467).
+    assert (sold["code-review"]["market"], sold["build-fixer"]["market"]) == (
+        "architecture",
+        "incident",
+    )
     # Included: nothing to buy.
     bought = await client.post(
         f"{API}/billing/add-ons/checkout", json={"kind": "agent", "key": "code-review"}
