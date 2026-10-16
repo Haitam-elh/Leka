@@ -6,7 +6,7 @@ import { Suspense, useEffect, useState } from "react";
 
 import { AuthCard } from "@/components/auth/auth-card";
 import { FormMessage, authErrorMessage } from "@/components/auth/form-message";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { routes } from "@/config/routes";
@@ -100,12 +100,18 @@ function LoginForm() {
       title={t.auth.signInTitle}
       description={t.auth.signInDescription}
       footer={
-        <>
-          {t.auth.noAccount}{" "}
-          <Link href="/register" className="underline underline-offset-4">
-            {t.auth.createOne}
+        // Seen, not hidden in a sentence (2026-10-14: « personne ne trouve
+        // la création de compte »).
+        <div className="flex w-full flex-col items-center gap-2">
+          <span>{t.auth.noAccount}</span>
+          <Link
+            href="/register"
+            className={buttonVariants({ variant: "outline", className: "w-full" })}
+            data-testid="login-signup"
+          >
+            {t.auth.createFree}
           </Link>
-        </>
+        </div>
       }
     >
       <FormMessage message={error} />

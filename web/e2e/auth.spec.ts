@@ -146,7 +146,8 @@ test("a device asked to remember keeps the session", async ({ page, context }) =
 test("the sign-in page links to registration and recovery", async ({ page }) => {
   await page.goto("/login");
 
-  await page.getByRole("link", { name: "En créer un" }).click();
+  // Seen, not hidden in a sentence (2026-10-14).
+  await page.getByRole("link", { name: "Créer un compte gratuit" }).click();
   await expect(page.getByRole("heading", { name: "Créer un compte" })).toBeVisible();
 
   // The card's own link: the site's header above has a "Se connecter" too.
