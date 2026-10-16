@@ -750,7 +750,7 @@ const fr = {
   activity: {
     title: "Activité",
     subtitle:
-      "Suivez en temps réel ce qui se passe dans votre environnement et les actions de LEKA.",
+      "Ce qui se passe dans votre environnement et les actions de LEKA, à chaque lecture de vos sources.",
     periods: {
       "7": "7 derniers jours",
       "30": "30 derniers jours",
@@ -6236,7 +6236,7 @@ const fr = {
         title: "Action",
         hint: "Mise en œuvre",
         heading: "Action",
-        lead: "Les actions validées sont en cours d'exécution. Vous pouvez suivre leur avancement en temps réel.",
+        lead: "Les actions validées sont en cours d'exécution. Leur avancement s'affiche au fur et à mesure.",
       },
       notNeeded:
         "Aucune action n'est à décider pour cette demande : LEKA y a répondu.",
@@ -8552,7 +8552,7 @@ const en: Dictionary = {
   activity: {
     title: "Activity",
     subtitle:
-      "Follow what happens in your environment and what LEKA does, as it happens.",
+      "What happens in your environment and what LEKA does, as each read of your sources brings it.",
     periods: { "7": "Last 7 days", "30": "Last 30 days", "90": "Last 90 days" },
     period: "Period",
     type: "Type",
@@ -13864,7 +13864,7 @@ const en: Dictionary = {
         title: "Action",
         hint: "Carrying it out",
         heading: "Action",
-        lead: "The approved actions are running. Follow their progress in real time.",
+        lead: "The approved actions are running. Their progress shows as it comes.",
       },
       notNeeded: "Nothing needs deciding for this request: LEKA answered it.",
       skipped: "Not needed",
