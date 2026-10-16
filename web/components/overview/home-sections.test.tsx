@@ -13,6 +13,8 @@ const env = vi.hoisted(() => ({ data: undefined as unknown }));
 const offers = vi.hoisted(() => ({ data: undefined as unknown }));
 const list = vi.hoisted(() => ({ value: { isPending: false, data: undefined as unknown } }));
 vi.mock("@/lib/environment-queries", () => ({ useEnvironment: () => env }));
+const listed = vi.hoisted(() => ({ data: undefined as unknown }));
+vi.mock("@/lib/sources-queries", () => ({ useSources: () => listed }));
 vi.mock("@/lib/billing-queries", () => ({ useAddOns: () => offers }));
 vi.mock("@/lib/intentions/queries", () => ({ useIntentions: () => list.value }));
 vi.mock("@/components/capabilities/offers", () => ({
@@ -59,6 +61,14 @@ describe("Mon environnement", () => {
     show(<EnvironmentCard />);
     expect(screen.getByTestId("home-health")).toHaveTextContent("Non vérifié");
     expect(screen.getByTestId("home-environment")).not.toHaveTextContent("%");
+  });
+
+  it("counts connected sources only, never a draft whose token was refused", () => {
+    env.data = measured;
+    listed.data = [{ status: "active" }, { status: "draft" }];
+    show(<EnvironmentCard />);
+    expect(screen.getByTestId("home-environment")).toHaveTextContent("1source connectée");
+    listed.data = undefined;
   });
 });
 

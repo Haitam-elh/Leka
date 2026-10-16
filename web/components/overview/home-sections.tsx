@@ -27,6 +27,8 @@ import { useEnvironment } from "@/lib/environment-queries";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 import { useIntentions } from "@/lib/intentions/queries";
+import { isConnected } from "@/lib/sources";
+import { useSources } from "@/lib/sources-queries";
 
 /**
  * The home's blocks of the sprint's mockup (LEKA-456): « Mon environnement »
@@ -71,6 +73,8 @@ export function EnvironmentCard() {
   const t = useDictionary();
   const w = t.overview.home;
   const env = useEnvironment().data;
+  // Connected only, as Sources counts them: a draft whose token was refused is not.
+  const connected = useSources().data?.filter(isConnected).length;
   if (!env) {
     return (
       <div
@@ -164,9 +168,11 @@ export function EnvironmentCard() {
             aria-hidden="true"
           />
           <dd className="mt-1 text-lg font-semibold text-brand-navy">
-            {env.sources?.length ?? 0}
+            {connected ?? env.sources?.length ?? 0}
           </dd>
-          <dt className="text-xs text-shell-muted">{w.sources}</dt>
+          <dt className="text-xs text-shell-muted">
+            {fill(w.sources, { count: connected ?? env.sources?.length ?? 0 })}
+          </dt>
         </div>
         <div>
           <Clock3
