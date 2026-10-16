@@ -7243,6 +7243,8 @@ const fr = {
         "why.answered": "La question a sa réponse.",
         "analysis.unknown_subject":
           "LEKA ne connaît rien qui s'appelle {names} : rien à lire.",
+        "analysis.sources_pending":
+          "Toutes les sources n'ont pas répondu : {sources}.",
         "analysis.not_its_cause":
           "LEKA ne connaît rien qui s'appelle {names} : ce qu'il a trouvé ailleurs n'en est pas la cause.",
         "standing.state":
@@ -14694,6 +14696,7 @@ const en: Dictionary = {
         "why.answered": "The question is answered.",
         "analysis.unknown_subject":
           "LEKA knows nothing called {names}: nothing to read.",
+        "analysis.sources_pending": "Not every source answered: {sources}.",
         "analysis.not_its_cause":
           "LEKA knows nothing called {names}: what it found elsewhere is not its cause.",
         "standing.state":
