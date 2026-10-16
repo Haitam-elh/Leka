@@ -37,11 +37,13 @@ from fastapi.responses import StreamingResponse
 from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
 from leka.capabilities import (
+    DECK_FILES,
     AgentRun,
     AgentRunCreate,
     AgentRunDecision,
     AgentRunDetail,
     AgentRunEventRead,
+    AgentRunFiles,
     AgentRunRead,
     AgentRuntime,
     AgentRunUsage,
@@ -56,6 +58,7 @@ from leka.capabilities import (
     capability_resource,
     deliverable_of,
     find,
+    queue_files,
     queue_run,
     read_deliverable,
     without_block,
@@ -183,6 +186,16 @@ def _expected(run: AgentRun, definition: Definition | None) -> list[str]:
     return [f for f in drawn if f in ("pdf", "pptx")]
 
 
+def _drawable(run: AgentRun, definition: Definition | None, files: list[object]) -> list[str]:
+    """Finished, the files its agent draws that it does not have."""
+    if run.status != "succeeded" or not run.output or definition is None:
+        return []
+    if definition.renders != "architecture_deck":
+        return []
+    have = {f.get("format") for f in files if isinstance(f, dict)}
+    return [f for f in DECK_FILES if f not in have]
+
+
 def run_read(run: AgentRun, principal: Principal) -> AgentRunRead:
     definition = find(run.key)
     failure = run.detail.get("failure")
@@ -205,6 +218,10 @@ def run_read(run: AgentRun, principal: Principal) -> AgentRunRead:
         format=run.format,
         pending=[str(p) for p in pending] if isinstance(pending, list) else [],
         expected=_expected(run, definition),
+        drawable=_drawable(run, definition, files),
+        drawing=[str(f) for f in drawing]
+        if isinstance(drawing := run.detail.get("drawing"), list)
+        else [],
         deliverables=[
             DeliverableRead(
                 format=f["format"],
@@ -391,6 +408,52 @@ async def get_deliverable(
             "Cache-Control": "private, no-store",
         },
     )
+
+
+@router.post(
+    "/{run_id}/files",
+    response_model=AgentRunRead,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Draw a finished run's files",
+)
+async def draw_run_files(
+    run_id: uuid.UUID, body: AgentRunFiles, session: SessionDep, principal: Runner
+) -> AgentRunRead:
+    """Its deck drawn as PDF or PowerPoint from the analysis it delivered —
+    the run never done again (2026-10-16: launched without asking, the
+    architect gave its report alone). 202, a worker draws it; 409 when it
+    is not finished, or is being drawn; 422 when its agent draws no file."""
+    run = await CapabilityRunRepository(session, principal.workspace_id).run(run_id, lock=True)
+    if run is None:
+        raise _missing()
+    definition = find(run.key)
+    files = run.detail.get("deliverables", [])
+    if run.status != "succeeded" or not run.output:
+        raise ApiError(
+            status.HTTP_409_CONFLICT, ErrorCode.CONFLICT, "Its analysis is not delivered yet."
+        )
+    if not _drawable(run, definition, files if isinstance(files, list) else []):
+        raise ApiError(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ErrorCode.VALIDATION_FAILED,
+            "This agent draws no more file.",
+            details=[FieldError(field="formats", message="not_drawn")],
+        )
+    if run.detail.get("drawing"):
+        raise ApiError(status.HTTP_409_CONFLICT, ErrorCode.CONFLICT, "Its files are being drawn.")
+    wanted = [f for f in dict.fromkeys(body.formats) if f in DECK_FILES]
+    run.detail = {**run.detail, "drawing": wanted}
+    audit_as(
+        session,
+        principal,
+        "ai",
+        "agent_run.files_asked",
+        target=Target("agent_run", run.id, run.key),
+        detail={"formats": wanted},
+    )
+    await session.commit()
+    await queue_files(principal.workspace_id, run.id, wanted)
+    return run_read(run, principal)
 
 
 @router.post("/{run_id}/cancel", response_model=AgentRunRead, summary="Cancel an agent run")

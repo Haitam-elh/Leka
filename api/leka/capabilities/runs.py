@@ -96,6 +96,11 @@ from leka.platform import Role
 logger = structlog.get_logger(__name__)
 
 RUN_JOB = "leka.capabilities.runs.run_agent"
+# A finished run's files drawn after it (2026-10-16): its deck, from the
+# analysis it delivered — the run itself never done again.
+FILES_JOB = "leka.capabilities.runs.draw_files"
+# The files a deck may be drawn as.
+DECK_FILES = ("pdf", "pptx")
 # How long a run may take, all of it: its context, its tools, its model.
 RUN_BUDGET = 15 * 60.0
 # A run found running this long had its worker go away; one queued this
@@ -621,6 +626,75 @@ async def outside_sources(
 def run_agent(workspace_id: str, run_id: str) -> dict[str, object]:
     """Entry point for the job runner, which is synchronous."""
     return asyncio.run(execute_run(uuid.UUID(workspace_id), uuid.UUID(run_id)))
+
+
+# ── its files, after it ─────────────────────────────────────────────────────
+
+
+async def queue_files(workspace_id: uuid.UUID, run_id: uuid.UUID, formats: Sequence[str]) -> bool:
+    """Its files to draw, for a worker: a deck takes minutes."""
+    job = await enqueue_job(
+        FILES_JOB,
+        str(workspace_id),
+        str(run_id),
+        ",".join(formats),
+        for_workspace_id=workspace_id,
+        queue=JobQueue.HIGH,
+        concurrency_key=f"agent-run-files:{run_id}",
+    )
+    return job is not None
+
+
+async def redraw(
+    workspace_id: uuid.UUID, run_id: uuid.UUID, formats: Sequence[str]
+) -> dict[str, object]:
+    """A finished run's deck drawn as `formats`, from the analysis it
+    delivered, and kept beside the files it has — said as a step of it."""
+    with workspace_scope(workspace_id):
+        async with session_factory() as session:
+            runs = CapabilityRunRepository(session, workspace_id)
+            run = await runs.run(run_id, lock=True)
+            if run is None or run.status != RunStatus.SUCCEEDED or not run.output:
+                return {"drawn": [], "skipped": "not_finished"}
+            subject = await subject_of(session, workspace_id, run.requested_by)
+            permissions = (
+                frozenset(p.value for p in subject.permissions) if subject else frozenset()
+            )
+            entry = await CatalogueService(session, workspace_id).entry(
+                run.key, permissions=permissions
+            )
+            steps = Steps(session, run, await runs.last_seq(run_id))
+            if entry is None or entry.definition.renders != "architecture_deck":
+                run.detail = {**run.detail, "drawing": None}
+                await session.commit()
+                return {"drawn": [], "skipped": "not_drawn"}
+            drawn = await draw(session, run, entry.definition, run.output, formats=formats)
+            had = run.detail.get("deliverables")
+            kept = [
+                f
+                for f in (had if isinstance(had, list) else [])
+                if isinstance(f, dict) and f.get("format") not in formats
+            ]
+            if drawn.error is None:
+                steps.add(drawn.step, **drawn.said())
+                files = kept + list(drawn.files)
+                run.detail = {
+                    **run.detail,
+                    "deliverables": files,
+                    "formats": sorted({str(f["format"]) for f in files}),
+                    "drawing": None,
+                }
+            else:
+                steps.add("render_failed", code=drawn.error, said=drawn.refusal)
+                run.detail = {**run.detail, **drawn.detail(), "drawing": None}
+            await session.commit()
+            return {"drawn": [f["format"] for f in drawn.files], "error": drawn.error}
+
+
+def draw_files(workspace_id: str, run_id: str, formats: str) -> dict[str, object]:
+    """Entry point for the job runner, which is synchronous."""
+    wanted = [f for f in formats.split(",") if f in DECK_FILES]
+    return asyncio.run(redraw(uuid.UUID(workspace_id), uuid.UUID(run_id), wanted))
 
 
 # ── the sweep ──────────────────────────────────────────────────────────────

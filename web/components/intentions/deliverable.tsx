@@ -26,7 +26,7 @@ import { Markdown } from "@/components/ui/markdown";
 import { routes } from "@/config/routes";
 import type { components } from "@/lib/api-types";
 import type { AgentRun, AgentRunDetail } from "@/lib/agent-runs";
-import { useAgentRun, useIntentionRuns } from "@/lib/agent-runs-queries";
+import { useAgentRun, useDrawFiles, useIntentionRuns } from "@/lib/agent-runs-queries";
 import { type DiffRow, diffRows, rowOf } from "@/lib/diff";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
@@ -128,6 +128,7 @@ function Delivered({
           </p>
         </div>
         <Deliverables run={run} />
+        <DrawFiles run={run} />
         {report ? (
           <Button type="button" variant="outline" size="sm" onClick={() => download(run, report)}>
             <Download className="size-3.5" aria-hidden="true" />
@@ -179,6 +180,36 @@ function Delivered({
         </Card>
       ) : null}
     </div>
+  );
+}
+
+/** Delivered without its deck (launched asking for no file): drawn after it
+ * on asking, from what it delivered — never run again (2026-10-16). */
+function DrawFiles({ run }: { run: AgentRunDetail }) {
+  const t = useDictionary();
+  const w = t.intentions.deliverable;
+  const draw = useDrawFiles(run.id);
+  const drawing = run.drawing ?? [];
+  const drawable = run.drawable ?? [];
+  if (drawing.length) {
+    return (
+      <span className="text-[0.8125rem] text-shell-muted" role="status" data-testid="deliverable-drawing">
+        {w.drawing}
+      </span>
+    );
+  }
+  if (!drawable.length) return null;
+  return (
+    <Button
+      type="button"
+      size="sm"
+      disabled={draw.isPending}
+      onClick={() => draw.mutate(drawable)}
+      data-testid="deliverable-draw"
+    >
+      <FileText className="size-3.5" aria-hidden="true" />
+      {drawable.length > 1 ? w.drawBoth : drawable[0] === "pdf" ? w.drawPdf : w.drawPptx}
+    </Button>
   );
 }
 

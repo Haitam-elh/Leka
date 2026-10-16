@@ -62,6 +62,7 @@ from leka.capabilities import (
     ModelCall,
     execute_run,
     find,
+    redraw,
     sweep_runs,
     sync_catalogue,
 )
@@ -353,6 +354,64 @@ async def test_the_architect_runs_end_to_end(
     listed = (await client.get(API, params={"key": ARCHITECT})).json()
     assert [r["id"] for r in listed] == [started["id"]]
     assert (await client.get(API, params={"status": "failed"})).json() == []
+
+
+async def test_a_report_alone_then_its_deck_drawn_after_it_never_run_again(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    leka_gemini: Callable[..., Script],
+    queued: list[uuid.UUID],
+    store: LocalObjectStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """2026-10-16: launched without asking for files, the architect gave its
+    report alone. Its deck is drawn after it, from what it delivered."""
+    await _ready(acme)
+    analysis = f"# Architecture — Billing API\n\nBilling API [{model[BILLING]}] sert Checkout."
+    content = drawn_deck(app_view=False)
+    leka_gemini(gemini(analysis), gemini(content.model_dump_json()))
+    asked: list[tuple[uuid.UUID, list[str]]] = []
+
+    async def files(workspace_id: uuid.UUID, run_id: uuid.UUID, formats: list[str]) -> bool:
+        asked.append((run_id, list(formats)))
+        return True
+
+    monkeypatch.setattr(agent_runs_api, "queue_files", files)
+    started = await _start(client)
+    # Launched from an intention asking for no file (as it is kept then).
+    await _sql(
+        acme["acme"],
+        "UPDATE agent_runs SET detail = detail || '{\"formats\": []}'::jsonb WHERE id = :id",
+        id=uuid.UUID(started["id"]),
+    )
+    assert await _run(acme, started["id"]) == {"status": "succeeded"}
+    done = await _detail(client, started["id"])
+    assert (done["deliverables"], done["expected"]) == ([], [])
+    assert done["drawable"] == ["pdf", "pptx"]
+
+    drawing = await client.post(f"{API}/{started['id']}/files", json={"formats": ["pdf", "pptx"]})
+    assert drawing.status_code == 202, drawing.text
+    assert drawing.json()["drawing"] == ["pdf", "pptx"]
+    assert asked == [(uuid.UUID(started["id"]), ["pdf", "pptx"])]
+    # Asked twice while drawn: refused.
+    again = await client.post(f"{API}/{started['id']}/files", json={"formats": ["pdf"]})
+    assert again.status_code == 409
+
+    # The worker draws them from its analysis — the run itself not done again.
+    said = await redraw(acme["acme"], uuid.UUID(started["id"]), ["pdf", "pptx"])
+    assert said == {"drawn": ["pptx", "pdf"], "error": None}
+    after = await _detail(client, started["id"])
+    assert (after["status"], after["output"]) == ("succeeded", analysis)
+    assert sorted(d["format"] for d in after["deliverables"]) == ["pdf", "pptx"]
+    assert (after["drawable"], after["drawing"]) == ([], [])
+    assert _kinds(after)[-1] == "rendered"
+    pdf = await client.get(f"{API}/{started['id']}/deliverables/pdf")
+    assert pdf.status_code == 200
+    # Nothing left to draw.
+    done_twice = await client.post(f"{API}/{started['id']}/files", json={"formats": ["pdf"]})
+    assert done_twice.status_code == 422
 
 
 async def test_a_deck_the_model_cannot_write_never_fails_the_run(

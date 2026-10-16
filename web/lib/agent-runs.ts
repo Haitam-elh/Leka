@@ -32,6 +32,12 @@ export const agentRuns = {
     apiFetch<AgentRun>("/agent-runs", { method: "POST", body: JSON.stringify(body) }),
   cancel: (id: string) =>
     apiFetch<AgentRun>(`/agent-runs/${encodeURIComponent(id)}/cancel`, { method: "POST" }),
+  /** A finished run's deck drawn after it (PDF, PowerPoint): never run again. */
+  drawFiles: (id: string, formats: string[]) =>
+    apiFetch<AgentRun>(`/agent-runs/${encodeURIComponent(id)}/files`, {
+      method: "POST",
+      body: JSON.stringify({ formats }),
+    }),
   /** Waiting for approval (LEKA-406): the runs to decide. */
   awaiting: () => apiFetch<AgentRun[]>("/agent-runs?status=awaiting_approval"),
   decide: (id: string, approve: boolean, note?: string) =>

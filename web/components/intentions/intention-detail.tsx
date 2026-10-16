@@ -79,6 +79,13 @@ export function IntentionDetailPage({ intention }: { intention: IntentionDetail 
   const { proposal } = useProposal(intention);
   const runs = useIntentionRuns(intention.id);
   const [chosen, setChosen] = useState<string[] | undefined>(undefined);
+  // The files each agent draws, chosen before it runs (2026-10-16: without a
+  // choice the architect delivered its report alone, never its deck). Ticked
+  // by default: what the request named, else every file it draws.
+  const [files, setFiles] = useState<Record<string, string[]>>({});
+  const filesOf = (agent: ProposedAgent): string[] =>
+    files[agent.key] ??
+    (agent.asked.length ? agent.asked : agent.deliverables.filter((d) => DRAWN.has(d)));
   const bought = search?.get("bought");
   const activated = search?.get("activated");
   const confirming = Boolean((bought && bought !== "cancelled") || activated === "success");
@@ -119,7 +126,14 @@ export function IntentionDetailPage({ intention }: { intention: IntentionDetail 
             queries): the same blocks read well beside a panel, on a phone. */}
         <div className="@container min-w-0 space-y-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-shell-line">
           <Exchange intention={intention} offer={offer.data} hasProposal={Boolean(proposal)} />
-          <UnderstandingCard intention={intention} offer={offer.data} chosen={chosen} onChoose={setChosen} />
+          <UnderstandingCard
+            intention={intention}
+            offer={offer.data}
+            chosen={chosen}
+            onChoose={setChosen}
+            filesOf={filesOf}
+            onFiles={(key, list) => setFiles((now) => ({ ...now, [key]: list }))}
+          />
           {executing ? (
             <section className="space-y-3" data-testid="detail-execution">
               <h2 className="text-[1.0625rem] font-semibold text-brand-navy">{w.executionTitle}</h2>
@@ -128,7 +142,12 @@ export function IntentionDetailPage({ intention }: { intention: IntentionDetail 
           ) : offer.data && offer.data.agents.length ? (
             <>
               <CapacityCard offer={offer.data} />
-              <OfferCard intention={intention} offer={offer.data} proposal={proposal?.agents ?? []} />
+              <OfferCard
+                intention={intention}
+                offer={offer.data}
+                proposal={proposal?.agents ?? []}
+                filesOf={filesOf}
+              />
             </>
           ) : null}
         </div>
@@ -230,6 +249,9 @@ const CATEGORY_ICON: Record<string, LucideIcon> = {
   knowledge: FileText,
 };
 
+// The files an agent draws besides its report (as the decision step offers).
+const DRAWN = new Set(["pdf", "pptx"]);
+
 /** Included — with the plan to take, when it is not the one it is on. */
 function includedAs(offer: IntentionOffer | undefined, w: Dictionary["intentions"]["detail"]): string {
   return offer?.change_plan ? fill(w.includedWith, { plan: offer.plan.name }) : w.included;
@@ -248,11 +270,15 @@ function UnderstandingCard({
   offer,
   chosen,
   onChoose,
+  filesOf,
+  onFiles,
 }: {
   intention: IntentionDetail;
   offer: IntentionOffer | undefined;
   chosen: string[] | undefined;
   onChoose: (keys: string[]) => void;
+  filesOf: (agent: ProposedAgent) => string[];
+  onFiles: (key: string, files: string[]) => void;
 }) {
   const t = useDictionary();
   const w = t.intentions.detail;
@@ -322,6 +348,8 @@ function UnderstandingCard({
                 checked={chosen ? chosen.includes(agent.key) : agent.chosen}
                 onToggle={() => toggle(agent.key)}
                 included={includedAs(offer, w)}
+                filesOf={filesOf}
+                onFiles={(list) => onFiles(agent.key, list)}
               />
             ))}
           </ul>
@@ -337,18 +365,24 @@ function AgentCard({
   checked,
   onToggle,
   included,
+  filesOf,
+  onFiles,
 }: {
   agent: OfferAgent;
   intention: IntentionDetail;
   checked: boolean;
   onToggle: () => void;
   included: string;
+  filesOf: (agent: ProposedAgent) => string[];
+  onFiles: (files: string[]) => void;
 }) {
   const t = useDictionary();
   const w = t.intentions.detail;
   const { format } = useLocale();
   const { proposal } = useProposal(intention);
   const proposed = proposal?.agents.find((a) => a.key === agent.key);
+  const drawn = proposed ? proposed.deliverables.filter((d) => DRAWN.has(d)) : [];
+  const files = proposed ? filesOf(proposed) : [];
   const Icon = iconOf(agent.category);
   // What it does here: the plan's steps it takes, else what it delivers.
   const bullets = (proposal?.steps ?? []).filter((s) => s.agent === agent.key).map((s) => s.title);
@@ -405,6 +439,31 @@ function AgentCard({
           ))}
         </ul>
       ) : null}
+      {proposed && drawn.length ? (
+        // The files it draws beside its report: chosen here, before it runs.
+        <fieldset className="space-y-1" data-testid="detail-agent-files">
+          <legend className="text-xs font-medium text-brand-navy">{t.intentions.agents.files}</legend>
+          <div className="flex flex-wrap gap-4">
+            {drawn.map((file) => (
+              <label key={file} className="flex items-center gap-2 text-[0.8125rem] text-brand-navy">
+                <input
+                  type="checkbox"
+                  checked={files.includes(file)}
+                  disabled={!checked}
+                  onChange={(event) =>
+                    onFiles(
+                      event.target.checked ? [...files, file] : files.filter((f) => f !== file),
+                    )
+                  }
+                  className="size-4 accent-brand-violet"
+                  data-testid={`detail-agent-file-${file}`}
+                />
+                {(t.intentions.agents.deliverables as Record<string, string>)[file] ?? file}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      ) : null}
     </li>
   );
 }
@@ -457,10 +516,12 @@ function OfferCard({
   intention,
   offer,
   proposal,
+  filesOf,
 }: {
   intention: IntentionDetail;
   offer: IntentionOffer;
   proposal: ProposedAgent[];
+  filesOf: (agent: ProposedAgent) => string[];
 }) {
   const t = useDictionary();
   const w = t.intentions.detail;
@@ -483,7 +544,7 @@ function OfferCard({
     agents.map((a) => ({
       key: a.key,
       inputs: a.inputs,
-      formats: a.asked as AgentLaunch["formats"],
+      formats: filesOf(a) as AgentLaunch["formats"],
       sources: [],
     }));
 

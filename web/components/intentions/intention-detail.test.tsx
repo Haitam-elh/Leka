@@ -72,8 +72,9 @@ const PROPOSAL = {
   informative: false,
   by: "model",
 };
+const proposed = vi.hoisted(() => ({ value: undefined as unknown }));
 vi.mock("@/components/intentions/agents-decision", () => ({
-  useProposal: () => ({ proposal: PROPOSAL, loading: false }),
+  useProposal: () => ({ proposal: proposed.value ?? PROPOSAL, loading: false }),
   AgentsAction: () => <div data-testid="agents-action" />,
 }));
 vi.mock("@/components/intentions/analysis-tab", () => ({
@@ -164,6 +165,7 @@ beforeEach(() => {
   checkout.mockReset();
   launch.mockReset();
   offered.value = offer();
+  proposed.value = undefined;
 });
 
 describe("an intention's page", () => {
@@ -246,6 +248,36 @@ describe("an intention's page", () => {
     } finally {
       PROPOSAL.agents[0].missing = [];
     }
+  });
+
+  it("asks the architect for its PDF and PowerPoint unless unticked (2026-10-16)", async () => {
+    const user = userEvent.setup();
+    const architect = {
+      ...PROPOSAL.agents[0],
+      key: "application-architecture",
+      title: "Architecte applicatif",
+      deliverables: ["report", "pptx", "pdf"],
+    };
+    proposed.value = { ...PROPOSAL, agents: [architect] };
+    offered.value = offer({
+      plan_now: "growth",
+      change_plan: false,
+      lines: [],
+      total_monthly: 0,
+      then_monthly: null,
+      ready: true,
+      agents: [{ ...offer().agents[0], key: "application-architecture", status: "included" }],
+    });
+    show();
+    const files = screen.getByTestId("detail-agent-files");
+    expect(within(files).getByTestId("detail-agent-file-pdf")).toBeChecked();
+    expect(within(files).getByTestId("detail-agent-file-pptx")).toBeChecked();
+    await user.click(within(files).getByTestId("detail-agent-file-pdf"));
+    await user.click(screen.getByTestId("detail-launch"));
+    expect(launch).toHaveBeenCalledWith(
+      [{ key: "application-architecture", inputs: {}, formats: ["pptx"], sources: [] }],
+      expect.anything(),
+    );
   });
 
   it("says the month's capacity is spent, and offers more — never an overage", () => {
