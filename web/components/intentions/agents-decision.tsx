@@ -272,7 +272,7 @@ function Unlock({
       <p className="flex flex-wrap items-center gap-2 text-xs text-brand-navy" data-testid="decide-unlock">
         <Lock className="size-3.5 text-state-warning" aria-hidden="true" />
         {w.planFirst}
-        <Link href={routes.billing()} className="font-medium text-brand-violet hover:underline">
+        <Link href={routes.billingPlans()} className="font-medium text-brand-violet hover:underline">
           {w.seePlans}
         </Link>
       </p>
@@ -620,7 +620,7 @@ export function AgentsDecision({ intention }: { intention: IntentionDetail }) {
             {upgrade ? (
               <p className="flex flex-wrap items-center gap-2 text-xs text-brand-navy" data-testid="decide-upgrade">
                 {launchError(t, decide.launch.error)}
-                <Link href={routes.billing()} className="font-medium text-brand-violet hover:underline">
+                <Link href={routes.billingPlans()} className="font-medium text-brand-violet hover:underline">
                   {w.seePlans}
                 </Link>
               </p>

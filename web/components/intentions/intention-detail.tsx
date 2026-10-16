@@ -758,7 +758,7 @@ function OfferCard({
             ))}
           </ul>
           <Link
-            href={routes.billing()}
+            href={routes.billingPlans()}
             className={buttonVariants({ variant: "outline", size: "sm" })}
             data-testid="detail-all-plans"
           >

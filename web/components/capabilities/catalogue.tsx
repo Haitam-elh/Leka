@@ -1036,7 +1036,7 @@ export function CatalogueScreen() {
                 <p className="text-[0.8125rem] text-shell-muted">{w.allAgentsLead}</p>
               </div>
               <Link
-                href={routes.billing()}
+                href={routes.billingPlans()}
                 className="inline-flex items-center gap-1 text-[0.8125rem] font-medium text-shell-nav-active hover:underline"
               >
                 {w.compare}

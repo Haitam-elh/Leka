@@ -76,7 +76,7 @@ export function AgentPrice({ agentKey, compact = false }: { agentKey: string; co
           </span>
         ) : offer.why === "plan_required" ? (
           <Link
-            href={routes.billing()}
+            href={routes.billingPlans()}
             className={cn(round, "border-shell-line text-shell-muted hover:bg-shell-canvas")}
             title={fill(w.fromPlan, { plan: planName(offers.data.minimum_plan) })}
           >
@@ -121,7 +121,7 @@ export function AgentPrice({ agentKey, compact = false }: { agentKey: string; co
           {w.active}
         </Pill>
       ) : offer.why === "plan_required" ? (
-        <Link href={routes.billing()} className="text-xs font-medium text-brand-violet hover:underline">
+        <Link href={routes.billingPlans()} className="text-xs font-medium text-brand-violet hover:underline">
           {fill(w.fromPlan, { plan: planName(offers.data.minimum_plan) })}
         </Link>
       ) : may ? (
@@ -230,7 +230,7 @@ function BundleCard({
             {w.active}
           </Pill>
         ) : !runsAgents ? (
-          <Link href={routes.billing()} className={buttonVariants({ variant: "outline", className: "w-full" })}>
+          <Link href={routes.billingPlans()} className={buttonVariants({ variant: "outline", className: "w-full" })}>
             {fill(w.fromPlan, { plan: planName(minimum) })}
           </Link>
         ) : may ? (

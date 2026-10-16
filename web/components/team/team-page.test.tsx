@@ -178,7 +178,7 @@ describe("the team", () => {
       "Votre formule ne permet pas un utilisateur de plus. Passez à une formule supérieure pour inviter quelqu'un d'autre.",
     );
     action.onClick();
-    expect(push).toHaveBeenCalledWith("/billing");
+    expect(push).toHaveBeenCalledWith("/billing/plans");
   });
 
   it("changes a role, removes only once asked, says the last owner", async () => {

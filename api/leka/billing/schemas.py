@@ -16,6 +16,20 @@ class _Read(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
+class QuotasRead(_Read):
+    """What a plan holds (LEKA-466): people, sources connected, standard
+    analyses a month, alert rules, recurring workflows. None: no limit said;
+    `contractual`: per contract; `provisional`: to validate."""
+
+    users: int | None
+    sources: int | None
+    analyses: int | None
+    alert_rules: int | None
+    workflows: int | None
+    provisional: bool
+    contractual: bool
+
+
 class PlanRead(_Read):
     key: str
     name: str
@@ -32,6 +46,7 @@ class PlanRead(_Read):
     own_llm: bool
     # Days free before the first charge, a card required; None: none.
     trial_days: int | None
+    quotas: QuotasRead
 
 
 class LaunchOfferRead(_Read):

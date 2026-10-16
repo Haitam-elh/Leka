@@ -14,6 +14,7 @@ from leka.billing.schemas import (
     LaunchOfferRead,
     PlanRead,
     PricingRead,
+    QuotasRead,
     SiteEventCount,
     SiteEventCreate,
 )
@@ -54,6 +55,7 @@ def pricing(
                 managed_llm=plan.managed_llm,
                 own_llm=plan.own_llm,
                 trial_days=plan.trial_days,
+                quotas=QuotasRead.model_validate(plan.quotas, from_attributes=True),
             )
         )
     launch = offer.launch_offer

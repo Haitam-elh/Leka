@@ -67,7 +67,7 @@ export function RouteState({ variant, title, body, action, headingLevel }: Route
       // A link, not a button: it goes somewhere, and middle-clicking it
       // should open a tab like any other link in the product.
       next: (
-        <Link href={routes.billing()} className={buttonVariants()}>
+        <Link href={routes.billingPlans()} className={buttonVariants()}>
           {t.states.seeBilling}
         </Link>
       ),

@@ -18953,6 +18953,7 @@ export interface components {
             own_llm: boolean;
             /** Trial Days */
             trial_days: number | null;
+            quotas: components["schemas"]["QuotasRead"];
         };
         /**
          * PlanStartRequest
@@ -19731,6 +19732,28 @@ export interface components {
              * Format: date-time
              */
             validated_at: string;
+        };
+        /**
+         * QuotasRead
+         * @description What a plan holds (LEKA-466): people, sources connected, standard
+         *     analyses a month, alert rules, recurring workflows. None: no limit said;
+         *     `contractual`: per contract; `provisional`: to validate.
+         */
+        QuotasRead: {
+            /** Users */
+            users: number | null;
+            /** Sources */
+            sources: number | null;
+            /** Analyses */
+            analyses: number | null;
+            /** Alert Rules */
+            alert_rules: number | null;
+            /** Workflows */
+            workflows: number | null;
+            /** Provisional */
+            provisional: boolean;
+            /** Contractual */
+            contractual: boolean;
         };
         /**
          * Quote

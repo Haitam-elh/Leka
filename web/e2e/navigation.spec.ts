@@ -324,8 +324,9 @@ test.describe("what a member may see", () => {
     await signIn(page);
     await asAMember(page);
     await page.goto("/overview");
-    // The plan is said, with no door to Facturation.
-    await expect(page.getByTestId("plan-badge")).not.toHaveAttribute("href");
+    // The plan opens the plans compared, which a member reads (LEKA-466) —
+    // never Facturation.
+    await expect(page.getByTestId("plan-badge")).toHaveAttribute("href", "/billing/plans");
 
     await openNavigation(page);
     await expect(page.getByTestId("nav-section-environment")).toBeVisible();

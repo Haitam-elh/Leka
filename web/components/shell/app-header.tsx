@@ -4,7 +4,7 @@ import { Crown, LayoutGrid, Search } from "lucide-react";
 import Link from "next/link";
 
 import { Wordmark } from "@/components/brand/logo";
-import { usePermissions, useShell } from "@/components/shell/shell-provider";
+import { useShell } from "@/components/shell/shell-provider";
 import { UserMenu } from "@/components/shell/user-menu";
 import { WorkspaceSwitcher } from "@/components/shell/workspace-switcher";
 import { routes } from "@/config/routes";
@@ -78,32 +78,22 @@ export function AppHeader({ onOpenNavigation, onOpenSearch, searchTriggerRef }: 
 const BADGE =
   "inline-flex h-9 items-center gap-1.5 rounded-lg bg-brand-violet px-3 text-sm font-medium text-white capitalize outline-none";
 
-/** The workspace's plan, as metering reads it; to Facturation for who may
- * open it. Nothing until it is known: never a plan guessed. */
+/** The workspace's plan, as metering reads it; the plans compared
+ * (LEKA-466) — every member reads them, who pays changes them there.
+ * Nothing until it is known: never a plan guessed. */
 function PlanBadge() {
   const t = useDictionary();
   const plan = useCredits().data?.plan;
-  // Facturation's own permission (config/routes.ts): a member sees the plan, no door.
-  const pays = usePermissions()?.includes("workspace:update") ?? false;
   if (!plan) return null;
-  const said = (
-    <>
-      <Crown className="size-4" aria-hidden="true" />
-      {plan}
-    </>
-  );
-  return pays ? (
+  return (
     <Link
-      href={routes.billing()}
+      href={routes.billingPlans()}
       aria-label={`${t.shell.plan} ${plan}`}
       data-testid="plan-badge"
       className={`${BADGE} hover:bg-brand-violet/90 focus-visible:ring-3 focus-visible:ring-brand-violet/40`}
     >
-      {said}
+      <Crown className="size-4" aria-hidden="true" />
+      {plan}
     </Link>
-  ) : (
-    <span aria-label={`${t.shell.plan} ${plan}`} data-testid="plan-badge" className={BADGE}>
-      {said}
-    </span>
   );
 }

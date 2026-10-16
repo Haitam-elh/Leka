@@ -242,7 +242,7 @@ describe("the Digital Twin", () => {
     expect(screen.getByTestId("alerts-limit")).toHaveTextContent(
       "Votre plan Free montre les états, leur fraîcheur et leur couverture. Les alertes proactives sont incluses dès Starter, par e-mail dès Growth.",
     );
-    expect(screen.getByRole("link", { name: /Voir les plans/ })).toHaveAttribute("href", "/billing");
+    expect(screen.getByRole("link", { name: /Voir les plans/ })).toHaveAttribute("href", "/billing/plans");
     expect(screen.queryByTestId("alert")).not.toBeInTheDocument();
   });
 
@@ -322,7 +322,7 @@ describe("the Digital Twin", () => {
     expect(capacity).toHaveTextContent("Aucun dépassement n'est facturé");
     expect(
       screen.getByRole("link", { name: /Passer à un plan offrant plus de capacité/ }),
-    ).toHaveAttribute("href", "/billing");
+    ).toHaveAttribute("href", "/billing/plans");
   });
 
   it("e-mail not included is said: in LEKA only", () => {
