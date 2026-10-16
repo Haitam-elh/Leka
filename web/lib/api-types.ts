@@ -1019,6 +1019,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/monitoring/alerts/{alert_id}/acknowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Acknowledge */
+        post: operations["acknowledge_api_v1_monitoring_alerts__alert_id__acknowledge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/governance/data-protection": {
         parameters: {
             query?: never;
@@ -7215,6 +7232,16 @@ export interface components {
             notified: {
                 [key: string]: components["schemas"]["JsonValue"];
             };
+            /**
+             * Acknowledged At
+             * @description Taken in hand, when.
+             */
+            acknowledged_at?: string | null;
+            /**
+             * Acknowledged By
+             * @description By whom.
+             */
+            acknowledged_by?: string | null;
         };
         /**
          * AmbiguityChoice
@@ -11422,6 +11449,22 @@ export interface components {
             };
         };
         /**
+         * CreditWarningRead
+         * @description A share of this month's credits passed: when, and how much was used
+         *     then (LEKA-463) — once a month for each.
+         */
+        CreditWarningRead: {
+            /** Threshold */
+            threshold: number;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Used */
+            used: number;
+        };
+        /**
          * CreditsLeftRead
          * @description A workspace's AI credits this month, as it bears on carrying an
          *     intention through (metering, LEKA-430).
@@ -11522,6 +11565,11 @@ export interface components {
              * @description What a credit is worth of LEKA's model cost.
              */
             credit_usd: number;
+            /**
+             * Warned
+             * @description The shares passed this month, each when (LEKA-463).
+             */
+            warned?: components["schemas"]["CreditWarningRead"][];
         };
         /**
          * Criticality
@@ -28976,6 +29024,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MonitoringRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    acknowledge_api_v1_monitoring_alerts__alert_id__acknowledge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                alert_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertRead"];
                 };
             };
             /** @description The request could not be understood. */

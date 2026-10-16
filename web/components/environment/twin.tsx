@@ -19,11 +19,16 @@ import { Card, CardLink, entityHref, IconTile, typeLabel } from "@/components/en
 import { KnowledgeTable, type KnowledgeColumn } from "@/components/knowledge/knowledge-table";
 import { StatusBadge } from "@/components/knowledge/status-badge";
 import { TONES } from "@/components/knowledge/status";
-import { timeAgo } from "@/components/knowledge/time";
+import { exactDate, timeAgo } from "@/components/knowledge/time";
+import { useCurrentUser, usePermissions } from "@/components/shell/shell-provider";
+import { Button } from "@/components/ui/button";
 import { routes } from "@/config/routes";
 import { fill } from "@/lib/i18n/dictionaries";
-import { useDictionary } from "@/lib/i18n/locale-provider";
+import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
+import type { Credits } from "@/lib/billing";
+import { useCredits } from "@/lib/billing-queries";
 import type { EnvironmentNode } from "@/lib/environment";
+import { useAcknowledge } from "@/lib/environment-queries";
 import {
   type Alert,
   byState,
@@ -394,6 +399,9 @@ export function SourcesCoverage({
 function AlertRow({ alert }: { alert: Alert }) {
   const t = useDictionary();
   const w = t.environment.twin.alerts;
+  const me = useCurrentUser();
+  const mayTake = usePermissions()?.includes("source:manage") ?? false;
+  const take = useAcknowledge();
   const incident = (alert.detail?.incident ?? null) as { key?: string } | null;
   const words =
     alert.kind === "source_failing"
@@ -425,6 +433,12 @@ function AlertRow({ alert }: { alert: Alert }) {
             t.environment.twin.certainty[alert.certainty],
             fill(w.since, { ago: ago(t, alert.opened_at) }),
             alert.status === "open" ? fill(w.seen, { ago: ago(t, alert.last_seen_at) }) : null,
+            alert.acknowledged_at
+              ? fill(w.taken, {
+                  who: alert.acknowledged_by && alert.acknowledged_by === me?.id ? w.takenYou : w.takenMember,
+                  ago: ago(t, alert.acknowledged_at),
+                })
+              : null,
             alert.status === "resolved"
               ? fill(w.resolvedBy, {
                   signal: ((alert.resolution?.signal as string[] | undefined) ?? []).join(", ") || "—",
@@ -437,6 +451,19 @@ function AlertRow({ alert }: { alert: Alert }) {
             .join(" · ")}
         </p>
       </div>
+      {alert.status === "open" && !alert.acknowledged_at && mayTake ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          disabled={take.isPending}
+          onClick={() => take.mutate(alert.id)}
+          data-testid="alert-take"
+        >
+          {w.take}
+        </Button>
+      ) : null}
       {alert.status === "open" ? (
         <Link
           href={intentionHref(words)}
@@ -450,11 +477,51 @@ function AlertRow({ alert }: { alert: Alert }) {
   );
 }
 
+/** The month's AI capacity (LEKA-463), on every plan: how much is used,
+ * each threshold passed and when — the configured ones, never invented —
+ * and, spent, why it stops and the way to more: never an overage. */
+function Capacity({ credits }: { credits: Credits }) {
+  const t = useDictionary();
+  const w = t.environment.twin.alerts.capacity;
+  const { format: locale } = useLocale();
+  const spent = credits.state === "exhausted";
+  const date = exactDate(locale, credits.period_end);
+  return (
+    <div
+      className={cn(
+        "mb-3 rounded-lg px-3 py-2 text-[0.8125rem]",
+        spent ? "bg-state-danger-soft" : credits.state === "warning" ? "bg-state-warning-soft" : "bg-shell-canvas",
+      )}
+      data-testid="alerts-capacity"
+      data-state={credits.state}
+    >
+      <p className="font-medium text-brand-navy">{w.title}</p>
+      <p className="text-shell-muted">
+        {fill(w.used, { percent: String(Math.round(credits.percent)), date })}
+      </p>
+      {(credits.warned ?? []).map((passed) => (
+        <p key={passed.threshold} className="text-xs text-brand-navy" data-testid="alerts-capacity-passed">
+          {fill(w.passed, { threshold: String(passed.threshold), ago: ago(t, passed.at) })}
+        </p>
+      ))}
+      {spent ? (
+        <>
+          <p className="mt-1 font-medium text-state-danger">
+            {credits.enforced ? fill(w.spentEnforced, { date }) : w.spentOpen}
+          </p>
+          <CardLink href={routes.billing()}>{w.more}</CardLink>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 /** The alerts the plan includes — or, when it does not, that limit and
  * the plan that lifts it: never an alert simulated, never the states hidden. */
 export function AlertsCard({ monitoring }: { monitoring: Monitoring | undefined }) {
   const t = useDictionary();
   const w = t.environment.twin.alerts;
+  const credits = useCredits().data;
   if (!monitoring) return null;
   const { entitlement } = monitoring;
   const plan = (name: string | null) =>
@@ -471,6 +538,7 @@ export function AlertsCard({ monitoring }: { monitoring: Monitoring | undefined 
         ) : undefined
       }
     >
+      {credits ? <Capacity credits={credits} /> : null}
       {entitlement.proactive ? (
         <div data-testid="alerts">
           {monitoring.open.length === 0 ? (

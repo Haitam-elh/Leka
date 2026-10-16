@@ -30,7 +30,7 @@ from leka.db import session_factory, system_scope, workspace_scope
 from leka.governance import allowance, credits_of, next_month
 from leka.identity import EmailMessage, User, build_email_sender, email_language
 from leka.metering.models import CreditWarning
-from leka.metering.schemas import CreditsRead
+from leka.metering.schemas import CreditsRead, CreditWarningRead
 from leka.platform import Membership, Role, Workspace
 
 logger = structlog.get_logger(__name__)
@@ -53,6 +53,13 @@ async def credits_now(
     total = given.credits
     percent = round(used / total * 100, 1) if total else (100.0 if used else 0.0)
     thresholds = warnings_at()
+    warned = (
+        await session.scalars(
+            select(CreditWarning)
+            .where(CreditWarning.workspace_id == workspace_id, CreditWarning.period == given.period)
+            .order_by(CreditWarning.threshold)
+        )
+    ).all()
     state = (
         "exhausted"
         if used >= total
@@ -75,6 +82,7 @@ async def credits_now(
         warn_at=thresholds,
         enforced=settings.credits_enforced,
         credit_usd=settings.credit_usd,
+        warned=[CreditWarningRead(threshold=w.threshold, at=w.at, used=w.used) for w in warned],
     )
 
 

@@ -3157,6 +3157,19 @@ const fr = {
         limitBody:
           "Votre plan {plan} montre les états, leur fraîcheur et leur couverture. Les alertes proactives sont incluses dès {alerts}, par e-mail dès {email}.",
         limitAction: "Voir les plans",
+        take: "Prendre en charge",
+        taken: "prise en charge {who} {ago}",
+        takenYou: "par vous",
+        takenMember: "par un membre",
+        capacity: {
+          title: "Capacité IA",
+          used: "{percent} % des crédits IA du mois utilisés (mesuré) — renouvelés le {date}.",
+          passed: "Seuil de {threshold} % franchi {ago}.",
+          spentEnforced:
+            "Capacité épuisée : les analyses de LEKA sont suspendues jusqu'au {date}. Aucun dépassement n'est facturé.",
+          spentOpen: "Capacité épuisée. Aucun dépassement n'est facturé.",
+          more: "Passer à un plan offrant plus de capacité",
+        },
       },
       ask: {
         trouble: "Pourquoi {name} est {state} ?",
@@ -10719,6 +10732,19 @@ const en: Dictionary = {
         limitBody:
           "Your {plan} plan shows states, their freshness and coverage. Proactive alerts are included from {alerts}, by e-mail from {email}.",
         limitAction: "See plans",
+        take: "Take in hand",
+        taken: "taken in hand {who} {ago}",
+        takenYou: "by you",
+        takenMember: "by a member",
+        capacity: {
+          title: "AI capacity",
+          used: "{percent}% of this month's AI credits used (measured) — renewed on {date}.",
+          passed: "{threshold}% threshold passed {ago}.",
+          spentEnforced:
+            "Capacity spent: LEKA's analyses are paused until {date}. No overage is ever billed.",
+          spentOpen: "Capacity spent. No overage is ever billed.",
+          more: "Move to a plan with more capacity",
+        },
       },
       ask: {
         trouble: "Why is {name} {state}?",

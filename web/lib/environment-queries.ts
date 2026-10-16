@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { environment, isEntityId } from "@/lib/environment";
 import { monitoring } from "@/lib/twin";
@@ -38,4 +38,13 @@ export function useEntityActivity(id: string, days: number) {
 /** The watch (LEKA-442): what the plan includes, the alerts open and ended. */
 export function useMonitoring() {
   return useQuery({ queryKey: ["monitoring"] as const, queryFn: monitoring.get });
+}
+
+/** An alert taken in hand (LEKA-463), the watch read again. */
+export function useAcknowledge() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: monitoring.acknowledge,
+    onSettled: () => client.invalidateQueries({ queryKey: ["monitoring"] }),
+  });
 }
