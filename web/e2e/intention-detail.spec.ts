@@ -188,5 +188,16 @@ test.describe("An intention's page", () => {
     await page.reload();
     await expect(page.getByTestId("working")).toHaveAttribute("data-phase", "agents");
     await expect(page.getByTestId("journey-note")).toHaveAttribute("data-state", "action_running");
+
+    // From another page, the header says it, and leads back to it (LEKA-475).
+    await page.goto("/sources");
+    const header = page.getByTestId("running-intentions");
+    await expect(header).toBeVisible();
+    await header.click();
+    // One: a link; several (other tests' too): a menu holding each.
+    if (!(await header.getAttribute("href"))) {
+      await page.locator(`[data-testid="running-intention"][data-intention="${id}"]`).click();
+    }
+    await expect(page).toHaveURL(new RegExp(`/intentions/${id}`));
   });
 });

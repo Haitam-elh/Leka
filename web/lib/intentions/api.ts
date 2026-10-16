@@ -109,6 +109,8 @@ export type IntentionFilters = {
   sort?: "updated" | "newest" | "oldest";
   /** Any of these states: a tab of the history (LEKA-457). */
   statuses?: readonly IntentionStatus[];
+  /** Only those whoever reads asked. */
+  mine?: boolean;
 };
 
 export const intentions = {
@@ -146,6 +148,7 @@ export const intentions = {
     if (phase) query.set("phase", phase);
     if (q) query.set("q", q);
     for (const status of filters.statuses ?? []) query.append("status", status);
+    if (filters.mine) query.set("mine", "true");
     if (filters.agent) query.set("agent", filters.agent);
     if (filters.source) query.set("source", filters.source);
     if (filters.days) query.set("since", new Date(Date.now() - filters.days * 86_400_000).toISOString());
