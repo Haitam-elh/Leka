@@ -4,7 +4,8 @@
  *
  * What these protect: what is typed is asked from the box itself — every
  * source, every environment, no period nobody chose, one key per sentence —
- * and its page opens; a request about anything but technology is said in
+ * and its page opens, the button busy meanwhile (seconds of silence read as
+ * broken, LEKA-450); a request about anything but technology is said in
  * words, above the box, and nothing opens.
  */
 
@@ -72,6 +73,20 @@ describe("the overview's box", () => {
     expect(asked).not.toHaveProperty("environment");
     expect(asked).not.toHaveProperty("since");
     expect(typeof key).toBe("string");
+  });
+
+  it("is busy while the intention is created, never pressed twice", async () => {
+    let done: (made: unknown) => void = () => {};
+    create.mockReturnValue(new Promise((resolve) => (done = resolve)));
+    renderIt();
+    await ask("Pourquoi payment-api est lente ?");
+
+    const button = screen.getByTestId("intention-submit");
+    await waitFor(() => expect(button).toBeDisabled());
+    expect(button).toHaveAttribute("aria-busy", "true");
+    done({ intention: { id: "int-1" }, context: {} });
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/intentions/int-1"));
+    expect(create).toHaveBeenCalledTimes(1);
   });
 
   it("says what LEKA answers about when the request is not about technology", async () => {

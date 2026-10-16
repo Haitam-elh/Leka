@@ -6,6 +6,7 @@ import {
   FileDiff,
   FileSymlink,
   Link2,
+  Loader2,
   type LucideIcon,
   Mic,
   Paperclip,
@@ -311,10 +312,15 @@ export function IntentionComposer({
               onClick={onSubmit}
               disabled={empty || tooLong || missing > 0 || submitting}
               aria-label={t.composer.submit}
+              aria-busy={submitting || undefined}
               data-testid="intention-submit"
               className="size-11 shrink-0 rounded-full bg-brand-violet p-0 text-white hover:bg-brand-violet/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <ArrowUp className="size-5" aria-hidden="true" />
+              {submitting ? (
+                <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+              ) : (
+                <ArrowUp className="size-5" aria-hidden="true" />
+              )}
             </Button>
           </div>
           {/* Only while it is true: a disabled button that does not say why

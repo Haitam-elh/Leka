@@ -75,6 +75,8 @@ export function CompactIntentionComposer() {
       <IntentionComposer
         variant="compact"
         onSubmit={() => void form.submit()}
+        // Creating the intention takes seconds: the button says it is working.
+        submitting={form.formState.isSubmitting}
         // Files are attached on the full step, where there is room to list
         // them; the paperclip carries the sentence there as it is.
         onAttachRequest={() => {
