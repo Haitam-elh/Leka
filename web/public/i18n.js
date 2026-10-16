@@ -543,6 +543,17 @@
     document.documentElement.setAttribute('lang', lang);
     document.documentElement.dataset.language = tag;
 
+    // A page asked in one of the site's languages (?lang=en) is its own
+    // canonical, as its hreflang alternates say (LEKA-432); the address
+    // without it stays the French, x-default one.
+    const canonicalLink = document.querySelector('link[rel="canonical"]');
+    const askedLang = match(fromAddress());
+    if (canonicalLink && askedLang && LANG_CODES.includes(askedLang)) {
+      const url = new URL(canonicalLink.getAttribute('href'));
+      url.searchParams.set('lang', askedLang);
+      canonicalLink.setAttribute('href', url.toString());
+    }
+
     document.querySelectorAll('[data-i18n]').forEach((el) => {
       const key = el.getAttribute('data-i18n');
       if (el.dataset.i18nOrig === undefined) el.dataset.i18nOrig = el.innerHTML;
