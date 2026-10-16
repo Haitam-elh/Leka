@@ -554,7 +554,7 @@ function TroubleCard() {
                   ),
                 })}{" "}
                 <Link
-                  href={routes.billing()}
+                  href={routes.billingPlans()}
                   className="text-shell-nav-active underline underline-offset-2"
                 >
                   {w.seePlans}

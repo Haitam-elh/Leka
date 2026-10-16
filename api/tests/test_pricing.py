@@ -262,6 +262,13 @@ async def test_anyone_reads_the_pricing_as_checkout_charges_it(
         ("growth", 14)
     ]
     assert growth["quotes"][0]["first_charge_on"] is not None
+    # What each plan holds, as the comparison shows it (LEKA-466).
+    assert {k: growth["quotas"][k] for k in ("users", "sources", "analyses")} == {
+        "users": 5,
+        "sources": 15,
+        "analyses": 500,
+    }
+    assert enterprise["quotas"]["contractual"] is True
     # No booking page configured: none guessed; the contact form always.
     assert said["booking"]["url"] is None
     assert said["booking"]["contact_url"].startswith("https://")

@@ -87,9 +87,14 @@ test.describe("the shell", () => {
     await expect(page.getByTestId("open-navigation")).toBeFocused();
   });
 
-  test("takes you to Facturation from the plan", async ({ page }) => {
+  test("takes you to the plans compared from the plan, Facturation still its own", async ({ page }) => {
     await signIn(page);
     await page.getByTestId("plan-badge").click();
+    // LEKA-466: the five plans, the workspace's marked.
+    await expect(page).toHaveURL(/\/billing\/plans$/);
+    await expect(page.getByTestId("plan-card")).toHaveCount(5);
+    await expect(page.locator('[data-testid="plan-card"][data-current="true"]')).toHaveCount(1);
+    await page.getByRole("link", { name: /Facturation, factures/ }).click();
     await expect(page).toHaveURL(/\/billing$/);
   });
 

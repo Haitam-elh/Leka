@@ -257,6 +257,15 @@ export const ROUTES: readonly RouteEntry[] = [
     requiredPermission: "workspace:update",
   },
   {
+    // The plans compared (LEKA-466): read by every member — the plan
+    // badge opens it —, changed only by who pays for the workspace.
+    id: "billing-plans",
+    path: "/billing/plans",
+    labelKey: "plans",
+    parentId: "billing",
+    requiredPermission: "workspace:read",
+  },
+  {
     id: "settings",
     path: "/settings",
     labelKey: "settings",
@@ -301,5 +310,6 @@ export const routes = {
   governance: () => "/governance",
   team: () => "/team",
   billing: () => "/billing",
+  billingPlans: () => "/billing/plans",
   settings: () => "/settings",
 } as const;

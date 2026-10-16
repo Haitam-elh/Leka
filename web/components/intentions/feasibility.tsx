@@ -284,7 +284,7 @@ function StepItem({
   if (step.kind === "connect_source") action = link(routes.sources());
   else if (step.kind === "configure_model") action = link(routes.settings());
   else if (step.kind === "enable") action = link(`${routes.capabilities()}?view=configuration`);
-  else if (step.kind === "contact_sales") action = link(routes.billing());
+  else if (step.kind === "contact_sales") action = link(routes.billingPlans());
   else if (step.kind === "change_plan" && pays)
     action = (
       <Button

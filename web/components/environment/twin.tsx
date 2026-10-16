@@ -512,7 +512,7 @@ function Capacity({ credits }: { credits: Credits }) {
           <p className="mt-1 font-medium text-state-danger">
             {credits.enforced ? fill(w.spentEnforced, { date }) : w.spentOpen}
           </p>
-          <CardLink href={routes.billing()}>{w.more}</CardLink>
+          <CardLink href={routes.billingPlans()}>{w.more}</CardLink>
         </>
       ) : null}
     </div>
@@ -581,7 +581,7 @@ export function AlertsCard({ monitoring }: { monitoring: Monitoring | undefined 
               email: plan(entitlement.email_from),
             })}
           </p>
-          <CardLink href={routes.billing()}>{w.limitAction}</CardLink>
+          <CardLink href={routes.billingPlans()}>{w.limitAction}</CardLink>
         </div>
       )}
     </Card>

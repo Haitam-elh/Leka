@@ -32,6 +32,7 @@ import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import { notify } from "@/lib/notify";
 import { initials, personName, type Role, ROLES, type TeamMember } from "@/lib/team";
 import { useInvitations, useTeamChange, useTeamMembers } from "@/lib/team-queries";
+import { routes } from "@/config/routes";
 
 /**
  * Équipe & accès, as docs/product/mockups/15-equipe-acces.jpeg: who is in
@@ -69,7 +70,7 @@ function Invite({ onClose }: { onClose: () => void }) {
       if (error instanceof ApiError && error.code === "plan_limit") {
         notify.error({
           title: t.billing.planLimit.users,
-          action: { label: t.billing.planLimit.see, onClick: () => router.push("/billing") },
+          action: { label: t.billing.planLimit.see, onClick: () => router.push(routes.billingPlans()) },
         });
         return;
       }
