@@ -31,4 +31,9 @@ describe("the history's query", () => {
     void intentions.list({ filters: { sort: "newest" } });
     expect([asked().get("sort"), asked().get("order")]).toEqual(["created_at", "desc"]);
   });
+
+  it("only those whoever reads asked, still active: the header's (LEKA-475)", () => {
+    void intentions.list({ phase: "active", filters: { mine: true } });
+    expect([asked().get("phase"), asked().get("mine")]).toEqual(["active", "true"]);
+  });
 });

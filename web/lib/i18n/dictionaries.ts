@@ -80,6 +80,14 @@ const fr = {
     skipToContent: "Aller au contenu",
     searchPlaceholder: "Rechercher une application, un service, un document…",
     notifications: "Notifications",
+    // The header's « what LEKA does for you » (LEKA-475).
+    running: {
+      label: "Vos intentions en cours",
+      count: "{count} en cours",
+      toDeal: "{count} à traiter",
+      late: "en retard",
+      all: "Voir toutes vos intentions",
+    },
     openNavigation: "Ouvrir la navigation",
     closeNavigation: "Fermer la navigation",
     collapseSidebar: "Replier la barre latérale",
@@ -8135,6 +8143,13 @@ const en: Dictionary = {
     skipToContent: "Skip to content",
     searchPlaceholder: "Search an application, a service, a document…",
     notifications: "Notifications",
+    running: {
+      label: "Your intentions in progress",
+      count: "{count} in progress",
+      toDeal: "{count} to deal with",
+      late: "late",
+      all: "See all your intentions",
+    },
     openNavigation: "Open the navigation",
     closeNavigation: "Close the navigation",
     collapseSidebar: "Collapse the sidebar",
