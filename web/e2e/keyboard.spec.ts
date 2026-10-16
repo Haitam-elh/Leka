@@ -104,6 +104,10 @@ test.describe("a detail panel closes on Escape", () => {
   test("Mon environnement: the card chosen on the architecture", async ({ page }) => {
     await signIn(page);
     await page.goto("/environment");
+    // None chosen for the person: the panel opens on a click (LEKA-473).
+    await expect(page.getByTestId("architecture-panel")).toHaveCount(0);
+    await page.getByTestId("arch-column-services").getByRole("button").first().click();
+    await expect(page.getByTestId("architecture-panel")).toBeVisible();
     const close = page.getByRole("button", { name: /^Fermer/ }).first();
     await expect(close).toBeVisible();
     await close.focus();
