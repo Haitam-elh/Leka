@@ -325,18 +325,21 @@ function Headline({
           </span>
           <LevelPill level={score.level} />
         </p>
-        <p className="mt-2 flex items-center gap-1.5 text-[0.8125rem] text-shell-muted">
-          {points === null ? null : points > 0 ? (
+        {/* No score 7 days ago yet: say nothing rather than « Stable ». */}
+        {points === null ? null : (
+          <p className="mt-2 flex items-center gap-1.5 text-[0.8125rem] text-shell-muted">
+            {points > 0 ? (
             <TrendingUp className="size-4 text-state-success" aria-hidden="true" />
           ) : points < 0 ? (
             <TrendingDown className="size-4 text-state-danger" aria-hidden="true" />
           ) : null}
           <span data-testid="quality-change">
-            {points === null || points === 0
+            {points === 0
               ? w.steady
               : fill(w.change, { sign: points > 0 ? "+" : "−", points: Math.abs(points) })}
           </span>
-        </p>
+          </p>
+        )}
         <p className="mt-1 text-xs text-shell-muted">
           {fill(w.measured, { when: timeAgo(t, score.measured_at) })}
         </p>
