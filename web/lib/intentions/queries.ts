@@ -54,6 +54,19 @@ export function useIntentions(
   });
 }
 
+/** Those you asked not settled yet, for the header (LEKA-475): read again
+ * while LEKA works on one, and when the tab comes back. */
+export function useMyActiveIntentions(enabled = true) {
+  return useQuery({
+    queryKey: [...intentionKeys.all, "mine-active"],
+    // shortcut: the 50 latest changed only, past that the header says « 50+ ».
+    queryFn: () => intentions.list({ phase: "active", filters: { mine: true }, limit: 50 }),
+    enabled,
+    refetchInterval: (query) =>
+      query.state.data?.data.some((row) => working(row.journey)) ? WHILE_WORKING * 2 : false,
+  });
+}
+
 export function useIntentionCounts() {
   return useQuery({ queryKey: intentionKeys.counts, queryFn: intentions.counts });
 }

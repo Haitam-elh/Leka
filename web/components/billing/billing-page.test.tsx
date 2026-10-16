@@ -35,6 +35,9 @@ vi.mock("@/lib/billing", async (original) => ({
   },
 }));
 
+// Its agents' and bundles' subscriptions: their own test.
+vi.mock("@/components/billing/add-on-subscriptions", () => ({ AddOnSubscriptions: () => null }));
+
 vi.mock("@/lib/subscription", async (original) => {
   const real = await original<typeof import("@/lib/subscription")>();
   return { ...real, subscription: { ...real.subscription, read: async () => subscribed } };

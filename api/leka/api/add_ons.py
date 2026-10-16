@@ -10,6 +10,11 @@
                                       bundle — opened from an intention's
                                       decision, its agents launched once paid
                                       (workspace:update)
+    POST /billing/add-ons/{subscription}/renewal
+                                      « Annuler l'abonnement » / « Réactiver le
+                                      renouvellement » of what was bought with
+                                      it: kept until its period's end either
+                                      way (workspace:update, LEKA-474)
 
 Owned comes only from a verified Stripe event, or LEKA's grant — never from
 the browser coming back from Checkout.
@@ -19,11 +24,17 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Path, status
 
 from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
-from leka.api.subscriptions import _locale, _refused, _stripe_failed, _unavailable
+from leka.api.subscriptions import (
+    RenewalChange,
+    _locale,
+    _refused,
+    _stripe_failed,
+    _unavailable,
+)
 from leka.billing import (
     AddOnCheckoutCreate,
     AddOnsRead,
@@ -36,6 +47,7 @@ from leka.billing import (
     PortalRead,
     StripeError,
     add_on,
+    add_on_renewal,
     catalogue,
     checkout_add_on,
     entitlements,
@@ -139,9 +151,36 @@ async def read_entitlements(principal: Reader, session: SessionDep) -> list[Enti
                 origin=row.origin,
                 started_at=row.started_at,
                 agents=agents,
+                subscription=row.stripe_subscription_id if row.origin == "purchase" else None,
+                cancel_at_period_end=row.cancel_at_period_end,
+                current_period_end=row.current_period_end,
             )
         )
     return found
+
+
+@router.post(
+    "/add-ons/{subscription}/renewal",
+    response_model=list[EntitlementRead],
+    summary="Renew an agent's or a bundle's subscription at its period's end, or not",
+)
+async def change_add_on_renewal(
+    subscription: Annotated[str, Path(max_length=100)],
+    body: RenewalChange,
+    principal: Payer,
+    session: SessionDep,
+) -> list[EntitlementRead]:
+    try:
+        await add_on_renewal(
+            session, principal.workspace_id, subscription, renew=body.renew, client=stripe()
+        )
+    except BillingUnavailableError:
+        raise _unavailable() from None
+    except CheckoutRefusedError as error:
+        raise _refused(error) from None
+    except StripeError as error:
+        raise _stripe_failed(error) from None
+    return await read_entitlements(principal, session)
 
 
 @router.post(

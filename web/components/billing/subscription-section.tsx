@@ -117,7 +117,10 @@ export function SubscriptionSection() {
             })}
           </p>
           {said.current_period_end ? (
-            <p className="text-xs text-shell-muted">
+            <p
+              className={said.cancel_at_period_end ? `rounded-lg px-3 py-2 text-[0.8125rem] ${TILE_TONES.warning}` : "text-xs text-shell-muted"}
+              data-testid="billing-period"
+            >
               {fill(said.cancel_at_period_end ? w.endsOn : w.renewsOn, { date: day(said.current_period_end) })}
             </p>
           ) : null}
@@ -127,8 +130,8 @@ export function SubscriptionSection() {
             </p>
           ) : null}
           <div className="flex flex-wrap gap-2">
-            {/* Said plainly (2026-10-14): Stripe's « Cancel subscription »
-                only stopped the renewal — the plan runs to its period's end. */}
+            {/* « Annuler l'abonnement » (LEKA-474), as Stripe's portal says it:
+                at its period's end — nothing stops before; then « Réactiver ». */}
             {said.cancel_at_period_end ? (
               <Button
                 type="button"
@@ -154,6 +157,8 @@ export function SubscriptionSection() {
                     title: w.stopTitle,
                     description: fill(w.stopBody, { date: end }),
                     confirmLabel: w.stopConfirm,
+                    // Never « Annuler » beside « Annuler l'abonnement ».
+                    cancelLabel: w.keep,
                   });
                   if (!ok) return;
                   renewal.mutate(false, {

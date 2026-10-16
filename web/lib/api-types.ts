@@ -6238,6 +6238,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/billing/add-ons/{subscription}/renewal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Renew an agent's or a bundle's subscription at its period's end, or not */
+        post: operations["change_add_on_renewal_api_v1_billing_add_ons__subscription__renewal_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/billing/add-ons/checkout": {
         parameters: {
             query?: never;
@@ -13456,6 +13473,22 @@ export interface components {
              * @description The agents it gives.
              */
             agents: string[];
+            /**
+             * Subscription
+             * @description Bought: its Stripe subscription, to cancel or renew.
+             */
+            subscription?: string | null;
+            /**
+             * Cancel At Period End
+             * @description Cancelled: kept until current_period_end, then not renewed.
+             * @default false
+             */
+            cancel_at_period_end: boolean;
+            /**
+             * Current Period End
+             * @description When its paid period ends, as Stripe last said it.
+             */
+            current_period_end?: string | null;
         };
         /** EntityActivityDay */
         EntityActivityDay: {
@@ -55133,6 +55166,104 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementRead"][];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    change_add_on_renewal_api_v1_billing_add_ons__subscription__renewal_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subscription: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenewalChange"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

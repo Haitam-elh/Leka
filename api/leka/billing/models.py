@@ -133,6 +133,14 @@ class AgentEntitlement(Base, WorkspaceScopedMixin):
     origin: Mapped[str] = mapped_column(String(10), nullable=False)
     status: Mapped[str] = mapped_column(String(10), nullable=False, server_default="active")
     stripe_subscription_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Its subscription's renewal, as Stripe last said it (LEKA-474): cancelled
+    # at its period's end — kept until then — or renewed.
+    cancel_at_period_end: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    current_period_end: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # Who: a person's id, an operator's name, Stripe.
     by_whom: Mapped[str] = mapped_column(String(120), nullable=False)
     reason: Mapped[str | None] = mapped_column(String(300), nullable=True)
