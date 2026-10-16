@@ -104,6 +104,9 @@ async def test_contexts_are_queried_by_what_they_hold_their_words_quality_and_ma
     model: dict[str, uuid.UUID],
     acme: dict[str, uuid.UUID],
 ) -> None:
+    # Shown by its sources today: the fixture's dates age, and a context
+    # judged below « high » by their age would not be found by its quality.
+    await _sql(acme["acme"], "UPDATE entities SET last_seen_at = now()")
     billing = (await _create(client, model))["context_id"]
     _as(identity, acme, "admin")
     nora = (

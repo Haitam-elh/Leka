@@ -35,6 +35,13 @@ const graphApi = { view: vi.fn(), architecture: vi.fn() };
 const pathname = { value: "/environment" };
 const params: { value: Record<string, string> } = { value: {} };
 
+// The alert rules (LEKA-477): their own test.
+vi.mock("@/components/environment/alert-rules", () => ({
+  AlertRuleProvider: ({ children }: { children: React.ReactNode }) => children,
+  AlertRulesCard: () => null,
+  CreateAlertButton: () => null,
+  AlertOnThing: () => null,
+}));
 vi.mock("@/lib/environment", async (original) => ({
   ...(await original<typeof import("@/lib/environment")>()),
   environment: api,

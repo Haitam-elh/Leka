@@ -4,6 +4,11 @@ plan that allows it is named — chosen explicitly, never changed for them.
 
     room_for_user(session, workspace, email)   a seat or a pending invitation more
     room_for_source(session, workspace)        a source more
+    room_for_alert_rule(session, workspace, used)
+                                               an alert rule on more (LEKA-477):
+                                               `used` those on now, counted by
+                                               the watch that keeps them
+    limit_of(session, workspace, what)         the plan's limit, None: none
 """
 
 from __future__ import annotations
@@ -20,7 +25,7 @@ from leka.connectors import Source
 from leka.governance.plans import plan_of
 from leka.platform import Invitation, InvitationStatus, Membership
 
-Limited = Literal["users", "sources"]
+Limited = Literal["users", "sources", "alert_rules"]
 
 
 class PlanLimitError(Exception):
@@ -30,6 +35,12 @@ class PlanLimitError(Exception):
         self.what, self.plan, self.limit, self.upgrade = what, plan, limit, upgrade
         then = f" {upgrade.capitalize()} allows more." if upgrade else ""
         super().__init__(f"The {plan.capitalize()} plan allows {limit} {what}.{then}")
+
+
+async def limit_of(session: AsyncSession, workspace_id: uuid.UUID, what: Limited) -> int | None:
+    current = (await plan_of(session, workspace_id)).name
+    limit: int | None = getattr(catalogue().plan(current).quotas, what)
+    return limit
 
 
 async def _room(session: AsyncSession, workspace_id: uuid.UUID, what: Limited, used: int) -> None:
@@ -69,3 +80,7 @@ async def room_for_source(session: AsyncSession, workspace_id: uuid.UUID) -> Non
         select(func.count()).select_from(Source).where(Source.workspace_id == workspace_id)
     )
     await _room(session, workspace_id, "sources", int(used or 0))
+
+
+async def room_for_alert_rule(session: AsyncSession, workspace_id: uuid.UUID, used: int) -> None:
+    await _room(session, workspace_id, "alert_rules", used)

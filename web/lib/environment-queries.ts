@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { type AlertRuleChange, type AlertRuleWrite, alertRules } from "@/lib/alert-rules";
 import { environment, isEntityId } from "@/lib/environment";
 import { monitoring } from "@/lib/twin";
 
@@ -59,4 +60,24 @@ export function useAcknowledge() {
     mutationFn: monitoring.acknowledge,
     onSettled: () => client.invalidateQueries({ queryKey: ["monitoring"] }),
   });
+}
+
+/** The alert rules (LEKA-477), and all a screen needs to set one. */
+export function useAlertRules(enabled = true) {
+  return useQuery({ queryKey: ["monitoring", "rules"] as const, queryFn: alertRules.list, enabled });
+}
+
+/** Set, changed, removed, tried: the rules read again. */
+export function useAlertRuleChange() {
+  const client = useQueryClient();
+  const settled = () => client.invalidateQueries({ queryKey: ["monitoring", "rules"] });
+  return {
+    create: useMutation({ mutationFn: (body: AlertRuleWrite) => alertRules.create(body), onSettled: settled }),
+    change: useMutation({
+      mutationFn: ({ id, body }: { id: string; body: AlertRuleChange }) => alertRules.change(id, body),
+      onSettled: settled,
+    }),
+    remove: useMutation({ mutationFn: (id: string) => alertRules.remove(id), onSettled: settled }),
+    test: useMutation({ mutationFn: (id: string) => alertRules.test(id), onSettled: settled }),
+  };
 }

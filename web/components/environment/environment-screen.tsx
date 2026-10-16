@@ -22,6 +22,7 @@ import { cn } from "cn";
 import { KnowledgeTable, type KnowledgeColumn } from "@/components/knowledge/knowledge-table";
 import { StatusBadge } from "@/components/knowledge/status-badge";
 import { timeAgo } from "@/components/knowledge/time";
+import { AlertRuleProvider, AlertRulesCard, CreateAlertButton } from "@/components/environment/alert-rules";
 import { ArchitectureBoard, ArchitectureFigures } from "@/components/environment/architecture";
 import { LekaInsights } from "@/components/insights/leka-insights";
 import { Cartography } from "@/components/environment/cartography";
@@ -266,7 +267,8 @@ export function EnvironmentScreen() {
     body = <SourcesPage embedded />;
   } else if (tab === "configuration") {
     // What sets what this screen shows — never a setting it does not have:
-    // the alerts are the common service's (LEKA-463).
+    // the alerts are the common service's (LEKA-463), their rules the
+    // person's (LEKA-477).
     body = (
       <div className="grid gap-4 xl:grid-cols-2">
         <Card
@@ -281,6 +283,7 @@ export function EnvironmentScreen() {
         </Card>
         <div className="flex flex-col gap-4">
           <AlertsCard monitoring={monitoring.data} />
+          <AlertRulesCard />
           {environment.data ? (
             <SourcesCoverage
               coverage={environment.data.coverage ?? []}
@@ -332,6 +335,7 @@ export function EnvironmentScreen() {
 
   return (
     <PageContainer>
+      <AlertRuleProvider>
       <Header model={model} freshness={environment.data?.freshness} />
 
       {error ? (
@@ -352,6 +356,7 @@ export function EnvironmentScreen() {
           {body}
         </div>
       )}
+      </AlertRuleProvider>
     </PageContainer>
   );
 }
@@ -482,6 +487,7 @@ function Header({
           >
             <RefreshCw className={cn(fetching && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
           </Button>
+          <CreateAlertButton />
           {canConnect ? (
             <Button type="button" onClick={() => setConnecting(true)} data-testid="env-connect">
               <Plus aria-hidden="true" />
