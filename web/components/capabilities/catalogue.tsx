@@ -152,7 +152,7 @@ const MARKET_OF_CATEGORY: Record<string, string> = {
   infrastructure: "devops",
   documentation: "documentation",
 };
-const MARKET_ICON: Record<string, LucideIcon> = {
+export const MARKET_ICON: Record<string, LucideIcon> = {
   product: Target,
   architecture: Code,
   testing: BadgeCheck,
@@ -166,7 +166,7 @@ const MARKET_ICON: Record<string, LucideIcon> = {
   documentation: FileText,
   orchestration: Workflow,
 };
-const MARKET_TEXT: Record<string, string> = {
+export const MARKET_TEXT: Record<string, string> = {
   product: "text-blue-600",
   architecture: "text-shell-nav-active",
   testing: "text-state-success",

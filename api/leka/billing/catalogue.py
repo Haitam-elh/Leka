@@ -134,6 +134,8 @@ class LaunchOffer(_Model):
 
 Tier = Literal["standard", "specialized", "expert"]
 PlanKey = Literal["free", "starter", "growth", "business", "enterprise"]
+# Cheapest first: a plan includes what every plan below it does.
+PLAN_ORDER: tuple[PlanKey, ...] = ("free", "starter", "growth", "business", "enterprise")
 
 
 class SoldAgent(_Model):
@@ -225,11 +227,14 @@ class AddOns(_Model):
 
     def included_in(self, plan: str) -> frozenset[str]:
         """The agents a plan runs as part of it — and every plan above it."""
-        order = ("free", "starter", "growth", "business", "enterprise")
-        if plan not in order:
+        if plan not in PLAN_ORDER:
             return frozenset()
-        upto = order[: order.index(plan) + 1]
+        upto = PLAN_ORDER[: PLAN_ORDER.index(plan) + 1]
         return frozenset(k for p, keys in self.included.items() if p in upto for k in keys)
+
+    def included_from(self, key: str) -> PlanKey | None:
+        """The least plan that includes an agent — « Inclus dès Growth »."""
+        return next((p for p in PLAN_ORDER if key in self.included_in(p)), None)
 
     @model_validator(mode="after")
     def _priced(self) -> AddOns:

@@ -159,6 +159,19 @@ export function AgentOfferAction({ agentKey }: { agentKey: string }) {
   );
 }
 
+/** Buying an agent from anywhere (LEKA-471): whether this person may, and
+ * the purchase — Stripe's page, the agent granted once Stripe says paid. */
+export function useAgentPurchase() {
+  const t = useDictionary();
+  const buy = useBuy();
+  const may = useMayBuy();
+  return {
+    may,
+    pending: buy.isPending,
+    buy: (key: string) => buy.mutate({ kind: "agent", key }, { onError: (error) => bought(t, error) }),
+  };
+}
+
 /** The home's « + » on an agent (LEKA-470, its mockup): bought from there,
  * where it is an option this person may buy — anywhere else, nothing. */
 export function AgentAdd({ agentKey }: { agentKey: string }) {
