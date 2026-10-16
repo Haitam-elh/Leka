@@ -121,6 +121,15 @@ describe("the figures", () => {
     expect(screen.queryByTestId("sources-stat-items")).not.toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: /Éléments/ })).not.toBeInTheDocument();
     expect(screen.queryByText("48 320")).not.toBeInTheDocument();
+    // One in error: never « Tout est à jour » beside it (LEKA-469).
+    expect(screen.getByTestId("sources-stat-errors")).toHaveTextContent("1");
+    expect(screen.getByTestId("sources-stat-last-sync")).not.toHaveTextContent("Tout est à jour");
+  });
+
+  it("says all is up to date only when no source is in error", async () => {
+    list.mockResolvedValue({ data: [GITHUB] });
+    renderPage();
+    expect(await screen.findByTestId("sources-stat-last-sync")).toHaveTextContent("Tout est à jour");
   });
 
   it("opens the source in error on a wide screen, the address left the list's", async () => {
