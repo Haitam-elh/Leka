@@ -359,7 +359,7 @@ describe("the overview", () => {
     const [row] = within(trouble).getAllByRole("listitem");
     expect(row).toHaveAttribute("data-state", "degraded");
     expect(row).toHaveTextContent("payment-api");
-    expect(row).toHaveTextContent("incident OPS-1841 ouvert · mesuré · par OPS board");
+    expect(row).toHaveTextContent("incident « OPS-1841 » ouvert · mesuré · par OPS board");
     expect(within(row).getByRole("link", { name: "Analyser" })).toHaveAttribute(
       "href",
       `/intentions/new?q=${encodeURIComponent("Pourquoi payment-api est dégradé ?")}`,
