@@ -88,6 +88,7 @@ The agent's instructions, in markdown.
 | `permission` | no | what a person needs to use it — `intention:create` by default |
 | `tools` | no | the runtime's tools it may be offered — `search_entities`, `read_entity`, `dependencies`, `what_happened` (LEKA-400); every read-only one when it declares none. Least privilege: declare what it needs |
 | `skills` | no | the skills of LEKA's library it may be offered, by key — `delivery-metrics`, `blast-radius`… (LEKA-401, [docs/skills.md](../docs/skills.md) § 9); none unless named, each only when it reads nothing beyond `entity_types` |
+| `method` | no | the library of guides it works by, read while it runs: a directory under [`_library/`](_library/README.md), e.g. `_library/emilkowalski-skills` — named with the tool `read_method` in `tools`, and only with it. A library is never an agent: the loader skips every directory named `_…` |
 | `renders` | no | what LEKA makes of what it delivers — `architecture_deck`: the editable PowerPoint and its PDF on the application architecture template ([docs/agent-runtime.md](../docs/agent-runtime.md) § 6 bis); its `pptx` and `pdf` are then not pending — `code_change`: the change it proposes, diffed, for a person to accept as a pull request (§ 6 ter); its `diff` is then not pending. The code tools `list_files` and `read_file` are offered only to an agent that names them in `tools` |
 
 `requires` names source kinds; alternatives in one entry, `"confluence|microsoft_365"`.
@@ -123,9 +124,14 @@ decides how an agent may behave must not pass silently.
 5. Open a pull request. An agent is reviewed like code, because it is.
 
 Categories today: `architecture/`, `codebase/`, `data/`, `development/`,
-`documentation/`, `drift/`, `incident/`, `infrastructure/`, `operations/`,
-`security/` — the library of LEKA-400 ([docs/agent-library.md](../docs/agent-library.md)).
+`documentation/`, `drift/`, `frontend/`, `incident/`, `infrastructure/`,
+`operations/`, `security/` — the library of LEKA-400 ([docs/agent-library.md](../docs/agent-library.md)).
 Add one when a new theme genuinely appears — not for a single file.
+
+What an agent works by but is too long for its instructions — a method of
+several guides — goes in [`_library/`](_library/README.md), read a guide at a
+time with `read_method`. Imported from outside, a library is held to the
+same rules as `vendor/`.
 
 ---
 

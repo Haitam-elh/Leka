@@ -94,6 +94,7 @@ model with its id, its type and its line of text, **as data**.
 | `read_content` | what one thing's records say — a page's text, a ticket's description, a README — its 4 latest, each cut at 6,000 characters; only of its types (2026-10-14) | `workspace:read` |
 | `list_files`, `read_file` | a GitHub repository's files, one file's text — the code-change agent's (§ 6 ter) | `workspace:read` |
 | `list_pull_requests`, `read_pull_request` | a GitHub repository's pull requests, one with its diff — the code review's (§ 6 quater) | `workspace:read` |
+| `read_method` | the guides of the library the agent names (`method:`, [agents/_library/README.md](../agents/_library/README.md)): without a path, their index — each with what it is for; with one, that `.md` file's text, cut at 60,000 characters. Never a file outside the library. LEKA's own content, the same for every workspace — the designer's (`design-review`), the motion review's, the interface's quality and the code change's for an interface (`capabilities/method_tools.py`) | `workspace:read` |
 
 **Rounds.** A run calls tools for 16 rounds at most, then it must answer:
 the last round offers none. An agent that reads a whole documentation

@@ -21,6 +21,8 @@ from leka.connectors import PublicHttpsUrl
 NAME_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 SEMVER_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
 VENDOR_ORIGIN_PATTERN = re.compile(r"^vendor:[\w.-]+/[\w.-]+$")
+# A library an agent reads while it runs: one directory under agents/_library/.
+METHOD_PATTERN = re.compile(r"^_library/[a-z0-9]+(-[a-z0-9]+)*$")
 
 
 class AgentMode(enum.StrEnum):
@@ -113,6 +115,19 @@ class AgentFrontMatter(BaseModel):
         "PowerPoint and its PDF, on the application architecture template; code_change — "
         "the change it proposes, diffed, for a person to accept as a pull request",
     )
+    method: str | None = Field(
+        default=None,
+        description="The library of guides it works by, read while it runs with "
+        "read_method: a directory under agents/_library/ (agents/_library/README.md)",
+    )
+
+    @field_validator("method")
+    @classmethod
+    def _library(cls, value: str | None) -> str | None:
+        if value is not None and not METHOD_PATTERN.match(value):
+            msg = f"method must be a directory under _library/, got {value!r}"
+            raise ValueError(msg)
+        return value
 
     @field_validator("name")
     @classmethod

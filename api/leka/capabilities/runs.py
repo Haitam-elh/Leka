@@ -58,6 +58,7 @@ from leka.capabilities.gateway import (
     Tool,
     ToolRoundsError,
 )
+from leka.capabilities.method_tools import METHOD_NAMES, METHOD_TOOLS, method_handlers
 from leka.capabilities.models import AgentRun, AgentRunEvent
 from leka.capabilities.repository import CapabilityRunRepository, stale_runs
 from leka.capabilities.review import review_of
@@ -76,6 +77,7 @@ from leka.capabilities.skills import SkillRuntime, agent_skill_tools, skill_hand
 from leka.capabilities.tools import TOOLS, Answer, handlers
 from leka.connectors import SourceRepository
 from leka.context import AssembledContext, ContextRepository, ContextService, IntentAsk
+from leka.core.config import settings
 from leka.db import hidden_entities, session_factory, system_scope, workspace_scope
 from leka.governance import (
     ROLE_PERMISSIONS,
@@ -468,6 +470,8 @@ async def _run(
     declared = [t for t in tools if not definition.tools or t.name in definition.tools]
     # The code tools: only to an agent that names them (code_tools.py).
     declared += [t for t in CODE_TOOLS if t.name in definition.tools]
+    # Its method's guides: only to an agent that names them and has a library.
+    declared += [t for t in METHOD_TOOLS if t.name in definition.tools and definition.method]
     given, withheld = offered(declared, permissions)
     # Its skills: those it names, within what it reads (LEKA-401).
     named, out_of_reach = agent_skill_tools(definition)
@@ -488,6 +492,8 @@ async def _run(
     read: dict[str, Any] = {}
     if CODE_NAMES & {t.name for t in given}:
         bound |= code_handlers(session, workspace_id, read)
+    if METHOD_NAMES & {t.name for t in given}:
+        bound |= method_handlers(definition, settings.agents_dir)
     # Each skill call checked and kept (skill_runs), about this run.
     bound |= skill_handlers(
         SkillRuntime(
