@@ -4,7 +4,7 @@ each telling kept, sent or failed, once per rule, alert, channel, recipient
 and round.
 
 Revision ID: adee2d9b1cf5
-Revises: 5c2e9a7f1b44
+Revises: d5f1b8c3a940
 Created: 2026-10-17
 """
 
@@ -18,7 +18,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "adee2d9b1cf5"
-down_revision: str | None = "5c2e9a7f1b44"
+down_revision: str | None = "d5f1b8c3a940"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
