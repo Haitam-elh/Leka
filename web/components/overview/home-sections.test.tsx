@@ -21,6 +21,8 @@ vi.mock("@/lib/sources-queries", () => ({ useSources: () => listed }));
 const buy = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }));
 const permissions = vi.hoisted(() => ({ value: [] as string[] }));
 vi.mock("@/lib/billing-queries", () => ({ useAddOns: () => offers, useBuy: () => buy }));
+const catalogue = vi.hoisted(() => ({ data: undefined as unknown }));
+vi.mock("@/lib/capabilities-queries", () => ({ useCapabilities: () => catalogue }));
 vi.mock("@/components/shell/shell-provider", () => ({ usePermissions: () => permissions.value }));
 vi.mock("@/lib/intentions/queries", () => ({ useIntentions: () => list.value }));
 vi.mock("@/components/intentions/intentions-list", () => ({
@@ -125,7 +127,7 @@ describe("what is on sale", () => {
     ...extra,
   });
 
-  it("twelve agents at most, each its state in words, the way to them all", () => {
+  it("one row of six at most — as many as its columns — each its state in words, the way to them all", () => {
     offers.data = {
       available: true,
       every: false,
@@ -135,16 +137,41 @@ describe("what is on sale", () => {
     };
     show(<AgentsSection />);
     const cards = screen.getAllByTestId("home-agent");
-    expect(cards).toHaveLength(12);
-    // Six at most on a phone: no row left half empty, the page not endless.
-    expect(cards[6]).toHaveClass("max-md:nth-[n+7]:hidden");
+    expect(cards).toHaveLength(6);
+    // One row at every width: two on a phone, three, four, six.
+    expect(cards[2]).toHaveClass("max-md:nth-[n+3]:hidden");
+    expect(cards[3]).toHaveClass("md:max-lg:nth-[n+4]:hidden");
+    expect(cards[4]).toHaveClass("lg:max-xl:nth-[n+5]:hidden");
     expect(screen.getAllByTestId("agent-state")[0]).toHaveTextContent("Option payante");
     expect(screen.getByRole("link", { name: /Voir tous les agents et bundles/ })).toHaveAttribute(
       "href",
       "/capabilities",
     );
-    // Dense: up to six a row on a wide screen, two on a phone.
     expect(screen.getByTestId("home-agents-grid")).toHaveClass("xl:grid-cols-6", "grid-cols-2");
+  });
+
+  it("recommends what works with the connected sources first, saying why (LEKA-488)", () => {
+    offers.data = {
+      available: true,
+      every: false,
+      minimum_plan: "starter",
+      agents: [agent("jira-reader"), agent("plain", { included: true, owned: true }), agent("github-reader")],
+      bundles: [],
+    };
+    catalogue.data = [
+      { key: "jira-reader", sources: [{ any_of: ["jira"], connected: false }] },
+      { key: "plain", sources: [] },
+      { key: "github-reader", sources: [{ any_of: ["github"], connected: true }] },
+    ];
+    show(<AgentsSection />);
+    const cards = screen.getAllByTestId("home-agent");
+    expect(cards.map((c) => c.dataset.key)).toEqual(["github-reader", "plain", "jira-reader"]);
+    expect(within(cards[0]).getByTestId("home-agent-fit")).toHaveTextContent(
+      "Fonctionne avec vos sources connectées",
+    );
+    expect(within(cards[1]).queryByTestId("home-agent-fit")).toBeNull();
+    expect(within(cards[2]).getByTestId("home-agent-fit")).toHaveTextContent("Une source à connecter");
+    catalogue.data = undefined;
   });
 
   it("« + » buys an option, only for whoever may change the workspace", () => {

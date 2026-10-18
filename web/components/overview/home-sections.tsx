@@ -23,10 +23,12 @@ import { exactDate, timeAgo } from "@/components/knowledge/time";
 import { routes } from "@/config/routes";
 import { euros } from "@/lib/billing";
 import { useAddOns } from "@/lib/billing-queries";
+import { useCapabilities } from "@/lib/capabilities-queries";
 import { useEnvironment } from "@/lib/environment-queries";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import { useIntentions } from "@/lib/intentions/queries";
+import { recommend } from "@/lib/recommend-agents";
 import { useSources } from "@/lib/sources-queries";
 import { type Health, overallOf } from "@/lib/twin";
 
@@ -219,7 +221,10 @@ export function AgentsSection() {
   const w = t.overview.home;
   const { format } = useLocale();
   const offers = useAddOns().data;
+  // What each needs, to recommend what works here first (LEKA-488).
+  const catalogue = useCapabilities({}).data;
   if (!offers?.available || offers.agents.length === 0) return null;
+  const row = recommend(offers.agents, (key) => agentStateOf(offers, key), catalogue, 6);
   return (
     <section
       className="mt-10"
@@ -247,15 +252,20 @@ export function AgentsSection() {
         className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"
         data-testid="home-agents-grid"
       >
-        {offers.agents.slice(0, 12).map((agent) => {
+        {/* One row, at every width: as many as its columns. */}
+        {row.map(({ agent, fit }) => {
           const { icon: Icon, tone } = markOf(agent.category);
           const payable = agentStateOf(offers, agent.key) === "option";
           return (
             <li
               key={agent.key}
-              className={cn(CARD, "flex flex-col p-3.5 max-md:nth-[n+7]:hidden")}
+              className={cn(
+                CARD,
+                "flex flex-col p-3.5 max-md:nth-[n+3]:hidden md:max-lg:nth-[n+4]:hidden lg:max-xl:nth-[n+5]:hidden",
+              )}
               data-testid="home-agent"
               data-key={agent.key}
+              data-fit={fit ?? undefined}
             >
               <div className="flex items-start justify-between gap-2">
                 <span
@@ -274,6 +284,12 @@ export function AgentsSection() {
               <p className="mt-1 line-clamp-2 flex-1 text-xs text-shell-muted">
                 {(t.catalogue.summaries as Record<string, string>)[agent.key] ?? agent.summary}
               </p>
+              {/* Why it is here: what it reads, against what is connected. */}
+              {fit === "connected" || fit === "to_connect" ? (
+                <p className="mt-2 text-xs text-shell-muted" data-testid="home-agent-fit">
+                  {w.fit[fit]}
+                </p>
+              ) : null}
               <div className="mt-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
                 <AgentStateSaid agentKey={agent.key} />
                 {payable ? (
