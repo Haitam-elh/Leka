@@ -16,7 +16,9 @@ test.describe("alert rules", () => {
     const dialog = page.getByTestId("alert-dialog");
     await expect(dialog).toBeVisible();
     // Never a channel said ready that is not: Slack, coming.
-    await expect(dialog.getByTestId("alert-channel-slack")).toHaveAttribute("data-status", "unavailable");
+    // Slack: connected by its webhook, here not yet (LEKA-496); SMS never offered.
+    await expect(dialog.getByTestId("alert-channel-slack")).toHaveAttribute("data-status", "not_connected");
+    await expect(dialog.getByTestId("alert-channel-sms")).toHaveAttribute("data-status", "unavailable");
 
     await dialog.getByTestId("alert-subject").click();
     await page.getByRole("option", { name: "payment-api", exact: true }).click();

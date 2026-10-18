@@ -101,9 +101,10 @@ async def test_what_may_be_watched_and_how_each_channel_stands(
         "email": "untested",
         "sms": "unavailable",
         "whatsapp": "unavailable",
-        "slack": "unavailable",
-        "teams": "unavailable",
-        "discord": "unavailable",
+        # Connected by a webhook (LEKA-496): not yet here.
+        "slack": "not_connected",
+        "teams": "not_connected",
+        "discord": "not_connected",
     }
     await plan(workspace_id, "starter")
     channels = {c["key"]: c["status"] for c in (await client.get(RULES)).json()["channels"]}

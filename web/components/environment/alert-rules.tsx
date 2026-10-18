@@ -1,6 +1,7 @@
 "use client";
 
 import { Bell, Plus } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { createContext, useContext, useState } from "react";
 
 import { cn } from "cn";
@@ -23,7 +24,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { routes } from "@/config/routes";
-import { type AlertRule, type AlertRules, usable } from "@/lib/alert-rules";
+import {
+  type AlertChannel,
+  type AlertRule,
+  type AlertRules,
+  alertChannels,
+  usable,
+  WEBHOOK_CHANNELS,
+  type WebhookChannel,
+} from "@/lib/alert-rules";
 import { ApiError } from "@/lib/api";
 import { useAlertRuleChange, useAlertRules, useMonitoring } from "@/lib/environment-queries";
 import { fill } from "@/lib/i18n/dictionaries";
@@ -445,6 +454,155 @@ export function AlertRulesCard() {
           })}
         </ul>
       )}
+      <ConnectedChannels data={data} manage={Boolean(open)} />
     </Card>
+  );
+}
+
+/** Slack, Microsoft Teams, Discord connected by their webhook (LEKA-496):
+ * where each stands, its hint — never its URL —, connected, tried and
+ * disconnected by who manages the sources; SMS and WhatsApp said not there. */
+function ConnectedChannels({ data, manage }: { data: AlertRules; manage: boolean }) {
+  const t = useDictionary();
+  const w = t.environment.twin.alerts.rules;
+  const x = w.webhooks;
+  const confirm = useConfirm();
+  const queries = useQueryClient();
+  const [typing, setTyping] = useState<Partial<Record<WebhookChannel, string>>>({});
+  const [busy, setBusy] = useState<WebhookChannel | null>(null);
+  const shown = data.channels.filter(
+    (c): c is AlertChannel & { key: WebhookChannel } =>
+      (WEBHOOK_CHANNELS as readonly string[]).includes(c.key) && c.status !== "not_in_plan",
+  );
+  if (!shown.length) return null;
+  const name = (key: WebhookChannel) => w.channelNames[key];
+
+  async function run(key: WebhookChannel, act: () => Promise<unknown>, done?: (said: unknown) => void) {
+    setBusy(key);
+    try {
+      const said = await act();
+      done?.(said);
+      await queries.invalidateQueries({ queryKey: ["monitoring", "rules"] });
+    } catch (problem) {
+      const refused = problem instanceof ApiError && problem.fieldErrors?.url;
+      notify.error({
+        title: refused ? fill(x.invalid, { channel: name(key) }) : problem instanceof ApiError ? problem.message : t.states.errorTitle,
+      });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <section className="mt-4 border-t border-shell-line pt-3" data-testid="alert-channels" aria-labelledby="alert-channels-title">
+      <h3 id="alert-channels-title" className="text-[0.875rem] font-semibold text-brand-navy">
+        {x.title}
+      </h3>
+      <p className="mt-0.5 text-xs text-shell-muted">{x.lead}</p>
+      <ul className="mt-2 space-y-3">
+        {shown.map((channel) => {
+          const key = channel.key;
+          const value = typing[key] ?? "";
+          return (
+            <li key={key} className="rounded-lg border border-shell-line p-3" data-testid="alert-channel-row" data-channel={key}>
+              <p className="flex flex-wrap items-center gap-2 text-[0.8125rem]">
+                <span className="font-medium text-brand-navy">{name(key)}</span>
+                <span className={cn("text-xs", channel.status === "failing" ? "text-state-danger" : "text-shell-muted")}>
+                  {w.channelStatus[channel.status]}
+                </span>
+                {channel.hint ? (
+                  <span className="text-xs text-shell-muted" data-testid="alert-channel-hint">
+                    {fill(x.connectedTo, { hint: channel.hint })}
+                  </span>
+                ) : null}
+              </p>
+              {channel.error ? (
+                <p className="mt-1 text-xs text-state-danger">{fill(x.lastError, { error: channel.error })}</p>
+              ) : null}
+              {manage ? (
+                <div className="mt-2 flex flex-wrap items-end gap-2">
+                  <div className="min-w-56 flex-1">
+                    <Label htmlFor={`webhook-${key}`} className="text-xs">
+                      {x.url}
+                    </Label>
+                    <Input
+                      id={`webhook-${key}`}
+                      type="url"
+                      autoComplete="off"
+                      placeholder="https://"
+                      value={value}
+                      onChange={(event) => setTyping((now) => ({ ...now, [key]: event.target.value }))}
+                      data-testid="alert-channel-url"
+                    />
+                    <p className="mt-1 text-[0.6875rem] text-shell-muted">{x.where[key]}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={busy === key || !value.trim()}
+                    onClick={() =>
+                      void run(
+                        key,
+                        () => alertChannels.connect(key, value.trim()),
+                        () => {
+                          setTyping((now) => ({ ...now, [key]: "" }));
+                          notify.success({ title: fill(x.connected, { channel: name(key) }) });
+                        },
+                      )
+                    }
+                    data-testid="alert-channel-connect"
+                  >
+                    {channel.hint ? x.replace : x.connect}
+                  </Button>
+                  {channel.hint ? (
+                    <>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={busy === key}
+                        onClick={() =>
+                          void run(
+                            key,
+                            () => alertChannels.test(key),
+                            (said) => {
+                              const read = said as AlertChannel;
+                              if (read.status === "operational") notify.success({ title: fill(x.tested, { channel: name(key) }) });
+                              else notify.error({ title: fill(x.testFailed, { error: read.error ?? "" }) });
+                            },
+                          )
+                        }
+                        data-testid="alert-channel-test"
+                      >
+                        {x.test}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy === key}
+                        onClick={async () => {
+                          const ok = await confirm({
+                            title: fill(x.disconnectTitle, { channel: name(key) }),
+                            description: x.disconnectBody,
+                            confirmLabel: x.disconnect,
+                            destructive: true,
+                          });
+                          if (ok) await run(key, () => alertChannels.disconnect(key));
+                        }}
+                        data-testid="alert-channel-disconnect"
+                      >
+                        {x.disconnect}
+                      </Button>
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+      <p className="mt-2 text-xs text-shell-muted">{x.others}</p>
+    </section>
   );
 }
