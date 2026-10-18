@@ -20,8 +20,7 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 
 from leka.db import session_factory, system_scope, workspace_scope
-from leka.intentions import Intention, IntentionAnalysis
-from leka.intentions import deletion
+from leka.intentions import Intention, IntentionAnalysis, deletion
 from tests.conftest import FakeIdentity
 from tests.test_context_engine import model
 from tests.test_intentions_api import API, ASKED, _ask, _get
@@ -36,9 +35,9 @@ async def _rows(intention_id: str) -> int:
     with system_scope():
         async with session_factory() as session:
             found = await session.scalar(
-                select(func.count()).select_from(Intention).where(
-                    Intention.id == uuid.UUID(intention_id)
-                )
+                select(func.count())
+                .select_from(Intention)
+                .where(Intention.id == uuid.UUID(intention_id))
             )
             return int(found or 0)
 
