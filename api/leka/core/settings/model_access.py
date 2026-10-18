@@ -15,7 +15,7 @@ from pydantic import SecretStr, field_validator
 from leka.core.settings._blank import blank_is_none
 from leka.core.settings._rotation import RotateEvery
 
-Provider = Literal["google", "mistral", "anthropic"]
+Provider = Literal["google", "mistral", "anthropic", "openai"]
 
 
 class ModelAccessSettings:
@@ -38,6 +38,9 @@ class ModelAccessSettings:
     # Each failure a provider says is temporary (busy, rate-limited, down)
     # is tried again this many times, then the next model is.
     llm_retries: int = 1
+    # The models each kind of work tries first (LEKA-491): "code=anthropic:
+    # claude-sonnet-5; vision=openai:gpt-4.1". Empty: none has its own.
+    llm_task_routes: str = ""
     # Where LEKA's default model is reached when not at its provider's own
     # address: a proxy, a regional endpoint — the browser tests point it at
     # a local stand-in. https in production (config.py).
@@ -46,9 +49,15 @@ class ModelAccessSettings:
     google_api_key: Annotated[SecretStr | None, RotateEvery(days=90)] = None
     mistral_api_key: Annotated[SecretStr | None, RotateEvery(days=90)] = None
     anthropic_api_key: Annotated[SecretStr | None, RotateEvery(days=90)] = None
+    openai_api_key: Annotated[SecretStr | None, RotateEvery(days=90)] = None
 
     @field_validator(
-        "google_api_key", "anthropic_api_key", "mistral_api_key", "llm_api_url", mode="before"
+        "google_api_key",
+        "anthropic_api_key",
+        "mistral_api_key",
+        "openai_api_key",
+        "llm_api_url",
+        mode="before",
     )
     @classmethod
     def _blank_model_key_is_not_configured(cls, value: object) -> object:
@@ -67,6 +76,7 @@ class ModelAccessSettings:
             "google": self.google_api_key,
             "mistral": self.mistral_api_key,
             "anthropic": self.anthropic_api_key,
+            "openai": self.openai_api_key,
         }
         return keys[self.llm_provider]
 
@@ -74,7 +84,12 @@ class ModelAccessSettings:
     def has_model_access(self) -> bool:
         return any(
             key is not None
-            for key in (self.google_api_key, self.mistral_api_key, self.anthropic_api_key)
+            for key in (
+                self.google_api_key,
+                self.mistral_api_key,
+                self.anthropic_api_key,
+                self.openai_api_key,
+            )
         )
 
 

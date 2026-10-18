@@ -255,6 +255,17 @@ class Entry:
         return self.standing.definition
 
 
+# The kind of work a capability is, by its category (LEKA-491): what
+# LEKA_LLM_TASK_ROUTES may give its own models.
+TASK_OF_CATEGORY = {
+    "development": "code",
+    "architecture": "architecture",
+    "infrastructure": "architecture",
+    "documentation": "writing",
+    "data": "data",
+}
+
+
 def needs_of(definition: Definition) -> Needs:
     """What a capability asks of a model, as the router reads it."""
     need = definition.model_needs
@@ -263,6 +274,7 @@ def needs_of(definition: Definition) -> Needs:
         tools=need.tools,
         context=need.context,
         quality=need.quality,
+        task=TASK_OF_CATEGORY.get(definition.category),
     )
 
 
