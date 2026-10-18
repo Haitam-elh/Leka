@@ -436,7 +436,8 @@ export function Bundles() {
     .map((b) => b.discount_percent as number);
   const best = savings.length ? Math.max(...savings) : null;
   return (
-    <section className="space-y-3" aria-labelledby="bundles-title" data-testid="bundles">
+    // id: the header's « Bundles » opens the catalogue here (LEKA-494).
+    <section id="bundles" className="scroll-mt-4 space-y-3" aria-labelledby="bundles-title" data-testid="bundles">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h2 id="bundles-title" className="text-[1.25rem] font-bold text-brand-navy">

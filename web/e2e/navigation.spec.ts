@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { ask, openStep } from "./intention-helpers";
-import { LANDING, openNavigation, signIn } from "./sign-in";
+import { LANDING, signIn } from "./sign-in";
 
 /**
  * The information architecture, clicked through.
@@ -11,49 +11,66 @@ import { LANDING, openNavigation, signIn } from "./sign-in";
  * above the title and the right words in the browser tab.
  */
 
-/** Every page the menu opens, the line it marks, the title it carries. */
+/** Every page, the header's entry it marks (LEKA-494), the title it carries. */
 const ZONES = [
-  ["/overview", "overview", "Mon Dashboard"],
-  ["/intentions/new", "intention-new", "Nouvelle intention"],
-  ["/intentions", "intentions", "Intentions"],
-  ["/environment", "environment-overview", "Mon environnement"],
-  ["/capabilities", "capabilities-available", "Compétences"],
-  ["/activity", "activity", "Activité"],
-  ["/approvals", "approvals", "À valider"],
-  ["/sources", "sources", "Sources"],
-  ["/governance", "governance", "Sécurité"],
-  ["/team", "team", "Équipe"],
-  ["/billing", "billing", "Facturation"],
-  ["/settings", "settings", "Paramètres"],
+  ["/overview", "home", "Mon Dashboard"],
+  ["/intentions/new", "history", "Nouvelle intention"],
+  ["/intentions", "history", "Intentions"],
+  ["/environment", "environment", "Mon environnement"],
+  ["/capabilities", "agents", "Compétences"],
+  ["/activity", null, "Activité"],
+  ["/approvals", null, "À valider"],
+  ["/sources", null, "Sources"],
+  ["/governance", null, "Sécurité"],
+  ["/team", null, "Équipe"],
+  ["/billing", null, "Facturation"],
+  ["/settings", null, "Paramètres"],
 ] as const;
 
 test.describe("the information architecture", () => {
   test("gives every zone the same shell, the right entry and the right title", async ({ page }) => {
     await signIn(page);
+    const header = page.getByRole("navigation", { name: "Navigation principale" });
 
     for (const [path, id, label] of ZONES) {
       await page.goto(path);
       await expect(page).toHaveTitle(`${label} · LEKA`);
-
-      // Marked, and in sight: the section it is in opened on arrival.
-      await openNavigation(page);
-      await expect(page.getByTestId(`nav-${id}`)).toHaveAttribute("aria-current", "page");
-      await expect(page.getByTestId(`nav-${id}`)).toBeVisible();
-      await expect(page.getByRole("navigation", { name: "Navigation principale" }).locator('a[aria-current="page"]')).toHaveCount(1);
-      await page.keyboard.press("Escape");
+      // Its entry marked in the header — the only one; none for a page of
+      // running the workspace, in the profile menu.
+      await expect(header.locator('a[aria-current="page"]')).toHaveCount(id ? 1 : 0);
+      if (id) await expect(page.getByTestId(`nav-${id}`)).toHaveAttribute("aria-current", "page");
     }
   });
 
-  test("marks the composer's line on the composer, not « Mes intentions »", async ({ page }) => {
+  test("no grid, no drawer: the main pages in the header, the others in the profile menu (LEKA-494)", async ({
+    page,
+  }) => {
     await signIn(page);
+    await expect(page.getByTestId("open-navigation")).toHaveCount(0);
+    for (const id of ["home", "environment", "agents", "bundles", "history"]) {
+      await expect(page.getByTestId(`nav-${id}`)).toBeVisible();
+    }
 
-    await openNavigation(page);
-    await page.getByTestId("nav-intention-new").click();
+    await page.getByTestId("nav-bundles").click();
+    await expect(page).toHaveURL("http://localhost:3000/capabilities#bundles");
 
-    await expect(page).toHaveURL("http://localhost:3000/intentions/new");
-    await openNavigation(page);
-    await expect(page.getByTestId("nav-intention-new")).toHaveAttribute("aria-current", "page");
-    await expect(page.getByTestId("nav-intentions")).not.toHaveAttribute("aria-current", "page");
+    for (const [id, path] of [
+      ["sources", "/sources"],
+      ["governance", "/governance"],
+      ["team", "/team"],
+      ["billing", "/billing"],
+    ] as const) {
+      await page.getByTestId("user-menu").click();
+      await page.getByTestId(`menu-${id}`).click();
+      await expect(page).toHaveURL(`http://localhost:3000${path}`);
+    }
+
+    // A phone: the header has no room for them — the profile menu holds them.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.getByTestId("nav-environment")).toBeHidden();
+    await page.getByTestId("user-menu").click();
+    await page.getByTestId("menu-environment").click();
+    await expect(page).toHaveURL("http://localhost:3000/environment");
   });
 
   test("puts a trail above a detail page, and names the thing you opened", async ({ page }) => {
@@ -65,11 +82,7 @@ test.describe("the information architecture", () => {
     await expect(trail.getByText("Payment API")).toBeVisible();
     await expect(page).toHaveTitle("Payment API · LEKA");
     // The parent stays marked while you read one of its children.
-    await openNavigation(page);
-    await expect(page.getByTestId("nav-environment-overview")).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    await expect(page.getByTestId("nav-environment")).toHaveAttribute("aria-current", "page");
   });
 
   test("keeps a tab in the URL, so it can be sent to someone", async ({ page }) => {
@@ -128,85 +141,22 @@ test.describe("the three pillars (LEKA-428)", () => {
   }) => {
     await signIn(page);
 
-    // Its name opens its overview, and unfolds it: under it, Activité only
-    // (2026-10-14).
-    await openNavigation(page);
-    await page.getByTestId("nav-environment-overview").click();
+    // The header's entry opens its overview.
+    await page.getByTestId("nav-environment").click();
     await expect(page).toHaveURL("http://localhost:3000/environment");
     await expect(page.getByRole("tablist", { name: "Vue de l'environnement" }).getByRole("tab", { name: "Vue d'ensemble" })).toHaveAttribute("aria-selected", "true");
-    await openNavigation(page);
-    await expect(page.getByTestId("nav-section-environment-toggle")).toHaveAttribute("aria-expanded", "true");
-    await expect(page.getByTestId("nav-activity")).toBeVisible();
-    await expect(page.getByTestId("nav-environment-applications")).toHaveCount(0);
-    await expect(page.getByTestId("nav-environment-overview")).toHaveAttribute("aria-current", "page");
-    await expect(page.getByRole("navigation", { name: "Navigation principale" }).locator('a[aria-current="page"]')).toHaveCount(1);
-    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("nav-environment")).toHaveAttribute("aria-current", "page");
 
     // A view chosen on the page (LEKA-459: its tabs): in the address, the
     // menu still on its page.
     await page.getByRole("tablist", { name: "Vue de l'environnement" }).getByRole("tab", { name: "Services" }).click();
     await expect(page).toHaveURL("http://localhost:3000/environment?tab=applications");
     await expect(page.getByRole("tablist", { name: "Vue de l'environnement" }).getByRole("tab", { name: "Services" })).toHaveAttribute("aria-selected", "true");
-    await openNavigation(page);
-    await expect(page.getByTestId("nav-environment-overview")).toHaveAttribute("aria-current", "page");
-    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("nav-environment")).toHaveAttribute("aria-current", "page");
 
     // And the address is the view: reloaded, or sent, it opens there.
     await page.goto("/environment?tab=domains");
     await expect(page.getByTestId("env-more")).toContainText("Domaines");
-  });
-
-  test("opens and closes a section, from the keyboard too, and remembers it", async ({ page }) => {
-    await signIn(page);
-    await openNavigation(page);
-
-    const administration = page.getByTestId("nav-section-administration-toggle");
-    await expect(administration).toHaveAttribute("aria-expanded", "false");
-    await expect(page.getByTestId("nav-sources")).toBeHidden();
-
-    await administration.focus();
-    await page.keyboard.press("Enter");
-    await expect(administration).toHaveAttribute("aria-expanded", "true");
-    await expect(page.getByTestId("nav-sources")).toBeVisible();
-
-    const intentions = page.getByTestId("nav-section-intentions-toggle");
-    await intentions.click();
-    await expect(intentions).toHaveAttribute("aria-expanded", "false");
-    await expect(page.getByTestId("nav-intentions")).toBeHidden();
-
-    await page.reload();
-    await openNavigation(page);
-    await expect(page.getByTestId("nav-section-administration-toggle")).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
-    await expect(page.getByTestId("nav-section-intentions-toggle")).toHaveAttribute(
-      "aria-expanded",
-      "false",
-    );
-  });
-
-  test("opens the section you arrive in, and keeps the page in sight", async ({ page }) => {
-    // A 13-inch laptop's window.
-    await page.setViewportSize({ width: 1440, height: 789 });
-    await signIn(page);
-    await page.goto("/activity");
-    await openNavigation(page);
-
-    await expect(page.getByTestId("nav-section-environment-toggle")).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
-    await expect(page.getByTestId("nav-activity")).toBeInViewport();
-
-    // Leaving it closes it again: nothing was chosen.
-    await page.getByTestId("nav-approvals").click();
-    await expect(page).toHaveURL("http://localhost:3000/approvals");
-    await openNavigation(page);
-    await expect(page.getByTestId("nav-section-environment-toggle")).toHaveAttribute(
-      "aria-expanded",
-      "false",
-    );
   });
 });
 
@@ -328,12 +278,14 @@ test.describe("what a member may see", () => {
     // never Facturation.
     await expect(page.getByTestId("plan-badge")).toHaveAttribute("href", "/billing/plans");
 
-    await openNavigation(page);
-    await expect(page.getByTestId("nav-section-environment")).toBeVisible();
-    await page.getByTestId("nav-section-administration-toggle").click();
-    await expect(page.getByTestId("nav-settings")).toBeVisible();
-    await expect(page.getByTestId("nav-billing")).toHaveCount(0);
+    await expect(page.getByTestId("nav-environment")).toBeVisible();
+    await page.getByTestId("user-menu").click();
+    await expect(page.getByTestId("settings")).toBeVisible();
+    await expect(page.getByTestId("menu-sources")).toBeVisible();
+    await expect(page.getByTestId("menu-billing")).toHaveCount(0);
+    await expect(page.getByTestId("menu-team")).toHaveCount(0);
     await expect(page.getByTestId("nav-approvals")).toHaveCount(0);
+    await page.keyboard.press("Escape");
 
     await page.goto("/billing");
 

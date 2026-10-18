@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
 import { accountLanguage } from "./account-language";
-import { DEMO_EMAIL, DEMO_PASSWORD, expectShellReady, expectSignedIn, LANDING, loginAnswer, openNavigation, signIn } from "./sign-in";
+import { DEMO_EMAIL, DEMO_PASSWORD, expectShellReady, expectSignedIn, LANDING, loginAnswer, signIn } from "./sign-in";
 
 /**
  * Languages, end to end (docs/languages.md).
@@ -158,9 +158,7 @@ test("the account menu and the settings change the language and the region", asy
   const dialog = page.getByTestId("language-dialog");
   await dialog.getByRole("combobox").fill("english");
   await dialog.locator('[data-tag="en"]').click();
-  await openNavigation(page);
-  await expect(page.getByTestId("nav-environment-overview")).toContainText("My environment");
-  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("nav-environment")).toContainText("My environment");
 
   await page.goto("/settings");
   const settings = page.getByTestId("language-settings");
