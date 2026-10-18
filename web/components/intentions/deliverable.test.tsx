@@ -16,6 +16,8 @@
  *   - the comments dropped, counted;
  *   - its report one tab away.
  * - An agent still at work: said, no deliverable yet.
+ * - Every deliverable offers to send it out: tickets for Jira, pages for
+ *   Confluence (their flow: publications.test.tsx).
  * - The agent block on the intention leads to its deliverable.
  */
 
@@ -41,6 +43,20 @@ const runs = vi.hoisted(() => ({ forIntention: vi.fn(), one: vi.fn() }));
 vi.mock("@/lib/agent-runs", async (original) => ({
   ...(await original<typeof import("@/lib/agent-runs")>()),
   agentRuns: runs,
+}));
+
+const changes = vi.hoisted(() => ({ list: vi.fn(), forRun: vi.fn(), accept: vi.fn(), reject: vi.fn() }));
+vi.mock("@/lib/code-changes", async (original) => ({
+  ...(await original<typeof import("@/lib/code-changes")>()),
+  codeChanges: changes,
+}));
+
+const shell = vi.hoisted(() => ({ permissions: ["intention:read", "intention:create", "intention:approve"] as string[] }));
+vi.mock("@/components/shell/shell-provider", () => ({ usePermissions: () => shell.permissions }));
+const sent = vi.hoisted(() => ({ forRun: vi.fn(), ask: vi.fn(), accept: vi.fn(), reject: vi.fn() }));
+vi.mock("@/lib/publications", async (original) => ({
+  ...(await original<typeof import("@/lib/publications")>()),
+  publications: sent,
 }));
 
 const { DeliverableView } = await import("@/components/intentions/deliverable");
@@ -176,6 +192,8 @@ function show(node: React.ReactNode) {
 beforeEach(() => {
   vi.clearAllMocks();
   search.value = new URLSearchParams();
+  changes.forRun.mockResolvedValue([]);
+  sent.forRun.mockResolvedValue([]);
 });
 
 describe("an agent's report", () => {
@@ -281,12 +299,61 @@ describe("the code review's deliverable", () => {
     expect(runs.one).not.toHaveBeenCalled();
   });
 
+  it("is the change it proposed first, before and after side by side, when it proposed one", async () => {
+    runs.forIntention.mockResolvedValue([run({ key: "code-change", title: "Modification de code" })]);
+    runs.one.mockResolvedValue(detail({ key: "code-change", title: "Modification de code", review: null }));
+    changes.forRun.mockResolvedValue([
+      {
+        id: "c1",
+        run_id: "r1",
+        intention_id: "i1",
+        repository: "acme/payments",
+        base_branch: "main",
+        title: "Déduire les paiements en attente",
+        summary: "Le solde ignorait les paiements en attente.",
+        status: "proposed",
+        files: [
+          {
+            path: "app/balance.py",
+            status: "modified",
+            additions: 2,
+            deletions: 1,
+            why: "Le calcul du solde",
+            diff: `--- a/app/balance.py\n+++ b/app/balance.py\n${PATCH}\n`,
+          },
+        ],
+        pull_requests_allowed: true,
+        error: null,
+        error_detail: null,
+        note: null,
+        pull_request_url: null,
+        pull_request_number: null,
+        created_at: new Date().toISOString(),
+        decided_at: null,
+      },
+    ]);
+    show(<DeliverableView intention={INTENTION} />);
+    const split = await screen.findByTestId("code-change-split");
+    expect(changes.forRun).toHaveBeenCalledWith("r1");
+    expect(screen.getByTestId("deliverable-tab-change")).toHaveAttribute("aria-selected", "true");
+    expect(split.querySelector('[data-change="remove"]')?.textContent).toBe("    return total");
+    expect(screen.getByRole("button", { name: "J'accepte d'appliquer ce changement sur GitHub" })).toBeEnabled();
+    // Its report, one tab away.
+    await userEvent.setup().click(screen.getByTestId("deliverable-tab-report"));
+    expect(screen.getByTestId("deliverable-report")).toHaveTextContent("Le solde change.");
+  });
+
   it("is any agent's report when it read no code", async () => {
     runs.forIntention.mockResolvedValue([run({ key: "security-review", title: "Revue de sécurité" })]);
     runs.one.mockResolvedValue(detail({ key: "security-review", title: "Revue de sécurité", review: null }));
     show(<DeliverableView intention={INTENTION} />);
     expect(await screen.findByTestId("deliverable-report")).toHaveTextContent("Le solde change.");
     expect(screen.queryByTestId("code-review")).toBeNull();
+    // Sent out of it, when a person asks: tickets for Jira, pages for Confluence.
+    const out = screen.getByTestId("publications");
+    expect(within(out).getByRole("button", { name: "Proposer des tickets Jira" })).toBeVisible();
+    expect(within(out).getByRole("button", { name: "Documenter sur Confluence" })).toBeVisible();
+    expect(sent.forRun).toHaveBeenCalledWith("r1");
   });
 });
 

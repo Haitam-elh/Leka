@@ -68,6 +68,11 @@ class ConfluenceConfig(BaseModel):
         max_length=MAX_SCOPE_OPTIONS,
         description="Keys of the spaces to read ('ENG'). Empty: every space the account can see.",
     )
+    pages: bool = Field(
+        default=False,
+        description="Allow LEKA to publish the pages a person accepted — new pages in the "
+        "spaces this source reads, never an edit. The account then needs Add pages there.",
+    )
 
     @field_validator("site")
     @classmethod

@@ -561,7 +561,8 @@ async def test_jira_end_to_end(
 
     # Pasted from the browser's address bar: kept as the site's name.
     source = await _create(client, **_jira("https://acme.atlassian.net/jira/software"))
-    assert source["config"] == {"site": "acme", "projects": None}
+    # LEKA reads: creating tickets is off until an admin turns it on.
+    assert source["config"] == {"site": "acme", "projects": None, "issues": False}
     assert JIRA_TOKEN not in json.dumps(source)
     url = f"{API}/sources/{source['id']}"
 
@@ -655,7 +656,8 @@ async def test_confluence_end_to_end(
 
     body = {**_jira("acme.atlassian.net"), "type": "confluence", "display_name": "Wiki"}
     source = await _create(client, **body)
-    assert source["config"] == {"site": "acme", "spaces": None}
+    # LEKA reads: publishing pages is off until an admin turns it on.
+    assert source["config"] == {"site": "acme", "spaces": None, "pages": False}
     url = f"{API}/sources/{source['id']}"
 
     tested = (await client.post(f"{url}/test")).json()

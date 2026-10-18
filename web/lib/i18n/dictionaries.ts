@@ -1833,7 +1833,14 @@ const fr = {
       failed: "Échec",
     },
     note: "Commentaire (facultatif)",
-    accept: "Accepter et ouvrir la pull request",
+    accept: "J'accepte d'appliquer ce changement sur GitHub",
+    acceptHint:
+      "LEKA ouvre une pull request sur une nouvelle branche : rien n'est fusionné, l'équipe la relit et la fusionne sur GitHub.",
+    view: "Affichage du changement",
+    split: "Avant / après",
+    unified: "Diff",
+    before: "Avant",
+    after: "Après · proposition de LEKA",
     opening: "Ouverture de la pull request…",
     reject: "Refuser",
     opened: "Pull request ouverte",
@@ -1844,7 +1851,7 @@ const fr = {
     failed: "La décision n'a pas pu être enregistrée.",
     seePullRequest: "Voir la pull request #{number} sur GitHub",
     notAllowed:
-      "Pour l'accepter, autorisez d'abord LEKA à ouvrir des pull requests sur cette source GitHub (Sources → la source GitHub → Paramètres → « pull_requests »), avec une clé qui a Contents et Pull requests en écriture.",
+      "Pour l'accepter, autorisez d'abord LEKA à ouvrir des pull requests sur cette source GitHub (Sources → la source GitHub → Modifier → « Ouvrir les pull requests acceptées »), avec une clé qui a Contents et Pull requests en écriture.",
     errors: {
       pull_requests_off:
         "Cette source GitHub n'autorise pas encore LEKA à ouvrir des pull requests.",
@@ -1857,6 +1864,109 @@ const fr = {
       too_large: "Un fichier est trop gros.",
       unavailable: "GitHub n'a pas répondu comme attendu : réessayez.",
       no_source: "La source GitHub n'est plus connectée.",
+    },
+  },
+  /** What LEKA proposes to send out of a deliverable: Jira tickets,
+   * Confluence pages (2026-10-18). */
+  publications: {
+    title: "Passer à l'action dans Jira ou Confluence",
+    intro:
+      "LEKA rédige, à partir de ce livrable, les tickets à ouvrir ou la documentation à publier : vous choisissez, puis vous envoyez.",
+    ask: { issues: "Proposer des tickets Jira", pages: "Documenter sur Confluence" },
+    noSource: {
+      issues: "Aucune source Jira connectée : connectez-en une pour que LEKA y propose des tickets.",
+      pages: "Aucune source Confluence connectée : connectez-en une pour que LEKA y publie des pages.",
+    },
+    connect: "Connecter une source",
+    source: "Source",
+    target: { issues: "Projet", pages: "Espace" },
+    placeholder: { issues: "PAY", pages: "DOC" },
+    draft: { issues: "Rédiger les tickets", pages: "Rédiger les pages" },
+    draftHint: {
+      issues:
+        "LEKA lit le livrable et rédige jusqu'à 15 tickets : titre, description, critères d'acceptation, priorité. Rien n'est envoyé avant votre accord.",
+      pages:
+        "LEKA lit le livrable et rédige jusqu'à 10 pages de documentation. Rien n'est publié avant votre accord.",
+    },
+    notYetAllowed: {
+      issues:
+        "Cette source ne permet pas encore à LEKA de créer des tickets : il peut les rédiger, puis un admin autorise l'envoi (Sources → la source Jira → Modifier → « Créer les tickets acceptés »).",
+      pages:
+        "Cette source ne permet pas encore à LEKA de publier des pages : il peut les rédiger, puis un admin autorise la publication (Sources → la source Confluence → Modifier → « Publier les pages acceptées »).",
+    },
+    statuses: {
+      drafting: "Rédaction…",
+      proposed: "À décider",
+      applied: "Envoyé",
+      partly: "Envoyé en partie",
+      rejected: "Refusé",
+      failed: "Échec",
+    },
+    where: { issues: "Tickets Jira · projet {target}", pages: "Pages Confluence · espace {target}" },
+    drafting: {
+      issues: "LEKA rédige les tickets à partir du livrable…",
+      pages: "LEKA rédige les pages à partir du livrable…",
+    },
+    chosen: "{count} sur {total} {count|choisi|choisis}",
+    all: "Tout choisir",
+    none: "Ne rien choisir",
+    read: { issues: "Lire le ticket", pages: "Lire la page" },
+    kinds: { task: "Tâche", bug: "Bug", story: "Récit" },
+    priorities: {
+      highest: "Critique",
+      high: "Haute",
+      medium: "Moyenne",
+      low: "Basse",
+      lowest: "Très basse",
+    },
+    send: { issues: "Ajouter à Jira ({count})", pages: "Publier sur Confluence ({count})" },
+    sendHint: {
+      issues:
+        "LEKA crée seulement de nouveaux tickets dans le projet {target}, avec le compte de la source : jamais une modification ni une suppression.",
+      pages:
+        "LEKA crée seulement de nouvelles pages dans l'espace {target}, avec le compte de la source : jamais une modification ni une suppression.",
+    },
+    notAllowed: {
+      issues:
+        "Pour les ajouter, un admin autorise d'abord LEKA à créer des tickets sur cette source (Modifier → « Créer les tickets acceptés »), avec un compte qui peut créer des tickets dans ce projet.",
+      pages:
+        "Pour les publier, un admin autorise d'abord LEKA à publier des pages sur cette source (Modifier → « Publier les pages acceptées »), avec un compte qui peut ajouter des pages dans cet espace.",
+    },
+    openSource: "Ouvrir la source",
+    approvers: "Un admin de l'espace de travail choisit et envoie : partagez-lui ce livrable.",
+    reject: "Refuser",
+    rejectedDone: "Proposition refusée",
+    rejectedBecause: "Refusée : {note}",
+    sentDone: {
+      issues: "{count} {count|ticket ajouté|tickets ajoutés} à Jira",
+      pages: "{count} {count|page publiée|pages publiées} sur Confluence",
+    },
+    sent: {
+      issues: "{count} sur {total} {total|ticket créé|tickets créés} dans Jira.",
+      pages: "{count} sur {total} {total|page publiée|pages publiées} sur Confluence.",
+    },
+    openIssue: "{key} dans Jira",
+    openPage: "Ouvrir la page",
+    notSent: "Non envoyé",
+    failed: "L'action n'a pas abouti : réessayez.",
+    errors: {
+      issues_off: "Cette source Jira n'autorise pas encore LEKA à créer des tickets.",
+      pages_off: "Cette source Confluence n'autorise pas encore LEKA à publier des pages.",
+      out_of_scope: "Ce projet ou cet espace n'est pas lu par la source.",
+      wrong_source: "Cette source n'est pas du bon type.",
+      no_source: "La source n'est plus connectée.",
+      not_finished: "Ce livrable n'est pas terminé.",
+      not_allowed:
+        "Le compte de la source ne peut pas créer ici : donnez-lui le droit de créer des tickets (Jira) ou d'ajouter des pages (Confluence).",
+      not_found: "Atlassian ne trouve pas ce projet ou cet espace.",
+      title_taken: "Une page de ce titre existe déjà dans l'espace.",
+      invalid: "Atlassian a refusé le contenu.",
+      unavailable: "Atlassian n'a pas répondu comme attendu : réessayez.",
+      nothing_chosen: "Choisissez au moins un élément.",
+      no_model: "Aucun modèle de langage n'est disponible pour rédiger.",
+      timeout: "La rédaction a pris trop de temps : redemandez-la.",
+      queue_down: "La rédaction n'a pas pu démarrer : redemandez-la.",
+      error: "La rédaction a échoué : redemandez-la.",
     },
   },
   /** LEKA's capabilities (LEKA-393, mockup 13). */
@@ -5602,6 +5712,12 @@ const fr = {
      * back to `fields`.
      */
     fieldsOf: {
+      github: {
+        pull_requests: {
+          label: "Ouvrir les pull requests acceptées",
+          help: "LEKA ouvre une pull request — une nouvelle branche, un commit, jamais une fusion — pour un changement de code qu'une personne a accepté. La clé doit avoir Contents et Pull requests en écriture.",
+        },
+      },
       splunk: {
         base_url: {
           label: "Adresse de l'API Splunk",
@@ -5665,11 +5781,19 @@ const fr = {
           label: "Token d'API",
           help: "Un token Atlassian ne peut pas être limité à la lecture : créez-le sur un compte dédié, sans droits d'administration, qui ne voit que ce que LEKA doit lire. Chiffré, et plus jamais affiché.",
         },
+        issues: {
+          label: "Créer les tickets acceptés",
+          help: "LEKA crée dans Jira les tickets qu'une personne a acceptés dans un livrable — de nouveaux tickets, dans les projets lus par cette source, jamais une modification. Le compte doit pouvoir créer des tickets dans ces projets.",
+        },
       },
       confluence: {
         token: {
           label: "Token d'API",
           help: "Un token Atlassian ne peut pas être limité à la lecture : créez-le sur un compte dédié, sans droits d'administration, qui ne voit que ce que LEKA doit lire. Chiffré, et plus jamais affiché.",
+        },
+        pages: {
+          label: "Publier les pages acceptées",
+          help: "LEKA publie dans Confluence les pages qu'une personne a acceptées dans un livrable — de nouvelles pages, dans les espaces lus par cette source, jamais une modification. Le compte doit pouvoir ajouter des pages dans ces espaces.",
         },
       },
       linear: {
@@ -6618,6 +6742,7 @@ const fr = {
       by: "Version {version} · livré le {when}",
       report: "Rapport",
       design: "Le design",
+      change: "Le changement proposé",
       onCode: "Revue sur le code",
       download: "Télécharger le rapport",
       drawBoth: "Générer le PDF et le PowerPoint",
@@ -10078,7 +10203,14 @@ const en: Dictionary = {
       failed: "Failed",
     },
     note: "Comment (optional)",
-    accept: "Accept and open the pull request",
+    accept: "I accept applying this change on GitHub",
+    acceptHint:
+      "LEKA opens a pull request on a new branch: nothing is merged, the team reviews and merges it on GitHub.",
+    view: "How the change is shown",
+    split: "Before / after",
+    unified: "Diff",
+    before: "Before",
+    after: "After · LEKA's proposal",
     opening: "Opening the pull request…",
     reject: "Reject",
     opened: "Pull request opened",
@@ -10089,7 +10221,7 @@ const en: Dictionary = {
     failed: "The decision could not be saved.",
     seePullRequest: "See pull request #{number} on GitHub",
     notAllowed:
-      "To accept it, first allow LEKA to open pull requests on this GitHub source (Sources → the GitHub source → Settings → « pull_requests »), with a token that has Contents and Pull requests in write.",
+      "To accept it, first allow LEKA to open pull requests on this GitHub source (Sources → the GitHub source → Edit → « Open the accepted pull requests »), with a token that has Contents and Pull requests in write.",
     errors: {
       pull_requests_off:
         "This GitHub source does not allow LEKA to open pull requests yet.",
@@ -10102,6 +10234,107 @@ const en: Dictionary = {
       too_large: "A file is too large.",
       unavailable: "GitHub did not answer as expected: try again.",
       no_source: "The GitHub source is no longer connected.",
+    },
+  },
+  publications: {
+    title: "Act on it in Jira or Confluence",
+    intro:
+      "From this deliverable, LEKA drafts the tickets to open or the documentation to publish: you choose, then you send.",
+    ask: { issues: "Propose Jira tickets", pages: "Document on Confluence" },
+    noSource: {
+      issues: "No Jira source connected: connect one for LEKA to propose tickets there.",
+      pages: "No Confluence source connected: connect one for LEKA to publish pages there.",
+    },
+    connect: "Connect a source",
+    source: "Source",
+    target: { issues: "Project", pages: "Space" },
+    placeholder: { issues: "PAY", pages: "DOC" },
+    draft: { issues: "Draft the tickets", pages: "Draft the pages" },
+    draftHint: {
+      issues:
+        "LEKA reads the deliverable and drafts up to 15 tickets: title, description, acceptance criteria, priority. Nothing is sent before you agree.",
+      pages:
+        "LEKA reads the deliverable and drafts up to 10 documentation pages. Nothing is published before you agree.",
+    },
+    notYetAllowed: {
+      issues:
+        "This source does not let LEKA create tickets yet: it can draft them, then an admin allows sending (Sources → the Jira source → Edit → « Create the accepted tickets »).",
+      pages:
+        "This source does not let LEKA publish pages yet: it can draft them, then an admin allows publishing (Sources → the Confluence source → Edit → « Publish the accepted pages »).",
+    },
+    statuses: {
+      drafting: "Drafting…",
+      proposed: "To decide",
+      applied: "Sent",
+      partly: "Partly sent",
+      rejected: "Rejected",
+      failed: "Failed",
+    },
+    where: { issues: "Jira tickets · project {target}", pages: "Confluence pages · space {target}" },
+    drafting: {
+      issues: "LEKA is drafting the tickets from the deliverable…",
+      pages: "LEKA is drafting the pages from the deliverable…",
+    },
+    chosen: "{count} of {total} chosen",
+    all: "Choose all",
+    none: "Choose none",
+    read: { issues: "Read the ticket", pages: "Read the page" },
+    kinds: { task: "Task", bug: "Bug", story: "Story" },
+    priorities: {
+      highest: "Critical",
+      high: "High",
+      medium: "Medium",
+      low: "Low",
+      lowest: "Lowest",
+    },
+    send: { issues: "Add to Jira ({count})", pages: "Publish on Confluence ({count})" },
+    sendHint: {
+      issues:
+        "LEKA only creates new tickets in project {target}, with the source's account: never an edit, never a deletion.",
+      pages:
+        "LEKA only creates new pages in space {target}, with the source's account: never an edit, never a deletion.",
+    },
+    notAllowed: {
+      issues:
+        "To add them, an admin first allows LEKA to create tickets on this source (Edit → « Create the accepted tickets »), with an account that can create tickets in this project.",
+      pages:
+        "To publish them, an admin first allows LEKA to publish pages on this source (Edit → « Publish the accepted pages »), with an account that can add pages in this space.",
+    },
+    openSource: "Open the source",
+    approvers: "A workspace admin chooses and sends: share this deliverable with them.",
+    reject: "Reject",
+    rejectedDone: "Proposal rejected",
+    rejectedBecause: "Rejected: {note}",
+    sentDone: {
+      issues: "{count} {count|ticket|tickets} added to Jira",
+      pages: "{count} {count|page|pages} published on Confluence",
+    },
+    sent: {
+      issues: "{count} of {total} {total|ticket|tickets} created in Jira.",
+      pages: "{count} of {total} {total|page|pages} published on Confluence.",
+    },
+    openIssue: "{key} in Jira",
+    openPage: "Open the page",
+    notSent: "Not sent",
+    failed: "That did not go through: try again.",
+    errors: {
+      issues_off: "This Jira source does not let LEKA create tickets yet.",
+      pages_off: "This Confluence source does not let LEKA publish pages yet.",
+      out_of_scope: "The source does not read this project or space.",
+      wrong_source: "This source is not of the right kind.",
+      no_source: "The source is no longer connected.",
+      not_finished: "This deliverable is not finished.",
+      not_allowed:
+        "The source's account cannot create here: give it the right to create issues (Jira) or add pages (Confluence).",
+      not_found: "Atlassian does not find this project or space.",
+      title_taken: "A page with this title is already in the space.",
+      invalid: "Atlassian refused the content.",
+      unavailable: "Atlassian did not answer as expected: try again.",
+      nothing_chosen: "Choose at least one item.",
+      no_model: "No language model is available to draft.",
+      timeout: "Drafting took too long: ask again.",
+      queue_down: "Drafting could not start: ask again.",
+      error: "Drafting failed: ask again.",
     },
   },
   catalogue: {
@@ -13727,6 +13960,12 @@ const en: Dictionary = {
       },
     },
     fieldsOf: {
+      github: {
+        pull_requests: {
+          label: "Open the accepted pull requests",
+          help: "LEKA opens a pull request — a new branch, one commit, never a merge — for a code change a person accepted. The token needs Contents and Pull requests in write.",
+        },
+      },
       splunk: {
         base_url: {
           label: "Splunk API address",
@@ -13790,11 +14029,19 @@ const en: Dictionary = {
           label: "API token",
           help: "An Atlassian token cannot be limited to reading: create it on a dedicated account, with no admin rights, that sees only what LEKA should read. Encrypted, and never shown again.",
         },
+        issues: {
+          label: "Create the accepted tickets",
+          help: "LEKA creates in Jira the tickets a person accepted in a deliverable — new issues, in the projects this source reads, never an edit. The account must be able to create issues in those projects.",
+        },
       },
       confluence: {
         token: {
           label: "API token",
           help: "An Atlassian token cannot be limited to reading: create it on a dedicated account, with no admin rights, that sees only what LEKA should read. Encrypted, and never shown again.",
+        },
+        pages: {
+          label: "Publish the accepted pages",
+          help: "LEKA publishes in Confluence the pages a person accepted in a deliverable — new pages, in the spaces this source reads, never an edit. The account must be able to add pages in those spaces.",
         },
       },
       linear: {
@@ -14716,6 +14963,7 @@ const en: Dictionary = {
       by: "Version {version} · delivered {when}",
       report: "Report",
       design: "The design",
+      change: "The proposed change",
       onCode: "Review on the code",
       download: "Download the report",
       drawBoth: "Draw the PDF and the PowerPoint",

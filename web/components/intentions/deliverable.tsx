@@ -17,7 +17,9 @@ import { useMemo, useState } from "react";
 import { cn } from "cn";
 
 import { Deliverables } from "@/components/capabilities/agent-runs";
+import { RunCodeChanges } from "@/components/capabilities/code-changes";
 import { DesignSimulator } from "@/components/capabilities/design-simulator";
+import { RunPublications } from "@/components/capabilities/publications";
 import { Card } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
 import { exactDate } from "@/components/knowledge/time";
@@ -28,6 +30,7 @@ import { routes } from "@/config/routes";
 import type { components } from "@/lib/api-types";
 import type { AgentRun, AgentRunDetail } from "@/lib/agent-runs";
 import { useAgentRun, useDrawFiles, useIntentionRuns } from "@/lib/agent-runs-queries";
+import { useRunCodeChanges } from "@/lib/code-changes-queries";
 import { type DiffRow, diffRows, rowOf } from "@/lib/diff";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
@@ -45,6 +48,9 @@ import { working } from "@/lib/intentions/journey";
  *                      comments on their lines: red for what is wrong, green
  *                      for what to do better or what is right — then its
  *                      report
+ *     every one, too   what to send out of it: tickets LEKA drafts for a
+ *                      Jira project, pages for a Confluence space, sent once
+ *                      a person chose them (2026-10-18)
  *
  * Only what the API kept is drawn. A comment the agent wrote on a line it
  * did not read was dropped there, and is counted here.
@@ -115,14 +121,19 @@ function Delivered({
   const w = t.intentions.deliverable;
   const agent = run.title ?? run.key;
   const report = run.report ?? run.output ?? "";
-  // What it delivered, the most telling first: the screen it redrew, its
-  // comments on the code, its report.
+  // The change it proposed to the code, when it proposed one.
+  const changes = useRunCodeChanges(run.id);
+  // What it delivered, the most telling first: the screen it redrew, the
+  // change it proposed, its comments on the code, its report.
   const views = [
     ...(run.design ? (["design"] as const) : []),
+    ...(changes.data?.length ? (["change"] as const) : []),
     ...(run.review ? (["code"] as const) : []),
     "report" as const,
   ];
-  const [view, setView] = useState<(typeof views)[number]>(views[0]);
+  type View = (typeof views)[number];
+  const [chosen, setView] = useState<View | null>(null);
+  const view: View = chosen && views.includes(chosen) ? chosen : views[0];
   return (
     <div className="flex flex-col gap-4" data-testid="deliverable" data-agent={run.key}>
       <section className="flex flex-wrap items-center gap-3 rounded-xl border border-shell-line bg-white px-5 py-4">
@@ -144,6 +155,8 @@ function Delivered({
           </Button>
         ) : null}
       </section>
+      {/* What to send out of it: tickets for Jira, pages for Confluence. */}
+      <RunPublications runId={run.id} />
       {views.length > 1 ? (
         <div className="flex gap-2" role="tablist" aria-label={w.title}>
           {views.map((each) => (
@@ -159,13 +172,15 @@ function Delivered({
                 view === each ? "bg-brand-violet-soft text-brand-violet" : "text-shell-nav hover:bg-shell-canvas",
               )}
             >
-              {each === "design" ? w.design : each === "code" ? w.onCode : w.report}
+              {each === "design" ? w.design : each === "change" ? w.change : each === "code" ? w.onCode : w.report}
             </button>
           ))}
         </div>
       ) : null}
       {run.design && view === "design" ? (
         <DesignSimulator runId={run.id} />
+      ) : view === "change" ? (
+        <RunCodeChanges runId={run.id} />
       ) : run.review && view === "code" ? (
         <CodeReview review={run.review} />
       ) : report ? (

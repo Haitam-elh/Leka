@@ -8,7 +8,7 @@ import { FormProvider, useFormContext, useWatch } from "react-hook-form";
 import { cn } from "cn";
 import { FormAlert } from "@/components/forms/form-alert";
 import { MetadataPanel } from "@/components/knowledge/metadata-panel";
-import { SelectField } from "@/components/forms/choice-fields";
+import { CheckboxField, SelectField } from "@/components/forms/choice-fields";
 import { TextField } from "@/components/forms/text-field";
 import { TextareaField } from "@/components/forms/textarea-field";
 import { capabilityWord, fieldWords } from "@/components/sources/source-panel";
@@ -39,6 +39,7 @@ import {
   type FieldSpec,
   fieldsOf,
   filled,
+  initialOf,
   scopeFieldOf,
   zodOf,
 } from "@/lib/sources-form";
@@ -362,7 +363,8 @@ function MethodStep({
 
 type Values = {
   display_name: string;
-  config: Record<string, string>;
+  // A yes or no — what LEKA may write — is a box, true or false.
+  config: Record<string, string | boolean>;
   credentials: Record<string, string>;
 };
 
@@ -428,10 +430,7 @@ function SettingsStep({
     defaultValues: {
       display_name: source?.display_name ?? entry.display_name,
       config: Object.fromEntries(
-        configFields.map((f) => [
-          f.name,
-          typeof current[f.name] === "string" ? String(current[f.name]) : f.default,
-        ]),
+        configFields.map((f) => [f.name, initialOf(f, current[f.name])]),
       ),
       credentials: defaultsOf(secretFields),
     },
@@ -520,6 +519,15 @@ function SchemaField({
     .join(" ");
   const name = `${part}.${field.name}` as `config.${string}`;
   const optional = !field.required || (keepSecret && field.kind === "password");
+  if (field.kind === "toggle") {
+    return (
+      <CheckboxField<Values, typeof name>
+        name={name}
+        label={known?.label ?? field.title}
+        description={help || undefined}
+      />
+    );
+  }
   if (field.kind === "choice") {
     const words = (t.sources.choices as Record<string, Record<string, string> | undefined>)[
       field.name
