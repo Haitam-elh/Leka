@@ -134,9 +134,8 @@ async def listed(session: AsyncSession, workspace_id: uuid.UUID) -> list[Capabil
 
 
 async def _list(status: str | None) -> int:
-    from leka.db import load_schema, session_factory, system_scope
+    from leka.db import session_factory, system_scope
 
-    load_schema()
     with system_scope():
         async with session_factory() as session:
             query = select(CapabilitySuggestion).order_by(CapabilitySuggestion.created_at.desc())
@@ -150,9 +149,8 @@ async def _list(status: str | None) -> int:
 
 
 async def _set_status(suggestion: uuid.UUID, status: str) -> int:
-    from leka.db import load_schema, session_factory, system_scope
+    from leka.db import session_factory, system_scope
 
-    load_schema()
     with system_scope():
         async with session_factory() as session:
             row = await session.get(CapabilitySuggestion, suggestion)
@@ -180,4 +178,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    from leka.db import load_schema
+
+    load_schema()
     raise SystemExit(main())
