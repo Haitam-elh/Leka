@@ -319,6 +319,28 @@ async def test_a_structured_answer_is_checked_and_asked_again(workspace: uuid.UU
     assert body["generationConfig"]["responseJsonSchema"]["required"] == ["goal", "confidence"]
 
 
+async def test_each_model_is_held_to_what_it_gives_and_a_cut_answer_is_said_cut(
+    workspace: uuid.UUID,
+) -> None:
+    # 2026-10-18: a code change asked within 16,000 tokens, thinking
+    # included, came back cut — and was said « no model ».
+    cut = gemini('{"goal": "explain_ca')
+    cut["candidates"][0]["finishReason"] = "MAX_TOKENS"
+    script = Script(
+        {GOOGLE: [cut, cut], MISTRAL: [chat('{"goal": "explain_cause", "confidence": 0.8}')]}
+    )
+    asked = ask(tier=Tier.FAST, max_tokens=100_000)
+    read = await _ask(workspace, script, lambda g: g.structured(asked, Verdict))
+    assert read.value.goal == "explain_cause"
+    google, mistral = (json.loads(script.asked[i].content) for i in (0, 2))
+    # Never more than each gives back.
+    assert google["generationConfig"]["maxOutputTokens"] == 65_536
+    assert mistral["max_tokens"] == 32_000
+    calls = await _calls(workspace)
+    assert [c.status for c in calls] == ["invalid", "invalid", "ok"]
+    assert "Cut at its limit" in (calls[0].error or "")
+
+
 async def test_tools_are_called_until_the_model_answers(workspace: uuid.UUID) -> None:
     script = Script(
         {

@@ -469,3 +469,36 @@ async def test_an_edit_not_found_is_said_and_the_change_written_again(
     # Only a code change is written again.
     architect = (await client.post(f"{RUNS}/{uuid.uuid4()}/change")).status_code
     assert architect == 404
+
+
+async def test_a_change_not_written_says_why_as_it_was(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    leka_gemini: Callable[..., Script],
+    github: GitHub,
+) -> None:
+    # 2026-10-18: answers cut at the token limit were said « no model »;
+    # the change writer now has room, and why it failed is said as it was.
+    _as(identity, acme, "member")
+    await _github_source(acme["acme"])
+    await sync_catalogue()
+    cut = gemini('{"repository": "acme/pay')
+    cut["candidates"][0]["finishReason"] = "MAX_TOKENS"
+    script = leka_gemini(
+        gemini(call={"name": "read_file", "args": {"repository": REPO, "path": "app/balance.py"}}),
+        gemini("# Analyse\n\nLe solde ignore les paiements en attente."),
+        cut,
+        cut,
+    )
+    started = await client.post(
+        RUNS,
+        json={"key": "code-change", "inputs": {"demande": "Corrige le solde", "depot": REPO}},
+    )
+    run_id = started.json()["id"]
+    assert await execute_run(acme["acme"], uuid.UUID(run_id)) == {"status": "succeeded"}
+    assert script.asked[2]["generationConfig"]["maxOutputTokens"] == 48_000
+    run = (await client.get(f"{RUNS}/{run_id}")).json()
+    assert run["draw_failed"] == "unanswered"
+    assert "Cut at its limit of 48000 tokens" in (run["draw_said"] or "")

@@ -314,8 +314,26 @@ describe("the code review's deliverable", () => {
     const missing = await screen.findByTestId("deliverable-change-missing");
     expect(missing).toHaveTextContent("LEKA n'a pas pu écrire le changement");
     expect(missing).toHaveTextContent("le texte à remplacer n'a pas été retrouvé dans le fichier");
+    expect(screen.queryByTestId("deliverable-change-said")).toBeNull();
     await userEvent.click(within(missing).getByRole("button", { name: "Réessayer d'écrire le changement" }));
     expect(runs.rewriteChange).toHaveBeenCalledWith("r1");
+  });
+
+  it("says what the model's provider said when no change came", async () => {
+    runs.forIntention.mockResolvedValue([run({ key: "code-change", title: "Modification de code" })]);
+    runs.one.mockResolvedValue(
+      detail({
+        key: "code-change",
+        title: "Modification de code",
+        review: null,
+        draw_failed: "unanswered",
+        draw_said: "Cut at its limit of 48000 tokens, thinking included.",
+      }),
+    );
+    show(<DeliverableView intention={INTENTION} />);
+    const missing = await screen.findByTestId("deliverable-change-missing");
+    expect(missing).toHaveTextContent("le modèle a répondu, mais pas sous la forme attendue");
+    expect(within(missing).getByTestId("deliverable-change-said")).toHaveTextContent("Cut at its limit of 48000 tokens");
   });
 
   it("says its change is being written", async () => {

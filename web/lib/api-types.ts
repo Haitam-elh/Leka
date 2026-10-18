@@ -7514,6 +7514,11 @@ export interface components {
              */
             draw_failed?: string | null;
             /**
+             * Draw Said
+             * @description What the model's provider, or LEKA, said when they could not be — or none.
+             */
+            draw_said?: string | null;
+            /**
              * Error
              * @description Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, invalid_output, abandoned, error.
              */
@@ -7667,6 +7672,11 @@ export interface components {
              * @description Why its files could not be drawn last time (no_model, timeout, error…) — or none.
              */
             draw_failed?: string | null;
+            /**
+             * Draw Said
+             * @description What the model's provider, or LEKA, said when they could not be — or none.
+             */
+            draw_said?: string | null;
             /**
              * Error
              * @description Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, invalid_output, abandoned, error.
