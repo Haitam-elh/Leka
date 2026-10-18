@@ -252,6 +252,48 @@ async def _set_status(workspace_id: str, status: WorkspaceStatus) -> None:
             await session.commit()
 
 
+async def test_votre_espace_saved_and_read_again_only_what_it_offers(
+    client: AsyncClient, identity: FakeIdentity, people: dict[str, uuid.UUID]
+) -> None:
+    """Paramètres → Votre espace (LEKA-502): its name and preferences kept and
+    read again; a value out of range refused; a policy never set through it."""
+    await _create_workspace(client, identity, people["owner"], "Acme Corp")
+    preferences = {
+        "timezone": "Europe/London",
+        "default_environment": "staging",
+        "default_period": {"preset": "custom", "from": "2026-10-01", "to": "2026-10-15"},
+    }
+
+    saved = await client.patch(
+        f"{API}/workspaces/current", json={"name": "  Acme Corporation ", "settings": preferences}
+    )
+    assert saved.status_code == 200
+    read = (await client.get(f"{API}/workspaces/current")).json()["workspace"]
+    assert read["name"] == "Acme Corporation"
+    assert read["settings"] == preferences
+
+    # Another preset: the period replaced whole, the others kept.
+    await client.patch(
+        f"{API}/workspaces/current", json={"settings": {"default_period": {"preset": "30d"}}}
+    )
+    read = (await client.get(f"{API}/workspaces/current")).json()["workspace"]
+    assert read["settings"]["default_period"] == {"preset": "30d"}
+    assert read["settings"]["timezone"] == "Europe/London"
+
+    for refused in (
+        {"name": "   "},
+        {"settings": {"timezone": "Mars/Olympus"}},
+        {"settings": {"default_environment": "prod-eu"}},
+        {"settings": {"default_period": {"preset": "custom", "from": "2026-10-15"}}},
+        {"settings": {"approval_policy": {"threshold": "none"}}},
+    ):
+        answer = await client.patch(f"{API}/workspaces/current", json=refused)
+        assert answer.status_code == 422, refused
+    read = (await client.get(f"{API}/workspaces/current")).json()["workspace"]
+    assert read["name"] == "Acme Corporation"
+    assert "approval_policy" not in read["settings"]
+
+
 async def test_a_suspended_workspace_reads_but_does_not_write(
     client: AsyncClient, identity: FakeIdentity, people: dict[str, uuid.UUID]
 ) -> None:
