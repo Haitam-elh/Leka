@@ -55953,7 +55953,10 @@ export interface operations {
     };
     open_portal_api_v1_billing_portal_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description cancel: opened on ending the subscription — back to Free */
+                flow?: "cancel" | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;

@@ -4,10 +4,13 @@
                                       last said it (workspace:read)
     POST /billing/checkout            a Stripe Checkout for a plan: its URL,
                                       and what will be charged — the page's
-                                      price (workspace:update)
+                                      price; already subscribed, Stripe's
+                                      confirmation of the change to that
+                                      exact price (LEKA-490) (workspace:update)
     POST /billing/portal              Stripe's customer portal: card, invoices,
                                       plan change, cancellation — in the
-                                      person's language (workspace:update)
+                                      person's language; ?flow=cancel opened
+                                      on ending it (workspace:update)
     POST /billing/subscription/renewal  « Ne pas renouveler » / « Réactiver le
                                       renouvellement »: kept until its period's
                                       end either way (workspace:update)
@@ -23,9 +26,9 @@ back from Checkout. No AI capacity is sold apart: there is no route for it.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from pydantic import BaseModel, ConfigDict
 
 from leka.api.dependencies import SessionDep
@@ -71,7 +74,7 @@ def _unavailable() -> ApiError:
 
 
 def _refused(error: CheckoutRefusedError) -> ApiError:
-    code = status.HTTP_409_CONFLICT if error.code == "subscribed" else 422
+    code = status.HTTP_409_CONFLICT if error.code in ("subscribed", "same_plan") else 422
     return ApiError(
         code,
         ErrorCode.CONFLICT if code == status.HTTP_409_CONFLICT else ErrorCode.VALIDATION_FAILED,
@@ -139,13 +142,21 @@ async def start_checkout(
 
 
 @router.post("/portal", response_model=PortalRead, summary="Stripe's customer portal")
-async def open_portal(principal: Payer, session: SessionDep) -> PortalRead:
+async def open_portal(
+    principal: Payer,
+    session: SessionDep,
+    flow: Annotated[
+        Literal["cancel"] | None,
+        Query(description="cancel: opened on ending the subscription — back to Free"),
+    ] = None,
+) -> PortalRead:
     try:
         url = await portal(
             session,
             principal.workspace_id,
             client=stripe(),
             locale=await _locale(session, principal),
+            cancel=flow == "cancel",
         )
     except BillingUnavailableError:
         raise _unavailable() from None
