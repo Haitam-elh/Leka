@@ -160,9 +160,15 @@ async def draw(
             )
         return Drawn([], usage=designed.usage, step="designed", kept=designed.kept)
     if definition.renders == "code_change":
-        proposed = await propose_change(session, run, definition, analysis)
+        proposed = await propose_change(session, run, definition, analysis, read=read or {})
         if proposed.change is None:
-            return Drawn([], proposed.error or "no_change", step="render_failed")
+            return Drawn(
+                [],
+                proposed.error or "no_change",
+                step="render_failed",
+                refusal=", ".join(f"{s['path']}: {s['why']}" for s in proposed.skipped)[:300]
+                or None,
+            )
         change = proposed.change
         return Drawn(
             [],
@@ -172,6 +178,7 @@ async def draw(
                 "code_change": str(change.id),
                 "repository": change.repository,
                 "files": len(change.files),
+                **({"skipped": proposed.skipped} if proposed.skipped else {}),
             },
         )
     request = Request(

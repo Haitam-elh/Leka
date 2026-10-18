@@ -21,14 +21,15 @@ export function useCodeChanges(intentionId: string, following: boolean) {
   });
 }
 
-/** What one run proposed — read again while it is still to decide. */
-export function useRunCodeChanges(runId: string | null) {
+/** What one run proposed — read again while it is still to decide, and
+ * while LEKA writes it (`writing`). */
+export function useRunCodeChanges(runId: string | null, writing = false) {
   return useQuery({
     queryKey: codeChangeKeys.run(runId ?? ""),
     queryFn: () => codeChanges.forRun(runId ?? ""),
     enabled: Boolean(runId),
     refetchInterval: (query) =>
-      (query.state.data ?? []).some((change) => change.status === "proposed") ? 4000 : false,
+      writing || (query.state.data ?? []).some((change) => change.status === "proposed") ? 4000 : false,
   });
 }
 

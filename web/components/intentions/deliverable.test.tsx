@@ -39,7 +39,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => search.value,
   useRouter: () => ({ push: vi.fn() }),
 }));
-const runs = vi.hoisted(() => ({ forIntention: vi.fn(), one: vi.fn() }));
+const runs = vi.hoisted(() => ({ forIntention: vi.fn(), one: vi.fn(), rewriteChange: vi.fn() }));
 vi.mock("@/lib/agent-runs", async (original) => ({
   ...(await original<typeof import("@/lib/agent-runs")>()),
   agentRuns: runs,
@@ -297,6 +297,32 @@ describe("the code review's deliverable", () => {
       "Revue de code travaille : son livrable s'affichera ici dès qu'il aura terminé.",
     );
     expect(runs.one).not.toHaveBeenCalled();
+  });
+
+  it("says why its change is missing, and writes it again on asking", async () => {
+    // 2026-10-18: the change not written, the analysis alone was shown.
+    runs.forIntention.mockResolvedValue([run({ key: "code-change", title: "Modification de code" })]);
+    runs.one.mockResolvedValue(
+      detail({ key: "code-change", title: "Modification de code", review: null, draw_failed: "edits_not_applied" }),
+    );
+    runs.rewriteChange.mockResolvedValue(run({ key: "code-change" }));
+    show(<DeliverableView intention={INTENTION} />);
+    const missing = await screen.findByTestId("deliverable-change-missing");
+    expect(missing).toHaveTextContent("LEKA n'a pas pu écrire le changement");
+    expect(missing).toHaveTextContent("le texte à remplacer n'a pas été retrouvé dans le fichier");
+    await userEvent.click(within(missing).getByRole("button", { name: "Réessayer d'écrire le changement" }));
+    expect(runs.rewriteChange).toHaveBeenCalledWith("r1");
+  });
+
+  it("says its change is being written", async () => {
+    runs.forIntention.mockResolvedValue([run({ key: "code-change", title: "Modification de code" })]);
+    runs.one.mockResolvedValue(
+      detail({ key: "code-change", title: "Modification de code", review: null, drawing: ["change"] }),
+    );
+    show(<DeliverableView intention={INTENTION} />);
+    expect(await screen.findByTestId("deliverable-change-writing")).toHaveTextContent("LEKA écrit le changement");
+    // Not the deck's « being drawn ».
+    expect(screen.queryByTestId("deliverable-drawing")).toBeNull();
   });
 
   it("is the change it proposed first, before and after side by side, when it proposed one", async () => {

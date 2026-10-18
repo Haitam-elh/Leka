@@ -73,6 +73,15 @@ export function useDrawFiles(id: string) {
   });
 }
 
+/** Its code change written again: the run read again until it is. */
+export function useRewriteChange(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => agentRuns.rewriteChange(id),
+    onSuccess: () => client.invalidateQueries({ queryKey: agentRunKeys.one(id) }),
+  });
+}
+
 /** Run, cancelled — the runs read again. */
 export function useAgentRunChange() {
   const client = useQueryClient();
