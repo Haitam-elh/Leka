@@ -103,7 +103,7 @@ async def connect(
     if row is None:
         row = ChannelEndpoint(workspace_id=workspace_id, channel=channel, created_by=by)
         session.add(row)
-    row.webhook = secret_box.encrypt(str(parsed))
+    row.webhook_ciphertext = secret_box.encrypt(str(parsed))
     row.hint = hint_of(parsed)
     row.status = "untested"
     row.last_error = None
@@ -131,7 +131,7 @@ async def _pause(attempt: int) -> None:
 
 async def post(row: ChannelEndpoint, text: str, *, now: datetime) -> Sent:
     """The message sent to it; its status and last error kept on it."""
-    url = secret_box.decrypt(row.webhook)
+    url = secret_box.decrypt(row.webhook_ciphertext)
     error: str | None = None
     async with httpx.AsyncClient(transport=_transport(), timeout=TIMEOUT) as client:
         for attempt in range(1, ATTEMPTS + 1):

@@ -24,7 +24,7 @@ def upgrade() -> None:
     op.create_table(
         "monitoring_channel_endpoints",
         sa.Column("channel", sa.String(length=10), nullable=False),
-        sa.Column("webhook", sa.LargeBinary(), nullable=False),
+        sa.Column("webhook_ciphertext", sa.LargeBinary(), nullable=False),
         sa.Column("hint", sa.String(length=120), nullable=False),
         sa.Column("status", sa.String(length=12), server_default="untested", nullable=False),
         sa.Column("last_error", sa.String(length=300), nullable=True),

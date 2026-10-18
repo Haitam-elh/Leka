@@ -90,7 +90,7 @@ async def test_connected_only_to_its_tools_webhook_kept_encrypted_shown_by_its_h
     with workspace_scope(workspace_id):
         async with session_factory() as session:
             row = await session.scalar(select(ChannelEndpoint))
-            assert row is not None and SLACK.encode() not in row.webhook
+            assert row is not None and SLACK.encode() not in row.webhook_ciphertext
 
     # SMS and WhatsApp: never offered.
     assert (await _channel(client, "sms"))["status"] == "unavailable"

@@ -188,7 +188,7 @@ class ChannelEndpoint(Base, WorkspaceScopedMixin):
     )
 
     channel: Mapped[str] = mapped_column(String(10), nullable=False)
-    webhook: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    webhook_ciphertext: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     # Its host and last characters: enough to recognise it, never to use it.
     hint: Mapped[str] = mapped_column(String(120), nullable=False)
     status: Mapped[str] = mapped_column(String(12), nullable=False, server_default="untested")
