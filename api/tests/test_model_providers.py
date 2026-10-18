@@ -29,6 +29,7 @@ from pydantic import BaseModel
 from leka.capabilities.gateway import (
     AZURE_OPENAI,
     MISTRAL,
+    OPENAI,
     Anthropic,
     Endpoint,
     Google,
@@ -49,7 +50,7 @@ from leka.capabilities.gateway import (
     route,
 )
 from leka.capabilities.gateway.contract import Call
-from leka.capabilities.gateway.routing import fallbacks_of
+from leka.capabilities.gateway.routing import fallbacks_of, task_routes_of
 
 
 class Verdict(BaseModel):
@@ -434,3 +435,69 @@ def test_fallbacks_are_read_as_configured() -> None:
         ("anthropic", "claude-sonnet-5"),
     ]
     assert fallbacks_of("") == []
+
+
+# ── each kind of work its models (LEKA-491) ─────────────────────────────────
+
+ALL_KEYS: dict[str, str | None] = {"google": "g", "mistral": "m", "anthropic": "a", "openai": "o"}
+
+
+def test_a_kind_of_work_tries_its_own_models_first_said_why_then_the_default() -> None:
+    tasks = task_routes_of("code=anthropic:claude-sonnet-5; vision=openai:gpt-4.1")
+    assert tasks == {
+        "code": [("anthropic", "claude-sonnet-5")],
+        "vision": [("openai", "gpt-4.1")],
+    }
+    code = route(Needs(task="code"), own=None, keys=ALL_KEYS, default=DEFAULT, tasks=tasks)
+    assert _order(code)[:2] == [
+        ("anthropic", "claude-sonnet-5", "task"),
+        ("google", "gemini-3.8-flash", "default"),
+    ]
+    # Another kind of work, or none: the default first, as before.
+    writing = route(Needs(task="writing"), own=None, keys=ALL_KEYS, default=DEFAULT, tasks=tasks)
+    assert _order(writing)[0] == ("google", "gemini-3.8-flash", "default")
+    # The workspace's own model still comes before any of LEKA's.
+    own = Own(Endpoint("azure_openai", "k", base_url="https://acme", owner="workspace"), "gpt")
+    mine = route(Needs(task="code"), own=own, keys=ALL_KEYS, default=DEFAULT, tasks=tasks)
+    assert _order(mine)[0][2] == "own" and _order(mine)[1][2] == "task"
+
+
+def test_a_kind_of_work_s_model_without_its_key_falls_back_said_never_retried_in_a_loop() -> None:
+    tasks = task_routes_of("code=openai:gpt-4.1")
+    routing = route(Needs(task="code"), own=None, keys=KEYS, default=DEFAULT, tasks=tasks)
+    assert ("openai", "gpt-4.1", "no_key") in {
+        (p.provider, p.model, p.reason) for p in routing.passed
+    }
+    assert _order(routing)[0] == ("google", "gemini-3.8-flash", "default")
+    # Each model offered once, whatever names it twice.
+    twice = route(
+        Needs(task="code"),
+        own=None,
+        keys=ALL_KEYS,
+        default=("openai", "gpt-4.1"),
+        tasks=tasks,
+    )
+    assert [r.profile.model for r in twice.routes].count("gpt-4.1") == 1
+
+
+def test_images_to_read_only_to_a_model_that_reads_them() -> None:
+    routing = route(Needs(vision=True), own=None, keys=ALL_KEYS, default=DEFAULT)
+    assert all(r.profile.vision for r in routing.routes)
+    assert ("mistral-large-latest", "vision") in {(p.model, p.reason) for p in routing.passed}
+
+
+async def test_openai_is_asked_in_chat_completions_with_leka_s_key() -> None:
+    request = Request(purpose="test", messages=[Message.user("Résume cet incident.")])
+    answer = {
+        "id": "o-1",
+        "model": "gpt-4.1-2025-04-14",
+        "choices": [
+            {"message": {"role": "assistant", "content": "Résumé."}, "finish_reason": "stop"}
+        ],
+        "usage": {"prompt_tokens": 12, "completion_tokens": 3},
+    }
+    done, sent = await _ask(OPENAI, _call("openai", "gpt-4.1", request), answer)
+    assert done.text == "Résumé."
+    assert str(sent.url) == "https://api.openai.com/v1/chat/completions"
+    assert sent.headers["authorization"] == "Bearer key-1"
+    assert json.loads(sent.content)["model"] == "gpt-4.1"

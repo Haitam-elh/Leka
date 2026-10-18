@@ -48,6 +48,8 @@ class Profile:
     prices: tuple[Price, ...] = ()
     # Gemini 3 asks to be left at its default temperature.
     sends_temperature: bool = True
+    # Reads images given to it (LEKA-491) — never confused with making them.
+    vision: bool = False
     known: bool = True
 
     def price(self, at: datetime | None = None) -> Price | None:
@@ -106,6 +108,7 @@ PROFILES: tuple[Profile, ...] = (
             Price(date(2027, 1, 1), 1.50, 7.50, 0.15),
         ),
         sends_temperature=False,
+        vision=True,
     ),
     Profile(
         "mistral",
@@ -144,6 +147,7 @@ PROFILES: tuple[Profile, ...] = (
         quality=3,
         speed=2,
         prices=(Price(_LONG_AGO, 2.0, 10.0),),
+        vision=True,
     ),
     Profile(
         "anthropic",
@@ -154,6 +158,31 @@ PROFILES: tuple[Profile, ...] = (
         quality=2,
         speed=3,
         prices=(Price(_LONG_AGO, 1.0, 5.0),),
+        vision=True,
+    ),
+    # OpenAI, held by LEKA (LEKA-491): text and images in, text out — never
+    # image generation. Prices: openai.com/api/pricing, per million tokens.
+    Profile(
+        "openai",
+        "gpt-4.1",
+        "GPT-4.1",
+        context=1_047_576,
+        output=32_768,
+        quality=3,
+        speed=2,
+        prices=(Price(_LONG_AGO, 2.0, 8.0, 0.5),),
+        vision=True,
+    ),
+    Profile(
+        "openai",
+        "gpt-4.1-mini",
+        "GPT-4.1 mini",
+        context=1_047_576,
+        output=32_768,
+        quality=2,
+        speed=3,
+        prices=(Price(_LONG_AGO, 0.4, 1.6, 0.1),),
+        vision=True,
     ),
 )
 
@@ -162,6 +191,7 @@ DEFAULTS: dict[str, str] = {
     "google": "gemini-3.8-flash",
     "mistral": "mistral-large-latest",
     "anthropic": "claude-sonnet-5",
+    "openai": "gpt-4.1",
 }
 
 _EXTRA: list[Profile] = []
@@ -180,10 +210,13 @@ def profile(provider: str, model: str) -> Profile:
     """What a model can do — a cautious guess for one the table does not
     know: 128k tokens in, structured output and tools as its provider's API
     offers them, middling quality, no price."""
-    for known in profiles():
-        if known.provider == provider and (
-            known.model == model or model.startswith(f"{known.model}-")
-        ):
+    mine = [known for known in profiles() if known.provider == provider]
+    # Its own name first: « gpt-4.1-mini » is not « gpt-4.1 » dated.
+    for known in mine:
+        if known.model == model:
+            return known
+    for known in mine:
+        if model.startswith(f"{known.model}-"):
             return known
     return Profile(
         provider,

@@ -64,7 +64,15 @@ from leka.capabilities.gateway.contract import (
 from leka.capabilities.gateway.controls import ControlRefusedError, Guard
 from leka.capabilities.gateway.profiles import DEFAULTS
 from leka.capabilities.gateway.rates import Rates, load_rates
-from leka.capabilities.gateway.routing import Needs, Own, Passed, Route, Routing, fallbacks_of
+from leka.capabilities.gateway.routing import (
+    Needs,
+    Own,
+    Passed,
+    Route,
+    Routing,
+    fallbacks_of,
+    task_routes_of,
+)
 from leka.capabilities.gateway.routing import route as route_of
 from leka.capabilities.models import ModelCall, WorkspaceModel
 from leka.connectors import BlockedAddressError, PublicTransport
@@ -169,6 +177,7 @@ def leka_keys() -> dict[str, str | None]:
         "google": settings.google_api_key,
         "mistral": settings.mistral_api_key,
         "anthropic": settings.anthropic_api_key,
+        "openai": settings.openai_api_key,
     }
     return {name: key.get_secret_value() if key else None for name, key in keys.items()}
 
@@ -244,6 +253,7 @@ class Gateway:
             list(fallbacks) if fallbacks is not None else fallbacks_of(settings.llm_fallbacks)
         )
         self._retries = max(0, settings.llm_retries if retries is None else retries)
+        self._tasks = task_routes_of(settings.llm_task_routes)
         self._sleep = sleep
         self._urls = urls if urls is not None else (leka_urls() if keys is None else {})
         self._guard = Guard(session, workspace_id)
@@ -266,6 +276,7 @@ class Gateway:
             default=self._default,
             fallbacks=self._fallbacks,
             urls=self._urls,
+            tasks=self._tasks,
         )
 
     async def ready(self, needs: Needs = Needs()) -> bool:
