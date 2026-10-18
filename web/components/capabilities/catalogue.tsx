@@ -67,6 +67,7 @@ import {
   useCapabilityChange,
   useCatalogueSummary,
 } from "@/lib/capabilities-queries";
+import { agentTitle } from "@/lib/agent-title";
 import { useAddOns } from "@/lib/billing-queries";
 import { type Dictionary, fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
@@ -162,7 +163,7 @@ export function titleOf(
   t: Dictionary,
   c: Pick<Capability, "key" | "title"> & { kind?: Capability["kind"] },
 ): string {
-  if (c.kind === "agent") return c.title;
+  if (c.kind === "agent") return agentTitle(t, c.key, c.title);
   return (t.intentions.analysis.capabilities as Record<string, string>)[c.key] ?? c.title;
 }
 

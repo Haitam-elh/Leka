@@ -15,6 +15,7 @@ import { Pill } from "@/components/intelligence/pill";
 import { StatusPill } from "@/components/intentions/intentions-list";
 import { exactDate, timeAgo } from "@/components/knowledge/time";
 import { routes } from "@/config/routes";
+import { agentTitle } from "@/lib/agent-title";
 import { euros } from "@/lib/billing";
 import { useAddOns } from "@/lib/billing-queries";
 import { useCapabilities } from "@/lib/capabilities-queries";
@@ -270,7 +271,7 @@ export function AgentsSection() {
                   className="rounded outline-none after:absolute after:inset-0 after:rounded-2xl hover:underline focus-visible:ring-3 focus-visible:ring-brand-violet/40"
                   data-testid="home-agent-open"
                 >
-                  {agent.title}
+                  {agentTitle(t, agent.key, agent.title)}
                 </Link>
               </h3>
               <p className="mt-1 line-clamp-2 flex-1 text-xs text-shell-muted">

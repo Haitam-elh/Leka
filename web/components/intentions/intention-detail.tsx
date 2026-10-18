@@ -44,6 +44,7 @@ import { useCurrentUser, usePermissions } from "@/components/shell/shell-provide
 import { SourceLogo } from "@/components/sources/source-logo";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { routes } from "@/config/routes";
+import { agentTitle } from "@/lib/agent-title";
 import { ApiError } from "@/lib/api";
 import { useIntentionRuns } from "@/lib/agent-runs-queries";
 import { billing, euros } from "@/lib/billing";
@@ -470,7 +471,7 @@ function AgentCard({
           <Icon className="size-5" aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[0.875rem] font-semibold text-brand-navy">{agent.title}</p>
+          <p className="text-[0.875rem] font-semibold text-brand-navy">{agentTitle(t, agent.key, agent.title)}</p>
           <p className="text-[0.8125rem] text-brand-navy">
             {agent.status === "included" ? (
               <span className="text-state-success">{included}</span>
@@ -488,7 +489,7 @@ function AgentCard({
           checked={checked}
           disabled={!selectable}
           onChange={onToggle}
-          aria-label={fill(w.choose, { name: agent.title })}
+          aria-label={fill(w.choose, { name: agentTitle(t, agent.key, agent.title) })}
           className="mt-1 size-4 accent-brand-violet"
           data-testid="detail-agent-choose"
         />
@@ -633,7 +634,7 @@ function CoveredCard({
           {agents.map((agent) => (
             <li key={agent.key} className="flex flex-wrap items-center gap-2 text-[0.8125rem] text-brand-navy">
               <Check className="size-3.5 text-[#15803d]" aria-hidden="true" />
-              <span className="font-medium">{agent.title}</span>
+              <span className="font-medium">{agentTitle(t, agent.key, agent.title)}</span>
               <span className="text-shell-muted">
                 — {agent.status === "owned" ? w.coveredBox.owned : w.coveredBox.included}
               </span>
@@ -1056,7 +1057,7 @@ function PlanSteps({ intention, offer }: { intention: IntentionDetail; offer: In
                 <Icon className="size-5 shrink-0 text-brand-violet" aria-hidden="true" />
                 <div className="min-w-0 text-xs">
                   <p className="truncate font-medium text-brand-navy">
-                    {agent?.title ?? proposed?.title ?? w.assistant}
+                    {step.agent ? agentTitle(t, step.agent, agent?.title ?? proposed?.title ?? step.agent) : w.assistant}
                   </p>
                   <p className="text-shell-muted">
                     {agent

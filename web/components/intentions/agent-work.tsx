@@ -8,6 +8,7 @@ import { deliverableHref } from "@/components/intentions/deliverable";
 import { IconTile } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
 import { buttonVariants } from "@/components/ui/button";
+import { agentTitle } from "@/lib/agent-title";
 import type { AgentRun } from "@/lib/agent-runs";
 import { useIntentionRuns } from "@/lib/agent-runs-queries";
 import { fill } from "@/lib/i18n/dictionaries";
@@ -60,7 +61,7 @@ export function AgentWork({ intentionId, live = false }: { intentionId: string; 
       <ul className="flex flex-col gap-4">
         {data.map((run) => {
           const moving = run.status === "queued" || run.status === "running";
-          const agent = run.title ?? run.key;
+          const agent = agentTitle(t, run.key, run.title ?? run.key);
           const said = moving
             ? fill(w.working, { agent })
             : run.status === "succeeded"

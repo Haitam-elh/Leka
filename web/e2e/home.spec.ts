@@ -71,13 +71,18 @@ test.describe("The home on a wide screen", () => {
 
     const cards = page.getByTestId("home-agent");
     await expect(cards.first()).toBeVisible();
-    const tops: number[] = [];
     // Those its columns hold: the rest are hidden, never on a second row.
     for (const card of await cards.filter({ visible: true }).all()) {
-      tops.push(Math.round((await card.boundingBox())?.y ?? -1));
       // Its state in words, always; a price only where there is one to pay.
       await expect(card.getByTestId("agent-state")).toBeVisible();
     }
+    // Measured at once, the page settled: nothing loading above moves some
+    // cards between two readings.
+    const tops = await cards.evaluateAll((all) =>
+      all
+        .filter((card) => (card as HTMLElement).offsetParent !== null)
+        .map((card) => Math.round(card.getBoundingClientRect().top)),
+    );
     // One row (LEKA-488): every card on the same line.
     expect(tops.length).toBeLessThanOrEqual(6);
     expect(tops.filter((top) => top === tops[0])).toHaveLength(tops.length);
