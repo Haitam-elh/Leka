@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Callable
+from typing import Any
 
 import pytest
 from httpx import AsyncClient
@@ -33,7 +34,7 @@ pytestmark = pytest.mark.integration
 _ = (model, gemini, started)  # fixtures, requested by name
 
 
-async def _read(client: AsyncClient, intention: str) -> tuple[dict, dict, dict, dict]:
+async def _read(client: AsyncClient, intention: str) -> tuple[Any, Any, Any, Any]:
     analysis = (await client.get(f"{API}/{intention}/analysis")).json()
     [first] = (await client.get(f"{API}/{intention}/analyses")).json()
     detail = (await client.get(f"{API}/{intention}")).json()
