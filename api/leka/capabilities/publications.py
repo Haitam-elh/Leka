@@ -1,7 +1,7 @@
 """What LEKA proposes to send out of a run's deliverable (2026-10-18): tickets
 for a Jira project, pages for a Confluence space.
 
-    a person asks, from a finished run           (POST /agent-runs/{id}/proposals)
+    a person asks, from a finished run           (POST /agent-runs/{id}/publications)
         ──▶ kept, drafting; a worker drafts it: the model again, no tools,
             from what the agent delivered — the tickets (title, description,
             kind, priority, labels) or the pages (title, body), in markdown
@@ -37,7 +37,7 @@ from leka.background import JobQueue, enqueue_job
 from leka.capabilities.catalogue import needs_of
 from leka.capabilities.definition import Definition
 from leka.capabilities.gateway import Gateway, Message, Needs, NoModelError, Request, Tier
-from leka.capabilities.models import AgentProposal, AgentRun
+from leka.capabilities.models import AgentRun, Publication
 from leka.connectors import (
     ConfluencePages,
     JiraIssues,
@@ -55,7 +55,7 @@ logger = structlog.get_logger(__name__)
 
 KINDS: Mapping[str, SourceKind] = {"issues": SourceKind.JIRA, "pages": SourceKind.CONFLUENCE}
 FLAGS: Mapping[str, str] = {"issues": "issues", "pages": "pages"}
-DRAFT_JOB = "leka.capabilities.proposals.draft_job"
+DRAFT_JOB = "leka.capabilities.publications.draft_job"
 DRAFT_TOKENS = 12_000
 DRAFT_BUDGET = 5 * 60.0
 MOST_ISSUES = 15
@@ -137,15 +137,15 @@ or a figure the deliverable does not hold; what it lacks is said as a point \
 to complete. Answer with the JSON object only."""
 
 
-class ProposalNotFoundError(LookupError):
+class PublicationNotFoundError(LookupError):
     pass
 
 
-class ProposalDecidedError(Exception):
+class PublicationDecidedError(Exception):
     """It is no longer proposed: drafting still, or decided already."""
 
 
-class ProposalRefusedError(Exception):
+class PublicationRefusedError(Exception):
     """Why it cannot be asked or sent: not_finished, no_source, wrong_source,
     out_of_scope, issues_off, pages_off — or what Atlassian said."""
 
@@ -191,47 +191,45 @@ def items_of(kind: str, draft: IssuesDraft | PagesDraft) -> list[dict[str, objec
     ]
 
 
-class ProposalService:
+class PublicationService:
     def __init__(self, session: AsyncSession, workspace_id: uuid.UUID) -> None:
         self._session = session
         self._workspace_id = workspace_id
 
-    async def proposals(
+    async def publications(
         self, *, run_id: uuid.UUID | None = None, intention_id: uuid.UUID | None = None
-    ) -> list[AgentProposal]:
-        query = select(AgentProposal).where(AgentProposal.workspace_id == self._workspace_id)
+    ) -> list[Publication]:
+        query = select(Publication).where(Publication.workspace_id == self._workspace_id)
         if run_id is not None:
-            query = query.where(AgentProposal.run_id == run_id)
+            query = query.where(Publication.run_id == run_id)
         if intention_id is not None:
-            query = query.where(AgentProposal.intention_id == intention_id)
-        found = await self._session.scalars(
-            query.order_by(AgentProposal.created_at.desc()).limit(50)
-        )
+            query = query.where(Publication.intention_id == intention_id)
+        found = await self._session.scalars(query.order_by(Publication.created_at.desc()).limit(50))
         return list(found)
 
-    async def proposal(self, proposal_id: uuid.UUID, *, lock: bool = False) -> AgentProposal:
-        query = select(AgentProposal).where(
-            AgentProposal.workspace_id == self._workspace_id, AgentProposal.id == proposal_id
+    async def publication(self, publication_id: uuid.UUID, *, lock: bool = False) -> Publication:
+        query = select(Publication).where(
+            Publication.workspace_id == self._workspace_id, Publication.id == publication_id
         )
         found = await self._session.scalar(query.with_for_update() if lock else query)
         if found is None:
-            raise ProposalNotFoundError(str(proposal_id))
+            raise PublicationNotFoundError(str(publication_id))
         return found
 
     async def _source(self, source_id: uuid.UUID, kind: str) -> Source:
         source = await self._session.get(Source, source_id)
         if source is None or source.workspace_id != self._workspace_id:
-            raise ProposalRefusedError("no_source", "Cette source n'existe pas dans l'espace.")
+            raise PublicationRefusedError("no_source", "Cette source n'existe pas dans l'espace.")
         if source.kind != KINDS[kind]:
-            raise ProposalRefusedError("wrong_source", "Cette source n'est pas du bon type.")
+            raise PublicationRefusedError("wrong_source", "Cette source n'est pas du bon type.")
         if source.status not in CONNECTED:
-            raise ProposalRefusedError("no_source", "Cette source n'est plus connectée.")
+            raise PublicationRefusedError("no_source", "Cette source n'est plus connectée.")
         return source
 
-    async def allowed(self, proposal: AgentProposal) -> bool:
+    async def allowed(self, publication: Publication) -> bool:
         """Whether its source lets LEKA create issues, or publish pages."""
-        source = await self._session.get(Source, proposal.source_id)
-        return bool(source is not None and (source.config or {}).get(FLAGS[proposal.kind]))
+        source = await self._session.get(Source, publication.source_id)
+        return bool(source is not None and (source.config or {}).get(FLAGS[publication.kind]))
 
     async def ask(
         self,
@@ -241,23 +239,23 @@ class ProposalService:
         source_id: uuid.UUID,
         target: str,
         by: uuid.UUID,
-    ) -> AgentProposal:
-        """A proposal of tickets or pages from a finished run, to draft."""
+    ) -> Publication:
+        """A publication of tickets or pages from a finished run, to draft."""
         if run.status != "succeeded" or not run.output:
-            raise ProposalRefusedError("not_finished", "Ce livrable n'est pas terminé.")
+            raise PublicationRefusedError("not_finished", "Ce livrable n'est pas terminé.")
         source = await self._source(source_id, kind)
         said = target.strip()
         key = said.upper() if kind == "issues" else said
         listed = (source.config or {}).get("projects" if kind == "issues" else "spaces")
         shaped = (PROJECT if kind == "issues" else SPACE).fullmatch(key)
         if not shaped or (isinstance(listed, list) and key not in listed):
-            raise ProposalRefusedError(
+            raise PublicationRefusedError(
                 "out_of_scope",
                 "Ce projet n'est pas lu par la source Jira."
                 if kind == "issues"
                 else "Cet espace n'est pas lu par la source Confluence.",
             )
-        proposal = AgentProposal(
+        publication = Publication(
             workspace_id=self._workspace_id,
             run_id=run.id,
             intention_id=run.intention_id,
@@ -267,57 +265,57 @@ class ProposalService:
             status="drafting",
             proposed_by=by,
         )
-        self._session.add(proposal)
+        self._session.add(publication)
         await self._session.flush()
-        return proposal
+        return publication
 
     async def reject(
-        self, proposal_id: uuid.UUID, *, by: uuid.UUID, note: str | None
-    ) -> AgentProposal:
-        proposal = await self.proposal(proposal_id, lock=True)
-        if proposal.status != "proposed":
-            raise ProposalDecidedError(proposal.status)
-        proposal.status = "rejected"
-        proposal.decided_by, proposal.decided_at = by, datetime.now(UTC)
-        proposal.note = (note or "").strip()[:2000] or None
+        self, publication_id: uuid.UUID, *, by: uuid.UUID, note: str | None
+    ) -> Publication:
+        publication = await self.publication(publication_id, lock=True)
+        if publication.status != "proposed":
+            raise PublicationDecidedError(publication.status)
+        publication.status = "rejected"
+        publication.decided_by, publication.decided_at = by, datetime.now(UTC)
+        publication.note = (note or "").strip()[:2000] or None
         await self._session.commit()
-        return proposal
+        return publication
 
     async def accept(
         self,
-        proposal_id: uuid.UUID,
+        publication_id: uuid.UUID,
         *,
         by: uuid.UUID,
         chosen: Sequence[str] | None,
         note: str | None,
-    ) -> AgentProposal:
+    ) -> Publication:
         """The tickets or pages chosen, created — each with its key or page,
         or why not. Refused before anything is sent when the source does not
         allow it: it stays proposed, said why."""
-        proposal = await self.proposal(proposal_id, lock=True)
-        if proposal.status != "proposed":
-            raise ProposalDecidedError(proposal.status)
-        source = await self._source(proposal.source_id, proposal.kind)
+        publication = await self.publication(publication_id, lock=True)
+        if publication.status != "proposed":
+            raise PublicationDecidedError(publication.status)
+        source = await self._source(publication.source_id, publication.kind)
         service = SourceService(self._session, self._workspace_id, actor_user_id=by)
         connector = await service.open_connector(source)
         wanted = set(chosen) if chosen else None
-        items = [i for i in proposal.items if wanted is None or str(i.get("id")) in wanted]
+        items = [i for i in publication.items if wanted is None or str(i.get("id")) in wanted]
         if not items:
-            raise ProposalRefusedError("nothing_chosen", "Aucun élément choisi.")
+            raise PublicationRefusedError("nothing_chosen", "Aucun élément choisi.")
         writer: JiraIssues | ConfluencePages
         try:
-            writer = await (open_issues if proposal.kind == "issues" else open_pages)(connector)
+            writer = await (open_issues if publication.kind == "issues" else open_pages)(connector)
             if not writer.writes:
                 raise PublishRefusedError(
-                    f"{proposal.kind}_off",
+                    f"{publication.kind}_off",
                     "Cette source Jira n'autorise pas LEKA à créer des tickets."
-                    if proposal.kind == "issues"
+                    if publication.kind == "issues"
                     else "Cette source Confluence n'autorise pas LEKA à publier des pages.",
                 )
         except PublishRefusedError as refused:
-            proposal.error, proposal.error_detail = refused.code, str(refused)[:2000]
+            publication.error, publication.error_detail = refused.code, str(refused)[:2000]
             await self._session.commit()
-            raise ProposalRefusedError(refused.code, str(refused)) from refused
+            raise PublicationRefusedError(refused.code, str(refused)) from refused
         results: list[dict[str, object]] = []
         for item in items:
             title, body = str(item.get("title") or ""), str(item.get("body") or "")
@@ -325,7 +323,7 @@ class ProposalService:
                 if isinstance(writer, JiraIssues):
                     labels = item.get("labels")
                     made = await writer.create(
-                        proposal.target,
+                        publication.target,
                         title=title,
                         description=body,
                         kind=str(item.get("kind") or "task"),
@@ -333,54 +331,54 @@ class ProposalService:
                     )
                     results.append({"id": item["id"], "key": made["key"], "url": made["url"]})
                 else:
-                    made = await writer.create(proposal.target, title=title, body=body)
+                    made = await writer.create(publication.target, title=title, body=body)
                     results.append({"id": item["id"], "page": made["id"], "url": made["url"]})
             except PublishRefusedError as refused:
                 results.append(
                     {"id": item["id"], "error": refused.code, "said": str(refused)[:500]}
                 )
         sent = [r for r in results if "url" in r]
-        proposal.results = results
+        publication.results = results
         if not sent:
             # Nothing reached Atlassian: it stays proposed, said why, to try
             # again once the account, the project or the space allows it.
-            proposal.error = str(results[0].get("error") or "error")
-            proposal.error_detail = str(results[0].get("said") or "")[:2000]
+            publication.error = str(results[0].get("error") or "error")
+            publication.error_detail = str(results[0].get("said") or "")[:2000]
             await self._session.commit()
-            raise ProposalRefusedError(proposal.error, proposal.error_detail)
-        proposal.status = "applied" if len(sent) == len(results) else "partly"
-        proposal.decided_by, proposal.decided_at = by, datetime.now(UTC)
-        proposal.note = (note or "").strip()[:2000] or None
-        proposal.error = proposal.error_detail = None
+            raise PublicationRefusedError(publication.error, publication.error_detail)
+        publication.status = "applied" if len(sent) == len(results) else "partly"
+        publication.decided_by, publication.decided_at = by, datetime.now(UTC)
+        publication.note = (note or "").strip()[:2000] or None
+        publication.error = publication.error_detail = None
         await self._session.commit()
         logger.info(
-            "proposal_applied",
-            proposal=str(proposal.id),
-            kind=proposal.kind,
+            "publication_applied",
+            publication=str(publication.id),
+            kind=publication.kind,
             sent=len(sent),
             refused=len(results) - len(sent),
         )
-        return proposal
+        return publication
 
 
 # ── drafting, in a worker ───────────────────────────────────────────────────
 
 
-async def queue_draft(workspace_id: uuid.UUID, proposal_id: uuid.UUID) -> bool:
+async def queue_draft(workspace_id: uuid.UUID, publication_id: uuid.UUID) -> bool:
     """Its drafting, for a worker: the model takes a minute."""
     job = await enqueue_job(
         DRAFT_JOB,
         str(workspace_id),
-        str(proposal_id),
+        str(publication_id),
         for_workspace_id=workspace_id,
         queue=JobQueue.HIGH,
-        concurrency_key=f"agent-proposal:{proposal_id}",
+        concurrency_key=f"publication:{publication_id}",
     )
     return job is not None
 
 
 async def draft(
-    workspace_id: uuid.UUID, proposal_id: uuid.UUID, *, budget: float = DRAFT_BUDGET
+    workspace_id: uuid.UUID, publication_id: uuid.UUID, *, budget: float = DRAFT_BUDGET
 ) -> dict[str, object]:
     """Its tickets or pages, drafted from the run's deliverable — or failed,
     said why: never left drafting."""
@@ -389,25 +387,25 @@ async def draft(
 
     with workspace_scope(workspace_id):
         async with session_factory() as session:
-            service = ProposalService(session, workspace_id)
-            proposal = await service.proposal(proposal_id)
-            if proposal.status != "drafting":
-                return {"status": proposal.status}
-            run = await session.get(AgentRun, proposal.run_id) if proposal.run_id else None
+            service = PublicationService(session, workspace_id)
+            publication = await service.publication(publication_id)
+            if publication.status != "drafting":
+                return {"status": publication.status}
+            run = await session.get(AgentRun, publication.run_id) if publication.run_id else None
             if run is None or not run.output:
-                proposal.status, proposal.error = "failed", "not_finished"
+                publication.status, publication.error = "failed", "not_finished"
                 await session.commit()
                 return {"status": "failed"}
             definition = find(run.key)
             model: type[IssuesDraft] | type[PagesDraft] = (
-                IssuesDraft if proposal.kind == "issues" else PagesDraft
+                IssuesDraft if publication.kind == "issues" else PagesDraft
             )
             request = Request(
-                purpose=f"agent:{run.key}:{proposal.kind}"[:100],
-                messages=draft_messages(proposal.kind, definition, run, proposal.target),
+                purpose=f"agent:{run.key}:{publication.kind}"[:100],
+                messages=draft_messages(publication.kind, definition, run, publication.target),
                 tier=Tier.DEEP,
                 max_tokens=DRAFT_TOKENS,
-                ref=f"agent_proposal:{proposal.id}",
+                ref=f"publication:{publication.id}",
             )
             needs = replace(needs_of(definition), tools=False) if definition else Needs()
             # Nothing held while the model writes.
@@ -425,28 +423,28 @@ async def draft(
             except TimeoutError:
                 error = "timeout"
             except Exception:
-                logger.exception("proposal_not_drafted", proposal=str(proposal_id))
+                logger.exception("publication_not_drafted", publication=str(publication_id))
                 error = "error"
-            proposal = await service.proposal(proposal_id, lock=True)
+            publication = await service.publication(publication_id, lock=True)
             if drafted is None:
-                proposal.status, proposal.error = "failed", error or "error"
+                publication.status, publication.error = "failed", error or "error"
             else:
-                proposal.title = drafted.title.strip()[:300]
-                proposal.summary = drafted.summary.strip()
-                proposal.items = items_of(proposal.kind, drafted)
-                proposal.status = "proposed"
+                publication.title = drafted.title.strip()[:300]
+                publication.summary = drafted.summary.strip()
+                publication.items = items_of(publication.kind, drafted)
+                publication.status = "proposed"
             await session.commit()
-            return {"status": proposal.status}
+            return {"status": publication.status}
 
 
-def draft_job(workspace_id: str, proposal_id: str) -> dict[str, object]:
+def draft_job(workspace_id: str, publication_id: str) -> dict[str, object]:
     """Entry point for the job runner, which is synchronous."""
-    return asyncio.run(draft(uuid.UUID(workspace_id), uuid.UUID(proposal_id)))
+    return asyncio.run(draft(uuid.UUID(workspace_id), uuid.UUID(publication_id)))
 
 
-def items_read(proposal: AgentProposal) -> list[dict[str, Any]]:
+def items_read(publication: Publication) -> list[dict[str, Any]]:
     """Its tickets or pages as the API says them, each with what came of it."""
-    results = {str(r.get("id")): r for r in proposal.results if isinstance(r, dict)}
+    results = {str(r.get("id")): r for r in publication.results if isinstance(r, dict)}
     return [
         {
             "id": str(item.get("id")),
@@ -460,7 +458,7 @@ def items_read(proposal: AgentProposal) -> list[dict[str, Any]]:
             "url": results.get(str(item.get("id")), {}).get("url"),
             "error": results.get(str(item.get("id")), {}).get("error"),
         }
-        for item in proposal.items
+        for item in publication.items
     ]
 
 
@@ -469,10 +467,10 @@ __all__ = [
     "KINDS",
     "IssuesDraft",
     "PagesDraft",
-    "ProposalDecidedError",
-    "ProposalNotFoundError",
-    "ProposalRefusedError",
-    "ProposalService",
+    "PublicationDecidedError",
+    "PublicationNotFoundError",
+    "PublicationRefusedError",
+    "PublicationService",
     "draft",
     "draft_job",
     "draft_messages",

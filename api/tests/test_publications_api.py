@@ -24,6 +24,7 @@ What these protect:
 # ruff: noqa: F811 — fixtures imported to be requested by name.
 from __future__ import annotations
 
+import importlib
 import json
 import uuid
 from collections.abc import Callable
@@ -35,9 +36,10 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 
-from leka.api import proposals as proposals_api
+from leka.api import publications as publications_api
 from leka.capabilities import AgentRun
-from leka.capabilities.proposals import draft
+from leka.capabilities import publications as publications_service
+from leka.capabilities.publications import draft
 from leka.connectors import SourceKind, SourceService
 from leka.connectors.atlassian_markup import confluence_xhtml, jira_wiki
 from leka.connectors.base import Connector
@@ -198,14 +200,14 @@ def atlassian(monkeypatch: pytest.MonkeyPatch) -> Atlassian:
 
 @pytest.fixture
 def drafted(monkeypatch: pytest.MonkeyPatch) -> list[uuid.UUID]:
-    """No worker here: the tests draft each proposal themselves."""
+    """No worker here: the tests draft each publication themselves."""
     asked: list[uuid.UUID] = []
 
-    async def queue(workspace_id: uuid.UUID, proposal_id: uuid.UUID) -> bool:
-        asked.append(proposal_id)
+    async def queue(workspace_id: uuid.UUID, publication_id: uuid.UUID) -> bool:
+        asked.append(publication_id)
         return True
 
-    monkeypatch.setattr(proposals_api, "queue_draft", queue)
+    monkeypatch.setattr(publications_api, "queue_draft", queue)
     return asked
 
 
@@ -269,7 +271,7 @@ async def test_tickets_drafted_from_a_deliverable_and_created_in_jira_once_accep
     confluence = await _source(workspace, SourceKind.CONFLUENCE, {"spaces": ["ENG"]})
     run_id = await _run(workspace)
     _as(identity, acme, "member")
-    ask = f"/api/v1/agent-runs/{run_id}/proposals"
+    ask = f"/api/v1/agent-runs/{run_id}/publications"
 
     # Refused, said why: a project it does not read, a source of the wrong
     # kind, a run not finished.
@@ -294,7 +296,7 @@ async def test_tickets_drafted_from_a_deliverable_and_created_in_jira_once_accep
     )
     waiting = await _run(workspace, status="running")
     unfinished = await client.post(
-        f"/api/v1/agent-runs/{waiting}/proposals",
+        f"/api/v1/agent-runs/{waiting}/publications",
         json={"kind": "issues", "source_id": str(jira), "target": "PAY"},
     )
     assert unfinished.status_code == 409
@@ -304,17 +306,24 @@ async def test_tickets_drafted_from_a_deliverable_and_created_in_jira_once_accep
     # Asked: drafting, queued.
     asked = await client.post(ask, json={"kind": "issues", "source_id": str(jira), "target": "pay"})
     assert asked.status_code == 202, asked.text
-    proposal = asked.json()
-    assert (proposal["status"], proposal["target"], proposal["items"]) == ("drafting", "PAY", [])
-    assert drafted == [uuid.UUID(proposal["id"])]
+    publication = asked.json()
+    assert (publication["status"], publication["target"], publication["items"]) == (
+        "drafting",
+        "PAY",
+        [],
+    )
+    assert drafted == [uuid.UUID(publication["id"])]
+    # The worker finds the job where it is said to be.
+    module, _, name = publications_service.DRAFT_JOB.rpartition(".")
+    assert getattr(importlib.import_module(module), name) is publications_service.draft_job
 
     # Drafted from the deliverable, no tools.
     script = leka_gemini(gemini(json.dumps(ISSUES)))
-    assert await draft(workspace, uuid.UUID(proposal["id"])) == {"status": "proposed"}
+    assert await draft(workspace, uuid.UUID(publication["id"])) == {"status": "proposed"}
     material = json.loads(script.asked[0]["contents"][-1]["parts"][0]["text"])
     assert material["deliverable"] == DELIVERED and material["target"] == "PAY"
     assert "tools" not in script.asked[0]
-    [read] = (await client.get("/api/v1/proposals", params={"run_id": str(run_id)})).json()
+    [read] = (await client.get("/api/v1/publications", params={"run_id": str(run_id)})).json()
     assert (read["status"], read["title"], read["allowed"]) == (
         "proposed",
         "Corriger l'accueil",
@@ -324,13 +333,13 @@ async def test_tickets_drafted_from_a_deliverable_and_created_in_jira_once_accep
     assert (first["kind"], first["priority"], first["labels"]) == ("bug", "highest", ["accueil"])
 
     # Only who may approve decides; the source does not allow it yet.
-    accept = f"/api/v1/proposals/{read['id']}/accept"
+    accept = f"/api/v1/publications/{read['id']}/accept"
     assert (await client.post(accept, json={"items": [first["id"]]})).status_code == 403
     _as(identity, acme, "admin")
     off = await client.post(accept, json={"items": [first["id"]]})
     assert (off.status_code, off.json()["error"]["details"][0]["message"]) == (409, "issues_off")
     assert atlassian.writes() == []
-    assert (await client.get(f"/api/v1/proposals/{read['id']}")).json()["status"] == "proposed"
+    assert (await client.get(f"/api/v1/publications/{read['id']}")).json()["status"] == "proposed"
 
     # Allowed, but Jira refuses the account: nothing sent, it stays
     # proposed, said why — to try again.
@@ -341,7 +350,7 @@ async def test_tickets_drafted_from_a_deliverable_and_created_in_jira_once_accep
         409,
         "not_allowed",
     )
-    still = (await client.get(f"/api/v1/proposals/{read['id']}")).json()
+    still = (await client.get(f"/api/v1/publications/{read['id']}")).json()
     assert (still["status"], still["error"], still["items"][0]["error"]) == (
         "proposed",
         "not_allowed",
@@ -372,8 +381,8 @@ async def test_tickets_drafted_from_a_deliverable_and_created_in_jira_once_accep
 
     # Another workspace sees nothing.
     _as(identity, acme, "other_admin")
-    assert (await client.get(f"/api/v1/proposals/{read['id']}")).status_code == 404
-    assert (await client.get("/api/v1/proposals", params={"run_id": str(run_id)})).json() == []
+    assert (await client.get(f"/api/v1/publications/{read['id']}")).status_code == 404
+    assert (await client.get("/api/v1/publications", params={"run_id": str(run_id)})).json() == []
 
 
 async def test_pages_drafted_from_a_deliverable_and_published_in_confluence(
@@ -390,16 +399,16 @@ async def test_pages_drafted_from_a_deliverable_and_published_in_confluence(
     run_id = await _run(workspace)
     _as(identity, acme, "admin")
     asked = await client.post(
-        f"/api/v1/agent-runs/{run_id}/proposals",
+        f"/api/v1/agent-runs/{run_id}/publications",
         json={"kind": "pages", "source_id": str(confluence), "target": "ENG"},
     )
     assert asked.status_code == 202, asked.text
-    proposal_id = uuid.UUID(asked.json()["id"])
+    publication_id = uuid.UUID(asked.json()["id"])
     both = {**PAGES, "pages": [*PAGES["pages"], {"title": "Déjà là", "body": "Texte."}]}
     leka_gemini(gemini(json.dumps(both)))
-    assert await draft(workspace, proposal_id) == {"status": "proposed"}
+    assert await draft(workspace, publication_id) == {"status": "proposed"}
 
-    done = await client.post(f"/api/v1/proposals/{proposal_id}/accept", json={})
+    done = await client.post(f"/api/v1/publications/{publication_id}/accept", json={})
     assert done.status_code == 200, done.text
     sent = done.json()
     assert sent["status"] == "partly"
@@ -417,15 +426,15 @@ async def test_pages_drafted_from_a_deliverable_and_published_in_confluence(
         "value": "<h1>Accueil</h1><p>Ce que fait l'écran.</p>",
     }
 
-    # A rejected proposal is said rejected, with why.
+    # A rejected publication is said rejected, with why.
     again = await client.post(
-        f"/api/v1/agent-runs/{run_id}/proposals",
+        f"/api/v1/agent-runs/{run_id}/publications",
         json={"kind": "pages", "source_id": str(confluence), "target": "ENG"},
     )
     rejected_id = again.json()["id"]
     leka_gemini(gemini(json.dumps(PAGES)))
     await draft(workspace, uuid.UUID(rejected_id))
     rejected = await client.post(
-        f"/api/v1/proposals/{rejected_id}/reject", json={"note": "Pas maintenant"}
+        f"/api/v1/publications/{rejected_id}/reject", json={"note": "Pas maintenant"}
     )
     assert (rejected.json()["status"], rejected.json()["note"]) == ("rejected", "Pas maintenant")

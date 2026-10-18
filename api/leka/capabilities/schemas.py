@@ -1233,7 +1233,7 @@ class CodeChangeDecision(BaseModel):
 # ── what LEKA proposes to send out of a deliverable (2026-10-18) ────────────
 
 
-class ProposalCreate(BaseModel):
+class PublicationCreate(BaseModel):
     """Tickets for a Jira project, or pages for a Confluence space, to draft
     from a finished run's deliverable."""
 
@@ -1246,7 +1246,7 @@ class ProposalCreate(BaseModel):
     )
 
 
-class ProposalItemRead(BaseModel):
+class PublicationItemRead(BaseModel):
     """One ticket or page — and, sent, what came of it."""
 
     model_config = ConfigDict(frozen=True)
@@ -1262,7 +1262,7 @@ class ProposalItemRead(BaseModel):
     error: str | None = Field(default=None, description="Not sent: why.")
 
 
-class ProposalRead(BaseModel):
+class PublicationRead(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     id: uuid.UUID
@@ -1274,7 +1274,7 @@ class ProposalRead(BaseModel):
     title: str
     summary: str
     status: Literal["drafting", "proposed", "applied", "partly", "rejected", "failed"]
-    items: list[ProposalItemRead]
+    items: list[PublicationItemRead]
     allowed: bool = Field(
         description="Whether its source lets LEKA create issues, or publish pages."
     )
@@ -1287,7 +1287,7 @@ class ProposalRead(BaseModel):
     created_at: datetime
 
 
-class ProposalDecision(BaseModel):
+class PublicationDecision(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     items: list[str] | None = Field(

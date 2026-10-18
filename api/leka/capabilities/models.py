@@ -556,22 +556,22 @@ class CodeChange(Base, WorkspaceScopedMixin):
     error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
-class AgentProposal(Base, WorkspaceScopedMixin):
+class Publication(Base, WorkspaceScopedMixin):
     """What LEKA proposes to send out of a run's deliverable (2026-10-18):
     tickets for a Jira project, or pages for a Confluence space — drafted
     from what the agent delivered, for a person to choose and accept.
     Accepted, LEKA creates them through the source, when its admin allowed
     it (`issues`, `pages`); never an edit, never a deletion."""
 
-    __tablename__ = "agent_proposals"
+    __tablename__ = "publications"
     __table_args__ = (
         CheckConstraint("kind IN ('issues', 'pages')", name="kind"),
         CheckConstraint(
             "status IN ('drafting', 'proposed', 'applied', 'partly', 'rejected', 'failed')",
             name="status",
         ),
-        Index("ix_agent_proposals_workspace_run", "workspace_id", "run_id"),
-        Index("ix_agent_proposals_workspace_intention", "workspace_id", "intention_id"),
+        Index("ix_publications_workspace_run", "workspace_id", "run_id"),
+        Index("ix_publications_workspace_intention", "workspace_id", "intention_id"),
     )
 
     # The run it was drafted from, the intention it answers — no foreign key

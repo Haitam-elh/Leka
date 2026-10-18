@@ -24,7 +24,7 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     op.create_table(
-        "agent_proposals",
+        "publications",
         sa.Column("run_id", sa.UUID(), nullable=True),
         sa.Column("intention_id", sa.UUID(), nullable=True),
         sa.Column("kind", sa.String(length=10), nullable=False),
@@ -59,56 +59,56 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.CheckConstraint("kind IN ('issues', 'pages')", name=op.f("ck_agent_proposals_kind")),
+        sa.CheckConstraint("kind IN ('issues', 'pages')", name=op.f("ck_publications_kind")),
         sa.CheckConstraint(
             "status IN ('drafting', 'proposed', 'applied', 'partly', 'rejected', 'failed')",
-            name=op.f("ck_agent_proposals_status"),
+            name=op.f("ck_publications_status"),
         ),
         sa.ForeignKeyConstraint(
             ["decided_by"],
             ["users.id"],
-            name=op.f("fk_agent_proposals_decided_by_users"),
+            name=op.f("fk_publications_decided_by_users"),
             ondelete="SET NULL",
         ),
         sa.ForeignKeyConstraint(
             ["proposed_by"],
             ["users.id"],
-            name=op.f("fk_agent_proposals_proposed_by_users"),
+            name=op.f("fk_publications_proposed_by_users"),
             ondelete="SET NULL",
         ),
         sa.ForeignKeyConstraint(
             ["source_id"],
             ["sources.id"],
-            name=op.f("fk_agent_proposals_source_id_sources"),
+            name=op.f("fk_publications_source_id_sources"),
             ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
             ["workspace_id"],
             ["workspaces.id"],
-            name=op.f("fk_agent_proposals_workspace_id_workspaces"),
+            name=op.f("fk_publications_workspace_id_workspaces"),
             ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint("id", name=op.f("pk_agent_proposals")),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_publications")),
     )
     op.create_index(
-        op.f("ix_agent_proposals_workspace_id"), "agent_proposals", ["workspace_id"], unique=False
+        op.f("ix_publications_workspace_id"), "publications", ["workspace_id"], unique=False
     )
     op.create_index(
-        "ix_agent_proposals_workspace_intention",
-        "agent_proposals",
+        "ix_publications_workspace_intention",
+        "publications",
         ["workspace_id", "intention_id"],
         unique=False,
     )
     op.create_index(
-        "ix_agent_proposals_workspace_run",
-        "agent_proposals",
+        "ix_publications_workspace_run",
+        "publications",
         ["workspace_id", "run_id"],
         unique=False,
     )
 
 
 def downgrade() -> None:
-    op.drop_index("ix_agent_proposals_workspace_run", table_name="agent_proposals")
-    op.drop_index("ix_agent_proposals_workspace_intention", table_name="agent_proposals")
-    op.drop_index(op.f("ix_agent_proposals_workspace_id"), table_name="agent_proposals")
-    op.drop_table("agent_proposals")
+    op.drop_index("ix_publications_workspace_run", table_name="publications")
+    op.drop_index("ix_publications_workspace_intention", table_name="publications")
+    op.drop_index(op.f("ix_publications_workspace_id"), table_name="publications")
+    op.drop_table("publications")
