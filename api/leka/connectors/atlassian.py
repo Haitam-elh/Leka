@@ -15,7 +15,9 @@ may add a source point LEKA's requests into LEKA's own network.
 LEKA READS. An API token carries every permission of its account, and
 Atlassian cannot narrow a classic token to reading. The documentation asks
 for a dedicated account that can only browse; the connectors warn when the
-account can administer.
+account can administer. Writing is the exception an admin turns on, source by
+source (`issues` for Jira, `pages` for Confluence): new issues, new pages, each
+accepted by a person first — atlassian_publish.py.
 """
 
 from __future__ import annotations

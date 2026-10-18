@@ -44,6 +44,13 @@ from leka.connectors import (
     supabase,  # noqa: F401  — registers SupabaseConnector
     trello,  # noqa: F401  — registers TrelloConnector
 )
+from leka.connectors.atlassian_publish import (
+    ConfluencePages,
+    JiraIssues,
+    PublishRefusedError,
+    open_issues,
+    open_pages,
+)
 from leka.connectors.base import (
     Capability,
     ConnectionTestResult,
@@ -137,6 +144,7 @@ __all__ = [
     "Capability",
     "CatalogEntry",
     "CodeRefusedError",
+    "ConfluencePages",
     "ConnectionTestResult",
     "Connector",
     "ConnectorCategory",
@@ -157,11 +165,13 @@ __all__ = [
     "InvalidSettingsError",
     "InvalidSourceInputError",
     "InvalidTransitionError",
+    "JiraIssues",
     "LifecycleEvent",
     "Mapping",
     "NoScopeError",
     "PublicHttpsUrl",
     "PublicTransport",
+    "PublishRefusedError",
     "PullRequest",
     "RawRecord",
     "Received",
@@ -209,6 +219,8 @@ __all__ = [
     "manifests",
     "next_status",
     "open_code",
+    "open_issues",
+    "open_pages",
     "register_connector",
     "rotate_source_credentials",
     "run_health_check",

@@ -92,6 +92,7 @@ from leka.capabilities.loader import (
 )
 from leka.capabilities.mockups import read_design, without_mark
 from leka.capabilities.models import (
+    AgentProposal,
     AgentRun,
     AgentRunEvent,
     CapabilityEvent,
@@ -108,6 +109,14 @@ from leka.capabilities.models import (
     WorkflowRunStep,
     WorkspaceCapability,
     WorkspaceModel,
+)
+from leka.capabilities.proposals import (
+    ProposalDecidedError,
+    ProposalNotFoundError,
+    ProposalRefusedError,
+    ProposalService,
+    items_read,
+    queue_draft,
 )
 from leka.capabilities.registry import (
     agent_definition,
@@ -195,6 +204,10 @@ from leka.capabilities.schemas import (
     ModelTallyRead,
     ModelTestRead,
     ModelUsageRead,
+    ProposalCreate,
+    ProposalDecision,
+    ProposalItemRead,
+    ProposalRead,
     RouteAsk,
     RoutedCandidateRead,
     RoutingRead,
@@ -270,6 +283,7 @@ __all__ = [
     "AgentInput",
     "AgentLoadError",
     "AgentMode",
+    "AgentProposal",
     "AgentRegistry",
     "AgentRisk",
     "AgentRun",
@@ -370,6 +384,14 @@ __all__ = [
     "NotYoursError",
     "OwnRunError",
     "Prefer",
+    "ProposalCreate",
+    "ProposalDecidedError",
+    "ProposalDecision",
+    "ProposalItemRead",
+    "ProposalNotFoundError",
+    "ProposalRead",
+    "ProposalRefusedError",
+    "ProposalService",
     "Query",
     "Reason",
     "Refusal",
@@ -445,6 +467,7 @@ __all__ = [
     "find_skill",
     "find_workflow",
     "inject",
+    "items_read",
     "leka_cost",
     "leka_default",
     "load_all",
@@ -460,6 +483,7 @@ __all__ = [
     "parse_agent",
     "permitted",
     "provide",
+    "queue_draft",
     "queue_files",
     "queue_run",
     "queue_workflow",
