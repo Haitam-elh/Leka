@@ -68,6 +68,7 @@ from leka.capabilities import (
     deliverable_of,
     find,
     page,
+    queue_change,
     queue_files,
     queue_run,
     read_deliverable,
@@ -535,6 +536,61 @@ async def draw_run_files(
     )
     await session.commit()
     await queue_files(principal.workspace_id, run.id, wanted)
+    return run_read(run, principal)
+
+
+@router.post(
+    "/{run_id}/change",
+    response_model=AgentRunRead,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Write a finished run's code change again",
+)
+async def rewrite_run_change(
+    run_id: uuid.UUID, session: SessionDep, principal: Runner
+) -> AgentRunRead:
+    """Its change written again from the analysis it delivered and the files
+    it read, read again — the run never done again (2026-10-18: its change
+    was not written, the analysis alone shown). 202, a worker writes it;
+    409 when it is not finished, already has its change, or is being
+    written; 422 when its agent proposes no code change."""
+    run = await CapabilityRunRepository(session, principal.workspace_id).run(run_id, lock=True)
+    if run is None:
+        raise _missing()
+    definition = find(run.key)
+    if definition is None or definition.renders != "code_change":
+        raise ApiError(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ErrorCode.VALIDATION_FAILED,
+            "This agent proposes no code change.",
+            details=[FieldError(field="run_id", message="not_a_change")],
+        )
+    if run.status != "succeeded" or not run.output:
+        raise ApiError(
+            status.HTTP_409_CONFLICT, ErrorCode.CONFLICT, "Its analysis is not delivered yet."
+        )
+    if run.detail.get("code_change"):
+        raise ApiError(status.HTTP_409_CONFLICT, ErrorCode.CONFLICT, "Its change is there.")
+    if _drawing(run):
+        raise ApiError(status.HTTP_409_CONFLICT, ErrorCode.CONFLICT, "Its change is being written.")
+    run.detail = {
+        **{
+            k: v
+            for k, v in run.detail.items()
+            if k not in ("deliverables_error", "deliverables_said")
+        },
+        "drawing": ["change"],
+        "drawing_since": datetime.now(UTC).isoformat(),
+    }
+    audit_as(
+        session,
+        principal,
+        "ai",
+        "agent_run.change_asked",
+        target=Target("agent_run", run.id, run.key),
+        detail={},
+    )
+    await session.commit()
+    await queue_change(principal.workspace_id, run.id)
     return run_read(run, principal)
 
 

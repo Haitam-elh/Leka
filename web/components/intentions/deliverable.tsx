@@ -9,6 +9,7 @@ import {
   FileText,
   GitPullRequest,
   Lightbulb,
+  Loader2,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -31,13 +32,14 @@ import { routes } from "@/config/routes";
 import { agentTitle } from "@/lib/agent-title";
 import type { components } from "@/lib/api-types";
 import type { AgentRun, AgentRunDetail } from "@/lib/agent-runs";
-import { useAgentRun, useDrawFiles, useIntentionRuns } from "@/lib/agent-runs-queries";
+import { useAgentRun, useDrawFiles, useIntentionRuns, useRewriteChange } from "@/lib/agent-runs-queries";
 import { useRunCodeChanges } from "@/lib/code-changes-queries";
 import { type DiffRow, diffRows, rowOf } from "@/lib/diff";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import type { IntentionDetail } from "@/lib/intentions/api";
 import { working } from "@/lib/intentions/journey";
+import { SPINNING } from "@/lib/motion";
 
 /**
  * What an agent delivered for an intention (2026-10-14: « l'agent a terminé,
@@ -127,8 +129,10 @@ function Delivered({
   const w = t.intentions.deliverable;
   const agent = agentTitle(t, run.key, run.title ?? run.key);
   const report = run.report ?? run.output ?? "";
-  // The change it proposed to the code, when it proposed one.
-  const changes = useRunCodeChanges(run.id);
+  // The change it proposed to the code, when it proposed one — followed
+  // while LEKA writes it again.
+  const writing = (run.drawing ?? []).includes("change");
+  const changes = useRunCodeChanges(run.id, writing);
   // What it delivered, the most telling first: the screen it redrew, the
   // change it proposed, its comments on the code, its report.
   const views = [
@@ -166,6 +170,10 @@ function Delivered({
           onStarted={(id) => router.push(deliverableHref(intentionId, id))}
         />
       </section>
+      {/* An agent that proposes code, its change not there: why, and again. */}
+      {CHANGE_AGENTS.has(run.key) && changes.data && !changes.data.length ? (
+        <ChangeMissing run={run} writing={writing} />
+      ) : null}
       {/* What to send out of it: tickets for Jira, pages for Confluence. */}
       <RunPublications runId={run.id} />
       {views.length > 1 ? (
@@ -219,13 +227,62 @@ function Delivered({
   );
 }
 
+/** The agents whose deliverable is a change to the code, shown before and
+ * after (`renders: code_change`). */
+const CHANGE_AGENTS: ReadonlySet<string> = new Set(["code-change", "test-generation"]);
+
+/** Its analysis delivered, its change not written (2026-10-18: the analysis
+ * alone was shown, nothing said): why, and the way to write it again — from
+ * what it delivered, never the run done again. */
+function ChangeMissing({ run, writing }: { run: AgentRunDetail; writing: boolean }) {
+  const t = useDictionary();
+  const w = t.intentions.deliverable;
+  const again = useRewriteChange(run.id);
+  if (writing) {
+    return (
+      <p
+        className="flex items-center gap-2 rounded-xl border border-shell-line bg-white px-5 py-3 text-[0.8125rem] text-shell-muted"
+        role="status"
+        data-testid="deliverable-change-writing"
+      >
+        <Loader2 className={cn("size-4", SPINNING)} aria-hidden="true" />
+        {w.changeWriting}
+      </p>
+    );
+  }
+  const failed = run.draw_failed ?? null;
+  if (!failed) return null;
+  const why = (w.changeErrors as Record<string, string>)[failed] ?? failed;
+  return (
+    <section
+      className="flex flex-wrap items-center gap-3 rounded-xl border border-state-warning/30 bg-state-warning-soft px-5 py-3"
+      data-testid="deliverable-change-missing"
+      data-error={failed}
+    >
+      <CircleAlert className="size-4 shrink-0 text-state-warning" aria-hidden="true" />
+      <p className="min-w-0 flex-1 text-[0.8125rem] text-brand-navy">{fill(w.changeFailed, { why })}</p>
+      <Button
+        type="button"
+        size="sm"
+        disabled={again.isPending}
+        onClick={() => again.mutate()}
+        data-testid="deliverable-change-again"
+      >
+        {again.isPending ? <Loader2 className={cn("size-3.5", SPINNING)} aria-hidden="true" /> : null}
+        {w.changeAgain}
+      </Button>
+    </section>
+  );
+}
+
 /** Delivered without its deck (launched asking for no file): drawn after it
  * on asking, from what it delivered — never run again (2026-10-16). */
 function DrawFiles({ run }: { run: AgentRunDetail }) {
   const t = useDictionary();
   const w = t.intentions.deliverable;
   const draw = useDrawFiles(run.id);
-  const drawing = run.drawing ?? [];
+  // Its files only: a change being written again is said elsewhere.
+  const drawing = (run.drawing ?? []).filter((f) => f === "pdf" || f === "pptx");
   const drawable = run.drawable ?? [];
   if (drawing.length) {
     return (

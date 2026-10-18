@@ -136,9 +136,11 @@ from leka.capabilities.runs import (
     DRAWING_LOST,
     capability_resource,
     execute_run,
+    queue_change,
     queue_files,
     queue_run,
     redraw,
+    rewrite_change,
     sweep_runs,
 )
 from leka.capabilities.runtime import (
@@ -485,6 +487,7 @@ __all__ = [
     "parse_agent",
     "permitted",
     "provide",
+    "queue_change",
     "queue_draft",
     "queue_files",
     "queue_run",
@@ -496,6 +499,7 @@ __all__ = [
     "register",
     "register_step",
     "review_of",
+    "rewrite_change",
     "route",
     "routing_read",
     "run_catalogue_sync",

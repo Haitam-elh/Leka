@@ -43,6 +43,10 @@ export const agentRuns = {
       method: "POST",
       body: JSON.stringify({ formats }),
     }),
+  /** A finished run's code change written again, from what it delivered
+   * and the files it read: never run again (2026-10-18). */
+  rewriteChange: (id: string) =>
+    apiFetch<AgentRun>(`/agent-runs/${encodeURIComponent(id)}/change`, { method: "POST" }),
   /** Waiting for approval (LEKA-406): the runs to decide. */
   awaiting: () => apiFetch<AgentRun[]>("/agent-runs?status=awaiting_approval"),
   decide: (id: string, approve: boolean, note?: string) =>
