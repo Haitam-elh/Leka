@@ -2070,6 +2070,14 @@ const fr = {
       buyBody:
         "{price} HT par mois, ajouté à l'abonnement de votre espace. Vous passez ensuite par le paiement sécurisé de Stripe ; l'agent est activé dès que le paiement est confirmé.",
       buyConfirm: "Continuer vers le paiement",
+      /** Several bundles in one order (LEKA-500). */
+      pick: "Ajouter à la sélection",
+      picked: "{count} {count|bundle sélectionné|bundles sélectionnés}",
+      clear: "Vider",
+      buySelection: "Acheter la sélection",
+      buySelectionTitle: "Acheter {count} {count|bundle|bundles} ?",
+      buySelectionBody:
+        "Total : {total}, en une seule commande, renouvelé chaque mois jusqu'à résiliation. Vous passez par le paiement sécurisé de Stripe ; chaque bundle est activé dès que le paiement est confirmé.",
       askAdminShort: "Un administrateur l'achète",
       manage: "Gérer",
       states: {
@@ -10371,6 +10379,13 @@ const en: Dictionary = {
       buyBody:
         "{price} excl. VAT a month, added to your workspace's subscription. You then go through Stripe's secure payment; the agent is turned on as soon as the payment is confirmed.",
       buyConfirm: "Continue to payment",
+      pick: "Add to the selection",
+      picked: "{count} {count|bundle selected|bundles selected}",
+      clear: "Clear",
+      buySelection: "Buy the selection",
+      buySelectionTitle: "Buy {count} {count|bundle|bundles}?",
+      buySelectionBody:
+        "Total: {total}, in a single order, renewed monthly until cancelled. You go through Stripe's secure payment; each bundle is turned on as soon as the payment is confirmed.",
       askAdminShort: "An admin buys it",
       manage: "Manage",
       states: {

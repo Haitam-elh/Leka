@@ -7063,7 +7063,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "agent" | "bundle" | "agents";
+            kind: "agent" | "bundle" | "agents" | "bundles";
             /** Key */
             key: string;
             /** Intention Id */
