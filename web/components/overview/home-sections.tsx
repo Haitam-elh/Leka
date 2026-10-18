@@ -15,7 +15,7 @@ import {
 import Link from "next/link";
 
 import { cn } from "cn";
-import { AgentAdd, agentStateOf, AgentStateSaid, Bundles } from "@/components/capabilities/offers";
+import { AgentCardAction, agentStateOf, AgentStateSaid, Bundles } from "@/components/capabilities/offers";
 import { type TileTone } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
 import { StatusPill } from "@/components/intentions/intentions-list";
@@ -264,13 +264,15 @@ export function AgentsSection() {
         {/* One row, at every width: as many as its columns. */}
         {row.map(({ agent, fit }) => {
           const { icon: Icon, tone } = markOf(agent.category);
-          const payable = agentStateOf(offers, agent.key) === "option";
+          // Its price wherever it is to pay for — bought, or with a plan above (LEKA-497).
+          const state = agentStateOf(offers, agent.key);
+          const payable = state === "option" || state === "upgrade";
           return (
             <li
               key={agent.key}
               className={cn(
                 CARD,
-                "flex flex-col p-3.5 max-md:nth-[n+3]:hidden md:max-lg:nth-[n+4]:hidden lg:max-xl:nth-[n+5]:hidden",
+                "relative flex flex-col p-3.5 hover:border-brand-violet/40 max-md:nth-[n+3]:hidden md:max-lg:nth-[n+4]:hidden lg:max-xl:nth-[n+5]:hidden",
               )}
               data-testid="home-agent"
               data-key={agent.key}
@@ -285,10 +287,16 @@ export function AgentsSection() {
                 >
                   <Icon className="size-4.5" aria-hidden="true" />
                 </span>
-                <AgentAdd agentKey={agent.key} />
               </div>
               <h3 className="mt-2.5 text-[0.875rem] leading-snug font-semibold text-brand-navy">
-                {agent.title}
+                {/* The whole card opens its page (LEKA-497); its action stays its own. */}
+                <Link
+                  href={routes.capability(agent.key)}
+                  className="rounded outline-none after:absolute after:inset-0 after:rounded-2xl hover:underline focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+                  data-testid="home-agent-open"
+                >
+                  {agent.title}
+                </Link>
               </h3>
               <p className="mt-1 line-clamp-2 flex-1 text-xs text-shell-muted">
                 {(t.catalogue.summaries as Record<string, string>)[agent.key] ?? agent.summary}
@@ -313,6 +321,9 @@ export function AgentsSection() {
                     </span>
                   </span>
                 ) : null}
+              </div>
+              <div className="mt-2.5">
+                <AgentCardAction agentKey={agent.key} />
               </div>
             </li>
           );

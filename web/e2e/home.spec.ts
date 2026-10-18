@@ -92,6 +92,15 @@ test.describe("The home on a wide screen", () => {
     }
   });
 
+  test("an agent's card opens its page; its state says what may be done (LEKA-497)", async ({ page }) => {
+    await home(page);
+    const first = page.getByTestId("home-agent").filter({ visible: true }).first();
+    const key = await first.getAttribute("data-key");
+    await expect(first.getByTestId("agent-state")).toBeVisible();
+    await first.getByTestId("home-agent-open").click();
+    await expect(page).toHaveURL(new RegExp(`/capabilities/${key}$`));
+  });
+
   test("« Historique des analyses » opens the intentions asked", async ({ page }) => {
     await home(page);
     await page.getByRole("link", { name: "Historique des analyses" }).click();
