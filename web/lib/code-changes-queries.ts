@@ -7,6 +7,7 @@ import { codeChanges } from "@/lib/code-changes";
 export const codeChangeKeys = {
   all: ["code-changes"] as const,
   intention: (id: string) => ["code-changes", "intention", id] as const,
+  run: (id: string) => ["code-changes", "run", id] as const,
 };
 
 /** An intention's proposed changes — read again every few seconds while
@@ -17,6 +18,17 @@ export function useCodeChanges(intentionId: string, following: boolean) {
     queryFn: () => codeChanges.list(intentionId),
     enabled: Boolean(intentionId),
     refetchInterval: following ? 4000 : false,
+  });
+}
+
+/** What one run proposed — read again while it is still to decide. */
+export function useRunCodeChanges(runId: string | null) {
+  return useQuery({
+    queryKey: codeChangeKeys.run(runId ?? ""),
+    queryFn: () => codeChanges.forRun(runId ?? ""),
+    enabled: Boolean(runId),
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some((change) => change.status === "proposed") ? 4000 : false,
   });
 }
 

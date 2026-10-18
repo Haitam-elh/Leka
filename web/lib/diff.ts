@@ -45,3 +45,46 @@ export function rowOf(
 ): number {
   return rows.findIndex((row) => (side === "new" ? row.new === line : row.old === line && row.kind !== "add"));
 }
+
+export type SplitCell = { number: number; text: string; change: "same" | "remove" | "add" };
+export type SplitRow =
+  | { kind: "hunk"; text: string }
+  | { kind: "pair"; left: SplitCell | null; right: SplitCell | null };
+
+/** A diff as two pages side by side: the file before on the left, after on
+ * the right — each line numbered as in its file, what was removed beside
+ * what replaced it, unchanged lines on both sides. The file names above the
+ * first hunk (a diff LEKA computed has them) are not lines. */
+export function splitRows(diff: string): SplitRow[] {
+  const first = diff.startsWith("@@") ? 0 : diff.indexOf("\n@@") + 1;
+  const rows: SplitRow[] = [];
+  let removed: SplitCell[] = [];
+  let added: SplitCell[] = [];
+  const flush = () => {
+    for (let i = 0; i < Math.max(removed.length, added.length); i++) {
+      rows.push({ kind: "pair", left: removed[i] ?? null, right: added[i] ?? null });
+    }
+    removed = [];
+    added = [];
+  };
+  for (const row of first > 0 || diff.startsWith("@@") ? diffRows(diff.slice(first)) : []) {
+    if (row.kind === "hunk") {
+      flush();
+      rows.push({ kind: "hunk", text: row.text });
+    } else if (row.kind === "remove") {
+      removed.push({ number: row.old ?? 0, text: row.text, change: "remove" });
+    } else if (row.kind === "add") {
+      added.push({ number: row.new ?? 0, text: row.text, change: "add" });
+    } else {
+      flush();
+      rows.push({
+        kind: "pair",
+        left: { number: row.old ?? 0, text: row.text, change: "same" },
+        right: { number: row.new ?? 0, text: row.text, change: "same" },
+      });
+    }
+  }
+  flush();
+  return rows;
+}
+

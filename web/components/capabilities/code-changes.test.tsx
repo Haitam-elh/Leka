@@ -15,6 +15,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CodeChange } from "@/lib/code-changes";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import { makeQueryClient } from "@/lib/query";
+import { splitRows } from "@/lib/diff";
 
 const api = vi.hoisted(() => ({ list: vi.fn(), accept: vi.fn(), reject: vi.fn() }));
 vi.mock("@/lib/code-changes", async (original) => ({
@@ -75,6 +76,22 @@ describe("a proposed code change", () => {
     expect(diffLines(DIFF).map((l) => l.kind)).toEqual(["meta", "meta", "hunk", "same", "remove", "add"]);
   });
 
+  it("lays a diff out as two pages, numbered as in each file", () => {
+    const rows = splitRows(
+      "--- a/x.py\n+++ b/x.py\n@@ -10,3 +10,4 @@ def f():\n a = 1\n-b = 2\n+b = 3\n+c = 4\n d = 5\n",
+    );
+    expect(rows[0]).toEqual({ kind: "hunk", text: "@@ -10,3 +10,4 @@ def f():" });
+    expect(rows.slice(1)).toEqual([
+      { kind: "pair", left: { number: 10, text: "a = 1", change: "same" }, right: { number: 10, text: "a = 1", change: "same" } },
+      { kind: "pair", left: { number: 11, text: "b = 2", change: "remove" }, right: { number: 11, text: "b = 3", change: "add" } },
+      { kind: "pair", left: null, right: { number: 12, text: "c = 4", change: "add" } },
+      { kind: "pair", left: { number: 12, text: "d = 5", change: "same" }, right: { number: 13, text: "d = 5", change: "same" } },
+    ]);
+    // A new file: nothing on the left; a removed line starting with "--" stays a line.
+    const created = splitRows("--- /dev/null\n+++ b/n.sql\n@@ -0,0 +1,1 @@\n+-- a comment\n");
+    expect(created[1]).toEqual({ kind: "pair", left: null, right: { number: 1, text: "-- a comment", change: "add" } });
+  });
+
   it("shows its diff, and accepts it as a pull request", async () => {
     api.list.mockResolvedValue([change()]);
     api.accept.mockResolvedValue(change({ status: "applied", pull_request_number: 7 }));
@@ -82,12 +99,20 @@ describe("a proposed code change", () => {
     show();
     const card = await screen.findByTestId("code-change");
     expect(card).toHaveTextContent("acme/payments · branche main · 1 fichier · +1 −1");
-    // Its indentation kept, as code.
+    // Before and after, side by side, numbered as in the file, its
+    // indentation kept, as code.
+    const split = within(card).getByTestId("code-change-split");
+    expect(split).toHaveTextContent("Avant");
+    expect(split).toHaveTextContent("Après · proposition de LEKA");
+    expect(split.querySelector('[data-change="remove"]')?.textContent).toBe("    return account.total");
+    expect(split.querySelector('[data-change="add"]')?.textContent).toBe("    return account.total - account.pending");
+    // Or as one diff.
+    await user.click(within(card).getByTestId("code-change-view-unified"));
     expect(within(card).getByTestId("code-change-diff").querySelector('[data-kind="add"]')?.textContent).toBe(
       "+    return account.total - account.pending",
     );
     await user.type(within(card).getByLabelText("Commentaire (facultatif)"), "OK");
-    await user.click(within(card).getByRole("button", { name: "Accepter et ouvrir la pull request" }));
+    await user.click(within(card).getByRole("button", { name: "J'accepte d'appliquer ce changement sur GitHub" }));
     await waitFor(() => expect(api.accept).toHaveBeenCalledWith("c1", "OK"));
   });
 
@@ -95,7 +120,7 @@ describe("a proposed code change", () => {
     api.list.mockResolvedValue([change({ pull_requests_allowed: false })]);
     show();
     expect(await screen.findByTestId("code-change-not-allowed")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Accepter et ouvrir la pull request" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "J'accepte d'appliquer ce changement sur GitHub" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Refuser" })).toBeEnabled();
   });
 
