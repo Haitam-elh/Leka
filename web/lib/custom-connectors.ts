@@ -18,7 +18,7 @@ export function isCustom(kind: string): boolean {
   return KIND_CATEGORY[kind as SourceKind] === "custom";
 }
 
-type Values = Record<string, string | undefined>;
+type Values = Record<string, unknown>;
 type Rule = (config: Values) => boolean;
 
 const named: Rule = (config) => config.auth === "header" || config.auth === "query";
@@ -37,11 +37,11 @@ export function shownFor(kind: string, field: string, config: Values): boolean {
 }
 
 /** Only the fields that matter: what a hidden field holds is not sent. */
-export function shownOnly(
+export function shownOnly<T>(
   kind: string,
-  values: Record<string, string>,
+  values: Record<string, T>,
   config: Values,
-): Record<string, string> {
+): Record<string, T> {
   return Object.fromEntries(
     Object.entries(values).filter(([field]) => shownFor(kind, field, config)),
   );

@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { defaultsOf, fieldsOf, filled, zodOf } from "@/lib/sources-form";
+import { defaultsOf, fieldsOf, filled, initialOf, zodOf } from "@/lib/sources-form";
 
 const POSTGRESQL = {
   type: "object",
@@ -43,6 +43,48 @@ describe("a whole-number field", () => {
 
   it("is left out when empty, so the API's default applies", () => {
     expect(filled({ host: "db.acme.example", port: "" })).toEqual({ host: "db.acme.example" });
+  });
+
+  it("keeps the source's own when it is edited, never its default", () => {
+    expect(initialOf(port!, 6543)).toBe("6543");
+    expect(initialOf(port!, undefined)).toBe("5432");
+  });
+});
+
+/**
+ * What LEKA may write (2026-10-18): GitHub's `pull_requests`, Jira's
+ * `issues`, Confluence's `pages` — a box to tick, sent as true or false,
+ * kept as it is when the source is edited: the API replaces the whole
+ * config, so a yes left out would come back a no.
+ */
+const JIRA = {
+  type: "object",
+  required: ["site"],
+  properties: {
+    site: { type: "string", maxLength: 255, title: "Site" },
+    projects: { anyOf: [{ type: "array", items: { type: "string" } }, { type: "null" }] },
+    issues: { type: "boolean", default: false, title: "Issues" },
+  },
+};
+
+describe("a yes or no", () => {
+  const fields = fieldsOf(JIRA);
+  const issues = fields.find((field) => field.name === "issues")!;
+
+  it("is a box to tick, off by default", () => {
+    expect(fields.map((field) => field.name)).toEqual(["site", "issues"]);
+    expect(issues).toMatchObject({ kind: "toggle", required: false, default: "false" });
+    expect(initialOf(issues, undefined)).toBe(false);
+  });
+
+  it("is kept as the source has it when it is edited", () => {
+    expect(initialOf(issues, true)).toBe(true);
+  });
+
+  it("is sent as true or false, never left out", () => {
+    expect(zodOf(fields).safeParse({ site: "acme", issues: true }).success).toBe(true);
+    expect(zodOf(fields).safeParse({ site: "acme", issues: "true" }).success).toBe(false);
+    expect(filled({ site: "acme", issues: false })).toEqual({ site: "acme", issues: false });
   });
 });
 
