@@ -5165,7 +5165,15 @@ export interface paths {
         get: operations["intention_api_v1_intentions__intention_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete
+         * @description « Supprimer l'analyse » (LEKA-487), whatever its status — by its asker
+         *     or who may approve. What is on its way is stopped first; gone at once
+         *     (`deleted`), or, while an analysis, an agent or an action still works on
+         *     it, out of every list and done once that ended (`pending`). What the bill
+         *     needs is kept (leka/intentions/deletion.py).
+         */
+        delete: operations["delete_api_v1_intentions__intention_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -16484,6 +16492,17 @@ export interface components {
         IntentionCreated: {
             intention: components["schemas"]["IntentionDetail"];
             context: components["schemas"]["AssembledContext"];
+        };
+        /**
+         * IntentionDeleted
+         * @description Gone at once, or pending while something still worked on it.
+         */
+        IntentionDeleted: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "deleted" | "pending";
         };
         /**
          * IntentionDetail
@@ -50690,6 +50709,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IntentionDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    delete_api_v1_intentions__intention_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intention_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntentionDeleted"];
                 };
             };
             /** @description The request could not be understood. */

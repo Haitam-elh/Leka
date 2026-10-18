@@ -7045,6 +7045,15 @@ const fr = {
       archive: "Archiver",
       restore: "Restaurer",
       done: "C'est fait.",
+      delete: "Supprimer l'analyse",
+      deleteTitle: "Supprimer définitivement cette analyse ?",
+      deleteBody:
+        "C'est irréversible : sa demande, son analyse, ses décisions, ses actions, son historique et ses fichiers sont supprimés. Ce qui est en cours est arrêté ; ce qui a déjà été consommé reste facturé.",
+      deleteConfirm: "Supprimer définitivement",
+      deleted: "Analyse supprimée.",
+      deletePending:
+        "Suppression en attente : un traitement se termine, l'analyse sera supprimée dès qu'il aura fini. Plus rien n'est fait dessus.",
+      deleteFailed: "La suppression a échoué. Réessayez.",
     },
     /** What LEKA understood of it (LEKA-385). */
     understanding: {
@@ -15151,6 +15160,15 @@ const en: Dictionary = {
       archive: "Archive",
       restore: "Restore",
       done: "Done.",
+      delete: "Delete the analysis",
+      deleteTitle: "Delete this analysis for good?",
+      deleteBody:
+        "This cannot be undone: its request, analysis, decisions, actions, history and files are deleted. What is running is stopped; what was already used stays billed.",
+      deleteConfirm: "Delete for good",
+      deleted: "Analysis deleted.",
+      deletePending:
+        "Deletion pending: a task is finishing; the analysis will be deleted as soon as it ends. Nothing more is done on it.",
+      deleteFailed: "The deletion failed. Try again.",
     },
     understanding: {
       title: "What LEKA understood",

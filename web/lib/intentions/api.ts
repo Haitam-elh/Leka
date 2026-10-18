@@ -175,6 +175,9 @@ export const intentions = {
   /** « Arrêter l'analyse » (LEKA-443): kept, ready to analyse again. */
   stop: (id: string) => apiFetch<IntentionDetail>(`${BASE}/${id}/stop`, { method: "POST" }),
   archive: (id: string) => apiFetch<IntentionDetail>(`${BASE}/${id}/archive`, { method: "POST" }),
+  /** Deleted at once, or pending while something still works on it (LEKA-487). */
+  remove: (id: string) =>
+    apiFetch<components["schemas"]["IntentionDeleted"]>(`${BASE}/${id}`, { method: "DELETE" }),
   restore: (id: string) => apiFetch<IntentionDetail>(`${BASE}/${id}/restore`, { method: "POST" }),
   /** Its latest analysis (LEKA-388) — 404 while there is none. */
   analysis: (id: string) => apiFetch<IntentionAnalysisRead>(`${BASE}/${id}/analysis`),
