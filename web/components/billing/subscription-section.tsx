@@ -96,6 +96,11 @@ export function SubscriptionSection() {
         <p className={`mb-3 rounded-lg px-3 py-2 text-[0.8125rem] ${TILE_TONES.success}`} role="status" data-testid="billing-checkout-back">
           {w.success}
         </p>
+      ) : params.get("changed") === "success" ? (
+        // Back from Stripe's confirmation of a plan change (LEKA-490).
+        <p className={`mb-3 rounded-lg px-3 py-2 text-[0.8125rem] ${TILE_TONES.success}`} role="status" data-testid="billing-checkout-back">
+          {t.billing.compare.changed}
+        </p>
       ) : back === "cancelled" ? (
         <p className={`mb-3 rounded-lg px-3 py-2 text-[0.8125rem] ${TILE_TONES.neutral}`} role="status" data-testid="billing-checkout-back">
           {w.cancelled}

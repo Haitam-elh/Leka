@@ -9,6 +9,7 @@ import { useConfirm } from "@/components/interactions/confirm";
 import { exactDate } from "@/components/knowledge/time";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { agentTitle } from "@/lib/agent-title";
 import type { CustomRole } from "@/lib/access";
 import type { AgentRun } from "@/lib/agent-runs";
 import {
@@ -409,7 +410,7 @@ export function ApprovalsCard({ canApprove }: { canApprove: boolean }) {
         <ul className="flex flex-col gap-2" data-testid="ai-approvals">
           {data.map((run) => (
             <li key={run.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-shell-line p-3 text-[0.8125rem]">
-              <span className="font-medium text-brand-navy">{run.title ?? run.key}</span>
+              <span className="font-medium text-brand-navy">{agentTitle(t, run.key, run.title ?? run.key)}</span>
               <span className="text-xs text-shell-muted">
                 {run.mine ? w.yours : ((run.requested_by && names.get(run.requested_by)) || t.governance.someone)} ·{" "}
                 {exactDate(locale, run.queued_at)}

@@ -12,6 +12,7 @@ import {
   History,
   Layers,
   LoaderCircle,
+  Lock,
   type LucideIcon,
   RotateCw,
   ScanSearch,
@@ -833,6 +834,8 @@ export function AnalysisResults({ intention }: { intention: IntentionDetail }) {
     );
   }
   if (data === undefined) return <Loading />;
+  // Kept by the server (LEKA-499): what is missing, and the way to it.
+  if (data?.locked) return <LockedResult lock={data.locked} />;
   if (!data || data.status === "running" || live) {
     return <AnalysisState status="running" />;
   }
@@ -942,6 +945,35 @@ export function DecisionAside({ intention }: { intention: IntentionDetail }) {
   );
 }
 
+/** Its result, locked (LEKA-499): the server sent none of it — said, with
+ * what is missing and the way to it. */
+export function LockedResult({ lock }: { lock: "plan_required" | "agents_required" }) {
+  const w = useDictionary().intentions.analysis.locked;
+  return (
+    <div
+      className="flex flex-col items-start gap-3 rounded-xl bg-shell-canvas p-4 text-[0.8125rem]"
+      role="status"
+      data-testid="result-locked"
+      data-lock={lock}
+    >
+      <p className="flex items-center gap-2 font-semibold text-brand-navy">
+        <Lock className="size-4" aria-hidden="true" />
+        {w.title}
+      </p>
+      <p className="text-shell-muted">{w[lock]}</p>
+      {lock === "plan_required" ? (
+        <Link href={routes.billingPlans()} className="font-medium text-shell-nav-active hover:underline">
+          {w.choosePlan}
+        </Link>
+      ) : (
+        <a href="#offer" className="font-medium text-shell-nav-active hover:underline">
+          {w.addAgents}
+        </a>
+      )}
+    </div>
+  );
+}
+
 export function EvidenceTab({ intention }: { intention: IntentionDetail }) {
   const t = useDictionary();
   const w = t.intentions.analysis.evidence;
@@ -962,6 +994,7 @@ export function EvidenceTab({ intention }: { intention: IntentionDetail }) {
     );
   }
   if (analysis.data === undefined) return <Loading />;
+  if (analysis.data?.locked) return <LockedResult lock={analysis.data.locked} />;
   return (
     <Card
       title={w.title}

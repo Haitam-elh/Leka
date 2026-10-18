@@ -40,11 +40,7 @@ type Values = z.infer<typeof schema>;
 // Every zone the browser knows, so a saved one is always among them.
 const TIMEZONES = Intl.supportedValuesOf("timeZone").map((zone) => ({ value: zone, label: zone }));
 
-const ENVIRONMENTS = [
-  { value: "production", label: "Production" },
-  { value: "staging", label: "Pré-production" },
-  { value: "dev", label: "Développement" },
-];
+const ENVIRONMENTS = ["production", "staging", "dev"] as const;
 
 const CURRENT = ["workspace", "current"] as const;
 
@@ -129,7 +125,7 @@ function Loaded({ saved }: { saved: WorkspaceRead }) {
         <SelectField<Values, "environment">
           name="environment"
           label={t.settings.defaultEnvironment}
-          options={ENVIRONMENTS}
+          options={ENVIRONMENTS.map((value) => ({ value, label: t.settings.environments[value] }))}
         />
         <PeriodField<Values> name="period" label={t.settings.defaultPeriod} />
       </fieldset>

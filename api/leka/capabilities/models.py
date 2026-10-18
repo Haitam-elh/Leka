@@ -114,6 +114,31 @@ class CapabilityFavourite(Base, WorkspaceScopedMixin):
     key: Mapped[str] = mapped_column(String(100), nullable=False)
 
 
+class CapabilitySuggestion(Base, WorkspaceScopedMixin):
+    """An agent or a skill someone wishes LEKA had (LEKA-501): sent to LEKA's
+    team, never an intention — nothing runs on it. Its status is the team's
+    to move (python -m leka.capabilities.suggestions)."""
+
+    __tablename__ = "capability_suggestions"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('received', 'reviewing', 'planned', 'declined', 'done')",
+            name="status",
+        ),
+        Index("ix_capability_suggestions_user_created", "user_id", "created_at"),
+    )
+
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    problem: Mapped[str] = mapped_column(Text, nullable=False)
+    use_case: Mapped[str] = mapped_column(Text, nullable=False)
+    systems: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    context: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(12), nullable=False, server_default="received")
+
+
 class WorkspaceModel(Base, WorkspaceScopedMixin):
     """A workspace's own language model (LEKA-394) — its Google, Mistral,
     OpenAI, Anthropic account, or its company's Azure OpenAI — used before

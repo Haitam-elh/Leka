@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Form } from "@/components/forms/form";
 import {
@@ -19,6 +19,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { useLekaForm } from "@/lib/forms/use-leka-form";
 import { fill } from "@/lib/i18n/dictionaries";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 import type { EvidenceRef, Impact, Recommendation, Support } from "@/lib/intelligence";
 import { notify } from "@/lib/notify";
@@ -43,96 +44,90 @@ import { z } from "@/lib/validation";
  * the next person will want: why.
  */
 
-const DEPLOYED: EvidenceRef = {
-  id: "example-deployed",
-  label: "Déploiement payment-api v2.8.4",
-  kind: "event",
-  source: { kind: "github", name: "GitHub" },
-  detail: "Exemple",
-};
-
-const LATENCY: EvidenceRef = {
-  id: "example-latency",
-  label: "Hausse de latence (p99)",
-  kind: "record",
-  source: { kind: "datadog", name: "Datadog" },
-  detail: "Exemple",
-};
-
-const SHARED: EvidenceRef = {
-  id: "example-shared",
-  label: "auth-service partage la base",
-  kind: "inference",
-  detail: "Exemple",
-};
-
-const EXAMPLES: Recommendation[] = [
-  {
-    id: "rollback-payment-api",
-    title: "Revenir à payment-api v2.8.3",
-    rationale: "La latence a commencé avec la version 2.8.4 ; la précédente tenait la charge.",
-    effect: "3 services concernés",
-    effort: "≈ 15 min",
-    action: "rollback",
-    priority: "high",
-    risk: "medium",
-    reversible: true,
-    confidence: 0.82,
-    evidence: [DEPLOYED, LATENCY],
-  },
-  {
-    id: "scale-db-pool",
-    title: "Augmenter le pool de connexions",
-    rationale: "auth-service partage la base : ses connexions manquent à payment-api.",
-    effect: "auth-service partage la base",
-    effort: "≈ 30 min",
-    action: "change",
-    priority: "medium",
-    risk: "low",
-    reversible: true,
-    confidence: 0.64,
-    evidence: [SHARED],
-  },
-  {
-    id: "alert-p99",
-    title: "Ajouter une alerte sur le p99",
-    rationale: "Le p99 est passé de 180 ms à 2,1 s sans alerte.",
-    effect: "Aucun impact en production",
-    effort: "≈ 15 min",
-    action: "monitor",
-    priority: "low",
-    risk: "low",
-    reversible: true,
-    confidence: 0.9,
-    evidence: [LATENCY],
-  },
-];
-
-const IMPACT: Impact = {
-  areas: [
+/** The example the step shows (LEKA-495): its words the dictionary's. */
+function examplesOf(x: Dictionary["decision"]["sample"]) {
+  const deployed: EvidenceRef = {
+    id: "example-deployed",
+    label: x.deployed,
+    kind: "event",
+    source: { kind: "github", name: "GitHub" },
+    detail: x.example,
+  };
+  const latency: EvidenceRef = {
+    id: "example-latency",
+    label: x.latency,
+    kind: "record",
+    source: { kind: "datadog", name: "Datadog" },
+    detail: x.example,
+  };
+  const shared: EvidenceRef = { id: "example-shared", label: x.shared, kind: "inference", detail: x.example };
+  const recommendations: Recommendation[] = [
     {
-      id: "affected",
-      label: "Touché",
-      items: [{ id: "payment-api", label: "payment-api", type: "service", detail: "Service" }],
+      id: "rollback-payment-api",
+      title: x.rollback,
+      rationale: x.rollbackWhy,
+      effect: x.rollbackEffect,
+      effort: "≈ 15 min",
+      action: "rollback",
+      priority: "high",
+      risk: "medium",
+      reversible: true,
+      confidence: 0.82,
+      evidence: [deployed, latency],
     },
     {
-      id: "dependents",
-      label: "Qui en dépend",
-      items: [
-        { id: "checkout", label: "checkout", type: "service", detail: "Service" },
-        { id: "auth-service", label: "auth-service", type: "service", detail: "Service" },
-      ],
+      id: "scale-db-pool",
+      title: x.pool,
+      rationale: x.poolWhy,
+      effect: x.shared,
+      effort: "≈ 30 min",
+      action: "change",
+      priority: "medium",
+      risk: "low",
+      reversible: true,
+      confidence: 0.64,
+      evidence: [shared],
     },
-  ],
-  risk: "high",
-  riskBasis: "Exemple",
-};
-
-const SUPPORT: Support[] = [
-  { id: "sources", label: "3 sources lues", established: true },
-  { id: "before", label: "1 déploiement juste avant", established: true },
-  { id: "more", label: "D'autres sources pourraient affiner l'analyse", established: false },
-];
+    {
+      id: "alert-p99",
+      title: x.alert,
+      rationale: x.alertWhy,
+      effect: x.alertEffect,
+      effort: "≈ 15 min",
+      action: "monitor",
+      priority: "low",
+      risk: "low",
+      reversible: true,
+      confidence: 0.9,
+      evidence: [latency],
+    },
+  ];
+  const impact: Impact = {
+    areas: [
+      {
+        id: "affected",
+        label: x.affected,
+        items: [{ id: "payment-api", label: "payment-api", type: "service", detail: x.service }],
+      },
+      {
+        id: "dependents",
+        label: x.dependents,
+        items: [
+          { id: "checkout", label: "checkout", type: "service", detail: x.service },
+          { id: "auth-service", label: "auth-service", type: "service", detail: x.service },
+        ],
+      },
+    ],
+    risk: "high",
+    riskBasis: x.example,
+  };
+  const support: Support[] = [
+    { id: "sources", label: x.sources, established: true },
+    { id: "before", label: x.before, established: true },
+    { id: "more", label: x.more, established: false },
+  ];
+  return { recommendations, impact, support };
+}
 
 const schema = z.object({ selected: z.array(z.string()) });
 type Values = z.infer<typeof schema>;
@@ -140,6 +135,10 @@ type Values = z.infer<typeof schema>;
 export function DecisionStep() {
   const t = useDictionary();
   const w = t.decision;
+  const { recommendations: EXAMPLES, impact: IMPACT, support: SUPPORT } = useMemo(
+    () => examplesOf(w.sample),
+    [w.sample],
+  );
   const confirm = useConfirm();
   const [settled, setSettled] = useState<string | null>(null);
 

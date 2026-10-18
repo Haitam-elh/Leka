@@ -114,6 +114,12 @@ class Intention(Base, WorkspaceScopedMixin):
         UUID(as_uuid=True), ForeignKey("contexts.id", ondelete="SET NULL"), nullable=True
     )
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Its deletion asked while something still worked on it (LEKA-487): out
+    # of every list, nothing more done on it, gone at the next sweep once
+    # that ended (deletion.py).
+    deletion_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # How many events it has: each event's place in its history.
     events_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     # Which version of what was asked it is (LEKA-443): 1 as asked, one more

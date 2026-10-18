@@ -66,9 +66,9 @@ function PaginationLink({ className, isActive, size = "icon", ...props }: Pagina
 
 function PaginationPrevious({
   className,
-  label = "Précédent",
+  label,
   ...props
-}: React.ComponentProps<typeof Button> & { label?: string }) {
+}: React.ComponentProps<typeof Button> & { label: string }) {
   return (
     <Button
       variant="ghost"
@@ -84,9 +84,9 @@ function PaginationPrevious({
 
 function PaginationNext({
   className,
-  label = "Suivant",
+  label,
   ...props
-}: React.ComponentProps<typeof Button> & { label?: string }) {
+}: React.ComponentProps<typeof Button> & { label: string }) {
   return (
     <Button
       variant="ghost"
