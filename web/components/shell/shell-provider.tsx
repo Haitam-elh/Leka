@@ -54,6 +54,8 @@ interface ShellContextValue {
   retry: () => void;
   /** The person as the API answered after they changed their profile. */
   updateUser: (user: CurrentUser["user"]) => void;
+  /** The active workspace renamed (LEKA-502): the header and the switcher say it. */
+  renameWorkspace: (name: string) => void;
 }
 
 const ShellContext = createContext<ShellContextValue | null>(null);
@@ -146,7 +148,23 @@ export function ShellProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
-  const value = useMemo(() => ({ state, retry, updateUser }), [state, retry, updateUser]);
+  const renameWorkspace = useCallback((name: string) => {
+    setState((previous) => {
+      if (previous.status !== "ready" || previous.workspace === null) return previous;
+      const id = previous.workspace.id;
+      const renamed = (w: WorkspaceMembership) => (w.id === id ? { ...w, name } : w);
+      return {
+        ...previous,
+        workspace: renamed(previous.workspace),
+        me: { ...previous.me, workspaces: previous.me.workspaces.map(renamed) },
+      };
+    });
+  }, []);
+
+  const value = useMemo(
+    () => ({ state, retry, updateUser, renameWorkspace }),
+    [state, retry, updateUser, renameWorkspace],
+  );
   const inDemo = state.status === "ready" && state.workspace?.demo === true;
   return (
     <ShellContext.Provider value={value}>
@@ -180,6 +198,11 @@ export function useShellRetry(): () => void {
 /** Replace the signed-in person with the API's newer answer. */
 export function useUpdateCurrentUser(): (user: CurrentUser["user"]) => void {
   return useShellValue().updateUser;
+}
+
+/** Say the active workspace's new name, once the API has kept it. */
+export function useRenameWorkspace(): (name: string) => void {
+  return useShellValue().renameWorkspace;
 }
 
 /** The signed-in person, or null while the answer is still on its way. */

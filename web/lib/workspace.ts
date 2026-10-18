@@ -17,6 +17,8 @@ import type { components } from "@/lib/api-types";
 export type CurrentWorkspace = components["schemas"]["CurrentWorkspace"];
 export type WorkspaceRead = components["schemas"]["WorkspaceRead"];
 export type DemoRead = components["schemas"]["DemoRead"];
+export type WorkspacePreferences = components["schemas"]["WorkspacePreferences"];
+export type WorkspaceUpdate = components["schemas"]["WorkspaceUpdate"];
 
 export const workspace = {
   current: () => apiFetch<CurrentWorkspace>("/workspaces/current", { redirectOn401: false }),
@@ -24,8 +26,9 @@ export const workspace = {
    * belongs to none does first. */
   create: (name: string) =>
     apiFetch<WorkspaceRead>("/workspaces", { method: "POST", body: JSON.stringify({ name }) }),
-  /** Change what an admin may: its language, here (docs/languages.md). */
-  configure: (changes: { default_language?: string }) =>
+  /** Change what an admin may: its name, its preferences (LEKA-502), its
+   * language (docs/languages.md). */
+  configure: (changes: WorkspaceUpdate) =>
     apiFetch<WorkspaceRead>("/workspaces/current", {
       method: "PATCH",
       body: JSON.stringify(changes),

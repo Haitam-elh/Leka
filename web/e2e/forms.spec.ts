@@ -126,16 +126,20 @@ test.describe("the settings form", () => {
     await expect(page.getByText("Modifications enregistrées")).toBeVisible();
   });
 
-  test("reports what the server refused on the field that caused it", async ({ page }) => {
+  test("what was saved is still there once the page is loaded again (LEKA-502)", async ({ page }) => {
     await signIn(page);
-    await page.goto("/settings?fail=1");
+    await page.goto("/settings");
 
-    await page.getByLabel("Identifiant").fill("acme-2");
+    const name = page.getByLabel("Nom de l'espace");
+    const renamed = `Acme ${Date.now()}`;
+    await name.fill(renamed);
     await page.getByTestId("settings-save").click();
+    await expect(page.getByText("Modifications enregistrées")).toBeVisible();
 
-    await expect(page.getByText("Cet identifiant est déjà utilisé.")).toBeVisible();
-    // And the work that produced the error is still there to correct.
-    await expect(page.getByLabel("Identifiant")).toHaveValue("acme-2");
+    await page.reload();
+    await expect(page.getByLabel("Nom de l'espace")).toHaveValue(renamed);
+    // The identifier is shown, never edited: links point at it.
+    await expect(page.getByLabel("Identifiant")).toHaveCount(0);
   });
 
   test("asks before leaving a form that has been changed", async ({ page }) => {

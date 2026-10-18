@@ -12644,6 +12644,22 @@ export interface components {
             on_behalf_of?: string | null;
         };
         /**
+         * DefaultPeriod
+         * @description The period an analysis looks at unless told otherwise: a preset, or
+         *     its own dates.
+         */
+        DefaultPeriod: {
+            /**
+             * Preset
+             * @enum {string}
+             */
+            preset: "24h" | "7d" | "30d" | "custom";
+            /** From */
+            from?: string | null;
+            /** To */
+            to?: string | null;
+        };
+        /**
          * DelegationCreate
          * @description Your authority to approve, lent to a member: up to a risk, for a
          *     time, said why.
@@ -23984,6 +24000,19 @@ export interface components {
              */
             exclusive: boolean;
         };
+        /**
+         * WorkspacePreferences
+         * @description The preferences an admin sets in Paramètres → Votre espace (LEKA-502).
+         *     Only these: the policies kept in the same column have their own routes,
+         *     their own permission and their own checks.
+         */
+        WorkspacePreferences: {
+            /** Timezone */
+            timezone?: string | null;
+            /** Default Environment */
+            default_environment?: ("production" | "staging" | "dev") | null;
+            default_period?: components["schemas"]["DefaultPeriod"] | null;
+        };
         /** WorkspaceRead */
         WorkspaceRead: {
             /**
@@ -24056,10 +24085,7 @@ export interface components {
         WorkspaceUpdate: {
             /** Name */
             name?: string | null;
-            /** Settings */
-            settings?: {
-                [key: string]: unknown;
-            } | null;
+            settings?: components["schemas"]["WorkspacePreferences"] | null;
             /** Default Language */
             default_language?: string | null;
         };
