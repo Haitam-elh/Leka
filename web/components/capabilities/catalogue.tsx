@@ -164,7 +164,14 @@ export function titleOf(
   c: Pick<Capability, "key" | "title"> & { kind?: Capability["kind"] },
 ): string {
   if (c.kind === "agent") return agentTitle(t, c.key, c.title);
-  return (t.intentions.analysis.capabilities as Record<string, string>)[c.key] ?? c.title;
+  // By its key whatever kind the caller said (LEKA-495): an agent, LEKA's
+  // own skill, a workflow — each named in the reader's language.
+  return (
+    (t.catalogue.agentTitles as Record<string, string>)[c.key] ??
+    (t.intentions.analysis.capabilities as Record<string, string>)[c.key] ??
+    (t.catalogue.workflowTitles as Record<string, string>)[c.key] ??
+    c.title
+  );
 }
 
 /** What it does, in the reader's words: LEKA's own capabilities' and its
