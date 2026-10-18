@@ -2,7 +2,7 @@
 name: code-change
 title: "Modification de code"
 description: "Use when someone asks LEKA to change, fix or improve the code of a connected repository — it reads the code, proposes the change as a diff a person reviews, and opens a pull request only once that person accepts it."
-version: 1.1.0
+version: 1.2.0
 category: development
 entity_types: [repository, service, application, issue, pull_request, commit, change, document]
 requires: ["github"]
@@ -55,6 +55,36 @@ Use when someone asks LEKA to change, fix or improve the code of a connected rep
 3. Le contexte : le service, les incidents, les changements récents liés
    (`read_entity`), quand ils expliquent la demande.
 
+## Sa méthode
+
+Le meilleur changement est le plus petit qui répond à la demande : chaque
+ligne de plus est une ligne à relire, à comprendre et à porter.
+
+1. **La demande, prise à la lettre.** Ses verbes fixent le périmètre :
+   « corrige » corrige, il n'améliore pas ; « ajoute un champ » ajoute un
+   champ, il ne refait pas le formulaire. Deux lectures possibles — le
+   symptôme ou sa cause, un écran ou tous — : prends la plus étroite, et dis
+   l'autre dans l'analyse.
+2. **La plus petite surface.** Les fichiers qu'il faut changer pour que la
+   demande marche, et eux seuls. Un fichier de plus se justifie par la
+   demande, jamais par le confort.
+3. **Le changement évident plutôt que l'élégant.** Entre deux solutions qui
+   marchent, celle qui change le moins de lignes. Trois lignes semblables
+   valent mieux qu'une abstraction prématurée ; pas d'option de
+   configuration pour un besoin qui n'existe pas ; pas de garde pour un cas
+   que le code rend impossible — on valide aux frontières : une entrée de
+   l'utilisateur, une API externe.
+4. **Rien « en passant ».** Pas de renommage, de reformatage, de
+   modernisation, de commentaire ni de type ajouté à du code que la demande
+   ne touche pas, même mal écrit.
+5. **Chaque ligne se justifie.** Avant de proposer, relis chaque ligne
+   changée : la demande exige-t-elle cette ligne ? Non, mais ce serait
+   mieux : elle part.
+6. **Ce qui est vu se dit, sans se faire.** Ce qui mérite un changement hors
+   du périmètre — un bug voisin, du code mort, un test absent — va dans
+   « Ce qui n'est pas fait ici », une ligne chacun : un changement à part,
+   que quelqu'un demandera.
+
 ## Quand c'est une interface
 
 Quand la modification touche une interface — un style, un composant, une
@@ -89,6 +119,8 @@ Une analyse markdown, dans la langue de la demande :
 3. **Les risques** — ce que la modification peut casser, ce qui reste à
    vérifier.
 4. **Comment tester** — les commandes ou les étapes, quand le dépôt les dit.
+5. **Ce qui n'est pas fait ici** — ce qui a été vu hors du périmètre, une
+   ligne chacun ; rien de modifié pour autant.
 
 LEKA lui demande ensuite les fichiers tels qu'ils doivent être, en calcule
 lui-même le diff, et le présente à une personne qui décide.
@@ -107,3 +139,6 @@ lui-même le diff, et le présente à une personne qui décide.
 - Aucun secret, jeton ou mot de passe n'est écrit dans le code proposé.
 - Chaque affirmation cite ce sur quoi elle repose : un chemin de fichier, ou
   l'identifiant d'une chose du modèle ([id]).
+
+<sub>Méthode adaptée de l'agent `engineering-minimal-change-engineer` d'[agency-agents](https://github.com/msitarzewski/agency-agents)
+@ `652b269` (MIT, © 2025 AgentLand Contributors), réécrite pour ce que LEKA voit. Voir `THIRD_PARTY_LICENSES.md`.</sub>

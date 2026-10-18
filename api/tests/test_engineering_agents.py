@@ -28,6 +28,8 @@ ENGINEERING = {
     "regression-analysis": ("specialized", ["change-review", "test-scope"]),
     "change-impact-analysis": ("specialized", ["blast-radius", "change-review"]),
 }
+# A new version each for its method (2026-10-18).
+VERSIONS = {"codebase-explorer": "1.1.0", "test-generation": "1.1.0"}
 
 
 def test_each_is_registered_reads_or_only_proposes() -> None:
@@ -38,7 +40,7 @@ def test_each_is_registered_reads_or_only_proposes() -> None:
             Kind.AGENT,
             Lifecycle.ACTIVE,
             True,
-            "1.0.0",
+            VERSIONS.get(key, "1.0.0"),
         ), key
         assert {"search_entities", "read_entity"} <= set(d.tools), key
         assert all(not i.required for i in d.contract.inputs), key
@@ -136,3 +138,41 @@ def test_a_question_never_goes_to_the_test_generation() -> None:
     )
     routed = route(asked, every, {d.key: Availability(True) for d in every})
     assert "test-generation" not in [c.key for c in routed.selected]
+
+
+def test_the_codebase_explorer_explains_in_three_levels_and_names_the_traps() -> None:
+    # 2026-10-18: one line, five minutes, the deep dive; the three files to
+    # read first; a real path followed, where it forks into a job said; the
+    # traps; describing, never judging; the files read and those not.
+    said = {d.key: d for d in catalogue()}["codebase-explorer"].instructions or ""
+    for part in (
+        "**En une phrase**",
+        "**En cinq minutes**",
+        "les trois fichiers à lire en premier",
+        "**Les pièges**",
+    ):
+        assert part in said, part
+    for step in (
+        "Suivre un vrai chemin",
+        "Traduire les abstractions",
+        "Décrire, pas juger",
+        "Une partie n'est pas le tout",
+    ):
+        assert step in said, step
+    assert "msitarzewski/agency-agents" in said
+
+
+def test_the_test_generation_writes_tests_that_would_fail() -> None:
+    # 2026-10-18: the lowest level that proves it, no fixed waits, data of
+    # its own, found as a person finds it, and for each test the change of
+    # the code that would make it fail.
+    said = {d.key: d for d in catalogue()}["test-generation"].instructions or ""
+    for step in (
+        "Le plus bas niveau qui le prouve",
+        "Des tests qui ne clignotent pas",
+        "Chercher comme une personne",
+        "Un test qui échouerait",
+    ):
+        assert step in said, step
+    assert "ce qui le ferait échouer" in said
+    assert "msitarzewski/agency-agents" in said

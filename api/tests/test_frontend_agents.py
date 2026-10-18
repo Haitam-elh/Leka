@@ -46,7 +46,7 @@ CODE = {"list_files", "read_file", "list_pull_requests", "read_pull_request"}
 LIBRARY = "_library/emilkowalski-skills"
 VERSIONS = {
     "ui-quality-review": "1.1.0",
-    "accessibility-audit": "1.0.0",
+    "accessibility-audit": "1.1.0",
     "design-review": "2.1.0",
     "motion-review": "1.1.0",
 }
@@ -90,6 +90,18 @@ def test_the_accessibility_audit_cites_its_criteria_and_never_declares_conformit
     assert "WCAG 2.2" in said and "RGAA" in said
     assert "4,5:1" in said and "sans ratio inventé" in said
     assert "jamais une\nconformité" in said or "jamais une conformité" in said
+    # 2026-10-18: home-made widgets suspect until their keyboard is proven,
+    # native HTML before ARIA, a page change announced, zoom and targets;
+    # each finding with how to check its fix, and where to start.
+    for step in (
+        "Les composants faits maison",
+        "Les changements de page",
+        "L'agrandissement et les cibles",
+    ):
+        assert step in said, step
+    assert "2.5.8" in said and "2.4.11" in said
+    assert "comment vérifier" in said and "**Par où commencer**" in said
+    assert "msitarzewski/agency-agents" in said
 
 
 def test_the_motion_review_respects_reduced_motion_and_what_composes() -> None:

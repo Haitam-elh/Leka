@@ -2,7 +2,7 @@
 name: test-generation
 title: "Génération de tests"
 description: "Use when someone asks LEKA to write the missing tests for code in a connected GitHub repository — it reads the code and its existing tests, proposes the new tests as a diff a person reviews, and opens a pull request only once that person accepts it."
-version: 1.0.0
+version: 1.1.0
 category: development
 entity_types: [repository, service, application, issue, pull_request, commit, change, document]
 requires: ["github"]
@@ -70,14 +70,29 @@ Use when someone asks LEKA to write the missing tests for code in a connected Gi
    l'analyse.
 4. **Rien d'autre ne change** : le code testé n'est pas modifié. Un défaut
    trouvé en écrivant un test se signale ; il ne se corrige pas ici.
+5. **Le plus bas niveau qui le prouve.** Ce qu'un test unitaire ou d'API
+   établit ne va pas dans un test de bout en bout ; celui-ci est gardé pour
+   un parcours où c'est l'intégration elle-même qui risque.
+6. **Des tests qui ne clignotent pas.** Jamais d'attente d'une durée fixe :
+   on attend une condition — un état, une réponse, une adresse. L'horloge,
+   l'aléatoire et le réseau sont fixés ou simulés comme le dépôt le fait
+   déjà. Chaque test crée ses propres données et ne dépend ni d'un autre
+   test, ni de leur ordre.
+7. **Chercher comme une personne.** Dans une interface, un élément se trouve
+   par son rôle et son nom (`getByRole("button", { name: … })`) ; un
+   identifiant de test seulement quand rien d'autre ne l'atteint ; jamais un
+   chemin CSS.
+8. **Un test qui échouerait.** Pour chaque test, la modification du code qui
+   le ferait échouer existe et se nomme : une assertion qui passerait même si
+   le comportement cassait ne prouve rien.
 
 ## Ce qu'il produit
 
 Une analyse markdown, dans la langue de la demande :
 
 1. **Ce qui était couvert** — les tests existants du périmètre, cités.
-2. **Les tests proposés** — fichier par fichier : chaque test et le
-   comportement qu'il vérifie.
+2. **Les tests proposés** — fichier par fichier : chaque test, le
+   comportement qu'il vérifie et ce qui le ferait échouer.
 3. **Ce qui n'a pas été testé, et pourquoi** — les règles à confirmer, les
    défauts soupçonnés.
 4. **Comment les lancer** — la commande du dépôt, telle qu'il l'écrit.
@@ -98,3 +113,6 @@ calcule lui-même le diff, et le présente à une personne qui décide.
   pas suivie, elle est signalée.
 - Tu ne modifies jamais le code testé, et tu n'écris jamais un test qui passe
   en affaiblissant ce qu'il vérifie.
+
+<sub>Méthode adaptée de l'agent `testing-test-automation-engineer` d'[agency-agents](https://github.com/msitarzewski/agency-agents)
+@ `652b269` (MIT, © 2025 AgentLand Contributors), réécrite pour ce que LEKA voit. Voir `THIRD_PARTY_LICENSES.md`.</sub>

@@ -2,7 +2,7 @@
 name: codebase-explorer
 title: "Exploration du code"
 description: "Use when someone wants to find their way in the code of a connected GitHub repository — how it is organised, where a feature lives, its entry points, how it is built, run and tested — read from its files."
-version: 1.0.0
+version: 1.1.0
 category: development
 entity_types: [repository, application, service, pull_request, release, deployment, team, person, document]
 requires: ["github"]
@@ -73,19 +73,38 @@ Un fichier coupé se dit ; ce qui n'a pas été lu n'est pas décrit.
   telles que le README, les scripts ou la CI les écrivent. Absentes : dis-le.
 - **Une réponse vaut par son chemin** : chaque affirmation donne le fichier
   (et la ligne quand elle compte), pour qu'une personne puisse y aller.
+- **Suivre un vrai chemin** : une requête, une commande ou un événement, de
+  son entrée jusqu'à ce qui sort — la route, la logique, les données, la
+  réponse —, chaque étape avec son fichier. Là où le flux part en tâche de
+  fond, en file ou en tâche planifiée, dis-le à l'endroit où il se sépare.
+- **Traduire les abstractions** : quand un nom cache son rôle — un
+  « manager » qui est en fait la couche métier —, dis-le en mots simples.
+- **Décrire, pas juger** : ni revue, ni refonte, ni conseil de modification ;
+  seulement, pour la question posée, ce qu'il faut lire autour.
+- **Une partie n'est pas le tout** : un sous-système lu ne fait pas comprendre
+  le dépôt ; dis ce qui a été lu, et ce qui ne l'a pas été.
 
 ## Ce qu'il produit
 
 Un document markdown, dans la langue de la demande :
 
 1. **En une phrase** — ce que fait ce dépôt, d'après ses fichiers.
-2. **La carte** — les dossiers qui comptent, chacun en une ligne.
-3. **Les points d'entrée et le chemin d'une requête** — de l'entrée jusqu'aux
-   données, cités.
-4. **Construire, lancer, tester** — les commandes du dépôt, citées.
-5. **La réponse à la question** — l'endroit exact, avec ce qu'il faut lire
+2. **En cinq minutes** — ce qu'il fait, ce qui y entre (requêtes, commandes,
+   messages, fichiers), ce qui en sort (réponses, écritures en base,
+   événements, écrans), et **les trois fichiers à lire en premier**, chacun
+   avec pourquoi.
+3. **La carte** — les dossiers qui comptent, chacun en une ligne ; ses
+   frontières : l'interface, le métier, les données et les appels externes,
+   le transverse (authentification, journaux, configuration, tâches de fond).
+4. **Les points d'entrée et le chemin d'une requête** — de l'entrée à la
+   réponse, chaque étape avec son fichier.
+5. **Construire, lancer, tester** — les commandes du dépôt, citées.
+6. **La réponse à la question** — l'endroit exact, avec ce qu'il faut lire
    autour pour le modifier sans casser.
-6. **Limites** — ce qui n'a pas pu être lu.
+7. **Les pièges** — ce qui a l'air important et ne l'est pas, ou l'inverse :
+   un nom trompeur, du code mort, un reste de migration, deux façons de faire
+   la même chose — cités.
+8. **Limites** — les fichiers lus, et ce qui n'a pas pu l'être.
 
 ## Ce qu'il ne doit jamais faire
 
@@ -99,3 +118,6 @@ Un document markdown, dans la langue de la demande :
 ## Ses compétences
 
 Il peut aussi appeler la compétence `repository-profile` de la bibliothèque LEKA (LEKA-401, docs/skills.md) : le profil du dépôt (qui le tient, ce qu'il construit, son activité), pour dire à qui s'adresser. Ce que la compétence ne dit pas, il ne l'invente pas.
+
+<sub>Méthode adaptée de l'agent `engineering-codebase-onboarding-engineer` d'[agency-agents](https://github.com/msitarzewski/agency-agents)
+@ `652b269` (MIT, © 2025 AgentLand Contributors), réécrite pour ce que LEKA voit. Voir `THIRD_PARTY_LICENSES.md`.</sub>

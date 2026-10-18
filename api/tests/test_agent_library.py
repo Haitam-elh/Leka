@@ -29,13 +29,14 @@ from leka.knowledge import EntityType
 
 VERSIONS = {
     "architecture-analysis": "1.2.0",
-    "code-review": "1.3.0",
+    "code-review": "1.4.0",
     "data-analysis": "1.2.0",
     "debug-assistant": "1.2.0",
     "documentation-assistant": "1.2.0",
+    "incident-investigation": "1.2.0",
     "infrastructure-analysis": "1.2.0",
     "release-analysis": "1.2.0",
-    "security-review": "1.2.0",
+    "security-review": "1.3.0",
     "test-analysis": "1.2.0",
 }
 
@@ -282,8 +283,27 @@ def test_the_code_review_reviews_by_a_method_it_can_prove() -> None:
         assert step in said, step
     assert "Zéro constat est une revue valide" in said
     assert "Un avis, jamais une décision" in said
+    # 2026-10-18: what it looks for in the lines it read, the worst first —
+    # a secret never written back, a user's input in a model's instructions
+    # weighed by where it lands; a doubtful pattern kept silent.
+    assert "Ce qu'il cherche dans les lignes" in said
+    for lens in (
+        "la justesse",
+        "les contrats",
+        "les données",
+        "les erreurs",
+        "la sécurité",
+        "la performance",
+    ):
+        assert f"**{lens}**" in said, lens
+    assert "ne s'écrit jamais en clair" in said and "révoquer" in said
+    assert "instructions système" in said and "clé publiable" in said
     # Credited, as their licence asks.
-    assert "affaan-m/ECC" in said and "garrytan/gstack" in said
+    assert (
+        "affaan-m/ECC" in said
+        and "garrytan/gstack" in said
+        and "msitarzewski/agency-agents" in said
+    )
 
 
 def test_the_code_review_reads_the_diff_and_anchors_its_comments() -> None:
@@ -312,7 +332,26 @@ def test_the_security_review_separates_what_it_proves_from_what_it_suspects() ->
         assert step in said, step
     assert "Hypothèses" in said
     assert "Aucun constat appuyé dans le périmètre" in said
-    assert "garrytan/gstack" in said and "affaan-m/ECC" in said
+    # 2026-10-18: six threats looked for at each boundary — angles, not
+    # findings; exposure and business impact over a score; a secret exposed
+    # is already burned; each supported finding a requirement to verify.
+    assert "Les six menaces, à chaque frontière" in said
+    for threat in (
+        "usurpation",
+        "altération",
+        "répudiation",
+        "divulgation",
+        "déni de service",
+        "élévation de privilège",
+    ):
+        assert f"**{threat}**" in said, threat
+    assert "Un secret exposé est déjà compromis" in said
+    assert "**Exigences**" in said
+    assert (
+        "garrytan/gstack" in said
+        and "affaan-m/ECC" in said
+        and "msitarzewski/agency-agents" in said
+    )
 
 
 def test_the_build_fixer_proposes_the_smallest_fix() -> None:
@@ -456,3 +495,52 @@ def test_the_data_analysis_knows_who_writes_and_how_to_change() -> None:
         assert step in said, step
     assert "en trois temps" in said
     assert "affaan-m/ECC" in said
+
+
+def test_the_incident_investigation_stops_the_harm_first_and_blames_no_one() -> None:
+    # 2026-10-18: an incident commander's method, rewritten for what LEKA
+    # sees — open or resolved from the sources, what stops the harm before
+    # the cause, a severity from the impact said estimated, milestones
+    # dated, three hypotheses at most, the cause on three levels, no blame,
+    # actions with their team and never a made-up deadline, a status
+    # message for a person to send.
+    said = {d.key: d for d in catalogue()}["incident-investigation"].instructions or ""
+    assert "## Sa méthode" in said
+    for step in (
+        "Où en est l'incident",
+        "La gravité, d'après l'impact",
+        "La chronologie, par jalons",
+        "Ce qui a changé avant",
+        "Trois hypothèses au plus",
+        "La cause, sur trois niveaux",
+        "Sans blâme",
+    ):
+        assert step in said, step
+    for part in (
+        "**À faire maintenant**",
+        "**Post-mortem (brouillon)**",
+        "**Message de situation (brouillon)**",
+    ):
+        assert part in said, part
+    assert "Jamais d'échéance inventée" in said and "LEKA, jamais" in said
+    assert "msitarzewski/agency-agents" in said
+
+
+def test_the_code_change_proposes_the_smallest_change_and_says_the_rest() -> None:
+    # 2026-10-18: the smallest diff that does what is asked — the ask taken
+    # literally, the fewest files, nothing changed on the way, every line
+    # justified; what it saw beyond, said and left alone.
+    change = {d.key: d for d in catalogue()}["code-change"]
+    assert change.version == "1.2.0"
+    said = change.instructions or ""
+    assert "## Sa méthode" in said
+    for step in (
+        "La demande, prise à la lettre",
+        "La plus petite surface",
+        "Le changement évident plutôt que l'élégant",
+        "Rien « en passant »",
+        "Chaque ligne se justifie",
+    ):
+        assert step in said, step
+    assert "**Ce qui n'est pas fait ici**" in said
+    assert "msitarzewski/agency-agents" in said
