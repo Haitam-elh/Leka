@@ -20,7 +20,7 @@ import pytest
 from httpx import AsyncClient
 
 from leka.db import session_factory, system_scope
-from leka.platform.models import Workspace
+from leka.platform import Workspace
 from tests.conftest import FakeIdentity
 from tests.test_agent_runs_api import _ready
 from tests.test_context_engine import model
