@@ -108,6 +108,18 @@ export function useIntentionChange(id: string) {
   });
 }
 
+/** « Supprimer l'analyse » (LEKA-487): gone from every list and count. */
+export function useIntentionDelete(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => intentions.remove(id),
+    onSuccess: () => {
+      client.removeQueries({ queryKey: intentionKeys.one(id) });
+      void client.invalidateQueries({ queryKey: intentionKeys.all });
+    },
+  });
+}
+
 /** Its latest analysis (LEKA-388): none while there is none yet — read
  * again every few seconds while `live` says one is on its way. */
 export function useIntentionAnalysis(
