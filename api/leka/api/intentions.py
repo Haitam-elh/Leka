@@ -112,6 +112,7 @@ from leka.intentions import (
     Withdrawal,
     deletion,
     queue_analysis,
+    result_lock,
     route_intention,
 )
 from leka.intentions import agents as agent_steps
@@ -492,7 +493,16 @@ async def intentions(
     result = await serve_page(
         session, statement, request=page, catalogue=SORTS, id_column=Intention.id
     )
-    return PageEnvelope(data=await service.reads(result.items), next_cursor=result.next_cursor)
+    reads = await service.reads(result.items)
+    # What it found, never sent to who has not the rights it asks (LEKA-499).
+    held = await result_lock.locks(session, principal.workspace_id, [r.id for r in reads])
+    return PageEnvelope(
+        data=[
+            r.model_copy(update={"summary": None, "locked": held[r.id]}) if r.id in held else r
+            for r in reads
+        ],
+        next_cursor=result.next_cursor,
+    )
 
 
 @router.get("/counts", response_model=IntentionCounts)
@@ -515,6 +525,9 @@ async def intention(
     found = await service.detail(intention_id)
     if found is None:
         raise _missing()
+    held = await result_lock.locks(session, principal.workspace_id, [found.id])
+    if found.id in held:
+        return found.model_copy(update={"summary": None, "locked": held[found.id]})
     return found
 
 
@@ -990,30 +1003,48 @@ async def unlink(
 MAX_ANALYSES = 50
 
 
+async def _held(
+    session: SessionDep,
+    principal: Principal,
+    intention_id: uuid.UUID,
+    rows: list[IntentionAnalysisRead],
+) -> list[IntentionAnalysisRead]:
+    """Locked (LEKA-499): how each went and what it proposes, nothing found."""
+    held = await result_lock.locks(session, principal.workspace_id, [intention_id])
+    lock = held.get(intention_id)
+    return [result_lock.locked(row, lock) for row in rows] if lock else rows
+
+
 @router.get("/{intention_id}/analyses", response_model=list[IntentionAnalysisRead])
 async def analyses(
     intention_id: uuid.UUID,
     service: Reading,
+    session: SessionDep,
+    principal: Reader,
     limit: Annotated[int, Query(ge=1, le=MAX_ANALYSES)] = 20,
 ) -> list[IntentionAnalysisRead]:
     """Its analyses, the latest first: which capabilities ran and why, what
-    each did, the result and its evidence."""
+    each did, the result and its evidence — locked while what it asks is
+    not had (LEKA-499)."""
     found = await service.analyses(intention_id, limit=limit)
     if found is None:
         raise _missing()
-    return found
+    return await _held(session, principal, intention_id, found)
 
 
 @router.get("/{intention_id}/analysis", response_model=IntentionAnalysisRead)
-async def analysis(intention_id: uuid.UUID, service: Reading) -> IntentionAnalysisRead:
+async def analysis(
+    intention_id: uuid.UUID, service: Reading, session: SessionDep, principal: Reader
+) -> IntentionAnalysisRead:
     """Its latest analysis — running, complete, partial, inconclusive,
-    failed, or blocked by its context. 404 before any."""
+    failed, or blocked by its context. 404 before any. Locked while what it
+    asks is not had (LEKA-499)."""
     found = await service.analyses(intention_id, limit=1)
     if found is None:
         raise _missing()
     if not found:
         raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No analysis yet.")
-    return found[0]
+    return (await _held(session, principal, intention_id, found))[0]
 
 
 @router.post(
