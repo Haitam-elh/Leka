@@ -267,7 +267,8 @@ describe("the catalogue", () => {
     expect(screen.getByTestId("catalogue-top")).toHaveTextContent("Responsabilités");
     expect(screen.getByTestId("catalogue-latest")).toHaveTextContent("Architecte applicatif");
     expect(screen.getByTestId("catalogue-latest")).not.toHaveTextContent("Use when");
-    expect(screen.getByTestId("catalogue-ask")).toHaveAttribute("href", "/intentions/new");
+    // A suggestion to LEKA's team, not a new intention (LEKA-501).
+    expect(screen.getByTestId("catalogue-ask")).not.toHaveAttribute("href");
   });
 
   it("never puts agents and LEKA's skills in the same box — the skills apart, never priced (LEKA-467)", async () => {
