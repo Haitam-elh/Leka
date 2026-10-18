@@ -217,3 +217,33 @@ async def test_nothing_of_it_is_anyone_else_s_nor_theirs_in_it(
     _as(identity, demos, "member")
     refused = await client.post(f"{API}/workspaces/{demo}/switch")
     assert refused.status_code == 403
+
+
+async def test_a_simulated_payment_gives_the_demonstration_what_it_needs_and_nothing_else(
+    client: AsyncClient, identity: FakeIdentity, demos: dict[str, uuid.UUID]
+) -> None:
+    """LEKA-498: in a demonstration, « Paiement simulé » gives a plan that
+    runs agents and every agent — no payment, nothing outside; twice, the
+    same. Anywhere else, refused: a real workspace pays with Stripe."""
+    from leka.billing import owned
+    from leka.governance import WorkspacePlan, plan_of
+
+    _as(identity, demos, "admin")
+    # A real workspace: never activated without paying.
+    refused = await client.post(f"{API}/demo/activate")
+    assert refused.status_code == 403
+
+    demo = uuid.UUID((await _open(client))["workspace"]["id"])
+    identity.active_workspace = demo
+    for _ in range(2):
+        said = await client.post(f"{API}/demo/activate")
+        assert said.status_code == 200, said.text
+        assert said.json() == {"activated": True}
+    with workspace_scope(demo):
+        async with session_factory() as session:
+            assert (await plan_of(session, demo)).name == "business"
+            assert (await owned(session, demo)).every
+            plans = await session.scalars(
+                select(WorkspacePlan).where(WorkspacePlan.workspace_id == demo)
+            )
+            assert len(list(plans)) == 1
