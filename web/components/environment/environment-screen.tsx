@@ -68,6 +68,7 @@ import { overallOf, type TwinStateName, twinOf, withTwin } from "@/lib/twin";
 import {
   AlertsCard,
   FreshnessLine,
+  ScoreExplained,
   SourcesCoverage,
   TwinCounts,
   TwinLegend,
@@ -245,7 +246,12 @@ export function EnvironmentScreen() {
             way to the list of its things —, the sources, the alerts, what
             changed. */}
         <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
-          <Overall states={environment.data?.states ?? {}} active={only} onPick={pick} />
+          <Overall
+            states={environment.data?.states ?? {}}
+            lastRead={environment.data?.freshness?.last_read_at ?? null}
+            active={only}
+            onPick={pick}
+          />
           <Sources lines={model?.sources ?? null} />
           <AlertsCard monitoring={monitoring.data} />
           <Card
@@ -365,10 +371,12 @@ export function EnvironmentScreen() {
  * operational, and each state counted — each the way to its list. */
 function Overall({
   states,
+  lastRead,
   active,
   onPick,
 }: {
   states: Readonly<Record<string, number>>;
+  lastRead: string | null;
   active: TwinStateName | null;
   onPick: (state: TwinStateName | null) => void;
 }) {
@@ -376,7 +384,7 @@ function Overall({
   const w = t.environment.overall;
   const { format: locale } = useLocale();
   // The overview's « Mon environnement » reads the same rule (LEKA-468).
-  const { total, share: counted } = overallOf({ states });
+  const { total, operational, share: counted } = overallOf({ states });
   const share = counted ?? 0;
   return (
     <Card title={w.title}>
@@ -409,6 +417,9 @@ function Overall({
           {total ? <TwinCounts states={states} active={active} onPick={onPick} column /> : <p className="text-[0.8125rem] text-shell-muted">{w.empty}</p>}
         </div>
       </div>
+      {total ? (
+        <ScoreExplained states={states} total={total} operational={operational} lastRead={lastRead} />
+      ) : null}
     </Card>
   );
 }

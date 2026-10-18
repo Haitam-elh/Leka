@@ -3458,6 +3458,17 @@ const fr = {
         never: "jamais",
         ask: "Demander à LEKA",
         none: "Aucun élément dans cet état.",
+        next: "Prochaine action",
+      },
+      /** What to do about a thing, by why it is in its state (LEKA-489). */
+      next: {
+        incident_open: "Suivre l'incident jusqu'à sa résolution",
+        resource_failed: "Vérifier la ressource chez son fournisseur",
+        resource_paused: "Vérifier qu'elle doit bien être arrêtée",
+        no_monitoring_source: "Connecter un outil de supervision qui le décrit",
+        no_signal: "Vérifier qu'une source le surveille vraiment",
+        sources_stale: "Relancer la synchronisation de ses sources",
+        sources_failing: "Réparer la source en erreur",
       },
       coverage: {
         title: "Sources et couverture",
@@ -3633,6 +3644,24 @@ const fr = {
       title: "État global",
       operational: "opérationnels",
       empty: "Aucun élément suivi pour l'instant.",
+      /** How the score is reckoned (LEKA-489), the same on the home. */
+      method: "Comment ce score est calculé",
+      rule:
+        "{operational} {operational|élément opérationnel|éléments opérationnels} sur {total} {total|suivi|suivis}. Chaque élément suivi compte autant. Seul ce qu'une source vérifie compte comme opérationnel : un élément inconnu, non couvert ou aux données obsolètes fait baisser le score sans être en panne.",
+      at: "Calculé sur les dernières lectures de vos sources, la plus récente {ago}.",
+      never: "Aucune source n'a encore été lue.",
+      limit:
+        "100 % n'est atteignable que si chaque élément est décrit par une source qui le surveille : ce que rien n'observe reste non vérifié.",
+      states: "Que veut dire chaque état ?",
+      improve: "Pour améliorer la couverture",
+      todo: {
+        not_covered: "Connecter un outil de supervision : {count} {count|élément n'est décrit|éléments ne sont décrits} par aucune source",
+        unknown: "Vérifier ce que surveillent vos sources : {count} {count|élément sans signal|éléments sans signal}",
+        stale: "Relancer la synchronisation : {count} {count|élément aux données obsolètes|éléments aux données obsolètes}",
+        troubled: "Traiter ce qui ne va pas : {count} {count|élément dégradé ou indisponible|éléments dégradés ou indisponibles}",
+      },
+      done: "Rien à améliorer : tout ce qui est suivi est vérifié.",
+      understand: "Comprendre ce score",
     },
     configuration: {
       sync: "Synchronisation des sources",
@@ -11645,6 +11674,16 @@ const en: Dictionary = {
         never: "never",
         ask: "Ask LEKA",
         none: "No element in this state.",
+        next: "Next step",
+      },
+      next: {
+        incident_open: "Follow the incident until it is resolved",
+        resource_failed: "Check the resource with its provider",
+        resource_paused: "Check it is meant to be stopped",
+        no_monitoring_source: "Connect a monitoring tool that describes it",
+        no_signal: "Check a source really monitors it",
+        sources_stale: "Restart its sources' synchronisation",
+        sources_failing: "Fix the failing source",
       },
       coverage: {
         title: "Sources and coverage",
@@ -11817,6 +11856,23 @@ const en: Dictionary = {
       title: "Overall state",
       operational: "operational",
       empty: "Nothing tracked yet.",
+      method: "How this score is reckoned",
+      rule:
+        "{operational} operational out of {total} tracked. Each tracked thing counts the same. Only what a source verifies counts as operational: a thing unknown, not covered or with stale data lowers the score without being down.",
+      at: "Reckoned from your sources' latest reads, the most recent {ago}.",
+      never: "No source has been read yet.",
+      limit:
+        "100 % is only reachable when every thing is described by a source that monitors it: what nothing observes stays unverified.",
+      states: "What does each state mean?",
+      improve: "To improve the coverage",
+      todo: {
+        not_covered: "Connect a monitoring tool: {count} {count|thing is|things are} described by no source",
+        unknown: "Check what your sources monitor: {count} {count|thing|things} with no signal",
+        stale: "Restart the synchronisation: {count} {count|thing|things} with stale data",
+        troubled: "Deal with what is wrong: {count} {count|thing|things} degraded or unavailable",
+      },
+      done: "Nothing to improve: everything tracked is verified.",
+      understand: "Understand this score",
     },
     configuration: {
       sync: "Source synchronisation",
