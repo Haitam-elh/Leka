@@ -8,12 +8,18 @@ Nova Retail's. Leaving it is switching back to one's own workspace.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request, status
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Request, status
+from pydantic import BaseModel
 
 from leka.api.dependencies import SessionDep, SessionStoreDep, UserIdDep
+from leka.api.errors import ApiError
+from leka.core.errors import ErrorCode
 from leka.demo import DemoRead, DemoService
+from leka.governance import Permission, Principal, require_permission
 from leka.identity import UserRepository
-from leka.platform import Role, WorkspaceId, WorkspaceSummary
+from leka.platform import Role, WorkspaceId, WorkspaceRepository, WorkspaceSummary
 
 router = APIRouter(prefix="/demo", tags=["demo"])
 
@@ -44,3 +50,27 @@ async def open_demo(
         ),
         created=created,
     )
+
+
+class DemoActivated(BaseModel):
+    activated: bool
+
+
+@router.post("/activate", response_model=DemoActivated)
+async def simulate_payment(
+    db: SessionDep,
+    principal: Annotated[Principal, Depends(require_permission(Permission.WORKSPACE_READ))],
+) -> DemoActivated:
+    """« Paiement simulé » (LEKA-498): in the demonstration one is in, what a
+    payment would give — a plan that runs agents, every agent — so an
+    analysis goes on to its result. No payment, nothing outside it; done
+    twice, the same. 403 anywhere else: a real workspace pays with Stripe."""
+    workspace = await WorkspaceRepository(db).get(principal.workspace_id)
+    if workspace is None or not await DemoService(db).activate(workspace, by=principal.user_id):
+        raise ApiError(
+            status.HTTP_403_FORBIDDEN,
+            ErrorCode.PERMISSION_DENIED,
+            "Only a demonstration is activated without paying.",
+        )
+    await db.commit()
+    return DemoActivated(activated=True)

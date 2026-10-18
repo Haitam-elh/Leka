@@ -6592,6 +6592,10 @@ const fr = {
       cancelled: "Paiement annulé : rien n'a été débité.",
       boughtSoon: "Paiement reçu : vos agents démarrent dans un instant.",
       launched: "Analyse lancée : vos agents travaillent.",
+      /** A demonstration's payment, simulated (LEKA-498). */
+      simulate: "Simuler le paiement (démo)",
+      simulateNote: "Démonstration : aucun paiement réel, aucune carte débitée. Les droits ne s'appliquent qu'à cet espace de démo.",
+      simulated: "Paiement simulé : les agents de la démo sont activés. Lancez l'analyse.",
       failed: "L'action n'a pas pu aboutir. Réessayez dans un instant.",
       executionTitle: "Exécution",
       tabs: {
@@ -14763,6 +14767,9 @@ const en: Dictionary = {
       cancelled: "Payment cancelled: nothing was charged.",
       boughtSoon: "Payment received: your agents start in a moment.",
       launched: "Analysis launched: your agents are at work.",
+      simulate: "Simulate the payment (demo)",
+      simulateNote: "Demonstration: no real payment, no card charged. The rights apply to this demo workspace only.",
+      simulated: "Payment simulated: the demo's agents are on. Launch the analysis.",
       failed: "That did not go through. Try again in a moment.",
       executionTitle: "Execution",
       tabs: {

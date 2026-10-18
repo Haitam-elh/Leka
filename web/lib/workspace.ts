@@ -38,6 +38,9 @@ export const workspace = {
     apiFetch<unknown>(`/workspaces/${workspaceId}/switch`, { method: "POST" }),
   /** My demonstration (LEKA-449), made when I have none — `fresh`: made
    * again from a clean state — and entered. */
+  /** « Paiement simulé » (LEKA-498): in a demonstration only, what a
+   * payment would give — no Stripe, no card. */
+  activateDemo: () => apiFetch<{ activated: boolean }>("/demo/activate", { method: "POST" }),
   openDemo: (fresh = false) =>
     apiFetch<DemoRead>(fresh ? "/demo?fresh=true" : "/demo", { method: "POST" }),
 };
