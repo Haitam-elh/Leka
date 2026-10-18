@@ -3,7 +3,7 @@ project, pages for a Confluence space — drafted, chosen and accepted by a
 person, then created through the source when its admin allowed it.
 
 Revision ID: c184793fb3fb
-Revises: adee2d9b1cf5
+Revises: 7a2c9e4b1d36
 Created: 2026-10-18
 """
 
@@ -17,7 +17,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "c184793fb3fb"
-down_revision: str | None = "adee2d9b1cf5"
+down_revision: str | None = "7a2c9e4b1d36"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
