@@ -53,14 +53,27 @@ def _missing() -> ApiError:
     return ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such proposal.")
 
 
+# What a person can change, then try again: the source, the run, Atlassian.
+CONFLICTS = frozenset(
+    {
+        "issues_off",
+        "pages_off",
+        "no_source",
+        "not_finished",
+        "not_allowed",
+        "not_found",
+        "title_taken",
+        "invalid",
+        "unavailable",
+    }
+)
+
+
 def _refused(refused: ProposalRefusedError, field: str) -> ApiError:
+    conflict = refused.code in CONFLICTS
     return ApiError(
-        status.HTTP_409_CONFLICT
-        if refused.code in ("issues_off", "pages_off", "no_source", "not_finished")
-        else status.HTTP_422_UNPROCESSABLE_CONTENT,
-        ErrorCode.CONFLICT
-        if refused.code in ("issues_off", "pages_off", "no_source", "not_finished")
-        else ErrorCode.VALIDATION_FAILED,
+        status.HTTP_409_CONFLICT if conflict else status.HTTP_422_UNPROCESSABLE_CONTENT,
+        ErrorCode.CONFLICT if conflict else ErrorCode.VALIDATION_FAILED,
         str(refused),
         details=[FieldError(field=field, message=refused.code)],
     )
@@ -115,7 +128,14 @@ async def ask_proposal(
             by=principal.user_id,
         )
     except ProposalRefusedError as refused:
-        raise _refused(refused, "source_id" if "source" in refused.code else "target") from None
+        field = (
+            "source_id"
+            if "source" in refused.code
+            else "run_id"
+            if refused.code == "not_finished"
+            else "target"
+        )
+        raise _refused(refused, field) from None
     await session.commit()
     if not await queue_draft(principal.workspace_id, proposal.id):
         proposal.status, proposal.error = "failed", "queue_down"

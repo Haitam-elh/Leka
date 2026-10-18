@@ -19,7 +19,9 @@ import httpx
 
 from leka.connectors import atlassian
 from leka.connectors.atlassian_markup import confluence_xhtml, jira_wiki
+from leka.connectors.confluence.connector import KEY as SPACE_KEY
 from leka.connectors.confluence.connector import ConfluenceConnector
+from leka.connectors.jira.connector import KEY as PROJECT_KEY
 from leka.connectors.jira.connector import JiraConnector
 
 # What an issue's description, or a page, weighs at most when sent.
@@ -79,8 +81,11 @@ class JiraIssues:
         return atlassian.site_url(self._config.site)
 
     def in_scope(self, project: str) -> bool:
+        """A project's key, of those the source reads — never anything that
+        is not a key: it goes into an address."""
         listed = self._config.projects
-        return listed is None or project.upper() in listed
+        key = project.upper()
+        return bool(PROJECT_KEY.match(key)) and (listed is None or key in listed)
 
     def _client(self) -> httpx.AsyncClient:
         said = atlassian.headers(self._connector.credentials)
@@ -160,8 +165,10 @@ class ConfluencePages:
         return atlassian.site_url(self._config.site)
 
     def in_scope(self, space: str) -> bool:
+        """A space's key, of those the source reads — never anything that is
+        not a key."""
         listed = self._config.spaces
-        return listed is None or space in listed
+        return bool(SPACE_KEY.match(space)) and (listed is None or space in listed)
 
     def _client(self) -> httpx.AsyncClient:
         said = atlassian.headers(self._connector.credentials)

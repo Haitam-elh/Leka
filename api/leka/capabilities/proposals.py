@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
@@ -62,6 +63,10 @@ MOST_PAGES = 10
 # What the writer is given of the deliverable, at most.
 MOST_DELIVERED = 80_000
 CONNECTED = (SourceStatus.ACTIVE, SourceStatus.DEGRADED)
+# A Jira project's key, a Confluence space's (a personal one starts with ~),
+# as the connectors check them: what a target may be — it goes into an address.
+PROJECT = re.compile(r"[A-Z][A-Z0-9_]{0,254}")
+SPACE = re.compile(r"~?[A-Za-z0-9_]{1,255}")
 
 
 class ProposedIssue(BaseModel):
@@ -244,7 +249,8 @@ class ProposalService:
         said = target.strip()
         key = said.upper() if kind == "issues" else said
         listed = (source.config or {}).get("projects" if kind == "issues" else "spaces")
-        if not key or (isinstance(listed, list) and key not in listed):
+        shaped = (PROJECT if kind == "issues" else SPACE).fullmatch(key)
+        if not shaped or (isinstance(listed, list) and key not in listed):
             raise ProposalRefusedError(
                 "out_of_scope",
                 "Ce projet n'est pas lu par la source Jira."
@@ -335,11 +341,17 @@ class ProposalService:
                 )
         sent = [r for r in results if "url" in r]
         proposal.results = results
-        proposal.status = "applied" if len(sent) == len(results) else "partly" if sent else "failed"
+        if not sent:
+            # Nothing reached Atlassian: it stays proposed, said why, to try
+            # again once the account, the project or the space allows it.
+            proposal.error = str(results[0].get("error") or "error")
+            proposal.error_detail = str(results[0].get("said") or "")[:2000]
+            await self._session.commit()
+            raise ProposalRefusedError(proposal.error, proposal.error_detail)
+        proposal.status = "applied" if len(sent) == len(results) else "partly"
         proposal.decided_by, proposal.decided_at = by, datetime.now(UTC)
         proposal.note = (note or "").strip()[:2000] or None
-        proposal.error = None if sent else str(results[0].get("error") or "error")
-        proposal.error_detail = None if sent else str(results[0].get("said") or "")[:2000]
+        proposal.error = proposal.error_detail = None
         await self._session.commit()
         logger.info(
             "proposal_applied",

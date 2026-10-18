@@ -142,6 +142,8 @@ class Atlassian:
 
     def __init__(self) -> None:
         self.asked: list[tuple[str, str, Any]] = []
+        # Jira refusing the account (403), until told otherwise.
+        self.refuse_issues = False
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content) if request.content else None
@@ -160,6 +162,8 @@ class Atlassian:
                 },
             )
         if request.method == "POST" and path == "/rest/api/2/issue":
+            if self.refuse_issues:
+                return httpx.Response(403, json={"errorMessages": ["No permission"]})
             return httpx.Response(201, json={"id": "11", "key": "PAY-24", "self": "…"})
         if path == "/wiki/api/v2/spaces":
             return httpx.Response(200, json={"results": [{"id": "98", "key": "ENG"}]})
@@ -278,12 +282,23 @@ async def test_tickets_drafted_from_a_deliverable_and_created_in_jira_once_accep
         ask, json={"kind": "issues", "source_id": str(confluence), "target": "ENG"}
     )
     assert kind.json()["error"]["details"][0]["message"] == "wrong_source"
+    # Never anything but a key: it goes into an address — even when the
+    # source reads every project.
+    every = await _source(workspace, SourceKind.JIRA, {})
+    odd = await client.post(
+        ask, json={"kind": "issues", "source_id": str(every), "target": "../../admin"}
+    )
+    assert (odd.status_code, odd.json()["error"]["details"][0]) == (
+        422,
+        {"field": "target", "message": "out_of_scope"},
+    )
     waiting = await _run(workspace, status="running")
     unfinished = await client.post(
         f"/api/v1/agent-runs/{waiting}/proposals",
         json={"kind": "issues", "source_id": str(jira), "target": "PAY"},
     )
     assert unfinished.status_code == 409
+    assert unfinished.json()["error"]["details"][0]["field"] == "run_id"
     assert drafted == []
 
     # Asked: drafting, queued.
@@ -317,8 +332,24 @@ async def test_tickets_drafted_from_a_deliverable_and_created_in_jira_once_accep
     assert atlassian.writes() == []
     assert (await client.get(f"/api/v1/proposals/{read['id']}")).json()["status"] == "proposed"
 
-    # Allowed: the one chosen created, the other not sent.
+    # Allowed, but Jira refuses the account: nothing sent, it stays
+    # proposed, said why — to try again.
     await _allow(workspace, jira, "issues")
+    atlassian.refuse_issues = True
+    refused = await client.post(accept, json={"items": [first["id"]]})
+    assert (refused.status_code, refused.json()["error"]["details"][0]["message"]) == (
+        409,
+        "not_allowed",
+    )
+    still = (await client.get(f"/api/v1/proposals/{read['id']}")).json()
+    assert (still["status"], still["error"], still["items"][0]["error"]) == (
+        "proposed",
+        "not_allowed",
+        "not_allowed",
+    )
+
+    # Then: the one chosen created, the other not sent.
+    atlassian.refuse_issues = False
     done = await client.post(accept, json={"items": [first["id"]], "note": "go"})
     assert done.status_code == 200, done.text
     sent = done.json()
@@ -326,7 +357,9 @@ async def test_tickets_drafted_from_a_deliverable_and_created_in_jira_once_accep
     one, other = sent["items"]
     assert (one["key"], one["url"]) == ("PAY-24", "https://acme.atlassian.net/browse/PAY-24")
     assert (other["key"], other["url"]) == (None, None)
-    [(_, path, body)] = atlassian.writes()
+    # The one refused, then the one created.
+    assert len(atlassian.writes()) == 2
+    _, path, body = atlassian.writes()[-1]
     fields = body["fields"]
     assert path == "/rest/api/2/issue"
     assert (fields["project"], fields["issuetype"]) == ({"key": "PAY"}, {"id": "10004"})
