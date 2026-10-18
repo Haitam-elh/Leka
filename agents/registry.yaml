@@ -99,7 +99,7 @@ agents:
 
   - path: frontend/design-review/SKILL.md
     name: design-review
-    version: 2.0.0
+    version: 2.1.0
     status: active
 
   - path: frontend/motion-review/SKILL.md

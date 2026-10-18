@@ -91,8 +91,9 @@ CATEGORIES = (
 )
 FIELD_TYPES = ("text", "number", "boolean", "choice", "entity")
 OUTPUTS = ("finding", "analysis", "document", "proposal")
-# diff: a change to a repository's code, shown as one (the code-change agent).
-FORMATS = ("json", "markdown", "pptx", "pdf", "docx", "xlsx", "csv", "diff")
+# diff: a change to a repository's code, shown as one (the code-change agent);
+# html: screens drawn as pages, before and after (the designer).
+FORMATS = ("json", "markdown", "pptx", "pdf", "docx", "xlsx", "csv", "diff", "html")
 MODES = ("read_only", "proposes_action")
 RISKS = ("low", "medium", "high")
 

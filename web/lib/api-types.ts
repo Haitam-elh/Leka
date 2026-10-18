@@ -4561,6 +4561,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agent-runs/{run_id}/design": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The screens the designer drew of its review: today's, then each proposal
+         * @description Each mock-up as the page to show — sandboxed, it runs nothing and
+         *     reaches nothing (capabilities/deliverables/design.py). 404 when the run,
+         *     or its mock-ups, are not there.
+         */
+        get: operations["get_design_api_v1_agent_runs__run_id__design_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agent-runs/{run_id}/files": {
         parameters: {
             query?: never;
@@ -7328,6 +7350,8 @@ export interface components {
             report?: string | null;
             /** @description A code review's deliverable, when it reviewed a pull request. */
             review?: components["schemas"]["CodeReviewRead"] | null;
+            /** @description The designer's mock-ups, when its review proposed a design: read them with GET /agent-runs/{id}/design */
+            design?: components["schemas"]["DesignSummaryRead"] | null;
             /** Events */
             events: components["schemas"]["AgentRunEventRead"][];
             usage: components["schemas"]["AgentRunUsage"];
@@ -12977,6 +13001,82 @@ export interface components {
              * @description The incidents said or suspected to follow from it.
              */
             incident_count: number;
+        };
+        /** DesignChangeRead */
+        DesignChangeRead: {
+            /** Where */
+            where: string;
+            /** Before */
+            before: string;
+            /** After */
+            after: string;
+            /** Why */
+            why: string;
+        };
+        /**
+         * DesignMockupRead
+         * @description One screen drawn — today's, or a proposal — as the page shown.
+         */
+        DesignMockupRead: {
+            /** Name */
+            name: string;
+            /** Axis */
+            axis: string;
+            /** When */
+            when: string;
+            /** Cost */
+            cost: string;
+            /**
+             * Page
+             * @description The whole page: no script, no address, nothing fetched — shown in a frame sandboxed with no permission
+             */
+            page: string;
+        };
+        /**
+         * DesignRead
+         * @description The designer's proposal: the screen today, then each proposal — before
+         *     and after —, the one recommended and why, what it changes.
+         */
+        DesignRead: {
+            /** Screen */
+            screen: string;
+            /**
+             * Viewport
+             * @enum {string}
+             */
+            viewport: "desktop" | "mobile";
+            before: components["schemas"]["DesignMockupRead"];
+            /** After */
+            after: components["schemas"]["DesignMockupRead"][];
+            /** Recommended */
+            recommended: number;
+            /** Why */
+            why: string;
+            /** Changes */
+            changes: components["schemas"]["DesignChangeRead"][];
+        };
+        /**
+         * DesignSummaryRead
+         * @description The screen the designer drew of its review, said in short.
+         */
+        DesignSummaryRead: {
+            /** Screen */
+            screen: string;
+            /**
+             * Viewport
+             * @enum {string}
+             */
+            viewport: "desktop" | "mobile";
+            /**
+             * Proposals
+             * @description The proposals' names, in order.
+             */
+            proposals: string[];
+            /**
+             * Recommended
+             * @description The index of the one recommended.
+             */
+            recommended: number;
         };
         /**
          * Diagnostic
@@ -47150,6 +47250,100 @@ export interface operations {
                 content: {
                     "application/vnd.openxmlformats-officedocument.presentationml.presentation": unknown;
                     "application/pdf": unknown;
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_design_api_v1_agent_runs__run_id__design_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesignRead"];
                 };
             };
             /** @description The request could not be understood. */

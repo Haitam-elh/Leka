@@ -33,6 +33,7 @@ from leka.capabilities.changes import propose_change
 from leka.capabilities.definition import Definition
 from leka.capabilities.deliverables import MEDIA_TYPES, ArchitectureDeck, render
 from leka.capabilities.gateway import Gateway, Message, NoModelError, Request, Tier
+from leka.capabilities.mockups import propose_design, proposes
 from leka.capabilities.models import AgentRun
 from leka.platform import ObjectStoreError, from_bytes, object_store
 
@@ -144,9 +145,20 @@ async def draw(
     *,
     budget: float = DECK_BUDGET,
     formats: Sequence[str] | None = None,
+    read: Mapping[str, str] | None = None,
 ) -> Drawn:
     """The deck of a run's analysis, drawn and kept — or, for a code-change
-    agent, the change it proposes (changes.py) — or why not."""
+    agent, the change it proposes (changes.py); for the designer, the screen
+    its review proposes, before and after (mockups.py) — or why not."""
+    if definition.renders == "design_mockups":
+        if not proposes(analysis):
+            return Drawn([], step="design_none", kept={})
+        designed = await propose_design(session, run, definition, analysis, read or {})
+        if designed.kept is None:
+            return Drawn(
+                [], designed.error or "error", step="render_failed", refusal=designed.refusal
+            )
+        return Drawn([], usage=designed.usage, step="designed", kept=designed.kept)
     if definition.renders == "code_change":
         proposed = await propose_change(session, run, definition, analysis)
         if proposed.change is None:

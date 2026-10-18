@@ -82,6 +82,7 @@ RENDERED = ("markdown", "json")
 DRAWN: Mapping[str, tuple[str, ...]] = {
     "architecture_deck": ("pptx", "pdf"),
     "code_change": ("diff",),
+    "design_mockups": ("html",),
 }
 # Formats whose content is a document: delivered as markdown.
 DOCUMENTS = frozenset({"markdown", "pptx", "pdf", "docx"})
@@ -275,6 +276,24 @@ test it. LEKA then asks you for the files as they must be, computes the \
 diff itself and shows it to a person, who accepts or rejects it.
 - Nothing is written to the repository by you or by LEKA before that \
 person accepts; then LEKA opens a pull request, never a merge.""",
+    "design_mockups": """---
+
+How this runs in LEKA:
+- This answer is the review, in markdown, as your instructions lay it out.
+- When the request asks for a design — to propose one, to improve a screen, \
+a complete review — the review holds its section « La proposition », opened \
+by this line alone: <!-- leka-design -->. In it: the screen today as its code \
+draws it — its structure from top to bottom, its texts, its colours, sizes \
+and fonts with their values —, then two or three proposals, each on its \
+named axis: what changes, why, when it is the right choice, what it costs; \
+and the one you recommend, and why.
+- Before you write it, read in full the files that draw the screen: the \
+page, the components it uses, the style sheets and the tokens. LEKA draws \
+the screen today and each proposal from your review and from the files you \
+read, and shows them side by side, before and after: your review never \
+holds HTML.
+- Without that line LEKA draws nothing: a review of animations alone, or of \
+one pull request, needs no mock-up.""",
 }
 
 

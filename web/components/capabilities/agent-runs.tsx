@@ -11,6 +11,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import type { TileTone } from "@/components/environment/parts";
+import { DesignSimulator } from "@/components/capabilities/design-simulator";
 import {
   ACTIVE,
   type AgentRun,
@@ -337,6 +338,8 @@ function RunDetail({ id }: { id: string }) {
               {w.download}
             </Button>
           </div>
+          {/* The screen the designer redrew, before and after. */}
+          {data.design ? <DesignSimulator runId={data.id} /> : null}
           {/* Its report, read as a page — not the model's raw text. */}
           <div
             className="max-h-[32rem] overflow-auto rounded-md bg-white p-4"

@@ -115,8 +115,8 @@ export const FRONT: Record<string, AgentProduct> = {
 
   "design-review": {
     promise: w(
-      "Votre interface relue comme par un design engineer exigeant : système de design, animations, téléphone, données réelles — et la correction exacte de chaque écart.",
-      "Your interface reviewed as a demanding design engineer would: design system, animations, phone, real-world data — and the exact fix for every gap.",
+      "Votre interface relue et redessinée comme par un design engineer exigeant : l'écran actuel et ses propositions côte à côte, et la correction exacte de chaque écart.",
+      "Your interface reviewed and redrawn as a demanding design engineer would: today's screen and its proposals side by side, and the exact fix for every gap.",
     ),
     problem: w(
       "Une interface qui marche peut sonner faux : des animations molles ou superflues, des noms longs qui cassent la mise en page, un survol qui reste collé sur téléphone, des couleurs en dur.",
@@ -135,8 +135,8 @@ export const FRONT: Record<string, AgentProduct> = {
         icon: "target",
         title: w("Avant, après, pourquoi", "Before, after, why"),
         body: w(
-          "Chaque constat cite le fichier et la ligne, le code actuel et le code exact à mettre à la place.",
-          "Each finding cites the file and line, the current code and the exact code to put instead.",
+          "L'écran proposé dessiné à côté de l'écran actuel, et pour chaque écart le fichier, la ligne et le code exact.",
+          "The proposed screen drawn beside today's, and for every gap the file, the line and the exact code.",
         ),
       },
       {
@@ -149,8 +149,8 @@ export const FRONT: Record<string, AgentProduct> = {
       },
     ],
     does: w(
-      "Il reconnaît la pile et les jetons de votre dépôt, ouvre le guide qui s'applique — design, animations, performance, pire des cas, téléphone —, relit les écrans ou la pull request, puis rend une revue au format avant, après, pourquoi, avec des plans de correction prêts à appliquer.",
-      "It identifies your repository's stack and tokens, opens the guide that applies — design, animation, performance, worst case, phone —, reviews the screens or the pull request, then delivers a before, after, why review with fix plans ready to apply.",
+      "Il reconnaît la pile et les jetons de votre dépôt, ouvre le guide qui s'applique — design, animations, performance, pire des cas, téléphone —, relit les écrans ou la pull request, propose deux ou trois directions, puis LEKA dessine l'écran actuel et chaque proposition côte à côte, avec la revue avant, après, pourquoi et des plans de correction prêts à appliquer.",
+      "It identifies your repository's stack and tokens, opens the guide that applies — design, animation, performance, worst case, phone —, reviews the screens or the pull request, proposes two or three directions, then LEKA draws today's screen and each proposal side by side, with the before, after, why review and fix plans ready to apply.",
     ),
     features: [
       w("La revue avant, après, pourquoi — fichier et ligne cités", "The before, after, why review — file and line cited"),
@@ -161,16 +161,22 @@ export const FRONT: Record<string, AgentProduct> = {
       ),
       w("Les données du pire cas : noms longs, listes vides, gros nombres", "Worst-case data: long names, empty lists, large numbers"),
       w("Le téléphone : survol collé, zoom des champs, encoche", "The phone: stuck hover, zooming inputs, the notch"),
-      w("Ce qui devrait s'animer — et ce qui ne doit pas", "What should animate — and what should not"),
+      w(
+        "L'écran redessiné : avant, après, sur bureau, tablette et téléphone",
+        "The screen redrawn: before, after, on desktop, tablet and phone",
+      ),
       w("Des plans de correction autonomes, prêts à appliquer", "Self-contained fix plans, ready to apply"),
       w("Sur une pull request, ses remarques sur les lignes du diff", "On a pull request, its comments on the diff's lines"),
     ],
     useCases: [
       {
         icon: "palette",
-        title: w("Une revue de design complète", "A complete design review"),
-        body: w("Système de design, mouvement, pire des cas, téléphone.", "Design system, motion, worst case, phone."),
-        ask: w("Fais une revue de design de l'accueil de acme/web", "Review the design of acme/web's home page"),
+        title: w("Redessiner un écran", "Redraw a screen"),
+        body: w("L'écran actuel et ses propositions, côte à côte.", "Today's screen and its proposals, side by side."),
+        ask: w(
+          "Propose-moi un meilleur design pour la page d'accueil de acme/web",
+          "Propose a better design for acme/web's home page",
+        ),
       },
       {
         icon: "git",
@@ -199,6 +205,7 @@ export const FRONT: Record<string, AgentProduct> = {
     ],
     outline: [
       w("Ce qui a été relu", "What was reviewed"),
+      w("La proposition : l'écran avant et après", "The proposal: the screen before and after"),
       w("Le verdict", "The verdict"),
       w("Constats : avant, après, pourquoi", "Findings: before, after, why"),
       w("Le pire des cas", "The worst case"),
@@ -247,6 +254,10 @@ export const FRONT: Record<string, AgentProduct> = {
       w(
         "Ce qui ne se juge qu'à l'écran — le ressenti d'une animation, un rendu de police, un geste sur un vrai téléphone — est signalé à vérifier, avec la façon de le faire.",
         "What can only be judged on screen — how an animation feels, a font's rendering, a gesture on a real phone — is flagged for checking, with how to do it.",
+      ),
+      w(
+        "Les maquettes sont redessinées à partir du code, pas capturées sur l'application en marche : l'écran réel peut en différer.",
+        "The mock-ups are redrawn from the code, not captured from the running application: the real screen may differ.",
       ),
       w(
         "Il propose les corrections sans les appliquer : une personne les applique, ou demande à LEKA d'en proposer le diff.",

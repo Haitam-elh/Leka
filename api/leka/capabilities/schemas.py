@@ -109,11 +109,12 @@ class AgentFrontMatter(BaseModel):
         "runtime's default (16) when none: an agent that gathers a whole documentation asks "
         "for more (2026-10-14)",
     )
-    renders: Literal["architecture_deck", "code_change"] | None = Field(
+    renders: Literal["architecture_deck", "code_change", "design_mockups"] | None = Field(
         default=None,
         description="What LEKA makes of what it delivers: architecture_deck — the editable "
         "PowerPoint and its PDF, on the application architecture template; code_change — "
-        "the change it proposes, diffed, for a person to accept as a pull request",
+        "the change it proposes, diffed, for a person to accept as a pull request; "
+        "design_mockups — the screen it proposes, drawn before and after",
     )
     method: str | None = Field(
         default=None,
@@ -839,6 +840,56 @@ class CodeReviewRead(BaseModel):
     dropped: int = Field(description="Comments it wrote that do not hold on the diff it read.")
 
 
+class DesignSummaryRead(BaseModel):
+    """The screen the designer drew of its review, said in short."""
+
+    model_config = ConfigDict(frozen=True)
+
+    screen: str
+    viewport: Literal["desktop", "mobile"]
+    proposals: list[str] = Field(description="The proposals' names, in order.")
+    recommended: int = Field(description="The index of the one recommended.")
+
+
+class DesignMockupRead(BaseModel):
+    """One screen drawn — today's, or a proposal — as the page shown."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    axis: str
+    when: str
+    cost: str
+    page: str = Field(
+        description="The whole page: no script, no address, nothing fetched — shown in a "
+        "frame sandboxed with no permission"
+    )
+
+
+class DesignChangeRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    where: str
+    before: str
+    after: str
+    why: str
+
+
+class DesignRead(BaseModel):
+    """The designer's proposal: the screen today, then each proposal — before
+    and after —, the one recommended and why, what it changes."""
+
+    model_config = ConfigDict(frozen=True)
+
+    screen: str
+    viewport: Literal["desktop", "mobile"]
+    before: DesignMockupRead
+    after: list[DesignMockupRead]
+    recommended: int
+    why: str
+    changes: list[DesignChangeRead]
+
+
 class AgentRunDetail(AgentRunRead):
     """A run, with what it delivered and every step."""
 
@@ -848,6 +899,11 @@ class AgentRunDetail(AgentRunRead):
     )
     review: CodeReviewRead | None = Field(
         default=None, description="A code review's deliverable, when it reviewed a pull request."
+    )
+    design: DesignSummaryRead | None = Field(
+        default=None,
+        description="The designer's mock-ups, when its review proposed a design: read them "
+        "with GET /agent-runs/{id}/design",
     )
     events: list[AgentRunEventRead]
     usage: AgentRunUsage
