@@ -22,7 +22,9 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -93,6 +95,8 @@ class MonitoringAlert(Base, WorkspaceScopedMixin):
 
 # Every way LEKA may one day tell; only those integrated are ever offered.
 CHANNELS = ("in_app", "email", "sms", "whatsapp", "slack", "teams", "discord")
+# Told through the webhook a person connects (LEKA-496).
+WEBHOOK_CHANNELS = ("slack", "teams", "discord")
 DELIVERIES = ("sent", "failed")
 
 
@@ -168,3 +172,28 @@ class AlertDelivery(Base, WorkspaceScopedMixin):
     status: Mapped[str] = mapped_column(String(10), nullable=False)
     error: Mapped[str | None] = mapped_column(String(300), nullable=True)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ChannelEndpoint(Base, WorkspaceScopedMixin):
+    """A channel connected by a webhook (LEKA-496): Slack, Microsoft Teams,
+    Discord — one each a workspace, its URL encrypted (SecretBox), never
+    read back whole: what is shown is its hint. Where it stands: untested
+    until a message went, then operational or failing, its last error said."""
+
+    __tablename__ = "monitoring_channel_endpoints"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "channel", name="uq_monitoring_channel_endpoints_channel"),
+        CheckConstraint("channel IN ('slack', 'teams', 'discord')", name="channel"),
+        CheckConstraint("status IN ('untested', 'operational', 'failing')", name="status"),
+    )
+
+    channel: Mapped[str] = mapped_column(String(10), nullable=False)
+    webhook: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    # Its host and last characters: enough to recognise it, never to use it.
+    hint: Mapped[str] = mapped_column(String(120), nullable=False)
+    status: Mapped[str] = mapped_column(String(12), nullable=False, server_default="untested")
+    last_error: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    tested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )

@@ -59,7 +59,7 @@ class Monitoring(_Model):
     for the launch, to revisit."""
 
     proactive: bool
-    alerts: tuple[Literal["in_app", "email"], ...] = ()
+    alerts: tuple[Literal["in_app", "email", "slack", "teams", "discord"], ...] = ()
     contractual: bool = False
     provisional: bool = False
 

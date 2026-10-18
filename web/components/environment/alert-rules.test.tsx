@@ -7,6 +7,7 @@
  * its last telling, a failure said.
  */
 
+import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -14,6 +15,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConfirmProvider } from "@/components/interactions/confirm";
 import { ApiError } from "@/lib/api";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
+import { makeQueryClient } from "@/lib/query";
 
 const permissions = vi.hoisted(() => ({ value: ["source:read", "source:manage"] }));
 const rules = vi.hoisted(() => ({ data: undefined as unknown }));
@@ -31,6 +33,11 @@ vi.mock("@/lib/environment-queries", () => ({
   useAlertRules: () => rules,
   useAlertRuleChange: () => mutations,
   useMonitoring: () => ({ data: { entitlement: { plan: "starter" } } }),
+}));
+const hooks = vi.hoisted(() => ({ connect: vi.fn(), test: vi.fn(), disconnect: vi.fn() }));
+vi.mock("@/lib/alert-rules", async (original) => ({
+  ...(await original<typeof import("@/lib/alert-rules")>()),
+  alertChannels: hooks,
 }));
 vi.mock("@/lib/team-queries", () => ({
   useTeamMembers: () => ({
@@ -51,9 +58,9 @@ const channels = (email = "untested") => [
   { key: "email", status: email },
   { key: "sms", status: "unavailable" },
   { key: "whatsapp", status: "unavailable" },
-  { key: "slack", status: "unavailable" },
-  { key: "teams", status: "unavailable" },
-  { key: "discord", status: "unavailable" },
+  { key: "slack", status: "not_connected", hint: null, error: null },
+  { key: "teams", status: "not_connected", hint: null, error: null },
+  { key: "discord", status: "operational", hint: "discord.com/…3xyz", error: null },
 ];
 const read = (over: Record<string, unknown> = {}) => ({
   limit: 20,
@@ -77,11 +84,13 @@ const read = (over: Record<string, unknown> = {}) => ({
 });
 const show = (node: React.ReactNode) =>
   render(
-    <LocaleProvider>
-      <ConfirmProvider>
-        <AlertRuleProvider>{node}</AlertRuleProvider>
-      </ConfirmProvider>
-    </LocaleProvider>,
+    <QueryClientProvider client={makeQueryClient()}>
+      <LocaleProvider>
+        <ConfirmProvider>
+          <AlertRuleProvider>{node}</AlertRuleProvider>
+        </ConfirmProvider>
+      </LocaleProvider>
+    </QueryClientProvider>,
   );
 
 beforeEach(() => {
@@ -113,8 +122,8 @@ describe("setting an alert", () => {
     expect(within(dialog).getByTestId("alert-condition-unavailable")).toHaveAttribute("data-checked");
     expect(within(dialog).getByTestId("alert-condition-degraded")).toHaveAttribute("data-checked");
     expect(within(dialog).getByTestId("alert-channel-email")).toHaveTextContent(/E-mail\s*· Pas encore testé/);
-    expect(within(dialog).getByTestId("alert-channel-slack")).toHaveTextContent(/Slack\s*· Bientôt disponible/);
-    expect(within(within(dialog).getByTestId("alert-channel-slack")).getByRole("checkbox")).toHaveAttribute(
+    expect(within(dialog).getByTestId("alert-channel-sms")).toHaveTextContent(/SMS\s*· Non disponible/);
+    expect(within(within(dialog).getByTestId("alert-channel-sms")).getByRole("checkbox")).toHaveAttribute(
       "aria-disabled",
       "true",
     );
@@ -225,6 +234,30 @@ describe("the rules", () => {
         expect.anything(),
       ),
     );
+  });
+
+  it("Slack, Teams, Discord connected by their webhook — its hint only, tried, never SMS (LEKA-496)", async () => {
+    hooks.connect.mockResolvedValue({ key: "slack", status: "untested", hint: "hooks.slack.com/…ijkl", error: null });
+    hooks.test.mockResolvedValue({ key: "discord", status: "operational", hint: "discord.com/…3xyz", error: null });
+    const user = userEvent.setup();
+    show(<AlertRulesCard />);
+    const rows = Object.fromEntries(
+      screen.getAllByTestId("alert-channel-row").map((row) => [row.dataset.channel, row]),
+    );
+    expect(Object.keys(rows)).toEqual(["slack", "teams", "discord"]);
+    expect(rows.slack).toHaveTextContent("À connecter");
+    expect(within(rows.discord).getByTestId("alert-channel-hint")).toHaveTextContent("Connecté : discord.com/…3xyz");
+    expect(screen.getByTestId("alert-channels")).toHaveTextContent("SMS et WhatsApp demandent un compte");
+
+    const url = "https://hooks.slack.com/services/T/B/abcdefghijkl";
+    await user.type(within(rows.slack).getByTestId("alert-channel-url"), url);
+    await user.click(within(rows.slack).getByTestId("alert-channel-connect"));
+    await waitFor(() => expect(hooks.connect).toHaveBeenCalledWith("slack", url));
+
+    await user.click(within(rows.discord).getByTestId("alert-channel-test"));
+    await waitFor(() => expect(hooks.test).toHaveBeenCalledWith("discord"));
+    // A member reads them, never connects one.
+    permissions.value = ["source:read"];
   });
 
   it("none yet: what a rule is for", () => {
