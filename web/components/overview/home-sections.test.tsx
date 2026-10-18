@@ -8,8 +8,10 @@
  */
 
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+import { ConfirmProvider } from "@/components/interactions/confirm";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 
 const env = vi.hoisted(() => ({ data: undefined as unknown }));
@@ -32,7 +34,12 @@ vi.mock("@/components/intentions/intentions-list", () => ({
 const home = await import("@/components/overview/home-sections");
 const { AgentsSection, EnvironmentCard, HistoryLink, HomeBundles, LatestAnalyses } = home;
 
-const show = (node: React.ReactNode) => render(<LocaleProvider>{node}</LocaleProvider>);
+const show = (node: React.ReactNode) =>
+  render(
+    <LocaleProvider>
+      <ConfirmProvider>{node}</ConfirmProvider>
+    </LocaleProvider>,
+  );
 const none = { unavailable: 0, degraded: 0, stale: 0, unknown: 0, not_covered: 0, operational: 0 };
 const READ_AT = new Date(Date.now() - 7 * 60_000);
 const measured = {
@@ -174,29 +181,47 @@ describe("what is on sale", () => {
     catalogue.data = undefined;
   });
 
-  it("« + » buys an option, only for whoever may change the workspace", () => {
+  it("each card opens its agent; its action by its state — a purchase confirmed, its price said (LEKA-497)", async () => {
     offers.data = {
       available: true,
       every: false,
       minimum_plan: "starter",
-      agents: [agent("option", { title: "Revue de code" }), agent("included", { included: true, owned: true })],
+      agents: [
+        agent("option", { title: "Revue de code" }),
+        agent("included", { included: true, owned: true }),
+        agent("upgrade", { why: "plan_required" }),
+      ],
       bundles: [],
     };
+    const user = userEvent.setup();
     const { unmount } = show(<AgentsSection />);
+    const cards = () => Object.fromEntries(screen.getAllByTestId("home-agent").map((c) => [c.dataset.key, c]));
+    expect(within(cards().option).getByTestId("home-agent-open")).toHaveAttribute("href", "/capabilities/option");
+    expect(within(cards().included).getByTestId("agent-open")).toHaveTextContent("Ouvrir l'agent");
+    expect(within(cards().upgrade).getByTestId("agent-upgrade")).toHaveAttribute("href", "/billing/plans");
+    // Who may not pay: never a purchase.
     expect(screen.queryByTestId("agent-buy")).toBeNull();
     unmount();
 
     permissions.value = ["workspace:update"];
     show(<AgentsSection />);
-    const [add] = screen.getAllByTestId("agent-buy");
-    expect(screen.getAllByTestId("agent-buy")).toHaveLength(1);
-    expect(add).toHaveAccessibleName("Acheter Revue de code");
-    add.click();
+    const buying = screen.getByTestId("agent-buy");
+    expect(buying).toHaveAccessibleName("Acheter Revue de code");
+    await user.click(buying);
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent(/9\s€ HT par mois/);
+    // Backing out buys nothing.
+    await user.click(within(dialog).getByRole("button", { name: "Annuler" }));
+    expect(buy.mutate).not.toHaveBeenCalled();
+    await user.click(screen.getByTestId("agent-buy"));
+    await user.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Continuer vers le paiement" }),
+    );
     expect(buy.mutate).toHaveBeenCalledWith({ kind: "agent", key: "option" }, expect.anything());
     permissions.value = [];
   });
 
-  it("a price only where there is one to pay: never on an included, bought or locked agent", () => {
+  it("a price only where there is one to pay: never on an included or bought agent", () => {
     offers.data = {
       available: true,
       every: false,
@@ -221,7 +246,9 @@ describe("what is on sale", () => {
     );
     expect(said.included).toEqual(["Inclus dans votre plan", null]);
     expect(said.owned).toEqual(["Déjà acheté", null]);
-    expect(said.upgrade).toEqual(["Upgrade requis", null]);
+    // Its price for whoever has it to pay — a plan above, here (LEKA-497).
+    expect(said.upgrade?.[0]).toBe("Upgrade requis");
+    expect(said.upgrade?.[1]).toMatch(/^9\s€ \/ mois HT$/);
     expect(said.option?.[0]).toBe("Option payante");
     expect(said.option?.[1]).toMatch(/^9\s€ \/ mois HT$/);
   });

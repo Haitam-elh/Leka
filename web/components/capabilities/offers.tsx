@@ -7,6 +7,7 @@ import { cn } from "cn";
 
 import { Card } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
+import { useConfirm } from "@/components/interactions/confirm";
 import { usePermissions } from "@/components/shell/shell-provider";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { routes } from "@/config/routes";
@@ -156,6 +157,67 @@ export function AgentOfferAction({ agentKey }: { agentKey: string }) {
         </Link>
       ) : null}
     </span>
+  );
+}
+
+/** What a card of the home does, by the agent's state (LEKA-497): « Ouvrir
+ * l'agent » where it is the workspace's, « Acheter l'agent » — its price and
+ * what happens said, confirmed, then Stripe's page — where it is an option
+ * this person may buy, « Voir les options » where a plan above is needed;
+ * nothing where it is not sold. The agent is granted once Stripe says paid. */
+export function AgentCardAction({ agentKey }: { agentKey: string }) {
+  const t = useDictionary();
+  const w = t.catalogue.offers;
+  const { format } = useLocale();
+  const confirm = useConfirm();
+  const offers = useAddOns();
+  const buy = useBuy();
+  const may = useMayBuy();
+  const offer = offers.data?.agents.find((a) => a.key === agentKey);
+  const state = agentStateOf(offers.data, agentKey);
+  if (!offer || !state || state === "unavailable") return null;
+  const link = "relative z-10 text-xs font-medium text-shell-nav-active hover:underline";
+  if (state === "included" || state === "owned") {
+    return (
+      <Link href={routes.capability(offer.key)} className={link} data-testid="agent-open">
+        {w.open}
+      </Link>
+    );
+  }
+  if (state === "upgrade") {
+    return (
+      <Link href={routes.billingPlans()} className={link} data-testid="agent-upgrade">
+        {w.seeOptions}
+      </Link>
+    );
+  }
+  if (!may) {
+    return (
+      <span className="text-xs text-shell-muted" title={w.askAdmin}>
+        {w.askAdminShort}
+      </span>
+    );
+  }
+  return (
+    <Button
+      type="button"
+      size="xs"
+      className="relative z-10"
+      disabled={buy.isPending}
+      aria-label={fill(w.buyNamed, { name: offer.title })}
+      data-testid="agent-buy"
+      onClick={async () => {
+        const ok = await confirm({
+          title: fill(w.buyTitle, { name: offer.title }),
+          description: fill(w.buyBody, { price: euros(offer.monthly_price, format) }),
+          confirmLabel: w.buyConfirm,
+        });
+        if (ok) buy.mutate({ kind: "agent", key: offer.key }, { onError: (error) => bought(t, error) });
+      }}
+    >
+      <ShoppingCart className="size-3" aria-hidden="true" />
+      {w.buyAgent}
+    </Button>
   );
 }
 

@@ -2031,6 +2031,14 @@ const fr = {
       // LEKA-467: an agent's state, in words, and its action.
       monthHt: "/ mois HT",
       buyNamed: "Acheter {name}",
+      /** From a card of the home (LEKA-497). */
+      open: "Ouvrir l'agent",
+      buyAgent: "Acheter l'agent",
+      seeOptions: "Voir les options",
+      buyTitle: "Acheter {name} ?",
+      buyBody:
+        "{price} HT par mois, ajouté à l'abonnement de votre espace. Vous passez ensuite par le paiement sécurisé de Stripe ; l'agent est activé dès que le paiement est confirmé.",
+      buyConfirm: "Continuer vers le paiement",
       askAdminShort: "Un administrateur l'achète",
       manage: "Gérer",
       states: {
@@ -10257,6 +10265,13 @@ const en: Dictionary = {
       fromPlan: "From the {plan} plan",
       monthHt: "/ month excl. VAT",
       buyNamed: "Buy {name}",
+      open: "Open the agent",
+      buyAgent: "Buy the agent",
+      seeOptions: "See the options",
+      buyTitle: "Buy {name}?",
+      buyBody:
+        "{price} excl. VAT a month, added to your workspace's subscription. You then go through Stripe's secure payment; the agent is turned on as soon as the payment is confirmed.",
+      buyConfirm: "Continue to payment",
       askAdminShort: "An admin buys it",
       manage: "Manage",
       states: {
