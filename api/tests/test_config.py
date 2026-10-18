@@ -237,7 +237,8 @@ def test_an_empty_key_counts_as_no_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_an_unknown_provider_is_refused() -> None:
     with pytest.raises(ValidationError):
-        Settings(_env_file=None, **{**VALID, "llm_provider": "openai"})  # type: ignore[arg-type]
+        # OpenAI is one now (LEKA-491); a provider LEKA has no client for is not.
+        Settings(_env_file=None, **{**VALID, "llm_provider": "cohere"})  # type: ignore[arg-type]
 
 
 # ── Credential encryption keys ───────────────────────────────────────────────

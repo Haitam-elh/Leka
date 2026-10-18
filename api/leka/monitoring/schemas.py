@@ -15,7 +15,9 @@ class MonitoringEntitlementRead(BaseModel):
 
     plan: str
     proactive: bool = Field(description="Its states are watched and alerts opened.")
-    alerts: list[Literal["in_app", "email"]] = Field(description="How it is told.")
+    alerts: list[Literal["in_app", "email", "slack", "teams", "discord"]] = Field(
+        description="How it is told."
+    )
     contractual: bool
     provisional: bool = Field(description="Decided for the launch, to revisit.")
     alerts_from: str | None = Field(description="The cheapest plan that watches proactively.")
@@ -80,7 +82,23 @@ class ChannelRead(BaseModel):
     delivery went — never said so before."""
 
     key: ChannelKey
-    status: Literal["operational", "untested", "failing", "not_in_plan", "unavailable"]
+    status: Literal[
+        "operational", "untested", "failing", "not_connected", "not_in_plan", "unavailable"
+    ]
+    hint: str | None = Field(
+        default=None, description="A webhook's (LEKA-496): its host and last characters only."
+    )
+    error: str | None = Field(
+        default=None, description="Its last delivery's error, when it failed."
+    )
+
+
+class WebhookConnect(BaseModel):
+    """A channel's webhook, as its tool gives it (LEKA-496)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = Field(min_length=10, max_length=600)
 
 
 class AlertDeliveryRead(BaseModel):

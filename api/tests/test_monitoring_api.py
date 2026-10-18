@@ -167,7 +167,8 @@ async def test_a_paid_plan_is_alerted_once_and_resolved_only_by_a_signal(
     await incident(workspace_id, "open")
     assert await watch(workspace_id, datetime.now(UTC)) == 2
     read = (await client.get("/api/v1/monitoring")).json()
-    assert read["entitlement"]["alerts"] == ["in_app", "email"]
+    # Growth: in LEKA, by e-mail, and the webhooks a person connects (LEKA-496).
+    assert read["entitlement"]["alerts"] == ["in_app", "email", "slack", "teams", "discord"]
     by_subject = {a["subject_name"]: a for a in read["open"]}
     payment = by_subject["payment-api"]
     assert (payment["kind"], payment["severity"], payment["certainty"]) == (

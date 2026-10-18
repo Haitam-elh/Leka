@@ -64,6 +64,8 @@ SECRET_OWNERS: dict[str, frozenset[str]] = {
     # Architecture rule 7: one place calls a model.
     "google_api_key": frozenset({"leka.capabilities"}),
     "anthropic_api_key": frozenset({"leka.capabilities"}),
+    # LEKA's OpenAI key (LEKA-491): the gateway's, as the other providers'.
+    "openai_api_key": frozenset({"leka.capabilities"}),
     "mistral_api_key": frozenset({"leka.capabilities"}),
     "llm_api_key": frozenset({"leka.capabilities"}),
     # A managed database or Redis puts its password in the URL, so reading

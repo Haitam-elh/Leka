@@ -43,6 +43,11 @@ class Needs:
     # The least quality it accepts (profiles.py: 1 to 3).
     quality: int = 1
     prefer: Prefer = Prefer.QUALITY
+    # What kind of work it is (LEKA-491): code, architecture, writing, data,
+    # vision — LEKA_LLM_TASK_ROUTES may name the models for it.
+    task: str | None = None
+    # Images to read: only a model that reads them.
+    vision: bool = False
 
     def unmet(self, model: Profile) -> str | None:
         """Why this model cannot answer — None when it can."""
@@ -54,6 +59,8 @@ class Needs:
             return "context"
         if model.quality < self.quality:
             return "quality"
+        if self.vision and not model.vision:
+            return "vision"
         return None
 
 
@@ -61,7 +68,7 @@ class Needs:
 class Route:
     endpoint: Endpoint
     profile: Profile
-    # own, default, fallback, alternative
+    # own, task (LEKA-491), default, fallback, alternative
     why: str
 
 
@@ -105,6 +112,19 @@ def fallbacks_of(said: str) -> list[tuple[str, str]]:
     return pairs
 
 
+def task_routes_of(said: str) -> dict[str, list[tuple[str, str]]]:
+    """LEKA_LLM_TASK_ROUTES — "code=anthropic:claude-sonnet-5;
+    vision=openai:gpt-4.1, google" — each kind of work and the models to
+    try first for it, in order (LEKA-491). Configured, never written where
+    it is used; empty: no kind of work has its own."""
+    routes: dict[str, list[tuple[str, str]]] = {}
+    for part in said.split(";"):
+        task, _, models = part.partition("=")
+        if task.strip() and models.strip():
+            routes[task.strip()] = fallbacks_of(models)
+    return routes
+
+
 def _rank(model: Profile, prefer: Prefer) -> tuple[float, ...]:
     price = model.price()
     cost = (price.per_million_in + price.per_million_out) if price else float("inf")
@@ -123,6 +143,7 @@ def route(
     default: tuple[str, str],
     fallbacks: Sequence[tuple[str, str]] = (),
     urls: Mapping[str, str] | None = None,
+    tasks: Mapping[str, Sequence[tuple[str, str]]] | None = None,
 ) -> Routing:
     """The models to try, in order, for what is needed."""
     routes: list[Route] = []
@@ -163,6 +184,10 @@ def route(
             why,
         )
 
+    # The models its kind of work is given first (LEKA-491), when LEKA holds
+    # their key and they can do what is asked — else on to the default.
+    for provider, model in (tasks or {}).get(needs.task or "", ()):
+        leka(provider, model, "task")
     leka(*default, "default")
     for provider, model in fallbacks:
         leka(provider, model, "fallback")

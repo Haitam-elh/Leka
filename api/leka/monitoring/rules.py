@@ -38,14 +38,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from leka.billing.limits import limit_of, room_for_alert_rule
 from leka.identity import EmailMessage, User, build_email_sender, email_language
 from leka.ingestion import EnrichmentRepository, twin_now
-from leka.monitoring.models import CHANNELS, AlertDelivery, AlertRule, MonitoringAlert
+from leka.monitoring import webhooks
+from leka.monitoring.models import (
+    CHANNELS,
+    WEBHOOK_CHANNELS,
+    AlertDelivery,
+    AlertRule,
+    MonitoringAlert,
+)
 from leka.monitoring.service import entitled
 from leka.platform import Membership, Workspace
 
 logger = structlog.get_logger(__name__)
 
-# The channels LEKA really delivers through; the others are never offered.
-INTEGRATED = ("in_app", "email")
+# The channels LEKA really delivers through — the webhooks once connected
+# (LEKA-496); SMS and WhatsApp never offered.
+INTEGRATED = ("in_app", "email", *WEBHOOK_CHANNELS)
 # Told in LEKA itself: the alert is on its screens for every member.
 IN_APP = "workspace"
 CONDITIONS = {"entity": ("unavailable", "degraded"), "source": ("source_failing",)}
@@ -78,8 +86,11 @@ class Watchable:
 @dataclass(frozen=True)
 class Channel:
     key: str
-    # operational, untested, failing, not_in_plan, unavailable
+    # operational, untested, failing, not_connected, not_in_plan, unavailable
     status: str
+    # A webhook's: what it is connected to, recognisable, never usable.
+    hint: str | None = None
+    error: str | None = None
 
 
 @dataclass(frozen=True)
@@ -145,6 +156,7 @@ async def channels(session: AsyncSession, workspace_id: uuid.UUID) -> list[Chann
         .order_by(AlertDelivery.at.desc())
         .limit(1)
     )
+    connected = await webhooks.endpoints(session, workspace_id)
     out: list[Channel] = []
     for key in CHANNELS:
         if key not in INTEGRATED:
@@ -153,6 +165,13 @@ async def channels(session: AsyncSession, workspace_id: uuid.UUID) -> list[Chann
             status = "not_in_plan"
         elif key == "in_app":
             status = "operational"
+        elif key in WEBHOOK_CHANNELS:
+            endpoint = connected.get(key)
+            if endpoint is None:
+                out.append(Channel(key, "not_connected"))
+                continue
+            out.append(Channel(key, endpoint.status, endpoint.hint, endpoint.last_error))
+            continue
         else:
             # Operational only once a delivery went (a test, or an alert).
             status = {"sent": "operational", "failed": "failing"}.get(str(last), "untested")
@@ -420,6 +439,19 @@ async def _send(
             continue
         if channel == "in_app":
             kept(channel, IN_APP, None)
+            continue
+        if channel in WEBHOOK_CHANNELS:
+            # Its webhook (LEKA-496): one message, to where it was connected.
+            endpoint = (await webhooks.endpoints(session, workspace_id)).get(channel)
+            if alert is not None and (rule.id, alert.id, channel, channel, round_) in done:
+                continue
+            if endpoint is None:
+                kept(channel, channel, "not_connected")
+                continue
+            language = workspace.default_language if workspace else "en"
+            said = told(rule, alert, language)
+            sent = await webhooks.post(endpoint, f"*{said.subject}*\n{said.body}", now=now)
+            kept(channel, channel, sent.error)
             continue
         members = await _members(session, workspace_id, [uuid.UUID(r) for r in rule.recipients])
         sender = build_email_sender()

@@ -126,6 +126,8 @@ says so, the rules answer in its place.
 | `LEKA_GOOGLE_API_KEY` | — | Google AI Studio key (paid tier: free-tier prompts may be used by Google) |
 | `LEKA_MISTRAL_API_KEY` | — | |
 | `LEKA_ANTHROPIC_API_KEY` | — | |
+| `LEKA_OPENAI_API_KEY` | — | OpenAI API key, held by LEKA (LEKA-491) — server-side only |
+| `LEKA_LLM_TASK_ROUTES` | — | The models each kind of work tries first: `code=anthropic:claude-sonnet-5; vision=openai:gpt-4.1` ([model-gateway.md](model-gateway.md) § 3) |
 
 ## Object storage and retention
 
@@ -224,6 +226,7 @@ are in `docs/runbook.md`.
 | `LEKA_GOOGLE_API_KEY` | `leka.capabilities` | 90 days |
 | `LEKA_ANTHROPIC_API_KEY` | `leka.capabilities` | 90 days |
 | `LEKA_MISTRAL_API_KEY` | `leka.capabilities` | 90 days |
+| `LEKA_OPENAI_API_KEY` | `leka.capabilities` | 90 days |
 | `LEKA_S3_SECRET_ACCESS_KEY` | `leka.platform.storage` | 90 days |
 | `LEKA_SENTRY_DSN` | `leka.platform.monitoring` | 365 days |
 | `LEKA_METRICS_TOKEN` | `leka.api.ops` | 365 days |

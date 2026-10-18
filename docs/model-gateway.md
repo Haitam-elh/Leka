@@ -69,6 +69,13 @@ tokens, with the date a published change applies**.
 | Mistral | Mistral Large (`mistral-large-latest`) | 256 000 | 3 | 0.50 / 1.50 |
 | Mistral | Mistral Medium, Small | 128 000 | 2, 1 | not published: not estimated |
 | Anthropic | Claude Sonnet 5, Haiku 4.5 | 1 000 000, 200 000 | 3, 2 | 2 / 10, 1 / 5 |
+| OpenAI (LEKA-491) | GPT-4.1 (`gpt-4.1`), GPT-4.1 mini | 1 047 576 | 3, 2 | 2 / 8 (cached 0.50), 0.40 / 1.60 (cached 0.10) |
+
+**Images** (`vision`, LEKA-491): Gemini 3.8 Flash, Claude Sonnet 5 and Haiku
+4.5, GPT-4.1 and its mini **read** images given to them; Mistral's do not.
+None of them is used to **make** an image: reading one is not generating one.
+A task that sends images says so (`Needs.vision`), and a model that cannot read
+them is passed over (`vision`).
 
 A model the table does not know — a company's Azure deployment, its own
 model — is taken cautiously: 128k tokens in, structured output and tools as
@@ -95,6 +102,11 @@ billed.
 1. **the workspace's own model**, when it brought one and it is on — its
    account, its contract, its data residency; when it said **"ours only"**
    (`exclusive`), nothing else, even when it fails;
+1b. **the models its kind of work is given** (LEKA-491) —
+   `LEKA_LLM_TASK_ROUTES`, `code=anthropic:claude-sonnet-5;
+   vision=openai:gpt-4.1, google` — in their order, when LEKA holds their key
+   and they can do what is asked (route `task`); none configured, or none of
+   them able: on to the default;
 2. **LEKA's default** — `LEKA_LLM_PROVIDER` + `LEKA_LLM_MODEL`, Gemini 3.8
    Flash; configured, never written where it is used;
 3. **the fallbacks** — `LEKA_LLM_FALLBACKS` (`mistral:mistral-large-latest`),
@@ -105,10 +117,20 @@ billed.
 
 A model that cannot do what is asked — a structured answer, tools, a context
 that long, a quality that high — **is not offered, and why is kept**
-(`Passed`: structured, tools, context, quality, no_key, exclusive). **A
+(`Passed`: structured, tools, context, quality, vision, no_key, exclusive). **A
 capability's needs choose its model**: its definition says them
 (`ModelNeed`, [capabilities.md](capabilities.md) § 1), the catalogue asks the
 router, the capability's sheet says which model would run it here.
+
+**Its kind of work** (`Needs.task`, LEKA-491) comes from its category
+(`TASK_OF_CATEGORY` in `catalogue.py`): development `code`; architecture and
+infrastructure `architecture`; documentation `writing`; data `data`. Which
+models each kind is given is **configuration, never code**: a first strategy
+to validate in staging — Claude for code and reviews, OpenAI where images are
+read, Gemini where it is already good and cheap — is
+`code=anthropic:claude-sonnet-5; architecture=anthropic:claude-sonnet-5;
+vision=openai:gpt-4.1`. Every call keeps its route: `task` says the kind of
+work chose it.
 
 ## 4. Retry and fallback
 
@@ -190,9 +212,34 @@ before LEKA-394, and the screens say so.
 
 ## 8. Configuration
 
-`LEKA_LLM_PROVIDER` (`google`), `LEKA_LLM_MODEL` (`gemini-3.8-flash`),
-`LEKA_LLM_FALLBACKS`, `LEKA_LLM_RETRIES`, `LEKA_GOOGLE_API_KEY`,
-`LEKA_MISTRAL_API_KEY`, `LEKA_ANTHROPIC_API_KEY` —
-[configuration.md](configuration.md). A Google AI Studio key **on a project
-with billing on**: on the free tier, Google may use what is sent to improve
-its products.
+`LEKA_LLM_PROVIDER` (`google`, `mistral`, `anthropic`, `openai`),
+`LEKA_LLM_MODEL` (`gemini-3.8-flash`), `LEKA_LLM_FALLBACKS`,
+`LEKA_LLM_TASK_ROUTES` (LEKA-491), `LEKA_LLM_RETRIES`, `LEKA_GOOGLE_API_KEY`,
+`LEKA_MISTRAL_API_KEY`, `LEKA_ANTHROPIC_API_KEY`, `LEKA_OPENAI_API_KEY` —
+[configuration.md](configuration.md). The keys are **server-side only**:
+never sent to the browser, never logged, rotated every 90 days
+(`RotateEvery`). A Google AI Studio key **on a project with billing on**: on
+the free tier, Google may use what is sent to improve its products.
+
+### Before turning a provider on in production (LEKA-491)
+
+What each is sent is **the request only**: the task's instructions, the
+context LEKA assembled for it (what the company model holds about the things
+asked — names, owners, states, extracts of its documents and tickets, within
+what the asker may see), the question, the tools' results. **No credential,
+no secret, no source's raw dump.** Before setting a provider's key in
+production:
+
+| Provider | Its terms for API data | To check |
+| --- | --- | --- |
+| Google (Gemini API) | not used to train on a paid project; abuse logs kept for a time | billing on for the project |
+| Anthropic (Claude API) | API inputs and outputs not used to train by default; kept a limited time for abuse checks | the org's retention and zero-retention option |
+| OpenAI (API) | API data not used to train by default; kept up to 30 days for abuse checks | zero data retention if the contract needs it; the project's region |
+| Mistral | per its API terms | as above |
+
+Then: set the key (`LEKA_<PROVIDER>_API_KEY`), name it in
+`LEKA_LLM_FALLBACKS` or `LEKA_LLM_TASK_ROUTES`, and read `GET /models` (who
+answers, in order) and `GET /models/usage` (what each costs) on the first
+days. A provider down or without a key is passed over — said `no_key` — and the
+next answers: never a loop, never billed twice (a failed attempt is kept as
+failed, its tokens as said).
