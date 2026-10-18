@@ -225,9 +225,9 @@ class AddOnsRead(_Read):
 class AddOnCheckoutCreate(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    # « agents »: several agents bought together, `key` their keys
-    # comma-separated (LEKA-458).
-    kind: Literal["agent", "bundle", "agents"]
+    # « agents », « bundles »: several bought together, `key` their keys
+    # comma-separated (LEKA-458, LEKA-500).
+    kind: Literal["agent", "bundle", "agents", "bundles"]
     key: str = Field(max_length=400)
     # Opened from an intention's decision: the agents to launch once paid.
     intention_id: uuid.UUID | None = None

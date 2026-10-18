@@ -1112,7 +1112,7 @@ export function CatalogueScreen() {
               keep={view === "mine" ? owned : undefined}
             />
           ) : null}
-          {view === "available" && shown !== "capabilities" ? <Bundles /> : null}
+          {view === "available" && shown !== "capabilities" ? <Bundles selectable /> : null}
           {/* LEKA's own skills, apart (LEKA-467): what they are, never a
               price — they are not sold. Hidden while a level or a state of
               agents is asked: they have neither. */}

@@ -2,6 +2,7 @@
 
 import { ArrowRight, BadgeCheck, Check, Clock, Lock, Package, Plus, ShoppingCart } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 
 import { cn } from "cn";
 
@@ -372,9 +373,14 @@ function BundleCard({
   markets,
   minimum,
   runsAgents,
+  picked,
+  onPick,
 }: {
   bundle: BundleOffer;
   titles: Map<string, string>;
+  /** In the marketplace: picked to buy with others, in one order (LEKA-500). */
+  picked?: boolean;
+  onPick?: () => void;
   /** Each agent's domain, to draw it as on its own card (LEKA-493). */
   markets: Map<string, string>;
   minimum: string;
@@ -477,6 +483,17 @@ function BundleCard({
         ) : (
           <p className="text-xs text-shell-muted">{w.askAdmin}</p>
         )}
+        {onPick && bundle.sellable && !bundle.owned && runsAgents && may ? (
+          <label className="flex cursor-pointer items-center justify-center gap-2 text-xs text-brand-navy" data-testid="bundle-pick">
+            <input
+              type="checkbox"
+              checked={Boolean(picked)}
+              onChange={onPick}
+              className="size-4 accent-brand-violet"
+            />
+            {w.pick}
+          </label>
+        ) : null}
       </div>
     </li>
   );
@@ -497,10 +514,11 @@ const BUNDLE_TONES: Record<string, { band: string; button: string }> = {
 
 /** The bundles, as the reference composes them: sold once every agent they
  * name is built, their saving computed (LEKA-454). */
-export function Bundles() {
+export function Bundles({ selectable = false }: { selectable?: boolean }) {
   const t = useDictionary();
   const w = t.catalogue.offers;
   const offers = useAddOns();
+  const [picked, setPicked] = useState<string[]>([]);
   const data = offers.data;
   if (!data?.available || !data.bundles.length) return null;
   const titles = new Map(data.agents.map((a: AgentOffer) => [a.key, a.title]));
@@ -533,12 +551,83 @@ export function Bundles() {
             bundle={bundle}
             titles={titles}
             markets={markets}
+            picked={picked.includes(bundle.key)}
+            onPick={
+              selectable
+                ? () =>
+                    setPicked((now) =>
+                      now.includes(bundle.key) ? now.filter((k) => k !== bundle.key) : [...now, bundle.key],
+                    )
+                : undefined
+            }
             minimum={data.minimum_plan}
             runsAgents={data.runs_agents}
           />
         ))}
       </ul>
+      {selectable && picked.length ? (
+        <BundleSelection
+          picked={data.bundles.filter((b) => picked.includes(b.key))}
+          onClear={() => setPicked([])}
+        />
+      ) : null}
     </section>
+  );
+}
+
+/** « Acheter la sélection » (LEKA-500): the bundles picked, each its price,
+ * their total, said and confirmed — then one Stripe Checkout, one
+ * subscription, each bundle its own right once Stripe says paid. */
+function BundleSelection({ picked, onClear }: { picked: BundleOffer[]; onClear: () => void }) {
+  const t = useDictionary();
+  const w = t.catalogue.offers;
+  const { format, locale } = useLocale();
+  const confirm = useConfirm();
+  const buy = useBuy();
+  const name = (b: BundleOffer) => (locale.startsWith("en") ? b.name.en : b.name.fr);
+  const total = picked.reduce((sum, b) => sum + b.monthly_price, 0);
+  return (
+    <div
+      className="sticky bottom-3 z-20 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-violet/30 bg-white px-4 py-3 shadow-md"
+      data-testid="bundle-selection"
+    >
+      <p className="text-[0.875rem] text-brand-navy">
+        <span className="font-semibold">{fill(w.picked, { count: picked.length })}</span>
+        {" · "}
+        <span className="tabular-nums" data-testid="bundle-selection-total">
+          {euros(total, format)} {w.monthHt}
+        </span>
+      </p>
+      <div className="flex items-center gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={onClear}>
+          {w.clear}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          disabled={buy.isPending}
+          data-testid="bundle-selection-buy"
+          onClick={async () => {
+            const lines = picked.map((b) => `${name(b)} : ${euros(b.monthly_price, format)} ${w.monthHt}`);
+            const ok = await confirm({
+              title: fill(w.buySelectionTitle, { count: picked.length }),
+              description: `${lines.join(" · ")}. ${fill(w.buySelectionBody, {
+                total: `${euros(total, format)} ${w.monthHt}`,
+              })}`,
+              confirmLabel: w.buyConfirm,
+            });
+            if (!ok) return;
+            const keys = picked.map((b) => b.key).join(",");
+            buy.mutate(
+              picked.length === 1 ? { kind: "bundle", key: keys } : { kind: "bundles", key: keys },
+              { onError: (error) => bought(t, error) },
+            );
+          }}
+        >
+          {w.buySelection}
+        </Button>
+      </div>
+    </div>
   );
 }
 
