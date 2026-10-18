@@ -18,7 +18,6 @@ import {
   Lightbulb,
   type LucideIcon,
   Network,
-  Plus,
   Search,
   ShieldCheck,
   Smartphone,
@@ -49,6 +48,7 @@ import { useConfirm } from "@/components/interactions/confirm";
 import { BackHome, PageContainer } from "@/components/shell/page-container";
 import { hasSourceLogo, sourceTitle } from "@/components/sources/source-logo";
 import { usePermissions } from "@/components/shell/shell-provider";
+import { SuggestCapability } from "@/components/capabilities/suggestion-dialog";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Select,
@@ -1079,14 +1079,8 @@ export function CatalogueScreen() {
           <h1 className="text-[2.125rem] leading-tight font-bold tracking-[-0.02em] text-brand-navy">{w.title}</h1>
           <p className="mt-1 text-[1.0625rem] text-shell-accent-muted">{w.subtitle}</p>
           <p className="text-[0.9375rem] text-shell-muted">{w.subtitleMore}</p>
-          <Link
-            href={routes.intentionNew()}
-            className={buttonVariants({ variant: "default", className: "mt-3" })}
-            data-testid="catalogue-ask"
-          >
-            <Plus className="size-4" aria-hidden="true" />
-            {w.ask}
-          </Link>
+          {/* A suggestion to LEKA's team, not an intention (LEKA-501). */}
+          <SuggestCapability />
         </div>
         <Stats />
       </div>
