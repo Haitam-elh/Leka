@@ -19795,6 +19795,20 @@ export interface components {
              * @description The agent that would do it, if one.
              */
             agent?: string | null;
+            /** Words */
+            words?: {
+                [key: string]: components["schemas"]["PlanStepWords"];
+            } | null;
+        };
+        /** PlanStepWords */
+        PlanStepWords: {
+            /** Title */
+            title: string;
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
         };
         /**
          * PolicyProbe

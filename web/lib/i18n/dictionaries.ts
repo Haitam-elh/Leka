@@ -2257,6 +2257,12 @@ const fr = {
       trustDecide: "Vous décidez : rien n'est appliqué sans votre accord.",
     },
     /** Each agent's name, by its key (LEKA-495): its file says it in French. */
+    /** The workflows' names, by key (LEKA-495): their files say them in French. */
+    workflowTitles: {
+      "architecture-dossier": "Dossier d'architecture",
+      "release-readiness": "Préparation de release",
+      "incident-review": "Revue d'incident",
+    },
     agentTitles: {
       "application-architecture": "Architecte applicatif",
       "architecture-analysis": "Analyse d'architecture",
@@ -10653,6 +10659,11 @@ const en: Dictionary = {
       trustNothing: "Nothing made up: what your sources do not say is reported.",
       trustReadOnly: "Read-only: nothing is changed on your side.",
       trustDecide: "You decide: nothing is applied without your consent.",
+    },
+    workflowTitles: {
+      "architecture-dossier": "Architecture dossier",
+      "release-readiness": "Release readiness",
+      "incident-review": "Incident review",
     },
     agentTitles: {
       "application-architecture": "Application architect",

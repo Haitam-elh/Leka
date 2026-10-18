@@ -1076,12 +1076,23 @@ class ProposedAgentRead(BaseModel):
     reasons: list[str] = Field(description="Why it cannot run here: missing_source, plan…")
 
 
+class PlanStepWords(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    title: str
+    detail: str = ""
+
+
 class PlanStepRead(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     title: str
     detail: str = ""
     agent: str | None = Field(default=None, description="The agent that would do it, if one.")
+    # A step LEKA's rules wrote (LEKA-495): its words in each language, so a
+    # reader sees it in theirs whatever the request's was. A model's own
+    # words have none: they stay as written.
+    words: dict[str, PlanStepWords] | None = None
 
 
 class AgentProposalRead(BaseModel):

@@ -31,7 +31,7 @@ import { ApiError } from "@/lib/api";
 import { summaryOf } from "@/components/capabilities/catalogue";
 import { fill } from "@/lib/i18n/dictionaries";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
-import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
+import { useDictionary, useLanguage, useLocale } from "@/lib/i18n/locale-provider";
 import type {
   AgentLaunch,
   AgentProposal,
@@ -74,10 +74,25 @@ export function useProposal(intention: IntentionDetail): {
   loading: boolean;
 } {
   const analysis = useIntentionAnalysis(intention.id, () => false);
+  const { language } = useLanguage();
   const data = analysis.data;
+  const proposal = data?.current ? (data.result?.proposal ?? null) : null;
   return {
-    proposal: data?.current ? (data.result?.proposal ?? null) : null,
+    proposal: useMemo(() => (proposal ? inReadersWords(proposal, language) : null), [proposal, language]),
     loading: data === undefined,
+  };
+}
+
+/** A plan LEKA's rules wrote, in the reader's language (LEKA-495) — French
+ * for French, English for any other; a model's own words as written. */
+export function inReadersWords(proposal: AgentProposal, language: string): AgentProposal {
+  const lang = language.startsWith("fr") ? "fr" : "en";
+  return {
+    ...proposal,
+    steps: proposal.steps.map((step) => {
+      const words = step.words?.[lang];
+      return words ? { ...step, title: words.title, detail: words.detail ?? "" } : step;
+    }),
   };
 }
 
