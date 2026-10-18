@@ -29,6 +29,8 @@ vi.mock("@/lib/workspace", () => ({
   },
 }));
 
+vi.mock("@/lib/nav-badges", () => ({ useNavBadges: () => ({}) }));
+
 const { ShellProvider } = await import("@/components/shell/shell-provider");
 const { UserMenu } = await import("@/components/shell/user-menu");
 
@@ -50,7 +52,7 @@ function mount() {
   return render(
     <LocaleProvider>
       <ShellProvider>
-        <UserMenu variant="sidebar" />
+        <UserMenu />
       </ShellProvider>
     </LocaleProvider>,
   );

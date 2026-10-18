@@ -91,15 +91,3 @@ export async function expectShellReady(page: Page): Promise<void> {
     );
   }
 }
-
-/**
- * Every page, in the drawer the header's menu opens (LEKA-455): the way a
- * spec reaches an entry the sidebar used to show.
- */
-export async function openNavigation(page: Page): Promise<void> {
-  await page.getByTestId("open-navigation").click();
-  // Named in the interface's language: a spec may have switched it.
-  await expect(
-    page.getByRole("navigation", { name: /^(Navigation principale|Main navigation)$/ }),
-  ).toBeVisible();
-}

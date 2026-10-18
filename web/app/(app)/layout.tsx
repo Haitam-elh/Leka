@@ -4,7 +4,6 @@ import { ConfirmProvider } from "@/components/interactions/confirm";
 import { AppShell } from "@/components/shell/app-shell";
 import { DocumentTitle } from "@/components/shell/document-title";
 import { RouteGuard } from "@/components/shell/route-guard";
-import { useNavBadges } from "@/lib/nav-badges";
 import { ShellProvider } from "@/components/shell/shell-provider";
 import { WorkspaceGate } from "@/components/shell/workspace-gate";
 import { Toaster } from "@/components/ui/toast";
@@ -42,12 +41,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** The shell, handed its counts: inside the providers, which they are read
- * through. */
 function Shell({ children }: { children: React.ReactNode }) {
-  const badges = useNavBadges();
   return (
-    <AppShell badges={badges}>
+    <AppShell>
       {/* Before the guard: with no workspace open every page is refused,
           and a new account needs a way in, not a refusal. */}
       <WorkspaceGate>
