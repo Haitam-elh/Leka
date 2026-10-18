@@ -1,8 +1,6 @@
 "use client";
 
 import { Building2 } from "lucide-react";
-import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
 
 import { IconTile } from "@/components/environment/parts";
 import { ActionEndpoints } from "@/components/settings/action-endpoints";
@@ -14,9 +12,6 @@ import { useDictionary } from "@/lib/i18n/locale-provider";
 
 function Settings() {
   const t = useDictionary();
-  // ?fail=1 makes the save return LEKA-333's error shape, which is how the
-  // server-error path is demonstrated without an endpoint to break.
-  const failOnce = useSearchParams().get("fail") === "1";
   return (
     <PageContainer>
       <PageHeader title={t.nav.settings} subtitle={t.settings.subtitle} />
@@ -29,7 +24,7 @@ function Settings() {
             <IconTile icon={Building2} tone="violet" />
             <h2 className="font-semibold text-brand-navy">{t.settings.generalTitle}</h2>
           </div>
-          <WorkspaceGeneralForm failOnce={failOnce} />
+          <WorkspaceGeneralForm />
         </section>
         {/* The model that reads and answers (LEKA-394). */}
         <LanguageModel />
@@ -41,9 +36,5 @@ function Settings() {
 }
 
 export default function Page() {
-  return (
-    <Suspense fallback={null}>
-      <Settings />
-    </Suspense>
-  );
+  return <Settings />;
 }

@@ -9,9 +9,11 @@ sending one.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
+from typing import Literal
+from zoneinfo import available_timezones
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from leka.core import languages
 from leka.platform.models import InvitationStatus, Role, WorkspaceStatus
@@ -35,6 +37,46 @@ class WorkspaceCreate(BaseModel):
         return languages.listed(value) if value is not None else None
 
 
+class DefaultPeriod(BaseModel):
+    """The period an analysis looks at unless told otherwise: a preset, or
+    its own dates."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    preset: Literal["24h", "7d", "30d", "custom"]
+    start: date | None = Field(default=None, alias="from")
+    end: date | None = Field(default=None, alias="to")
+
+    @model_validator(mode="after")
+    def _dated(self) -> DefaultPeriod:
+        if self.preset == "custom" and (
+            self.start is None or self.end is None or self.start > self.end
+        ):
+            msg = "a custom period takes a start no later than its end"
+            raise ValueError(msg)
+        return self
+
+
+class WorkspacePreferences(BaseModel):
+    """The preferences an admin sets in Paramètres → Votre espace (LEKA-502).
+    Only these: the policies kept in the same column have their own routes,
+    their own permission and their own checks."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    timezone: str | None = None
+    default_environment: Literal["production", "staging", "dev"] | None = None
+    default_period: DefaultPeriod | None = None
+
+    @field_validator("timezone")
+    @classmethod
+    def _zone(cls, value: str | None) -> str | None:
+        if value is not None and value not in available_timezones():
+            msg = f"unknown time zone {value!r}"
+            raise ValueError(msg)
+        return value
+
+
 class WorkspaceUpdate(BaseModel):
     """What may be changed later.
 
@@ -44,8 +86,18 @@ class WorkspaceUpdate(BaseModel):
     """
 
     name: str | None = Field(default=None, min_length=1, max_length=200)
-    settings: dict[str, object] | None = None
+    settings: WorkspacePreferences | None = None
     default_language: str | None = Field(default=None, max_length=35)
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not value.strip():
+            msg = "a name is not only spaces"
+            raise ValueError(msg)
+        return value.strip()
 
     @field_validator("default_language")
     @classmethod
