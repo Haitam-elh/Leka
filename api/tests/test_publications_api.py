@@ -438,3 +438,25 @@ async def test_pages_drafted_from_a_deliverable_and_published_in_confluence(
         f"/api/v1/publications/{rejected_id}/reject", json={"note": "Pas maintenant"}
     )
     assert (rejected.json()["status"], rejected.json()["note"]) == ("rejected", "Pas maintenant")
+
+
+async def test_allowing_leka_to_write_keeps_the_source_connected(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+) -> None:
+    # 2026-10-18: ticking « Créer les tickets acceptés » sent a connected Jira
+    # back to draft — what LEKA may write is not what it reads.
+    _as(identity, acme, "admin")
+    workspace = acme["acme"]
+    jira = await _source(workspace, SourceKind.JIRA, {"projects": ["PAY"]})
+    source = f"/api/v1/sources/{jira}"
+    config = (await client.get(source)).json()["config"]
+    allowed = await client.patch(source, json={"config": {**config, "issues": True}})
+    assert allowed.status_code == 200, allowed.text
+    assert (allowed.json()["status"], allowed.json()["config"]["issues"]) == ("active", True)
+    # What it reads, changed: tested again before it reads.
+    widened = await client.patch(
+        source, json={"config": {**allowed.json()["config"], "projects": ["PAY", "OPS"]}}
+    )
+    assert widened.json()["status"] == "draft"

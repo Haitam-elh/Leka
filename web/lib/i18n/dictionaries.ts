@@ -1861,6 +1861,10 @@ const fr = {
     seePullRequest: "Voir la pull request #{number} sur GitHub",
     notAllowed:
       "Pour l'accepter, autorisez d'abord LEKA à ouvrir des pull requests sur cette source GitHub (Sources → la source GitHub → Modifier → « Ouvrir les pull requests acceptées »), avec une clé qui a Contents et Pull requests en écriture.",
+    allow: "Autoriser LEKA à ouvrir des pull requests sur cette source",
+    allowedDone: "LEKA peut maintenant ouvrir des pull requests sur cette source.",
+    notAllowedAdmin:
+      "Cette source GitHub n'autorise pas encore LEKA à ouvrir des pull requests : autorisez-le ici, la source reste connectée. Sa clé doit avoir Contents et Pull requests en écriture.",
     errors: {
       pull_requests_off:
         "Cette source GitHub n'autorise pas encore LEKA à ouvrir des pull requests.",
@@ -1942,6 +1946,20 @@ const fr = {
         "Pour les publier, un admin autorise d'abord LEKA à publier des pages sur cette source (Modifier → « Publier les pages acceptées »), avec un compte qui peut ajouter des pages dans cet espace.",
     },
     openSource: "Ouvrir la source",
+    allow: {
+      issues: "Autoriser LEKA à créer des tickets sur cette source",
+      pages: "Autoriser LEKA à publier des pages sur cette source",
+    },
+    allowedDone: {
+      issues: "LEKA peut maintenant créer des tickets sur cette source.",
+      pages: "LEKA peut maintenant publier des pages sur cette source.",
+    },
+    notAllowedAdmin: {
+      issues:
+        "Cette source n'autorise pas encore LEKA à créer des tickets : autorisez-le ici, la source reste connectée. Son compte doit pouvoir créer des tickets dans ce projet.",
+      pages:
+        "Cette source n'autorise pas encore LEKA à publier des pages : autorisez-le ici, la source reste connectée. Son compte doit pouvoir ajouter des pages dans cet espace.",
+    },
     approvers: "Un admin de l'espace de travail choisit et envoie : partagez-lui ce livrable.",
     reject: "Refuser",
     rejectedDone: "Proposition refusée",
@@ -10431,6 +10449,10 @@ const en: Dictionary = {
     seePullRequest: "See pull request #{number} on GitHub",
     notAllowed:
       "To accept it, first allow LEKA to open pull requests on this GitHub source (Sources → the GitHub source → Edit → « Open the accepted pull requests »), with a token that has Contents and Pull requests in write.",
+    allow: "Allow LEKA to open pull requests on this source",
+    allowedDone: "LEKA may now open pull requests on this source.",
+    notAllowedAdmin:
+      "This GitHub source does not let LEKA open pull requests yet: allow it here, the source stays connected. Its token needs Contents and Pull requests in write.",
     errors: {
       pull_requests_off:
         "This GitHub source does not allow LEKA to open pull requests yet.",
@@ -10510,6 +10532,20 @@ const en: Dictionary = {
         "To publish them, an admin first allows LEKA to publish pages on this source (Edit → « Publish the accepted pages »), with an account that can add pages in this space.",
     },
     openSource: "Open the source",
+    allow: {
+      issues: "Allow LEKA to create tickets on this source",
+      pages: "Allow LEKA to publish pages on this source",
+    },
+    allowedDone: {
+      issues: "LEKA may now create tickets on this source.",
+      pages: "LEKA may now publish pages on this source.",
+    },
+    notAllowedAdmin: {
+      issues:
+        "This source does not let LEKA create tickets yet: allow it here, the source stays connected. Its account must be able to create issues in this project.",
+      pages:
+        "This source does not let LEKA publish pages yet: allow it here, the source stays connected. Its account must be able to add pages in this space.",
+    },
     approvers: "A workspace admin chooses and sends: share this deliverable with them.",
     reject: "Reject",
     rejectedDone: "Proposal rejected",

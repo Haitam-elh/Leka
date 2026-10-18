@@ -1,18 +1,21 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { Check, Columns2, ExternalLink, FileCode2, GitPullRequest, Rows3, X } from "lucide-react";
 import { useState } from "react";
 
 import { Card, type TileTone } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
+import { usePermissions } from "@/components/shell/shell-provider";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
 import type { CodeChange, CodeChangeFile } from "@/lib/code-changes";
-import { useCodeChangeDecision, useCodeChanges, useRunCodeChanges } from "@/lib/code-changes-queries";
+import { codeChangeKeys, useCodeChangeDecision, useCodeChanges, useRunCodeChanges } from "@/lib/code-changes-queries";
 import { type SplitCell, splitRows } from "@/lib/diff";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 import { notify } from "@/lib/notify";
+import { useAllowWrite } from "@/lib/sources-queries";
 
 /**
  * What the code-change agent proposed for an intention: each file and its
@@ -153,6 +156,10 @@ function ChangeCard({ change }: { change: CodeChange }) {
   const t = useDictionary();
   const w = t.codeChanges;
   const { accept, reject } = useCodeChangeDecision();
+  // Who manages the sources allows LEKA to open pull requests, in one click.
+  const manager = usePermissions()?.includes("source:manage") ?? false;
+  const allow = useAllowWrite();
+  const client = useQueryClient();
   const [note, setNote] = useState("");
   const [view, setView] = useState<"split" | "unified">("split");
   const busy = accept.isPending || reject.isPending;
@@ -168,6 +175,17 @@ function ChangeCard({ change }: { change: CodeChange }) {
       } else {
         notify.success({ title: w.rejectedDone });
       }
+    } catch (error) {
+      notify.error({ title: error instanceof ApiError ? error.message : w.failed });
+    }
+  }
+
+  async function allowPullRequests() {
+    if (!change.source_id) return;
+    try {
+      await allow.mutateAsync({ sourceId: change.source_id, flag: "pull_requests" });
+      await client.invalidateQueries({ queryKey: codeChangeKeys.all });
+      notify.success({ title: w.allowedDone });
     } catch (error) {
       notify.error({ title: error instanceof ApiError ? error.message : w.failed });
     }
@@ -225,9 +243,23 @@ function ChangeCard({ change }: { change: CodeChange }) {
       {change.status === "proposed" ? (
         <div className="flex flex-col gap-2">
           {!change.pull_requests_allowed ? (
-            <p className="text-xs text-state-warning" data-testid="code-change-not-allowed">
-              {w.notAllowed}
-            </p>
+            <div className="flex flex-wrap items-center gap-2" data-testid="code-change-not-allowed">
+              <p className="min-w-0 flex-1 text-xs text-state-warning">
+                {manager && change.source_id ? w.notAllowedAdmin : w.notAllowed}
+              </p>
+              {manager && change.source_id ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={allow.isPending}
+                  onClick={() => void allowPullRequests()}
+                  data-testid="code-change-allow"
+                >
+                  {w.allow}
+                </Button>
+              ) : null}
+            </div>
           ) : null}
           <label className="flex flex-col gap-1 text-xs text-shell-muted">
             {w.note}

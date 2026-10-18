@@ -54,6 +54,10 @@ from leka.platform import Workspace
 
 logger = structlog.get_logger(__name__)
 
+# What a source lets LEKA write — never what it reads: changed alone, they
+# need no new test (GitHub's pull requests, Jira's issues, Confluence's pages).
+WRITE_FLAGS = frozenset({"pull_requests", "issues", "pages"})
+
 
 class SourceNotFoundError(LookupError):
     """No such source in this workspace — including one in another workspace."""
@@ -183,9 +187,24 @@ class SourceService:
             manifest = get_connector(source.kind).manifest
             new = _validate(manifest.config_schema, "config", config).model_dump(mode="json")
             if new != source.config:
-                source.config = new
-                self._reconfigure(source)
-                self._record(source, SourceEventType.RECONFIGURED, fields=sorted(new))
+                changed = sorted(
+                    k for k in set(new) | set(source.config) if new.get(k) != source.config.get(k)
+                )
+                if set(changed) <= WRITE_FLAGS:
+                    # What LEKA may write, not what it reads: the source stays
+                    # as it is, its last test still holds (2026-10-18: allowing
+                    # tickets sent a connected Jira back to draft).
+                    held = source.tested_config_fingerprint is not None and (
+                        source.tested_config_fingerprint == await self._fingerprint(source)
+                    )
+                    source.config = new
+                    if held:
+                        source.tested_config_fingerprint = await self._fingerprint(source)
+                    self._record(source, SourceEventType.RECONFIGURED, fields=changed, writes=True)
+                else:
+                    source.config = new
+                    self._reconfigure(source)
+                    self._record(source, SourceEventType.RECONFIGURED, fields=sorted(new))
         try:
             await self._sources.flush()
         except IntegrityError as error:

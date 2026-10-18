@@ -23,6 +23,13 @@ vi.mock("@/lib/code-changes", async (original) => ({
   codeChanges: api,
 }));
 vi.mock("@/lib/notify", () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
+const shell = vi.hoisted(() => ({ permissions: [] as string[] }));
+vi.mock("@/components/shell/shell-provider", () => ({ usePermissions: () => shell.permissions }));
+const sourcesApi = vi.hoisted(() => ({ get: vi.fn(), update: vi.fn() }));
+vi.mock("@/lib/sources", async (original) => ({
+  ...(await original<typeof import("@/lib/sources")>()),
+  sources: sourcesApi,
+}));
 
 const { CodeChanges, diffLines } = await import("@/components/capabilities/code-changes");
 
@@ -43,6 +50,7 @@ function change(overrides: Partial<CodeChange> = {}): CodeChange {
       { path: "app/balance.py", status: "modified", additions: 1, deletions: 1, diff: DIFF, why: "le calcul" },
     ],
     pull_requests_allowed: true,
+    source_id: "s-github",
     proposed_by: null,
     decided_by: null,
     decided_at: null,
@@ -124,6 +132,27 @@ describe("a proposed code change", () => {
     expect(await screen.findByTestId("code-change-not-allowed")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "J'accepte d'appliquer ce changement sur GitHub" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Refuser" })).toBeEnabled();
+    // Only who manages the sources may allow it here.
+    expect(screen.queryByRole("button", { name: "Autoriser LEKA à ouvrir des pull requests sur cette source" })).toBeNull();
+  });
+
+  it("lets an admin allow pull requests in one click, the rest of the source as it is", async () => {
+    // 2026-10-18: the button stayed grey, and the way to allow it went
+    // through a wizard that sent the source back to draft.
+    shell.permissions = ["source:manage", "intention:approve"];
+    api.list.mockResolvedValue([change({ pull_requests_allowed: false })]);
+    sourcesApi.get.mockResolvedValue({ id: "s-github", config: { organization: "acme", repositories: ["acme/payments"] } });
+    sourcesApi.update.mockResolvedValue({ id: "s-github" });
+    show();
+    const card = await screen.findByTestId("code-change-not-allowed");
+    expect(card).toHaveTextContent("la source reste connectée");
+    await userEvent.click(within(card).getByRole("button", { name: "Autoriser LEKA à ouvrir des pull requests sur cette source" }));
+    await waitFor(() =>
+      expect(sourcesApi.update).toHaveBeenCalledWith("s-github", {
+        config: { organization: "acme", repositories: ["acme/payments"], pull_requests: true },
+      }),
+    );
+    shell.permissions = [];
   });
 
   it("rejects it", async () => {

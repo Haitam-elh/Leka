@@ -58,6 +58,7 @@ async def _read(service: ChangeService, change: CodeChange) -> CodeChangeRead:
         status=change.status,
         files=[CodeChangeFileRead.model_validate(f) for f in files_read(change.files)],
         pull_requests_allowed=await service.allowed(change),
+        source_id=change.source_id,
         proposed_by=change.proposed_by,
         decided_by=change.decided_by,
         decided_at=change.decided_at,

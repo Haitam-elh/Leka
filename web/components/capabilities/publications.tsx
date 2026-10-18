@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { BookOpen, Check, CircleAlert, ExternalLink, ListChecks, Loader2, X } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -18,9 +19,9 @@ import { useDictionary } from "@/lib/i18n/locale-provider";
 import { SPINNING } from "@/lib/motion";
 import { notify } from "@/lib/notify";
 import type { Publication, PublicationItem, PublicationKind } from "@/lib/publications";
-import { usePublicationActions, useRunPublications } from "@/lib/publications-queries";
+import { publicationKeys, usePublicationActions, useRunPublications } from "@/lib/publications-queries";
 import type { Source } from "@/lib/sources";
-import { useSources } from "@/lib/sources-queries";
+import { useAllowWrite, useSources } from "@/lib/sources-queries";
 
 /**
  * What LEKA proposes to send out of a deliverable (2026-10-18): tickets for
@@ -226,8 +227,13 @@ function PublicationCard({ runId, publication }: { runId: string; publication: P
   const w = t.publications;
   const errors = w.errors as Record<string, string>;
   const { accept, reject } = usePublicationActions(runId);
-  // Anyone who may ask drafts; who may approve sends, or rejects.
-  const approver = usePermissions()?.includes("intention:approve") ?? false;
+  // Anyone who may ask drafts; who may approve sends, or rejects; who
+  // manages the sources allows LEKA to write there, in one click.
+  const permissions = usePermissions();
+  const approver = permissions?.includes("intention:approve") ?? false;
+  const manager = permissions?.includes("source:manage") ?? false;
+  const allow = useAllowWrite();
+  const client = useQueryClient();
   const kind = publication.kind;
   // What is left out, not what is chosen: every item is chosen by default,
   // those drafted after this card was first drawn too.
@@ -251,6 +257,16 @@ function PublicationCard({ runId, publication }: { runId: string; publication: P
       const done = await accept.mutateAsync({ id: publication.id, items: picked.map((item) => item.id) });
       const sent = done.items.filter((item) => item.url).length;
       notify.success({ title: fill(w.sentDone[kind], { count: sent }) });
+    } catch (error) {
+      notify.error({ title: why(error, errors, w.failed) });
+    }
+  }
+
+  async function allowWrites() {
+    try {
+      await allow.mutateAsync({ sourceId: publication.source_id, flag: kind });
+      await client.invalidateQueries({ queryKey: publicationKeys.all });
+      notify.success({ title: w.allowedDone[kind] });
     } catch (error) {
       notify.error({ title: why(error, errors, w.failed) });
     }
@@ -352,12 +368,27 @@ function PublicationCard({ runId, publication }: { runId: string; publication: P
             </p>
           ) : null}
           {!publication.allowed ? (
-            <p className="text-xs text-state-warning" data-testid="publication-not-allowed">
-              {w.notAllowed[kind]}{" "}
-              <Link href={routes.source(publication.source_id)} className="font-medium underline">
-                {w.openSource}
-              </Link>
-            </p>
+            <div className="flex flex-wrap items-center gap-2" data-testid="publication-not-allowed">
+              <p className="min-w-0 flex-1 text-xs text-state-warning">
+                {manager ? w.notAllowedAdmin[kind] : w.notAllowed[kind]}{" "}
+                <Link href={routes.source(publication.source_id)} className="font-medium underline">
+                  {w.openSource}
+                </Link>
+              </p>
+              {manager ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={allow.isPending}
+                  onClick={() => void allowWrites()}
+                  data-testid="publication-allow"
+                >
+                  {allow.isPending ? <Loader2 className={cn("size-3.5", SPINNING)} aria-hidden="true" /> : null}
+                  {w.allow[kind]}
+                </Button>
+              ) : null}
+            </div>
           ) : null}
           <p className="text-xs text-shell-muted">{fill(w.sendHint[kind], { target: publication.target })}</p>
           <div className="flex flex-wrap gap-2">

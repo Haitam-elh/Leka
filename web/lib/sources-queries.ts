@@ -21,6 +21,20 @@ export const sourceKeys = {
   validation: (id: string) => [...sourceKeys.all, "validation", id] as const,
 };
 
+/** What LEKA may write on a source — tickets, pages, pull requests — allowed
+ * in one click by an admin, the rest of its config as it is; the source
+ * stays connected (2026-10-18). */
+export function useAllowWrite() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ sourceId, flag }: { sourceId: string; flag: "issues" | "pages" | "pull_requests" }) => {
+      const current = await sources.get(sourceId);
+      return sources.update(sourceId, { config: { ...current.config, [flag]: true } });
+    },
+    onSuccess: () => client.invalidateQueries({ queryKey: sourceKeys.all }),
+  });
+}
+
 export function useSources() {
   return useQuery({
     queryKey: sourceKeys.list(),
