@@ -105,7 +105,8 @@ export function UserMenu() {
           <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-violet text-xs font-semibold text-white">
             {initials}
           </span>
-          <span className="hidden truncate text-sm font-medium text-shell-nav capitalize sm:block">
+          {/* The name only where the header has room beside its pages. */}
+          <span className="hidden truncate text-sm font-medium text-shell-nav capitalize sm:block xl:hidden 2xl:block">
             {name}
           </span>
           <ChevronDown className="size-4 shrink-0 text-shell-muted" aria-hidden="true" />
@@ -131,7 +132,7 @@ export function UserMenu() {
           </DropdownMenuGroup>
           {/* The header's pages, where it has no room for them. */}
           {main.length > 0 ? (
-            <DropdownMenuGroup className="md:hidden">
+            <DropdownMenuGroup className="xl:hidden">
               <DropdownMenuSeparator />
               {main.map((entry) => (
                 <DropdownMenuItem key={entry.id} onClick={() => router.push(entry.href)} data-testid={`menu-${entry.id}`}>

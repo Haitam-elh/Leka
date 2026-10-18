@@ -85,7 +85,7 @@ function Indicator({ rows, more }: { rows: Intention[]; more: boolean }) {
           aria-label={`${stateOf(row)} — ${row.title}`}
         >
           {icon}
-          <span className="hidden truncate sm:inline">
+          <span className="hidden truncate sm:inline xl:hidden 2xl:inline">
             {stateOf(row)} · {row.title}
           </span>
       </Link>
@@ -104,8 +104,9 @@ function Indicator({ rows, more }: { rows: Intention[]; more: boolean }) {
           aria-label={said}
         >
           {icon}
-          <span className="tabular-nums sm:hidden">{count}</span>
-          <span className="hidden truncate sm:inline">{said}</span>
+          {/* In words only where the header has room beside its pages. */}
+          <span className="tabular-nums sm:hidden xl:inline 2xl:hidden">{count}</span>
+          <span className="hidden truncate sm:inline xl:hidden 2xl:inline">{said}</span>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-80">
           <DropdownMenuGroup>

@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import { Wordmark } from "@/components/brand/logo";
 import { NotificationBell } from "@/components/notifications/bell";
-import { MainNav } from "@/components/shell/main-nav";
+import { MainNav, WaitingDecisions } from "@/components/shell/main-nav";
 import { RunningIntentions } from "@/components/shell/running-intentions";
 import { useShell } from "@/components/shell/shell-provider";
 import { UserMenu } from "@/components/shell/user-menu";
@@ -42,7 +42,7 @@ export function AppHeader({ onOpenSearch, searchTriggerRef }: AppHeaderProps) {
         href={routes.overview()}
         aria-label={t.shell.home}
         data-testid="home-logo"
-        className="me-auto rounded-md outline-none focus-visible:ring-3 focus-visible:ring-brand-violet/40 md:me-4"
+        className="me-auto shrink-0 rounded-md outline-none focus-visible:ring-3 focus-visible:ring-brand-violet/40 xl:me-4"
       >
         <Wordmark className="h-[23px]" priority />
       </Link>
@@ -61,6 +61,7 @@ export function AppHeader({ onOpenSearch, searchTriggerRef }: AppHeaderProps) {
       </button>
 
       {/* What happened, told (LEKA-476): once the session is known. */}
+      {ready ? <WaitingDecisions className={ICON_BUTTON} /> : null}
       {ready ? <NotificationBell className={ICON_BUTTON} /> : null}
 
       <div className="hidden sm:block">
@@ -90,7 +91,8 @@ function PlanBadge() {
       className={`${BADGE} hover:bg-brand-violet/90 focus-visible:ring-3 focus-visible:ring-brand-violet/40`}
     >
       <Crown className="size-4" aria-hidden="true" />
-      {plan}
+      {/* Its name only where the header has room beside its pages. */}
+      <span className="hidden sm:inline xl:hidden 2xl:inline">{plan}</span>
     </Link>
   );
 }
