@@ -135,16 +135,19 @@ def lines_of(text: str, arguments: Mapping[str, Any]) -> dict[str, object]:
         size += len(line) + 1
     shown_to = first + len(given) - 1
     content = "\n".join(given)
+    # One line longer than all a file may give (a minified file): cut too.
+    cut = len(content) > MOST_CHARS
+    content = content[:MOST_CHARS]
     # To its very end: as the file is, its last newline included.
-    if given and shown_to >= total and text.endswith("\n"):
+    if given and not cut and shown_to >= total and text.endswith("\n"):
         content += "\n"
     return {
         "content": content,
         "lines": total,
         "from_line": first if given else 0,
         "to_line": shown_to if given else 0,
-        "complete": first == 1 and shown_to >= total,
-        "truncated": shown_to < last,
+        "complete": first == 1 and shown_to >= total and not cut,
+        "truncated": cut or shown_to < last,
     }
 
 

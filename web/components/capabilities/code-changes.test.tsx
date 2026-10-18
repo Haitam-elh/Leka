@@ -106,6 +106,8 @@ describe("a proposed code change", () => {
     expect(split).toHaveTextContent("Après · proposition de LEKA");
     expect(split.querySelector('[data-change="remove"]')?.textContent).toBe("    return account.total");
     expect(split.querySelector('[data-change="add"]')?.textContent).toBe("    return account.total - account.pending");
+    // A long line wraps in its own column: it never runs over the other side.
+    expect(split.querySelector('[data-change="add"]')?.className).toContain("whitespace-pre-wrap");
     // Or as one diff.
     await user.click(within(card).getByTestId("code-change-view-unified"));
     expect(within(card).getByTestId("code-change-diff").querySelector('[data-kind="add"]')?.textContent).toBe(
