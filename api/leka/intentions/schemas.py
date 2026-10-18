@@ -419,6 +419,9 @@ class IntentionRead(BaseModel):
     phase: Phase = Field(description="active, scheduled or finished: how a list groups it.")
     status_changed_at: datetime
     summary: str | None
+    # Its result kept from who has not the rights it asks (LEKA-499): what
+    # is missing — the summary then never sent.
+    locked: Literal["plan_required", "agents_required"] | None = None
     created_by: uuid.UUID | None
     created_at: datetime
     updated_at: datetime
@@ -1213,6 +1216,11 @@ class IntentionAnalysisRead(BaseModel):
     selection: list[CapabilityChoiceRead]
     steps: list[AnalysisStepRead]
     result: IntentionAnalysisResult | None
+    locked: Literal["plan_required", "agents_required"] | None = Field(
+        default=None,
+        description="What is missing to read its result (LEKA-499): only how it went and "
+        "what it proposes are sent.",
+    )
     error: str | None
     detail: dict[str, JsonValue]
     context_now: int | None = Field(

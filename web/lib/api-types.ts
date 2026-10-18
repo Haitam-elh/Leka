@@ -5601,7 +5601,8 @@ export interface paths {
         /**
          * Analyses
          * @description Its analyses, the latest first: which capabilities ran and why, what
-         *     each did, the result and its evidence.
+         *     each did, the result and its evidence — locked while what it asks is
+         *     not had (LEKA-499).
          */
         get: operations["analyses_api_v1_intentions__intention_id__analyses_get"];
         put?: never;
@@ -5622,7 +5623,8 @@ export interface paths {
         /**
          * Analysis
          * @description Its latest analysis — running, complete, partial, inconclusive,
-         *     failed, or blocked by its context. 404 before any.
+         *     failed, or blocked by its context. 404 before any. Locked while what it
+         *     asks is not had (LEKA-499).
          */
         get: operations["analysis_api_v1_intentions__intention_id__analysis_get"];
         put?: never;
@@ -16342,6 +16344,11 @@ export interface components {
             /** Steps */
             steps: components["schemas"]["AnalysisStepRead"][];
             result: components["schemas"]["IntentionAnalysisResult"] | null;
+            /**
+             * Locked
+             * @description What is missing to read its result (LEKA-499): only how it went and what it proposes are sent.
+             */
+            locked?: ("plan_required" | "agents_required") | null;
             /** Error */
             error: string | null;
             /** Detail */
@@ -16589,6 +16596,8 @@ export interface components {
             status_changed_at: string;
             /** Summary */
             summary: string | null;
+            /** Locked */
+            locked?: ("plan_required" | "agents_required") | null;
             /** Created By */
             created_by: string | null;
             /**
@@ -16982,6 +16991,8 @@ export interface components {
             status_changed_at: string;
             /** Summary */
             summary: string | null;
+            /** Locked */
+            locked?: ("plan_required" | "agents_required") | null;
             /** Created By */
             created_by: string | null;
             /**
