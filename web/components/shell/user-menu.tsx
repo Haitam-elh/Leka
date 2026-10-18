@@ -1,9 +1,8 @@
 "use client";
 
-import { ChevronDown, Globe, LogOut, Settings, User } from "lucide-react";
+import { ChevronDown, CreditCard, Globe, LogOut, Plug, Settings, ShieldCheck, User, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { cn } from "cn";
 
 import {
   DropdownMenu,
@@ -17,36 +16,41 @@ import {
 import { useChooseLanguage } from "@/components/language/account-language";
 import { LanguageDialog } from "@/components/language/language-picker";
 import { ProfileDialog } from "@/components/shell/profile-dialog";
-import { useCurrentUser, useCurrentWorkspace } from "@/components/shell/shell-provider";
+import { useMainNav } from "@/components/shell/main-nav";
+import { useCurrentUser, usePermissions } from "@/components/shell/shell-provider";
 import { language as languageOf } from "@/lib/i18n/languages";
-import { routes } from "@/config/routes";
+import { routeById, routes } from "@/config/routes";
+import { canOpen } from "@/lib/navigation/access";
 import { useDictionary, useLanguage } from "@/lib/i18n/locale-provider";
 import { auth, markSignedOut } from "@/lib/auth";
 
+/** The pages of running the workspace (LEKA-494), each to who may open it. */
+const MANAGEMENT = [
+  { id: "sources", icon: Plug, href: routes.sources() },
+  { id: "governance", icon: ShieldCheck, href: routes.governance() },
+  { id: "team", icon: Users, href: routes.team() },
+  { id: "billing", icon: CreditCard, href: routes.billing() },
+] as const;
+
 /**
- * The account, and the two things anyone looks for in it: settings and the
- * way out.
- *
- * The same component twice, because the mockups show the person in two
- * places: at the foot of the sidebar, with their role, and in the header
- * beside the notifications. One menu, two shapes, so the two cannot drift.
+ * The account, in the header: who you are, the pages of running the
+ * workspace (LEKA-494), settings and the way out — and, on a phone, where
+ * the header has no room for them, the main pages.
  *
  * The language lives here as well as in Settings because it is the one
  * preference someone changes before they can read the settings page. It
  * opens the picker of every language LEKA offers (components/language).
  */
-export function UserMenu({
-  variant,
-  collapsed = false,
-}: {
-  variant: "sidebar" | "header";
-  /** On the rail there is room for the avatar and nothing else. */
-  collapsed?: boolean;
-}) {
+export function UserMenu() {
   const t = useDictionary();
   const router = useRouter();
   const user = useCurrentUser();
-  const workspace = useCurrentWorkspace();
+  const permissions = usePermissions() ?? [];
+  const main = useMainNav();
+  const managed = MANAGEMENT.filter((page) => {
+    const route = routeById(page.id);
+    return route !== undefined && canOpen(route, permissions);
+  });
   const { language } = useLanguage();
   const choose = useChooseLanguage();
   const [profileOpen, setProfileOpen] = useState(false);
@@ -96,42 +100,16 @@ export function UserMenu({
         <DropdownMenuTrigger
           aria-label={t.shell.account}
           data-testid="user-menu"
-          className={cn(
-            "flex items-center gap-2 rounded-lg text-start transition-colors outline-none focus-visible:ring-3 focus-visible:ring-brand-violet/40",
-            variant === "sidebar"
-              ? "w-full gap-4 px-3 py-2 hover:bg-brand-violet-soft/60"
-              : "px-2 py-1.5 hover:bg-brand-violet-soft/60",
-            collapsed && "justify-center px-0",
-          )}
+          className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-start transition-colors outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
         >
-          <span
-            className={cn(
-              "flex shrink-0 items-center justify-center rounded-full font-semibold",
-              // The mockup's foot of the sidebar: a navy disc, white initial.
-              variant === "sidebar"
-                ? "size-[38px] bg-brand-navy text-sm text-white"
-                : "size-9 bg-brand-violet text-xs text-white",
-            )}
-          >
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-violet text-xs font-semibold text-white">
             {initials}
           </span>
-          {collapsed ? null : variant === "sidebar" ? (
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium text-shell-nav capitalize">
-                {name}
-              </span>
-              <span className="block truncate text-xs text-shell-muted">
-                {workspace ? roleLabel(t, workspace.role) : ""}
-              </span>
-            </span>
-          ) : (
-            <>
-              <span className="hidden truncate text-sm font-medium text-shell-nav capitalize sm:block">
-                {name}
-              </span>
-              <ChevronDown className="size-4 shrink-0 text-shell-muted" aria-hidden="true" />
-            </>
-          )}
+          {/* The name only where the header has room beside its pages. */}
+          <span className="hidden truncate text-sm font-medium text-shell-nav capitalize sm:block xl:hidden 2xl:block">
+            {name}
+          </span>
+          <ChevronDown className="size-4 shrink-0 text-shell-muted" aria-hidden="true" />
         </DropdownMenuTrigger>
 
         <DropdownMenuContent align="end" className="w-60">
@@ -152,6 +130,31 @@ export function UserMenu({
               {t.nav.settings}
             </DropdownMenuItem>
           </DropdownMenuGroup>
+          {/* The header's pages, where it has no room for them. */}
+          {main.length > 0 ? (
+            <DropdownMenuGroup className="xl:hidden">
+              <DropdownMenuSeparator />
+              {main.map((entry) => (
+                <DropdownMenuItem key={entry.id} onClick={() => router.push(entry.href)} data-testid={`menu-${entry.id}`}>
+                  <span className="min-w-0 flex-1 truncate">{entry.label}</span>
+                  {entry.count > 0 ? <span className="text-shell-muted">{entry.count}</span> : null}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+          ) : null}
+          {managed.length > 0 ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                {managed.map((page) => (
+                  <DropdownMenuItem key={page.id} onClick={() => router.push(page.href)} data-testid={`menu-${page.id}`}>
+                    <page.icon className="size-4" aria-hidden="true" />
+                    {t.nav[page.id]}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuGroup>
+            </>
+          ) : null}
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
             <DropdownMenuItem onClick={() => setLanguageOpen(true)} data-testid="language">
@@ -181,10 +184,4 @@ export function UserMenu({
       />
     </>
   );
-}
-
-/** The API's role name, in the interface's language — never the raw word. */
-function roleLabel(t: ReturnType<typeof useDictionary>, role: string): string {
-  const roles: Record<string, string> = t.shell.roles;
-  return roles[role] ?? role;
 }

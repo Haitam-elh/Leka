@@ -3,7 +3,7 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 
 import { openContextTab } from "./context-tab";
 import { openIncidentAnalysis } from "./incident";
-import { openNavigation, signIn } from "./sign-in";
+import { signIn } from "./sign-in";
 
 /**
  * The accessibility review of LEKA-343, as far as a machine can take it.
@@ -117,20 +117,12 @@ test.describe("what a screen opens", () => {
     await expectNoViolations(page);
   });
 
-  test("the navigation, every section open", async ({ page }) => {
+  test("the header's navigation, its page marked (LEKA-494)", async ({ page }) => {
     await signIn(page);
     await page.goto("/environment?tab=applications");
-    await openNavigation(page);
-    await page.getByTestId("nav-section-capabilities-toggle").click();
-    await page.getByTestId("nav-section-administration-toggle").click();
-    await expect(page.getByTestId("nav-capabilities-mine")).toBeVisible();
-    await expect(page.getByTestId("nav-sources")).toBeVisible();
+    await expect(page.getByTestId("nav-environment")).toHaveAttribute("aria-current", "page");
 
-    // The navigation is a modal here: it, not the page under it.
-    await expectNoViolations(
-      page,
-      page.getByRole("dialog", { name: /^(Navigation principale|Main navigation)$/ }),
-    );
+    await expectNoViolations(page);
   });
 
   test("an incident's analysis, unfolded, a probable cause's evidence open", async ({ page }) => {

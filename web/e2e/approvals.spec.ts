@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { openNavigation, signIn } from "./sign-in";
+import { signIn } from "./sign-in";
 
 /**
  * À valider, in a real browser (LEKA-380).
@@ -29,9 +29,8 @@ test.describe("À valider", () => {
     await expect(waiting).toHaveCount(3);
     await expect(waiting.filter({ hasText: "SLA de payment-api : 99.95 ou 99.9" })).toHaveCount(1);
     await expect(page.getByText("4 éléments en attente", { exact: true })).toBeVisible();
-    await openNavigation(page);
+    // In the header while something waits (LEKA-494).
     await expect(page.getByTestId("nav-approvals")).toContainText("4");
-    await page.keyboard.press("Escape");
 
     await waiting.filter({ hasText: "SLA de payment-api" }).getByRole("link").click();
     await expect(page).toHaveURL(/\/approvals\/[0-9a-f-]{36}\?kind=conflict$/);

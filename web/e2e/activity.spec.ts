@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { openNavigation, signIn } from "./sign-in";
+import { signIn } from "./sign-in";
 
 /**
  * Activité and a thing's Historique, in a real browser (LEKA-383).
@@ -23,10 +23,8 @@ test.describe("Activité", () => {
     page,
   }) => {
     await signIn(page);
-    // Activité is one of Mon environnement's lines (2026-10-07).
-    await openNavigation(page);
-    await page.getByTestId("nav-section-environment-toggle").click();
-    await page.getByTestId("nav-activity").click();
+    // Activité, from Mon environnement's « Voir tout » (LEKA-494: no drawer).
+    await page.goto("/activity");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Activité");
 
     await expect(page.getByTestId("activity-stat-incidents")).toHaveText("1");
@@ -73,7 +71,8 @@ test.describe("a thing's Historique", () => {
     await signIn(page);
     await page.goto("/activity");
     await page.getByTestId("activity-top").getByRole("link", { name: /payment-api/ }).click();
-    await page.getByRole("link", { name: "Historique" }).click();
+    // The sheet's tab, not the header's « Historique » (LEKA-494).
+    await page.getByRole("main").getByRole("link", { name: "Historique" }).click();
     await expect(page).toHaveURL(/\/environment\/services\/[0-9a-f-]{36}\/history$/);
 
     const latest = page.getByTestId("history-version-4");
