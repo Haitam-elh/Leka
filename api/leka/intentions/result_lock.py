@@ -27,7 +27,7 @@ from leka.intentions.schemas import (
     IntentionAnalysisResult,
     IntentionOfferRead,
 )
-from leka.platform.models import Workspace
+from leka.platform import Workspace
 
 Lock = Literal["plan_required", "agents_required"]
 
