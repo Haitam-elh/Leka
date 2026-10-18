@@ -171,6 +171,15 @@ export function EnvironmentCard() {
           {fill(w.sourcesFailing, { count: failing })}
         </Link>
       ) : null}
+      {/* Its rule, its states, what would raise it: on Mon environnement,
+          the same definition (LEKA-489). */}
+      <Link
+        href={routes.environment()}
+        className="mt-2 block rounded text-center text-xs text-shell-nav-active outline-none hover:underline focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+        data-testid="home-health-explained"
+      >
+        {t.environment.overall.understand}
+      </Link>
     </section>
   );
 }

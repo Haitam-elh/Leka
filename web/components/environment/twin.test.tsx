@@ -23,6 +23,7 @@ import {
   SourcesCoverage,
   TwinCounts,
   TwinLegend,
+  ScoreExplained,
   TwinList,
   twinHow,
 } from "@/components/environment/twin";
@@ -217,6 +218,59 @@ describe("the Digital Twin", () => {
     const counts = screen.getByTestId("twin-counts");
     expect(within(counts).getAllByRole("listitem")).toHaveLength(6);
     expect(counts).toHaveTextContent("0Non couvert");
+  });
+
+  it("says each thing's next step by why it is in its state — the sources' to fix, to Sources (LEKA-489)", () => {
+    show(<TwinList nodes={NODES} />);
+    const rows = within(screen.getByTestId("twin-list")).getAllByRole("row").slice(1);
+    const next = (i: number) => within(rows[i]).queryByTestId("twin-next");
+    expect(next(0)).toHaveTextContent("Suivre l'incident jusqu'à sa résolution");
+    expect(next(0)?.tagName).toBe("SPAN");
+    expect(next(2)).toHaveTextContent("Relancer la synchronisation de ses sources");
+    expect(next(2)).toHaveAttribute("href", "/sources");
+    expect(next(3)).toHaveTextContent("Vérifier qu'une source le surveille vraiment");
+    // Nothing to do about what is fine.
+    expect(next(4)).toBeNull();
+  });
+
+  it("explains the score: its rule, when, its limit; each state; what would raise it (LEKA-489)", async () => {
+    const user = userEvent.setup();
+    show(
+      <ScoreExplained
+        states={{ unavailable: 1, degraded: 0, stale: 2, unknown: 1, not_covered: 3, operational: 5 }}
+        total={12}
+        operational={5}
+        lastRead={read(10)}
+      />,
+    );
+    const method = screen.getByTestId("score-method");
+    await user.click(within(method).getByText("Comment ce score est calculé"));
+    expect(method).toHaveTextContent("5 éléments opérationnels sur 12 suivis.");
+    expect(method).toHaveTextContent("la plus récente il y a 10 min");
+    expect(method).toHaveTextContent("100 % n'est atteignable que si");
+
+    const states = screen.getByTestId("score-states");
+    await user.click(within(states).getByText("Que veut dire chaque état ?"));
+    expect(within(states).getAllByRole("term")).toHaveLength(6);
+    expect(states).toHaveTextContent("inconnu ne veut pas dire sain");
+
+    const improve = screen.getByTestId("score-improve");
+    expect([...improve.querySelectorAll("li")].map((li) => li.dataset.todo)).toEqual([
+      "troubled",
+      "not_covered",
+      "unknown",
+      "stale",
+    ]);
+    expect(within(improve).getByRole("link", { name: /3 éléments ne sont décrits par aucune source/ })).toHaveAttribute(
+      "href",
+      "/sources",
+    );
+  });
+
+  it("nothing to improve when all is verified — never a promise", () => {
+    show(<ScoreExplained states={{ operational: 4 }} total={4} operational={4} lastRead={null} />);
+    expect(screen.getByTestId("score-improve")).toHaveTextContent("Rien à améliorer");
+    expect(screen.getByTestId("score-method")).toHaveTextContent("Aucune source n'a encore été lue.");
   });
 
   it("says each source in its state and what covers each part", () => {
