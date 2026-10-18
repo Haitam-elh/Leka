@@ -221,6 +221,21 @@ describe("what is on sale", () => {
     permissions.value = [];
   });
 
+  it("each card says its domain, drawn as in the marketplace and its bundles (LEKA-493)", () => {
+    offers.data = {
+      available: true,
+      every: false,
+      minimum_plan: "starter",
+      agents: [agent("ui", { market: "frontend" }), agent("dev", { market: null, category: "development" })],
+      bundles: [],
+    };
+    show(<AgentsSection />);
+    const [ui, dev] = screen.getAllByTestId("home-agent");
+    expect(within(ui).getByTestId("home-agent-market")).toHaveTextContent("Frontend & Design");
+    expect(ui.querySelector("[data-market]")).toHaveAttribute("data-market", "frontend");
+    expect(within(dev).getByTestId("home-agent-market")).toHaveTextContent("Architecture & Code");
+  });
+
   it("a price only where there is one to pay: never on an included or bought agent", () => {
     offers.data = {
       available: true,

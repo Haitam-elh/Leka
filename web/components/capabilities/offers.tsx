@@ -7,6 +7,7 @@ import { cn } from "cn";
 
 import { Card } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
+import { MarketTile, marketOf } from "@/components/capabilities/market-mark";
 import { useConfirm } from "@/components/interactions/confirm";
 import { usePermissions } from "@/components/shell/shell-provider";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -368,11 +369,14 @@ export function AgentPrice({ agentKey, compact = false }: { agentKey: string; co
 function BundleCard({
   bundle,
   titles,
+  markets,
   minimum,
   runsAgents,
 }: {
   bundle: BundleOffer;
   titles: Map<string, string>;
+  /** Each agent's domain, to draw it as on its own card (LEKA-493). */
+  markets: Map<string, string>;
   minimum: string;
   runsAgents: boolean;
 }) {
@@ -418,7 +422,14 @@ function BundleCard({
               data-built={member.agent ? "true" : "false"}
               title={member.agent ? undefined : w.notBuilt}
             >
-              {member.agent ? (
+              {member.agent && markets.get(member.agent) ? (
+                // Its domain's mark, as on its own card (LEKA-493).
+                <MarketTile
+                  market={markets.get(member.agent) as string}
+                  label={(t.catalogue.markets as Record<string, string>)[markets.get(member.agent) as string] ?? ""}
+                  className="size-5 rounded [&_svg]:size-3"
+                />
+              ) : member.agent ? (
                 <BadgeCheck className="size-3.5 shrink-0 text-state-success" aria-hidden="true" />
               ) : (
                 <Clock className="size-3.5 shrink-0" aria-hidden="true" />
@@ -493,6 +504,7 @@ export function Bundles() {
   const data = offers.data;
   if (!data?.available || !data.bundles.length) return null;
   const titles = new Map(data.agents.map((a: AgentOffer) => [a.key, a.title]));
+  const markets = new Map(data.agents.map((a: AgentOffer) => [a.key, marketOf(a)]));
   const savings = data.bundles
     .filter((b) => b.sellable && b.discount_percent !== null)
     .map((b) => b.discount_percent as number);
@@ -519,6 +531,7 @@ export function Bundles() {
             key={bundle.key}
             bundle={bundle}
             titles={titles}
+            markets={markets}
             minimum={data.minimum_plan}
             runsAgents={data.runs_agents}
           />

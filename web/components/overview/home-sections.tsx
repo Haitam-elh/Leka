@@ -2,19 +2,13 @@
 
 import {
   ArrowRight,
-  Bug,
-  ChartColumn,
   ChevronRight,
-  Code2,
-  FileText,
   History,
-  Network,
-  ShieldCheck,
-  type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 
 import { cn } from "cn";
+import { MarketTile, marketOf } from "@/components/capabilities/market-mark";
 import { AgentCardAction, agentStateOf, AgentStateSaid, Bundles } from "@/components/capabilities/offers";
 import { type TileTone } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
@@ -193,23 +187,6 @@ export function HistoryLink() {
   );
 }
 
-/** An agent's tile: its category's mark, the catalogue's own colours. */
-const CATEGORY_MARK: Record<string, { icon: LucideIcon; tone: string }> = {
-  code: { icon: Code2, tone: "bg-violet-100 text-violet-600" },
-  architecture: { icon: Network, tone: "bg-sky-100 text-sky-600" },
-  security: { icon: ShieldCheck, tone: "bg-emerald-100 text-emerald-600" },
-  incident: { icon: Bug, tone: "bg-rose-100 text-rose-600" },
-  performance: { icon: ChartColumn, tone: "bg-amber-100 text-amber-600" },
-  documentation: { icon: FileText, tone: "bg-blue-100 text-blue-600" },
-};
-
-function markOf(category: string) {
-  const key = Object.keys(CATEGORY_MARK).find((k) =>
-    category.toLowerCase().includes(k),
-  );
-  return CATEGORY_MARK[key ?? "code"];
-}
-
 /** « Agents disponibles » (LEKA-470, its mockup): the agents on sale,
  * dense — six a row on a wide screen, four, three, two on a phone, twelve
  * at most (six on a phone) so no row is left half empty — each its name,
@@ -254,7 +231,9 @@ export function AgentsSection() {
       >
         {/* One row, at every width: as many as its columns. */}
         {row.map(({ agent, fit }) => {
-          const { icon: Icon, tone } = markOf(agent.category);
+          // Its domain, drawn as in the marketplace and its bundles (LEKA-493).
+          const market = marketOf(agent);
+          const marketName = (t.catalogue.markets as Record<string, string>)[market] ?? market;
           // Its price wherever it is to pay for — bought, or with a plan above (LEKA-497).
           const state = agentStateOf(offers, agent.key);
           const payable = state === "option" || state === "upgrade";
@@ -269,14 +248,10 @@ export function AgentsSection() {
               data-key={agent.key}
               data-fit={fit ?? undefined}
             >
-              <div className="flex items-start justify-between gap-2">
-                <span
-                  className={cn(
-                    "flex size-9 shrink-0 items-center justify-center rounded-lg",
-                    tone,
-                  )}
-                >
-                  <Icon className="size-4.5" aria-hidden="true" />
+              <div className="flex items-center gap-2">
+                <MarketTile market={market} label={marketName} />
+                <span className="min-w-0 truncate text-xs text-shell-muted" data-testid="home-agent-market">
+                  {marketName}
                 </span>
               </div>
               <h3 className="mt-2.5 text-[0.875rem] leading-snug font-semibold text-brand-navy">
