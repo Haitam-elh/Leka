@@ -59,6 +59,15 @@ from leka.connectors import (
 logger = structlog.get_logger(__name__)
 
 MAX_FILES = 20
+# A gateway's reason for no answer, as a change's error.
+NO_MODEL = {
+    "none": "no_model",
+    "timeout": "timeout",
+    "limited": "limited",
+    "refused": "refused",
+    "blocked": "refused",
+    "unanswered": "unanswered",
+}
 # Why a file was not changed, as the summary says it.
 SKIPPED_SAID = {
     "not_found": "le texte à remplacer n'y est pas",
@@ -67,7 +76,10 @@ SKIPPED_SAID = {
 # What the writer is shown of the files the agent read: each, and all.
 MOST_SHOWN = 60_000
 MOST_SHOWN_ALL = 240_000
-CHANGE_TOKENS = 16_000
+# Its thinking counts: a model that thinks hard on the files it is given
+# left too little of 16,000 for the edits (2026-10-18). Each model is held to
+# what it gives back at most (the gateway).
+CHANGE_TOKENS = 48_000
 CHANGE_BUDGET = 8 * 60.0
 # A diff kept, at most, per file.
 MAX_DIFF_CHARS = 120_000
@@ -260,6 +272,8 @@ class Proposed:
     usage: dict[str, Any] = field(default_factory=dict)
     # The files it could not change, each with why (an edit not found…).
     skipped: list[dict[str, str]] = field(default_factory=list)
+    # What the model's provider, or LEKA, said when it was not written.
+    said: str = ""
 
 
 async def github_sources(session: AsyncSession, workspace_id: uuid.UUID) -> list[Source]:
@@ -313,8 +327,11 @@ async def propose_change(
             timeout=budget,
         )
     except NoModelError as error:
-        logger.warning("change_not_written", run=str(run.id), reason=error.reason)
-        return Proposed(None, "no_model")
+        # Why, as it was: no model at all, or models that answered and were
+        # not kept — never all said « no model » (2026-10-18).
+        said = next((a.error for a in reversed(error.attempts) if a.error), None)
+        logger.warning("change_not_written", run=str(run.id), reason=error.reason, said=said)
+        return Proposed(None, NO_MODEL.get(error.reason, "unanswered"), said=(said or "")[:300])
     except TimeoutError:
         return Proposed(None, "timeout")
     except Exception:

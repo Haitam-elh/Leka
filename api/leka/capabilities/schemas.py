@@ -725,6 +725,10 @@ class AgentRunRead(BaseModel):
         description="Why its files could not be drawn last time (no_model, timeout, error…) — "
         "or none.",
     )
+    draw_said: str | None = Field(
+        default=None,
+        description="What the model's provider, or LEKA, said when they could not be — or none.",
+    )
     error: str | None = Field(
         description="Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, "
         "invalid_output, abandoned, error."

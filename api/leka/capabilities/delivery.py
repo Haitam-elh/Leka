@@ -166,7 +166,9 @@ async def draw(
                 [],
                 proposed.error or "no_change",
                 step="render_failed",
-                refusal=", ".join(f"{s['path']}: {s['why']}" for s in proposed.skipped)[:300]
+                refusal=(
+                    proposed.said or ", ".join(f"{s['path']}: {s['why']}" for s in proposed.skipped)
+                )[:300]
                 or None,
             )
         change = proposed.change

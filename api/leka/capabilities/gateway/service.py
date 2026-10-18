@@ -224,6 +224,10 @@ def own_of(row: WorkspaceModel) -> Own | None:
     return Own(endpoint, model, exclusive=row.exclusive)
 
 
+# How a provider says an answer stopped at its token limit.
+CUT = frozenset({"MAX_TOKENS", "LENGTH"})
+
+
 def json_of(text: str) -> str:
     """The JSON in an answer — some models fence it all the same."""
     fenced = re.fullmatch(r"\s*```(?:json)?\s*(.*?)\s*```\s*", text, re.DOTALL)
@@ -374,7 +378,11 @@ class Gateway:
         call = Call(
             route.endpoint,
             model,
-            request,
+            # Never more than the model gives back: a request sized for the
+            # largest one still reaches a smaller one (2026-10-18).
+            replace(request, max_tokens=min(request.max_tokens, route.profile.output))
+            if route.profile.output
+            else request,
             thinking=route.profile.thinking,
             sends_temperature=route.profile.sends_temperature,
         )
@@ -460,6 +468,12 @@ class Gateway:
             try:
                 value = model.model_validate_json(json_of(done.text))
             except ValidationError as error:
+                # Cut at its token limit, thinking included: said as such,
+                # never as a wrong shape (2026-10-18).
+                if str(done.finish or "").upper() in CUT:
+                    raise InvalidOutputError(
+                        f"Cut at its limit of {request.max_tokens} tokens, thinking included."
+                    ) from error
                 errors = error.errors()
                 where = ".".join(str(p) for p in errors[0]["loc"]) if errors else ""
                 said = errors[0]["msg"] if errors else "invalid"

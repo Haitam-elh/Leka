@@ -260,7 +260,15 @@ function ChangeMissing({ run, writing }: { run: AgentRunDetail; writing: boolean
       data-error={failed}
     >
       <CircleAlert className="size-4 shrink-0 text-state-warning" aria-hidden="true" />
-      <p className="min-w-0 flex-1 text-[0.8125rem] text-brand-navy">{fill(w.changeFailed, { why })}</p>
+      <div className="min-w-0 flex-1">
+        <p className="text-[0.8125rem] text-brand-navy">{fill(w.changeFailed, { why })}</p>
+        {run.draw_said ? (
+          // What the model's provider, or LEKA, said: to quote when asking why.
+          <p className="mt-0.5 font-mono text-xs break-words text-shell-muted" data-testid="deliverable-change-said">
+            {run.draw_said}
+          </p>
+        ) : null}
+      </div>
       <Button
         type="button"
         size="sm"

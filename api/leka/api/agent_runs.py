@@ -260,6 +260,7 @@ def run_read(run: AgentRun, principal: Principal) -> AgentRunRead:
         drawable=_drawable(run, definition, files),
         drawing=_drawing(run),
         draw_failed=str(failed) if (failed := run.detail.get("deliverables_error")) else None,
+        draw_said=str(said)[:300] if (said := run.detail.get("deliverables_said")) else None,
         deliverables=[
             DeliverableRead(
                 format=f["format"],
