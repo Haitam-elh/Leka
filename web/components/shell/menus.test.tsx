@@ -33,14 +33,19 @@ vi.mock("@/lib/auth", () => ({
   markSignedOut: vi.fn(),
 }));
 
+// The decisions waiting: none, here.
+vi.mock("@/lib/nav-badges", () => ({ useNavBadges: () => ({}) }));
+
+const allowed = vi.hoisted(() => ({ value: ["workspace:read"] }));
+
 // The shell asks the API what this person may do, as well as who they are.
 vi.mock("@/lib/workspace", () => ({
   workspace: {
-    current: vi.fn().mockResolvedValue({
+    current: vi.fn().mockImplementation(async () => ({
       workspace: { id: "w1", name: "Acme Corp", slug: "acme", status: "active" },
       role: "owner",
-      permissions: ["workspace:read"],
-    }),
+      permissions: allowed.value,
+    })),
   },
 }));
 
@@ -61,7 +66,7 @@ function mount(children: React.ReactNode) {
 describe("the account menu", () => {
   it("opens with the keyboard and closes on Escape", async () => {
     const user = userEvent.setup();
-    mount(<UserMenu variant="header" />);
+    mount(<UserMenu />);
 
     await user.tab();
     expect(screen.getByTestId("user-menu")).toHaveFocus();
@@ -79,21 +84,43 @@ describe("the account menu", () => {
     expect(screen.getByTestId("user-menu")).toHaveFocus();
   });
 
-  it("opens the settings, from the sidebar's menu as from the header's", async () => {
+  it("opens the settings", async () => {
     // It went nowhere: an item with nothing to do (2026-10-14).
-    for (const variant of ["sidebar", "header"] as const) {
-      const user = userEvent.setup();
-      const { unmount } = mount(<UserMenu variant={variant} />);
-      await user.click(await screen.findByTestId("user-menu"));
-      await user.click(await screen.findByTestId("settings"));
-      expect(router.push).toHaveBeenLastCalledWith("/settings");
-      unmount();
+    const user = userEvent.setup();
+    mount(<UserMenu />);
+    await user.click(await screen.findByTestId("user-menu"));
+    await user.click(await screen.findByTestId("settings"));
+    expect(router.push).toHaveBeenLastCalledWith("/settings");
+  });
+
+  it("holds the pages of running the workspace, each to who may open it (LEKA-494)", async () => {
+    allowed.value = ["workspace:read", "source:read", "access:read", "member:invite", "workspace:update"];
+    const user = userEvent.setup();
+    const { unmount } = mount(<UserMenu />);
+    await user.click(await screen.findByTestId("user-menu"));
+    for (const id of ["sources", "governance", "team", "billing"] as const) {
+      expect(await screen.findByTestId(`menu-${id}`)).toHaveTextContent(fr.nav[id]);
     }
+    await user.click(screen.getByTestId("menu-billing"));
+    expect(router.push).toHaveBeenLastCalledWith("/billing");
+    unmount();
+
+    // A member: none of them.
+    allowed.value = ["workspace:read"];
+    mount(<UserMenu />);
+    await user.click(await screen.findByTestId("user-menu"));
+    await screen.findByTestId("settings");
+    expect(screen.queryByTestId("menu-sources")).toBeNull();
+    expect(screen.queryByTestId("menu-billing")).toBeNull();
+    // The main pages, for a phone: what a member may open.
+    expect(screen.getByTestId("menu-home")).toHaveTextContent("Accueil");
+    expect(screen.queryByTestId("menu-history")).toBeNull();
+    allowed.value = ["workspace:read"];
   });
 
   it("says the language, and opens the picker of every one LEKA offers", async () => {
     const user = userEvent.setup();
-    mount(<UserMenu variant="header" />);
+    mount(<UserMenu />);
 
     await user.tab();
     await user.keyboard("{Enter}");

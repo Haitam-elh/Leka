@@ -646,6 +646,22 @@ It creates the products, prices, the launch coupon and the customer portal's
 settings that are missing, and prints them. The webhook endpoint, its events
 and the test-to-live steps: [pricing.md](pricing.md) § 7.
 
+## Agent and skill suggestions (LEKA-501)
+
+What customers send from « Demander une compétence », on the Agents page, is
+kept in `capability_suggestions` — never an intention, nothing run on it.
+LEKA's team reads it on the box, newest first, one JSON line each (who,
+which workspace, the problem, the use case):
+
+```bash
+dc exec api python -m leka.capabilities.suggestions list --status received
+dc exec api python -m leka.capabilities.suggestions set-status <id> reviewing   # planned, declined, done
+```
+
+The workspace sees where each of its suggestions stands. A declined or done
+one may be suggested again; one still open may not, and a person sends at
+most five a day.
+
 ## What is deliberately not here
 
 - **No staging.** One environment. A change is tested by CI and the browser

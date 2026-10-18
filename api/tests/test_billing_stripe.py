@@ -166,7 +166,10 @@ def subscription(
         "metadata": {"leka_plan": plan},
         "items": {
             "data": [
-                {"price": {"metadata": {"leka_plan": plan}, "recurring": {"interval": interval}}}
+                {
+                    "id": "si_1",
+                    "price": {"metadata": {"leka_plan": plan}, "recurring": {"interval": interval}},
+                }
             ]
         },
     }
@@ -329,6 +332,70 @@ async def test_checkout_charges_what_the_page_shows_the_launch_offer_once(
 
 
 @pytest.mark.integration
+async def test_subscribed_the_chosen_plan_confirmed_in_stripe_never_a_second_subscription(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    stripe: FakeStripe,
+) -> None:
+    """LEKA-490: once subscribed, « Choisir Business » opens Stripe on the
+    change to Business's exact price — prorated there — never Checkout, never
+    the portal's front page; the same plan refused; back to Free, its end."""
+    await _synced(stripe)
+    _as(identity, acme, "admin")
+    workspace = acme["acme"]
+    stripe.subscriptions["sub_1"] = subscription("growth", "active")
+    await _deliver(
+        client,
+        _event(
+            "checkout.session.completed",
+            {
+                "id": "cs_1",
+                "mode": "subscription",
+                "subscription": "sub_1",
+                "customer": "cus_1",
+                "client_reference_id": str(workspace),
+            },
+            created=1_800_000_100,
+        ),
+    )
+    assert await _plan(workspace) == "growth"
+
+    changed = await client.post(f"{API}/checkout", json={"plan": "business", "interval": "month"})
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["url"] == "https://billing.stripe.test/p_1"
+    assert changed.json()["quote"]["discount"] is None
+    [opened] = stripe.posted("/v1/billing_portal/sessions")
+    assert opened["flow_data[type]"] == "subscription_update_confirm"
+    assert opened["flow_data[subscription_update_confirm][subscription]"] == "sub_1"
+    assert opened["flow_data[subscription_update_confirm][items][0][id]"] == "si_1"
+    business = next(
+        v for k, v in stripe.prices.items() if k.startswith("leka_core_business_month_")
+    )
+    assert opened["flow_data[subscription_update_confirm][items][0][price]"] == business
+    assert (
+        opened["flow_data[after_completion][redirect][return_url]"]
+        == "https://leka.test/billing?changed=success"
+    )
+    # Never a second subscription; the plan changes only with Stripe's event.
+    assert stripe.posted("/v1/checkout/sessions") == []
+    assert await _plan(workspace) == "growth"
+
+    # Growth yearly is a change too; Growth monthly is what it has.
+    yearly = await client.post(f"{API}/checkout", json={"plan": "growth", "interval": "year"})
+    assert yearly.status_code == 200
+    same = await client.post(f"{API}/checkout", json={"plan": "growth", "interval": "month"})
+    assert same.status_code == 409
+    assert same.json()["error"]["details"][0]["message"] == "same_plan"
+
+    ending = await client.post(f"{API}/portal", params={"flow": "cancel"})
+    assert ending.status_code == 200
+    cancel = stripe.posted("/v1/billing_portal/sessions")[-1]
+    assert cancel["flow_data[type]"] == "subscription_cancel"
+    assert cancel["flow_data[subscription_cancel][subscription]"] == "sub_1"
+
+
+@pytest.mark.integration
 async def test_without_stripe_nothing_can_be_bought(
     client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
 ) -> None:
@@ -397,9 +464,12 @@ async def test_the_plan_comes_from_verified_events_once_never_undone_by_an_older
         "active",
         False,
     )
-    # Subscribed: a new checkout goes to the portal.
+    # Subscribed: another plan is a change confirmed in Stripe, never a
+    # second subscription (LEKA-490).
+    sessions = len(stripe.posted("/v1/checkout/sessions"))
     again = await client.post(f"{API}/checkout", json={"plan": "business", "interval": "month"})
-    assert again.status_code == 409
+    assert again.status_code == 200
+    assert len(stripe.posted("/v1/checkout/sessions")) == sessions
     portal = await client.post(f"{API}/portal")
     assert portal.json() == {"url": "https://billing.stripe.test/p_1"}
 

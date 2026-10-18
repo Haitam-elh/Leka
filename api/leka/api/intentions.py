@@ -26,6 +26,7 @@
     POST   /intentions/{id}/ask          asked again: its context made again
     POST   /intentions/{id}/cancel       withdrawn
     POST   /intentions/{id}/archive, /restore
+    DELETE /intentions/{id}                deleted, whatever its status (LEKA-487)
     POST   /intentions/{id}/links        linked to a context, a finding, an
                                          entity
     DELETE /intentions/{id}/links/{link_id}
@@ -56,6 +57,7 @@ from urllib.parse import quote, unquote
 
 from fastapi import APIRouter, Depends, Header, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
@@ -108,6 +110,7 @@ from leka.intentions import (
     SourceToReadRead,
     Understanding,
     Withdrawal,
+    deletion,
     queue_analysis,
     route_intention,
 )
@@ -714,6 +717,36 @@ async def offer(
         raise _missing()
     chosen = [a for a in (agents or "").split(",") if a] if agents is not None else None
     return await offer_for(session, principal.workspace_id, intention_id, chosen=chosen)
+
+
+class IntentionDeleted(BaseModel):
+    """Gone at once, or pending while something still worked on it."""
+
+    status: Literal["deleted", "pending"]
+
+
+@router.delete("/{intention_id}", response_model=IntentionDeleted)
+async def delete(
+    intention_id: uuid.UUID, session: SessionDep, principal: Asker
+) -> IntentionDeleted:
+    """« Supprimer l'analyse » (LEKA-487), whatever its status — by its asker
+    or who may approve. What is on its way is stopped first; gone at once
+    (`deleted`), or, while an analysis, an agent or an action still works on
+    it, out of every list and done once that ended (`pending`). What the bill
+    needs is kept (leka/intentions/deletion.py)."""
+    try:
+        said = await deletion.delete(
+            session,
+            principal.workspace_id,
+            intention_id,
+            by=principal.user_id,
+            steward=_steward(principal),
+        )
+    except deletion.NotYoursToDeleteError:
+        raise _refused(NotYoursError()) from None
+    if said is None:
+        raise _missing()
+    return IntentionDeleted(status=said)
 
 
 @router.post("/{intention_id}/cancel", response_model=IntentionDetail)

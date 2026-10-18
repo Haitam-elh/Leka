@@ -6,41 +6,30 @@ import { DemoBanner } from "@/components/demo/demo";
 import { entityHref, typeLabel } from "@/components/environment/parts";
 import { AppHeader } from "@/components/shell/app-header";
 import { LanguageNotice } from "@/components/language/account-language";
-import { AppSidebar } from "@/components/shell/app-sidebar";
 import { CommandPalette, useCommandShortcut } from "@/components/shell/command-palette";
 import { SkipLink } from "@/components/shell/skip-link";
 import { useShell, useShellRetry } from "@/components/shell/shell-provider";
 import { ErrorState } from "@/components/states/error-state";
 import { LoadingState } from "@/components/states/loading-state";
 import { OfflineBanner } from "@/components/states/offline-banner";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
-import type { BadgeKey } from "@/config/routes";
-import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
+import { useDictionary } from "@/lib/i18n/locale-provider";
 import { knowledgeGraph } from "@/lib/knowledge-graph";
 import { knowledgeSearchProvider } from "@/lib/search";
 
 /**
  * The frame every authenticated page sits in (LEKA-455, the sprint's
- * mockups): a header across the top — the logo, the workspace, the plan,
- * who you are — and no permanent sidebar. Every page stays one click away:
- * the header's menu opens the whole navigation in a drawer, at every width.
+ * mockups): a header across the top — the logo, the main pages, the
+ * workspace, the plan, who you are — and no sidebar (LEKA-494): the pages
+ * of running the workspace are in the profile menu, every page in ⌘K.
  *
  * The header does not scroll; the content does. That is what `h-screen
  * overflow-hidden` on the frame and `overflow-y-auto` on <main> buy, and it
  * is why no page needs to think about it.
  */
-export function AppShell({
-  children,
-  badges,
-}: {
-  children: React.ReactNode;
-  badges?: Partial<Record<BadgeKey, number>>;
-}) {
+export function AppShell({ children }: { children: React.ReactNode }) {
   const t = useDictionary();
-  const { dir } = useLocale();
   const state = useShell();
   const retry = useShellRetry();
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   // ⌘K finds what the company model knows (LEKA-369).
   const search = useMemo(
@@ -65,22 +54,8 @@ export function AppShell({
     <div className="relative flex h-screen overflow-hidden bg-shell-page">
       <SkipLink />
 
-      {/* Every page, from the header's menu. Escape closes it and the focus returns to the button
-          that opened it — base-ui's dialog does both. */}
-      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <SheetContent
-          side={dir === "rtl" ? "right" : "left"}
-          showCloseButton={false}
-          className="w-sidebar max-w-[85vw] p-0"
-        >
-          <SheetTitle className="sr-only">{t.shell.mainNavigation}</SheetTitle>
-          <AppSidebar collapsed={false} onNavigate={() => setDrawerOpen(false)} badges={badges} />
-        </SheetContent>
-      </Sheet>
-
       <div className="flex min-w-0 flex-1 flex-col">
         <AppHeader
-          onOpenNavigation={() => setDrawerOpen(true)}
           onOpenSearch={() => setSearchOpen(true)}
           searchTriggerRef={searchTrigger}
         />

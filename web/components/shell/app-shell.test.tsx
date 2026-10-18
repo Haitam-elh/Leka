@@ -41,6 +41,8 @@ vi.mock("@/lib/workspace", () => ({
   },
 }));
 
+vi.mock("@/lib/nav-badges", () => ({ useNavBadges: () => ({}) }));
+
 const { ShellProvider } = await import("@/components/shell/shell-provider");
 const { AppShell } = await import("@/components/shell/app-shell");
 

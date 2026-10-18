@@ -35,6 +35,7 @@ import { entityHref } from "@/components/environment/parts";
 import { AgentsAction, useProposal } from "@/components/intentions/agents-decision";
 import { AnalysisResults, EvidenceTab } from "@/components/intentions/analysis-tab";
 import { sizeOf } from "@/components/intentions/attachments";
+import { DeleteIntention } from "@/components/intentions/delete-intention";
 import { JourneyNote } from "@/components/intentions/journey";
 import { phaseOf, Working } from "@/components/intentions/working";
 import { useConfirm } from "@/components/interactions/confirm";
@@ -119,13 +120,16 @@ export function IntentionDetailPage({ intention }: { intention: IntentionDetail 
 
   return (
     <div className="space-y-4" data-testid="intention-detail-page">
-      <Link
-        href={routes.overview()}
-        className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-1.5 text-[0.8125rem] font-medium text-brand-navy shadow-sm ring-1 ring-shell-line hover:bg-shell-canvas"
-      >
-        <ArrowLeft className="size-4 rtl:-scale-x-100" aria-hidden="true" />
-        {w.back}
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Link
+          href={routes.overview()}
+          className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-1.5 text-[0.8125rem] font-medium text-brand-navy shadow-sm ring-1 ring-shell-line hover:bg-shell-canvas"
+        >
+          <ArrowLeft className="size-4 rtl:-scale-x-100" aria-hidden="true" />
+          {w.back}
+        </Link>
+        <DeleteIntention intention={intention} />
+      </div>
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] xl:items-start">
         {/* Laid out by the room each column has, not the screen's (container
             queries): the same blocks read well beside a panel, on a phone. */}

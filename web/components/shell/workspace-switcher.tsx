@@ -57,7 +57,7 @@ export function WorkspaceSwitcher({
         <DropdownMenuTrigger
           aria-label={t.shell.switchWorkspace}
           data-testid="workspace-switcher"
-          className="flex h-9 max-w-56 items-center gap-2 rounded-lg border border-shell-line bg-white px-3 text-sm text-brand-navy transition-colors outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+          className="flex h-9 max-w-56 items-center gap-2 rounded-lg border xl:max-w-44 2xl:max-w-56 border-shell-line bg-white px-3 text-sm text-brand-navy transition-colors outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
         >
           <UserRound
             className="size-4 shrink-0 text-shell-muted"

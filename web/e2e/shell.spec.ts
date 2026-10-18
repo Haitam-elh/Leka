@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { accountLanguage } from "./account-language";
-import { openNavigation, signIn } from "./sign-in";
+import { signIn } from "./sign-in";
 
 /**
  * The shell, in a real browser, at the sizes it claims to support (LEKA-455:
@@ -31,9 +31,9 @@ test.describe("the shell", () => {
     await expect(page.getByTestId("back-home")).toHaveCount(0);
 
     for (const [href, id] of [
-      ["/intentions", "intentions"],
-      ["/sources", "sources"],
-      ["/team", "team"],
+      ["/intentions", "history"],
+      ["/sources", null],
+      ["/team", null],
     ] as const) {
       await page.goto(href);
 
@@ -44,11 +44,10 @@ test.describe("the shell", () => {
       await expect(page.locator("main#main-content")).toBeVisible();
       await expect(page.getByTestId("back-home")).toBeVisible();
 
-      // The menu marks the page you are on, and only that one.
-      await openNavigation(page);
-      await expect(page.getByRole("navigation", { name: "Navigation principale" }).locator('a[aria-current="page"]')).toHaveCount(1);
-      await expect(page.getByTestId(`nav-${id}`)).toHaveAttribute("aria-current", "page");
-      await page.keyboard.press("Escape");
+      // The header marks the page you are on, and only that one — none for
+      // a page of the profile menu (LEKA-494).
+      await expect(page.getByRole("navigation", { name: "Navigation principale" }).locator('a[aria-current="page"]')).toHaveCount(id ? 1 : 0);
+      if (id) await expect(page.getByTestId(`nav-${id}`)).toHaveAttribute("aria-current", "page");
     }
 
     await page.getByTestId("back-home").click();
@@ -71,21 +70,6 @@ test.describe("the shell", () => {
       await expect(page.locator("main#main-content")).toBeVisible();
     });
   }
-
-  test("keeps every page in the header's menu, and Escape closes it", async ({ page }) => {
-    await signIn(page);
-
-    const navigation = page.getByRole("navigation", { name: "Navigation principale" });
-    await expect(navigation).toBeHidden();
-
-    await openNavigation(page);
-    await page.getByTestId("nav-section-administration-toggle").click();
-    await expect(page.getByTestId("nav-governance")).toBeVisible();
-
-    await page.keyboard.press("Escape");
-    await expect(navigation).toBeHidden();
-    await expect(page.getByTestId("open-navigation")).toBeFocused();
-  });
 
   test("takes you to the plans compared from the plan, Facturation still its own", async ({ page }) => {
     await signIn(page);
@@ -132,10 +116,7 @@ test.describe("the shell", () => {
       await picker.getByRole("combobox").fill("English");
       await picker.getByRole("option", { name: /^English/ }).click();
 
-      await openNavigation(page);
-      const environment = page.getByTestId("nav-environment-overview");
-      await expect(environment).toContainText("My environment");
-      await expect(environment).toContainText("Your company's living system.");
+      await expect(page.getByTestId("nav-environment")).toContainText("My environment");
     } finally {
       // Kept on the account: given back, for the specs after this one.
       accountLanguage("fr");

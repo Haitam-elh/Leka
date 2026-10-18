@@ -201,3 +201,20 @@ test.describe("An intention's page", () => {
     await expect(page).toHaveURL(new RegExp(`/intentions/${id}`));
   });
 });
+
+test.describe("« Supprimer l'analyse » (LEKA-487)", () => {
+  test("deleted for good once confirmed: back to the history, its address gone", async ({ page }) => {
+    await signIn(page);
+    const id = await ask(page, `Qui est responsable de auth-service ? (${Date.now()})`);
+    await page.goto(`/intentions/${id}`);
+
+    await page.getByTestId("intention-delete").click();
+    const dialog = page.getByRole("alertdialog");
+    await expect(dialog).toContainText("C'est irréversible");
+    await dialog.getByRole("button", { name: "Supprimer définitivement" }).click();
+
+    await expect(page).toHaveURL("http://localhost:3000/intentions");
+    const answer = await page.request.get(`http://localhost:8000/api/v1/intentions/${id}`);
+    expect(answer.status()).toBe(404);
+  });
+});
