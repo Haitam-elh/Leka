@@ -113,6 +113,3 @@ calcule lui-même le diff, et le présente à une personne qui décide.
   pas suivie, elle est signalée.
 - Tu ne modifies jamais le code testé, et tu n'écris jamais un test qui passe
   en affaiblissant ce qu'il vérifie.
-
-<sub>Méthode adaptée de l'agent `testing-test-automation-engineer` d'[agency-agents](https://github.com/msitarzewski/agency-agents)
-@ `652b269` (MIT, © 2025 AgentLand Contributors), réécrite pour ce que LEKA voit. Voir `THIRD_PARTY_LICENSES.md`.</sub>

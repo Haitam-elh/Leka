@@ -118,6 +118,3 @@ Un document markdown, dans la langue de la demande :
 ## Ses compétences
 
 Il peut aussi appeler la compétence `repository-profile` de la bibliothèque LEKA (LEKA-401, docs/skills.md) : le profil du dépôt (qui le tient, ce qu'il construit, son activité), pour dire à qui s'adresser. Ce que la compétence ne dit pas, il ne l'invente pas.
-
-<sub>Méthode adaptée de l'agent `engineering-codebase-onboarding-engineer` d'[agency-agents](https://github.com/msitarzewski/agency-agents)
-@ `652b269` (MIT, © 2025 AgentLand Contributors), réécrite pour ce que LEKA voit. Voir `THIRD_PARTY_LICENSES.md`.</sub>

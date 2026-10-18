@@ -29,7 +29,12 @@ ENGINEERING = {
     "change-impact-analysis": ("specialized", ["blast-radius", "change-review"]),
 }
 # A new version each for its method (2026-10-18).
-VERSIONS = {"codebase-explorer": "1.1.0", "test-generation": "1.1.0"}
+VERSIONS = {
+    "codebase-explorer": "1.1.0",
+    "test-generation": "1.1.0",
+    "regression-analysis": "1.1.0",
+    "change-impact-analysis": "1.1.0",
+}
 
 
 def test_each_is_registered_reads_or_only_proposes() -> None:
@@ -159,7 +164,7 @@ def test_the_codebase_explorer_explains_in_three_levels_and_names_the_traps() ->
         "Une partie n'est pas le tout",
     ):
         assert step in said, step
-    assert "msitarzewski/agency-agents" in said
+    assert "msitarzewski/agency-agents" not in said and "<sub>" not in said
 
 
 def test_the_test_generation_writes_tests_that_would_fail() -> None:
@@ -175,4 +180,14 @@ def test_the_test_generation_writes_tests_that_would_fail() -> None:
     ):
         assert step in said, step
     assert "ce qui le ferait échouer" in said
-    assert "msitarzewski/agency-agents" in said
+    assert "msitarzewski/agency-agents" not in said and "<sub>" not in said
+
+
+def test_the_regression_and_the_impact_weigh_contracts_and_the_way_back() -> None:
+    # 2026-10-18: a broken contract and an irreversible migration, the way
+    # back and how to ship a wide change, by stages.
+    found = {d.key: d for d in catalogue()}
+    regression = found["regression-analysis"].instructions or ""
+    assert "**Le contrat.**" in regression and "**La migration.**" in regression
+    impact = found["change-impact-analysis"].instructions or ""
+    assert "**Le retour arrière.**" in impact and "**Comment le livrer.**" in impact

@@ -2,7 +2,7 @@
 name: test-analysis
 title: "Analyse des tests"
 description: "Use when someone asks what should be tested before or after a change or a release — what it touches, what depends on it, what broke recently — from the company model and the code hosting sources."
-version: 1.2.0
+version: 1.3.0
 category: development
 entity_types: [repository, service, pull_request, commit, release, incident, application, database, infra_resource, business_capability, business_process]
 requires: ["github|gitlab|bitbucket"]
@@ -68,6 +68,15 @@ Avant d'écrire, dans cet ordre :
 5. **Ce qu'un vert ne prouve pas.** Pour chaque point critique, ce qu'un test
    réussi ne garantit pas — un service simulé, un environnement qui n'est pas
    la production. Une CI verte n'est pas une preuve de comportement.
+6. **Le coût d'un défaut qui passe.** Pour chaque point critique : ce qui
+   arrive si le défaut part en production — pour qui, combien de temps, ce
+   qu'il faudrait pour réparer. La probabilité se lit dans ce qui a déjà
+   cassé autour ([id]), jamais dans une impression.
+7. **Ce qui clignote.** Quand les sources montrent des exécutions : un test
+   qui échoue puis passe sans changement est instable. Il ne prouve rien
+   tant qu'on ne sait pas pourquoi ; il se met de côté et se diagnostique —
+   on ne le supprime jamais, et on ne compte pas sur les relances pour le
+   rendre vert.
 
 ## Ce qu'il produit
 
@@ -76,7 +85,7 @@ Un document markdown, dans la langue de la demande :
 1. **Périmètre** — ce que le changement touche directement.
 2. **Par ricochet** — ce qui en dépend et doit être revérifié.
 3. **Zones à risque** — ce qui a cassé récemment autour.
-4. **Plan de test proposé** — les critiques d'abord ; chaque point : ce qu'on observe, le niveau, pourquoi ([id]), ce qu'un vert ne prouverait pas.
+4. **Plan de test proposé** — les critiques d'abord ; chaque point : ce qu'on observe, le niveau, pourquoi ([id]), ce que coûterait le défaut s'il passait, ce qu'un vert ne prouverait pas.
 5. **Limites** — LEKA ne lit pas la couverture de tests : il le dit quand c'est ce qui manque.
 
 ## Ce qu'il ne doit jamais faire
@@ -91,7 +100,3 @@ Un document markdown, dans la langue de la demande :
 ## Ses compétences
 
 Il peut aussi appeler la compétence `test-scope` de la bibliothèque LEKA (LEKA-401, docs/skills.md) : le périmètre de test d'un changement : ce qui dépend de la chose modifiée, le plus critique d'abord, ce qui a eu des incidents récemment. Chacune est une lecture vérifiée, faite avec les droits de la personne qui demande, et gardée. Il s'appuie sur leurs signaux (`signals`) et cite ce qu'elles ont lu ; ce qu'une compétence ne dit pas, il ne l'invente pas.
-
-<sub>Méthode adaptée de l'agent `pr-test-analyzer` et du skill `test-collaboration` d'[ECC](https://github.com/affaan-m/ECC)
-@ `b92f181` (MIT, © 2026 Affaan Mustafa) et du skill `test-audit` de [gstack](https://github.com/garrytan/gstack)
-@ `945ac30` (MIT, © 2026 Garry Tan), réécrite pour ce que LEKA voit. Voir `THIRD_PARTY_LICENSES.md`.</sub>

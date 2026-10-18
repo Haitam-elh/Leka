@@ -2,7 +2,7 @@
 name: release-analysis
 title: "Analyse de release"
 description: "Use when someone wants a release or a deployment analysed — what went out, what it touched, what happened after it — or the risk of the next one assessed."
-version: 1.2.0
+version: 1.3.0
 category: development
 entity_types: [release, deployment, change, commit, pull_request, service, incident, application, repository, business_capability, business_process]
 requires: ["github|gitlab|bitbucket"]
@@ -71,6 +71,15 @@ d'écrire, dans cet ordre :
    touche des accès ou des données sensibles sans relecteur connu, une
    migration dont on ne sait pas revenir, ou qu'un fort impact n'a pas de
    retour arrière. Une CI verte ne prouve pas qu'une release est prête.
+6. **Le déploiement par étapes.** Une release risquée part par paliers — une
+   petite part, puis davantage, puis tout —, avec, fixés avant de commencer,
+   les signaux qui l'arrêtent (taux d'erreur, latence, incidents) et qui
+   décide. Une application mobile publiée ne se retire pas : son seul retour
+   est la version suivante, et son déploiement par étapes doit pouvoir se
+   suspendre au premier mauvais signal.
+7. **Le budget d'erreur.** Quand un objectif de service est documenté et
+   déjà dépassé sur la période, la fiabilité passe avant les nouveautés :
+   dis-le dans le verdict.
 
 ## Ce qu'il produit
 
@@ -79,7 +88,7 @@ Un document markdown, dans la langue de la demande :
 1. **Ce qui est parti** — changements, pull requests, services.
 2. **Après** — incidents ou changements survenus ensuite, et leur lien possible.
 3. **Évaluation** — le verdict en une phrase, ce qui le bloque, ce qui a été vérifié et ce qui manque pour en être sûr.
-4. **Pour la prochaine** — ce qu'il faudrait surveiller, et le retour arrière à prévoir.
+4. **Pour la prochaine** — ce qu'il faudrait surveiller, le retour arrière à prévoir et, pour une release risquée, ses paliers et les signaux qui l'arrêtent.
 
 ## Ce qu'il ne doit jamais faire
 
@@ -93,6 +102,3 @@ Un document markdown, dans la langue de la demande :
 ## Ses compétences
 
 Il peut aussi appeler les compétences `delivery-metrics`, `change-review` de la bibliothèque LEKA (LEKA-401, docs/skills.md) : les indicateurs de livraison du service (fréquence, taux d'échec, temps de rétablissement, au sens DORA) et la revue d'un changement (ce qu'il a touché, jusqu'où il porte, les incidents qui l'ont suivi). Chacune est une lecture vérifiée, faite avec les droits de la personne qui demande, et gardée. Il s'appuie sur leurs signaux (`signals`) et cite ce qu'elles ont lu ; ce qu'une compétence ne dit pas, il ne l'invente pas.
-
-<sub>Méthode adaptée des skills `deployment-patterns` et `production-audit` d'[ECC](https://github.com/affaan-m/ECC)
-@ `b92f181` (MIT, © 2026 Affaan Mustafa), réécrite pour ce que LEKA voit. Voir `THIRD_PARTY_LICENSES.md`.</sub>

@@ -67,6 +67,7 @@ from leka.capabilities.runtime import (
     Injected,
     Refusal,
     RunStatus,
+    Withheld,
     inject,
     messages,
     offered,
@@ -400,6 +401,15 @@ async def _fail(
     return {"status": "failed" if ended else "cancelled", "error": code}
 
 
+async def _reads_code(session: AsyncSession, workspace_id: uuid.UUID) -> bool:
+    """Whether a GitHub source is connected, its code there to read."""
+    # Here, not at the top: changes.py reads the catalogue, which reads the
+    # registry, which reads the code tools' names.
+    from leka.capabilities.changes import github_sources
+
+    return bool(await github_sources(session, workspace_id))
+
+
 async def _run(
     session: AsyncSession,
     run: AgentRun,
@@ -468,11 +478,19 @@ async def _run(
     )
     # Its tools: those it declares (LEKA-400), what it may use, by who asked.
     declared = [t for t in tools if not definition.tools or t.name in definition.tools]
-    # The code tools: only to an agent that names them (code_tools.py).
-    declared += [t for t in CODE_TOOLS if t.name in definition.tools]
+    # The code tools: only to an agent that names them (code_tools.py), and
+    # only when there is code to read — a GitHub source connected; else the
+    # model never hears of them (2026-10-18: the documentation assistant
+    # reads the code when it can, and works without it).
+    coded = [t for t in CODE_TOOLS if t.name in definition.tools]
+    no_code: list[Withheld] = []
+    if coded and not await _reads_code(session, workspace_id):
+        no_code, coded = [Withheld(t.name, "no_source") for t in coded], []
+    declared += coded
     # Its method's guides: only to an agent that names them and has a library.
     declared += [t for t in METHOD_TOOLS if t.name in definition.tools and definition.method]
     given, withheld = offered(declared, permissions)
+    withheld += no_code
     # Its skills: those it names, within what it reads (LEKA-401).
     named, out_of_reach = agent_skill_tools(definition)
     skilled, unskilled = offered(named, permissions)

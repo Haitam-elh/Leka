@@ -2,7 +2,7 @@
 name: architecture-analysis
 title: "Analyse d'architecture"
 description: "Use when someone wants the architecture of an application or a service explained — what it is made of, what it depends on, what depends on it, where the weak points are — from the company model, without a deck."
-version: 1.2.0
+version: 1.3.0
 category: architecture
 entity_types: [application, service, database, infra_resource, business_process, team, repository, business_capability, person]
 requires: []
@@ -64,11 +64,24 @@ dans cet ordre :
    Chacune cite les liens qui la montrent ([id]) ; sans eux, elle n'est pas écrite.
 4. **Le rayon d'impact.** Pour la fragilité la plus grave, ce qui tombe avec
    elle, directement puis indirectement, jusqu'au métier (`blast-radius`).
-5. **Vérifié ou non vérifié.** Ce que les outils ne montrent pas est écrit
+5. **Quand ça tombe.** Pour chaque dépendance critique, la question : que
+   se passe-t-il quand elle ne répond plus ? Une solution de repli, une file,
+   un délai que le modèle montre — ou rien de connu, dit comme tel.
+6. **Les qualités, nommées** : la disponibilité (la redondance connue), la
+   montée en charge (ce qui garde un état, ce qui est unique), la facilité à
+   évoluer (le sens des dépendances : un composant métier qui dépend d'un
+   détail technique — une base, une file, un fournisseur — est un couplage à
+   l'envers ; deux domaines qui se parlent sans contrat explicite, un
+   autre), l'observabilité (la supervision connue). Chacune dit ce que le
+   modèle montre, jamais une note.
+7. **Vérifié ou non vérifié.** Ce que les outils ne montrent pas est écrit
    « non vérifié », jamais déduit.
 
-Une piste donne son compromis : ce qu'elle apporte, ce qu'elle coûte,
-l'autre option. La plus simple qui règle la fragilité passe d'abord. Tu
+Une piste donne **au moins deux options** et leur compromis : ce que chacune
+apporte, ce qu'elle coûte, **ce qu'on y abandonne**, et si on peut revenir
+en arrière. La plus simple qui règle la fragilité passe d'abord ; à valeur
+égale, la plus réversible. Pas d'abstraction qui ne se justifie par un
+problème réel : un motif d'architecture est un outil, pas un insigne. Tu
 décris ce qui existe ; une architecture cible est une décision humaine.
 
 ## Ce qu'il produit
@@ -79,8 +92,12 @@ Un document markdown, dans la langue de la demande :
 2. **Composants** — chacun avec son rôle et son responsable connu.
 3. **Dépendances** — amont (ce dont il dépend) et aval (ce qui en dépend), les plus critiques d'abord.
 4. **Points de fragilité** — chacun avec les liens qui le montrent, et le rayon d'impact du plus grave.
-5. **Pistes** — au plus trois, chacune avec son compromis.
-6. **Ce qui manque** — ce que le modèle ne dit pas, les liens non vérifiés, ce qu'il faudrait documenter.
+5. **Pistes** — au plus trois, chacune avec ses options et leur compromis.
+6. **Décision à prendre (brouillon)** — quand la demande en pose une : le
+   contexte, les options, celle proposée, ses conséquences — ce qui devient
+   plus facile, ce qui devient plus difficile —, et comment revenir en
+   arrière. À décider par l'équipe.
+7. **Ce qui manque** — ce que le modèle ne dit pas, les liens non vérifiés, ce qu'il faudrait documenter.
 
 ## Ce qu'il ne doit jamais faire
 
@@ -94,7 +111,3 @@ Un document markdown, dans la langue de la demande :
 ## Ses compétences
 
 Il peut aussi appeler la compétence `blast-radius` de la bibliothèque LEKA (LEKA-401, docs/skills.md) : le rayon d'impact d'une chose : ce qui en dépend directement et indirectement, les applications et le métier qu'elle porte. Chacune est une lecture vérifiée, faite avec les droits de la personne qui demande, et gardée. Il s'appuie sur leurs signaux (`signals`) et cite ce qu'elles ont lu ; ce qu'une compétence ne dit pas, il ne l'invente pas.
-
-<sub>Méthode adaptée des agents `architect`, `code-architect`, `code-explorer` et du skill `change-impact`
-d'[ECC](https://github.com/affaan-m/ECC) @ `b92f181` (MIT, © 2026 Affaan Mustafa), réécrite pour ce
-que LEKA voit. Voir `THIRD_PARTY_LICENSES.md`.</sub>

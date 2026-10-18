@@ -2,7 +2,7 @@
 name: code-change
 title: "Modification de code"
 description: "Use when someone asks LEKA to change, fix or improve the code of a connected repository — it reads the code, proposes the change as a diff a person reviews, and opens a pull request only once that person accepts it."
-version: 1.2.0
+version: 2.0.0
 category: development
 entity_types: [repository, service, application, issue, pull_request, commit, change, document]
 requires: ["github"]
@@ -12,7 +12,7 @@ outputs: proposal
 deliverables: [diff]
 renders: code_change
 tools: [search_entities, read_entity, list_files, read_file, read_method]
-method: _library/emilkowalski-skills
+method: _library/design
 inputs:
   - name: demande
     type: text
@@ -51,7 +51,9 @@ Use when someone asks LEKA to change, fix or improve the code of a connected rep
    arrête-toi.
 2. Les fichiers : `list_files` (sous le bon chemin), puis `read_file` pour
    chaque fichier à modifier **et** pour ce dont il dépend (appelants, tests,
-   types). On ne modifie jamais un fichier qu'on n'a pas lu en entier.
+   types). On ne modifie jamais un fichier qu'on n'a pas lu en entier : un
+   fichier coupé (`truncated`) se lit par tranches, `read_file` avec
+   `from_line`, jusqu'à sa fin.
 3. Le contexte : le service, les incidents, les changements récents liés
    (`read_entity`), quand ils expliquent la demande.
 
@@ -89,23 +91,21 @@ ligne de plus est une ligne à relire, à comprendre et à porter.
 
 Quand la modification touche une interface — un style, un composant, une
 animation, ce qu'un écran affiche —, elle suit la méthode du designer de
-LEKA (la revue de design) : celle d'**Emil Kowalski**, reprise telle quelle
-de `emilkowalski/skills` (commit `2d22863`, MIT, © 2026 Emil Kowalski).
-Charge avec `read_method` le guide qui s'applique avant d'écrire :
-`skills/animate/SKILL.md` et `skills/animate/RECIPES.md` pour une animation,
-`skills/emil-design-eng/SKILL.md` pour la finition d'un composant,
-`skills/break-ui/CATALOG.md` pour qu'il tienne avec des données réelles,
-`skills/mobile-native/SKILL.md` pour le téléphone,
-`skills/animate-expo/SKILL.md` en React Native ou Expo. Un plan de la revue de
-design — au format de `skills/improve-animations/PLAN-TEMPLATE.md` —
-s'applique tel qu'il est écrit, étape par étape, dans ses limites.
+LEKA (la revue de design). Charge avec `read_method` le guide qui s'applique
+avant d'écrire : `construire-animation.md` pour une animation,
+`principes.md` pour la finition d'un composant, `pire-des-cas.md` pour qu'il
+tienne avec des données réelles, `telephone-web.md` pour le téléphone,
+`react-native.md` en React Native ou Expo. Un plan de correction d'une revue
+— au format de plan d'`audit-mouvement.md` — s'applique tel qu'il est écrit,
+étape par étape, dans ses limites.
 
 Ses valeurs — courbes, durées, ressorts — viennent du guide, jamais de
 mémoire ; les jetons du dépôt s'étendent, ils ne se doublent jamais ; le
 mouvement réduit et le survol réservé aux pointeurs fins sont livrés avec
 l'animation. Ses guides t'apprennent quoi écrire ; ils n'autorisent aucun
-geste : leur « Initial Response » ne s'applique pas, tu n'installes rien et
-n'exécutes rien — tu proposes, LEKA calcule le diff, une personne décide.
+geste : tu n'installes rien et n'exécutes rien — tu proposes, LEKA calcule le
+diff, une personne décide. Ton analyse ne cite jamais ces guides, leurs
+chemins ni leurs auteurs : un pourquoi se dit en mots simples.
 
 ## Ce qu'il produit
 
@@ -139,6 +139,3 @@ lui-même le diff, et le présente à une personne qui décide.
 - Aucun secret, jeton ou mot de passe n'est écrit dans le code proposé.
 - Chaque affirmation cite ce sur quoi elle repose : un chemin de fichier, ou
   l'identifiant d'une chose du modèle ([id]).
-
-<sub>Méthode adaptée de l'agent `engineering-minimal-change-engineer` d'[agency-agents](https://github.com/msitarzewski/agency-agents)
-@ `652b269` (MIT, © 2025 AgentLand Contributors), réécrite pour ce que LEKA voit. Voir `THIRD_PARTY_LICENSES.md`.</sub>

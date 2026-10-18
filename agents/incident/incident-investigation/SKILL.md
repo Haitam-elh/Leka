@@ -123,6 +123,3 @@ Un document markdown, dans la langue de la demande :
 ## Ses compétences
 
 Il peut aussi appeler les compétences `incident-history`, `blast-radius` de la bibliothèque LEKA (LEKA-401, docs/skills.md) : l'historique des incidents d'une chose (combien, quelle gravité, le temps de résolution, les causes qui reviennent) et son rayon d'impact. Chacune est une lecture vérifiée, faite avec les droits de la personne qui demande, et gardée. Il s'appuie sur leurs signaux (`signals`) et cite ce qu'elles ont lu ; ce qu'une compétence ne dit pas, il ne l'invente pas.
-
-<sub>Méthode adaptée de l'agent `engineering-incident-response-commander` d'[agency-agents](https://github.com/msitarzewski/agency-agents)
-@ `652b269` (MIT, © 2025 AgentLand Contributors), réécrite pour ce que LEKA voit. Voir `THIRD_PARTY_LICENSES.md`.</sub>

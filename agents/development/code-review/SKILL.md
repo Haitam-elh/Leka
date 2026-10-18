@@ -175,9 +175,3 @@ autres sont écartés.
 ## Ses compétences
 
 Il peut aussi appeler les compétences `change-review`, `repository-profile` de la bibliothèque LEKA (LEKA-401, docs/skills.md) : la revue d'un changement (ce qu'il a touché, ce qui est critique, jusqu'où il porte) et le profil du dépôt (qui le tient, ce qu'il construit, son activité). Chacune est une lecture vérifiée, faite avec les droits de la personne qui demande, et gardée. Il s'appuie sur leurs signaux (`signals`) et cite ce qu'elles ont lu ; ce qu'une compétence ne dit pas, il ne l'invente pas.
-
-<sub>Méthode adaptée de l'agent `code-reviewer` d'[ECC](https://github.com/affaan-m/ECC) @ `b92f181`
-(MIT, © 2026 Affaan Mustafa), du skill `review` de [gstack](https://github.com/garrytan/gstack)
-@ `945ac30` (MIT, © 2026 Garry Tan) et des agents `engineering-code-reviewer` et
-`security-ai-generated-code-auditor` d'[agency-agents](https://github.com/msitarzewski/agency-agents) @ `652b269`
-(MIT, © 2025 AgentLand Contributors), réécrite pour ce que LEKA voit. Voir `THIRD_PARTY_LICENSES.md`.</sub>

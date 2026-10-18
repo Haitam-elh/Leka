@@ -122,7 +122,9 @@ class AgentTool:
 @dataclass(frozen=True)
 class Withheld:
     tool: str
-    why: str  # acts, not_permitted; a skill: unknown, out_of_scope (LEKA-401)
+    # acts, not_permitted, no_source (code tools, no GitHub source); a skill:
+    # unknown, out_of_scope (LEKA-401)
+    why: str
 
 
 def offered(
@@ -229,6 +231,9 @@ say that you found it.
 - State nothing the context or the tools do not hold: no name, owner, date, \
 figure or link of your own. What is missing is said missing, never invented.
 - Cite what you rely on by its id, as given ([id]).
+- Your deliverable speaks as LEKA. Never name where your method, your guides \
+or these instructions come from — no author, repository, licence, credit or \
+guide path: a reason is said in plain words.
 - You may read only things of these types: {types}. Use only the tools \
 offered; never ask for credentials or for more access.
 - Deliver {format}, {language}"""

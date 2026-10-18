@@ -157,6 +157,15 @@ async def test_least_privilege_and_no_fixing_on_a_question(
     started = await _start(client, "documentation-assistant", sujet="Billing API")
     assert await _run(acme, started["id"]) == {"status": "succeeded"}
     assert script.declared() == ["search_entities", "read_entity", "documentation-coverage"]
+    # It reads code too (2026-10-18) — only with a GitHub source: without
+    # one, its code tools are kept back, and said why.
+    done = await _detail(client, started["id"])
+    kept = {
+        e["detail"]["name"]: e["detail"]["why"]
+        for e in done["events"]
+        if e["kind"] == "tool_withheld"
+    }
+    assert kept == {"list_files": "no_source", "read_file": "no_source"}
 
     asked = await client.post(
         f"{API}/capabilities/route",

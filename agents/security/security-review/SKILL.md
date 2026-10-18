@@ -133,8 +133,3 @@ Un document markdown, dans la langue de la demande :
 ## Ses compétences
 
 Il peut aussi appeler la compétence `security-posture` de la bibliothèque LEKA (LEKA-401, docs/skills.md) : la posture de sécurité : ce qui est exposé à internet, les dépôts publics, les données personnelles et les secrets stockés, ce qui n'a pas de propriétaire. Chacune est une lecture vérifiée, faite avec les droits de la personne qui demande, et gardée. Il s'appuie sur leurs signaux (`signals`) et cite ce qu'elles ont lu ; ce qu'une compétence ne dit pas, il ne l'invente pas.
-
-<sub>Méthode adaptée du skill `cso` de [gstack](https://github.com/garrytan/gstack) @ `945ac30`
-(MIT, © 2026 Garry Tan), de l'agent `security-reviewer` d'[ECC](https://github.com/affaan-m/ECC)
-@ `b92f181` (MIT, © 2026 Affaan Mustafa) et de l'agent `security-appsec-engineer` d'[agency-agents](https://github.com/msitarzewski/agency-agents)
-@ `652b269` (MIT, © 2025 AgentLand Contributors), réécrite pour ce que LEKA voit. Voir `THIRD_PARTY_LICENSES.md`.</sub>

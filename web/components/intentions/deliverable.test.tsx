@@ -18,6 +18,9 @@
  * - An agent still at work: said, no deliverable yet.
  * - Every deliverable offers to send it out: tickets for Jira, pages for
  *   Confluence (their flow: publications.test.tsx).
+ * - A review offers its fix: the code-change agent asked from it, on its
+ *   repository, for the intention — and its deliverable opened; a report
+ *   that reviewed no code does not.
  * - The agent block on the intention leads to its deliverable.
  */
 
@@ -35,11 +38,12 @@ import { sampleJourney } from "@/lib/intentions/journey-sample";
 import { makeQueryClient } from "@/lib/query";
 
 const search = vi.hoisted(() => ({ value: new URLSearchParams() }));
+const push = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({
   useSearchParams: () => search.value,
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push }),
 }));
-const runs = vi.hoisted(() => ({ forIntention: vi.fn(), one: vi.fn() }));
+const runs = vi.hoisted(() => ({ forIntention: vi.fn(), one: vi.fn(), start: vi.fn() }));
 vi.mock("@/lib/agent-runs", async (original) => ({
   ...(await original<typeof import("@/lib/agent-runs")>()),
   agentRuns: runs,
@@ -354,6 +358,33 @@ describe("the code review's deliverable", () => {
     expect(within(out).getByRole("button", { name: "Proposer des tickets Jira" })).toBeVisible();
     expect(within(out).getByRole("button", { name: "Documenter sur Confluence" })).toBeVisible();
     expect(sent.forRun).toHaveBeenCalledWith("r1");
+  });
+});
+
+describe("a review's fix", () => {
+  it("asks the code-change agent from the review, on its repository, and opens its deliverable", async () => {
+    runs.forIntention.mockResolvedValue([run()]);
+    runs.one.mockResolvedValue(detail());
+    runs.start.mockResolvedValue(run({ id: "r2", key: "code-change", status: "queued" }));
+    show(<DeliverableView intention={INTENTION} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Proposer la correction" }));
+    const form = screen.getByRole("form", { name: "Corriger ce que la revue a trouvé" });
+    expect(within(form).getByLabelText("Dépôt GitHub")).toHaveValue("acme/payments");
+    await userEvent.click(within(form).getByRole("button", { name: "Lancer la correction" }));
+    await vi.waitFor(() => expect(runs.start).toHaveBeenCalledTimes(1));
+    const [asked] = runs.start.mock.calls[0];
+    expect(asked).toMatchObject({ key: "code-change", intention_id: "i1", inputs: { depot: "acme/payments" } });
+    expect(asked.inputs.demande).toContain("Corrige les constats bloquants et importants");
+    expect(asked.inputs.demande).toContain("Le solde change.");
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith("/intentions/i1/deliverable?run=r2"));
+  });
+
+  it("is not offered for a report that reviewed no code", async () => {
+    runs.forIntention.mockResolvedValue([run({ key: "security-review", title: "Revue de sécurité" })]);
+    runs.one.mockResolvedValue(detail({ key: "security-review", title: "Revue de sécurité", review: null }));
+    show(<DeliverableView intention={INTENTION} />);
+    await screen.findByTestId("deliverable-report");
+    expect(screen.queryByRole("button", { name: "Proposer la correction" })).toBeNull();
   });
 });
 

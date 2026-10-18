@@ -11,7 +11,7 @@ import {
   Lightbulb,
 } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { cn } from "cn";
@@ -19,6 +19,7 @@ import { cn } from "cn";
 import { Deliverables } from "@/components/capabilities/agent-runs";
 import { RunCodeChanges } from "@/components/capabilities/code-changes";
 import { DesignSimulator } from "@/components/capabilities/design-simulator";
+import { ProposeFix } from "@/components/capabilities/propose-fix";
 import { RunPublications } from "@/components/capabilities/publications";
 import { Card } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
@@ -51,6 +52,9 @@ import { working } from "@/lib/intentions/journey";
  *     every one, too   what to send out of it: tickets LEKA drafts for a
  *                      Jira project, pages for a Confluence space, sent once
  *                      a person chose them (2026-10-18)
+ *     a review         its fix, asked of the code-change agent from it: the
+ *                      change shown before and after, applied on GitHub only
+ *                      once a person accepts it (2026-10-18)
  *
  * Only what the API kept is drawn. A comment the agent wrote on a line it
  * did not read was dropped there, and is counted here.
@@ -118,6 +122,7 @@ function Delivered({
 }) {
   const t = useDictionary();
   const { format: locale } = useLocale();
+  const router = useRouter();
   const w = t.intentions.deliverable;
   const agent = run.title ?? run.key;
   const report = run.report ?? run.output ?? "";
@@ -154,6 +159,11 @@ function Delivered({
             {w.download}
           </Button>
         ) : null}
+        <ProposeFix
+          run={run}
+          intentionId={intentionId}
+          onStarted={(id) => router.push(deliverableHref(intentionId, id))}
+        />
       </section>
       {/* What to send out of it: tickets for Jira, pages for Confluence. */}
       <RunPublications runId={run.id} />
