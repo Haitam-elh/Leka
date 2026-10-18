@@ -50,7 +50,8 @@ import { useEffect, useState } from "react";
 
 import { cn } from "cn";
 
-import { MARKET_ICON, reasonSaid, summaryOf, titleOf } from "@/components/capabilities/catalogue";
+import { reasonSaid, summaryOf, titleOf } from "@/components/capabilities/catalogue";
+import { MARKET_ICON } from "@/components/capabilities/market-mark";
 import {
   AgentAdd,
   agentStateOf,
