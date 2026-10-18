@@ -1213,6 +1213,9 @@ class CodeChangeRead(BaseModel):
     pull_requests_allowed: bool = Field(
         description="Its GitHub source allows LEKA to open pull requests (its admin's choice)."
     )
+    source_id: uuid.UUID | None = Field(
+        default=None, description="Its GitHub source — where an admin allows pull requests."
+    )
     proposed_by: uuid.UUID | None
     decided_by: uuid.UUID | None
     decided_at: datetime | None

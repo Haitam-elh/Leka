@@ -10865,6 +10865,11 @@ export interface components {
              * @description Its GitHub source allows LEKA to open pull requests (its admin's choice).
              */
             pull_requests_allowed: boolean;
+            /**
+             * Source Id
+             * @description Its GitHub source — where an admin allows pull requests.
+             */
+            source_id?: string | null;
             /** Proposed By */
             proposed_by: string | null;
             /** Decided By */

@@ -35,7 +35,7 @@ vi.mock("@/lib/publications", async (original) => ({
   ...(await original<typeof import("@/lib/publications")>()),
   publications: api,
 }));
-const listed = vi.hoisted(() => ({ list: vi.fn() }));
+const listed = vi.hoisted(() => ({ list: vi.fn(), get: vi.fn(), update: vi.fn() }));
 vi.mock("@/lib/sources", async (original) => ({
   ...(await original<typeof import("@/lib/sources")>()),
   sources: listed,
@@ -247,6 +247,25 @@ describe("a proposal", () => {
     const why = within(card).getByTestId("publication-not-allowed");
     expect(why).toHaveTextContent("Créer les tickets acceptés");
     expect(within(why).getByRole("link", { name: "Ouvrir la source" })).toHaveAttribute("href", "/sources/s-jira");
+  });
+
+  it("lets an admin allow it in one click, the source staying connected", async () => {
+    shell.permissions = [...ADMIN, "source:manage"];
+    api.forRun.mockResolvedValue([publication({ allowed: false })]);
+    listed.get.mockResolvedValue(source());
+    listed.update.mockResolvedValue(source({ config: { site: "acme", projects: ["PAY", "OPS"], issues: true } }));
+    show();
+    const why = await screen.findByTestId("publication-not-allowed");
+    expect(why).toHaveTextContent("la source reste connectée");
+    await userEvent.click(within(why).getByRole("button", { name: "Autoriser LEKA à créer des tickets sur cette source" }));
+    await waitFor(() =>
+      expect(listed.update).toHaveBeenCalledWith("s-jira", {
+        config: { site: "acme", projects: ["PAY", "OPS"], issues: true },
+      }),
+    );
+    await waitFor(() =>
+      expect(notified.success).toHaveBeenCalledWith({ title: "LEKA peut maintenant créer des tickets sur cette source." }),
+    );
   });
 
   it("refused whole by Jira, stays to send again, said why", async () => {
