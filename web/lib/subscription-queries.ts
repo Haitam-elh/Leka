@@ -21,7 +21,7 @@ export function usePayment() {
       onSuccess: ({ url }) => window.location.assign(url),
     }),
     portal: useMutation({
-      mutationFn: subscription.portal,
+      mutationFn: (cancel?: boolean) => subscription.portal(cancel),
       onSuccess: ({ url }) => window.location.assign(url),
     }),
   };
