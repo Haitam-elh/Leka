@@ -128,6 +128,10 @@ def test_the_interface_s_quality_breaks_it_with_real_world_data_and_on_a_phone()
     # a decision — and a file cut read by ranges, never left half-judged.
     assert "**Le regard du produit, d'abord**" in said
     assert "fait tomber l'écran entier" in said and "comment vérifier" in said
+    # An error is followed to what catches it before it is said to take the
+    # screen down — Haitam's first test called one blocking that a form
+    # hook caught and showed (2026-10-18); an impossible case is not one.
+    assert "jusqu'à ce qui\n   l'attrape" in said and "Un cas que le code rend impossible" in said
     for part in (
         "**Prêt**",
         "**À reprendre**",

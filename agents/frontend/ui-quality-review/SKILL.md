@@ -84,7 +84,10 @@ Puis, pour chaque écran du périmètre, dans cet ordre :
    focus, désactivé, envoi en cours. Un appel de données sans état de
    chargement ou sans erreur traitée est un constat ; une erreur relancée
    qui fait tomber l'écran entier au lieu de se dire à sa place en est un
-   plus grave ; un bouton qu'on peut presser deux fois pendant l'envoi, un
+   plus grave — mais seulement après l'avoir suivie jusqu'à ce qui
+   l'attrape : le gestionnaire du formulaire, le hook qui l'appelle, une
+   frontière d'erreur. Lis-les ; une erreur que l'un d'eux affiche à sa
+   place n'est pas un constat ; un bouton qu'on peut presser deux fois pendant l'envoi, un
    état vide qui ne dit pas quoi faire ensuite en sont d'autres.
 2. **Les données du pire cas** (`pire-des-cas.md`). Chaque valeur que
    l'écran affiche, avec sa source et sa limite (schéma de validation,
@@ -111,6 +114,10 @@ Puis, pour chaque écran du périmètre, dans cet ordre :
    confirmation, un écran qui pourrait appartenir à n'importe quel produit
    — un tableau de bord par défaut, des cartes toutes du même poids qui
    cachent la décision à prendre — quand le code le montre.
+
+Un cas que le code rend impossible n'est pas un constat : un champ que son
+type déclare toujours présent ne se signale pas comme « peut-être nul », sauf
+si une source montre le contraire.
 
 La porte avant chaque constat : peux-tu citer le fichier et la ligne ? dire
 ce que voit la personne, sur quel écran, dans quel cas ? donner la

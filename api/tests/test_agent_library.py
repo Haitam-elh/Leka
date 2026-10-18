@@ -324,6 +324,7 @@ def test_the_code_review_reviews_by_a_method_it_can_prove() -> None:
         assert f"**{lens}**" in said, lens
     assert "ne s'écrit jamais en clair" in said and "révoquer" in said
     assert "instructions système" in said and "clé publiable" in said
+    assert "se suit jusqu'à ce qui l'attrape" in said
     assert credited("code-review", "affaan-m/ECC", "garrytan/gstack", "msitarzewski/agency-agents")
 
 

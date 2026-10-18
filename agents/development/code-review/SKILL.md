@@ -89,7 +89,10 @@ Une revue utile dit peu, et le prouve. Avant d'écrire, dans cet ordre :
      migration sans retour, deux écritures concurrentes sans verrou ni
      transaction ;
    - **les erreurs** : une erreur avalée sur un chemin critique, une capture
-     trop large qui cache la cause, un appel externe sans délai ;
+     trop large qui cache la cause, un appel externe sans délai — une
+     erreur relancée se suit jusqu'à ce qui l'attrape (l'appelant, le
+     gestionnaire, la frontière) avant d'en dire l'effet ; un cas que le
+     type rend impossible n'est pas un constat ;
    - **la sécurité** : une entrée non validée qui rejoint une requête, une
      commande ou un rendu HTML ; une autorisation qui se fie à un champ que
      le client peut écrire (un rôle dans la requête, des métadonnées que
