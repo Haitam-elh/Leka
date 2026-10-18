@@ -60,7 +60,10 @@ function Side({ cell }: { cell: SplitCell | null }) {
       <td className={`w-10 select-none border-r border-shell-line px-2 text-right text-shell-muted ${CELL_CLASS[cell.change]}`}>
         {cell.number}
       </td>
-      <td className={`px-2 font-mono whitespace-pre ${CELL_CLASS[cell.change]}`} data-change={cell.change}>
+      <td
+        className={`px-2 font-mono whitespace-pre-wrap [overflow-wrap:anywhere] ${CELL_CLASS[cell.change]}`}
+        data-change={cell.change}
+      >
         {cell.text || " "}
       </td>
     </>

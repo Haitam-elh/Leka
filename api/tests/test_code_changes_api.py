@@ -211,6 +211,19 @@ def test_a_file_is_read_whole_or_by_ranges_and_says_which() -> None:
     big = lines_of(huge * 100, {})
     assert big["truncated"] is True and big["complete"] is False
     assert len(str(big["content"])) <= MOST_CHARS
+    # One line longer than all it may give — a minified file: cut, said cut.
+    minified = lines_of("x" * (MOST_CHARS * 3), {})
+    assert len(str(minified["content"])) == MOST_CHARS
+    assert (minified["truncated"], minified["complete"], minified["lines"]) == (True, False, 1)
+    # An empty file: nothing, and that is all of it.
+    assert lines_of("", {}) == {
+        "content": "",
+        "lines": 0,
+        "from_line": 0,
+        "to_line": 0,
+        "complete": True,
+        "truncated": False,
+    }
 
 
 # ── end to end ─────────────────────────────────────────────────────────────
