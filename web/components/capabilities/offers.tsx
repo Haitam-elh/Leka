@@ -12,6 +12,7 @@ import { useConfirm } from "@/components/interactions/confirm";
 import { usePermissions } from "@/components/shell/shell-provider";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { routes } from "@/config/routes";
+import { agentTitle } from "@/lib/agent-title";
 import { ApiError } from "@/lib/api";
 import { euros, type AddOns, type AgentOffer, type BundleOffer } from "@/lib/billing";
 import { useAddOns, useBuy, useEntitlements } from "@/lib/billing-queries";
@@ -128,7 +129,7 @@ export function AgentOfferAction({ agentKey }: { agentKey: string }) {
             type="button"
             size="xs"
             disabled={buy.isPending}
-            aria-label={fill(w.buyNamed, { name: offer.title })}
+            aria-label={fill(w.buyNamed, { name: agentTitle(t, offer.key, offer.title) })}
             onClick={() => buy.mutate({ kind: "agent", key: offer.key }, { onError: (error) => bought(t, error) })}
             data-testid="agent-buy"
           >
@@ -205,11 +206,11 @@ export function AgentCardAction({ agentKey }: { agentKey: string }) {
       size="xs"
       className="relative z-10"
       disabled={buy.isPending}
-      aria-label={fill(w.buyNamed, { name: offer.title })}
+      aria-label={fill(w.buyNamed, { name: agentTitle(t, offer.key, offer.title) })}
       data-testid="agent-buy"
       onClick={async () => {
         const ok = await confirm({
-          title: fill(w.buyTitle, { name: offer.title }),
+          title: fill(w.buyTitle, { name: agentTitle(t, offer.key, offer.title) }),
           description: fill(w.buyBody, { price: euros(offer.monthly_price, format) }),
           confirmLabel: w.buyConfirm,
         });
@@ -245,7 +246,7 @@ export function AgentAdd({ agentKey }: { agentKey: string }) {
   const may = useMayBuy();
   const offer = offers.data?.agents.find((a) => a.key === agentKey);
   if (!offer || !may || agentStateOf(offers.data, agentKey) !== "option") return null;
-  const named = fill(w.buyNamed, { name: offer.title });
+  const named = fill(w.buyNamed, { name: agentTitle(t, offer.key, offer.title) });
   return (
     <button
       type="button"
@@ -306,8 +307,8 @@ export function AgentPrice({ agentKey, compact = false }: { agentKey: string; co
             type="button"
             className={cn(round, "border-shell-line text-shell-nav-active hover:bg-brand-violet-soft disabled:opacity-50")}
             disabled={buy.isPending}
-            title={`${w.buy} — ${offer.title}`}
-            aria-label={`${w.buy} — ${offer.title}`}
+            title={`${w.buy} — ${agentTitle(t, offer.key, offer.title)}`}
+            aria-label={`${w.buy} — ${agentTitle(t, offer.key, offer.title)}`}
             onClick={() =>
               buy.mutate({ kind: "agent", key: offer.key }, { onError: (error) => bought(t, error) })
             }
@@ -503,7 +504,7 @@ export function Bundles() {
   const offers = useAddOns();
   const data = offers.data;
   if (!data?.available || !data.bundles.length) return null;
-  const titles = new Map(data.agents.map((a: AgentOffer) => [a.key, a.title]));
+  const titles = new Map(data.agents.map((a: AgentOffer) => [a.key, agentTitle(t, a.key, a.title)]));
   const markets = new Map(data.agents.map((a: AgentOffer) => [a.key, marketOf(a)]));
   const savings = data.bundles
     .filter((b) => b.sellable && b.discount_percent !== null)
@@ -551,7 +552,7 @@ export function Owned() {
   const owned = useEntitlements();
   const data = offers.data;
   if (!data || !owned.data) return null;
-  const titles = new Map(data.agents.map((a) => [a.key, a.title]));
+  const titles = new Map(data.agents.map((a) => [a.key, agentTitle(t, a.key, a.title)]));
   const bundles = new Map(data.bundles.map((b) => [b.key, b]));
   return (
     <Card title={w.ownedTitle} icon={<BadgeCheck className="size-4 text-shell-muted" aria-hidden="true" />}>

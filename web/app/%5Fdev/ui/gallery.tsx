@@ -90,10 +90,10 @@ export function UiGallery() {
         <Pagination>
           <PaginationContent>
             <PaginationItem>
-              <PaginationPrevious disabled />
+              <PaginationPrevious label="Précédent" disabled />
             </PaginationItem>
             <PaginationItem>
-              <PaginationNext onClick={() => window.alert("onNext(cursor)")} />
+              <PaginationNext label="Suivant" onClick={() => window.alert("onNext(cursor)")} />
             </PaginationItem>
           </PaginationContent>
         </Pagination>

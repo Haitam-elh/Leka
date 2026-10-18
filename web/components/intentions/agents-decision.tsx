@@ -26,9 +26,11 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { routes } from "@/config/routes";
+import { agentTitle } from "@/lib/agent-title";
 import { ApiError } from "@/lib/api";
 import { summaryOf } from "@/components/capabilities/catalogue";
 import { fill } from "@/lib/i18n/dictionaries";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import type {
   AgentLaunch,
@@ -128,7 +130,7 @@ function AgentLine({ agent }: { agent: ProposedAgent }) {
       <IconTile icon={Bot} tone="violet" className="size-10" />
       <div className="min-w-0 flex-1 space-y-1">
         <p className="flex flex-wrap items-center gap-2">
-          <span className="text-[0.9375rem] font-semibold text-brand-navy">{agent.title}</span>
+          <span className="text-[0.9375rem] font-semibold text-brand-navy">{agentTitle(t, agent.key, agent.title)}</span>
           <Pill tone={agent.available ? "success" : "warning"}>
             {agent.available ? w.ready : w.unavailable}
           </Pill>
@@ -147,8 +149,9 @@ function AgentLine({ agent }: { agent: ProposedAgent }) {
 
 /** The plan, step by step: who does each — an agent, or the person. */
 export function PlanSteps({ proposal }: { proposal: AgentProposal }) {
-  const w = useDictionary().intentions.agents;
-  const titles = new Map(proposal.agents.map((a) => [a.key, a.title]));
+  const t = useDictionary();
+  const w = t.intentions.agents;
+  const titles = new Map(proposal.agents.map((a) => [a.key, agentTitle(t, a.key, a.title)]));
   return (
     <ol className="space-y-3" data-testid="plan-steps">
       {proposal.steps.map((step, i) => (
@@ -356,7 +359,7 @@ function ChosenAgent({
           className="mt-0.5"
         />
         <span className="min-w-0">
-          <span className="block text-[0.9375rem] font-semibold text-brand-navy">{agent.title}</span>
+          <span className="block text-[0.9375rem] font-semibold text-brand-navy">{agentTitle(t, agent.key, agent.title)}</span>
           <span className="block text-[0.8125rem] text-shell-muted">{summaryOf(t, agent)}</span>
           <Why agent={agent} />
         </span>
@@ -658,8 +661,13 @@ export function AgentsDecision({ intention }: { intention: IntentionDetail }) {
 
 const KEPT = "leka.plan.";
 
-function markdownOf(intention: IntentionDetail, proposal: AgentProposal, byYou: string): string {
-  const titles = new Map(proposal.agents.map((a) => [a.key, a.title]));
+function markdownOf(
+  t: Dictionary,
+  intention: IntentionDetail,
+  proposal: AgentProposal,
+  byYou: string,
+): string {
+  const titles = new Map(proposal.agents.map((a) => [a.key, agentTitle(t, a.key, a.title)]));
   return [
     `# ${intention.title}`,
     "",
@@ -677,7 +685,8 @@ function markdownOf(intention: IntentionDetail, proposal: AgentProposal, byYou: 
 /** Action, done by hand: the plan, ticked off as it is done — kept in this
  * browser — to download or copy. */
 export function PlanChecklist({ intention }: { intention: IntentionDetail }) {
-  const w = useDictionary().intentions.agents;
+  const t = useDictionary();
+  const w = t.intentions.agents;
   const { proposal } = useProposal(intention);
   const [done, setDone] = useState<number[]>([]);
   useEffect(() => {
@@ -689,8 +698,8 @@ export function PlanChecklist({ intention }: { intention: IntentionDetail }) {
     }
   }, [intention.id]);
   const text = useMemo(
-    () => (proposal ? markdownOf(intention, proposal, w.byYou) : ""),
-    [intention, proposal, w.byYou],
+    () => (proposal ? markdownOf(t, intention, proposal, w.byYou) : ""),
+    [t, intention, proposal, w.byYou],
   );
   if (!proposal) return null;
 

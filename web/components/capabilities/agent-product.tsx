@@ -74,6 +74,7 @@ import {
   type ProductIcon,
   type Words,
 } from "@/lib/agent-products";
+import { agentTitle } from "@/lib/agent-title";
 import { type AddOns, type AgentOffer, euros } from "@/lib/billing";
 import { useAddOns } from "@/lib/billing-queries";
 import type { CapabilityDetail } from "@/lib/capabilities";
@@ -1021,7 +1022,7 @@ function SimilarSection({ capability, offers }: { capability: CapabilityDetail; 
                     href={routes.capability(agent.key)}
                     className="rounded text-[0.9375rem] font-bold text-brand-navy outline-none hover:underline focus-visible:ring-3 focus-visible:ring-brand-violet/40"
                   >
-                    {agent.title}
+                    {agentTitle(t, agent.key, agent.title)}
                   </Link>
                   <p className="mt-0.5 line-clamp-2 text-xs text-shell-muted">{summaries[agent.key] ?? agent.summary}</p>
                 </div>
