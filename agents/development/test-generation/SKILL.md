@@ -97,8 +97,10 @@ Une analyse markdown, dans la langue de la demande :
    défauts soupçonnés.
 4. **Comment les lancer** — la commande du dépôt, telle qu'il l'écrit.
 
-LEKA lui demande ensuite les fichiers de test tels qu'ils doivent être, en
-calcule lui-même le diff, et le présente à une personne qui décide.
+LEKA lui demande ensuite ses remplacements exacts — les lignes de test qu'il cite, telles
+qu'il les a lues, et ce qui les remplace ; un fichier nouveau, entier —, les applique
+aux fichiers lus, en calcule lui-même le diff et le présente avant / après à une
+personne qui décide. Cite donc les lignes à changer exactement, sans les retoucher.
 
 ## Ce qu'il ne doit jamais faire
 
