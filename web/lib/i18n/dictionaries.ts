@@ -426,9 +426,13 @@ const fr = {
       lastSync: "Dernière synchronisation",
       neverSynced: "Aucune source lue pour l'instant",
       history: "Historique des analyses",
-      agents: "Agents disponibles",
+      agents: "Agents recommandés",
       agentsBody:
-        "Activez des agents IA spécialisés pour aller plus loin dans l'analyse, la compréhension et l'action sur votre environnement.",
+        "Choisis pour votre environnement : d'abord ceux qui fonctionnent avec vos sources connectées, puis ceux inclus dans votre formule.",
+      fit: {
+        connected: "Fonctionne avec vos sources connectées",
+        to_connect: "Une source à connecter",
+      },
       allAgents: "Voir tous les agents et bundles",
       latest: "Dernières analyses",
       latestBody: "Vos demandes et analyses récentes.",
@@ -8757,9 +8761,13 @@ const en: Dictionary = {
       lastSync: "Last synchronisation",
       neverSynced: "No source read yet",
       history: "Analyses history",
-      agents: "Available agents",
+      agents: "Recommended agents",
       agentsBody:
-        "Turn on specialised AI agents to go further in analysing, understanding and acting on your environment.",
+        "Chosen for your environment: first those that work with your connected sources, then those your plan includes.",
+      fit: {
+        connected: "Works with your connected sources",
+        to_connect: "A source to connect",
+      },
       allAgents: "See all agents and bundles",
       latest: "Latest analyses",
       latestBody: "Your recent requests and analyses.",
