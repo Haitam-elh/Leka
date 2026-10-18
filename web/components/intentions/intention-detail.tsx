@@ -35,6 +35,7 @@ import { entityHref } from "@/components/environment/parts";
 import { AgentsAction, useProposal } from "@/components/intentions/agents-decision";
 import { AnalysisResults, EvidenceTab } from "@/components/intentions/analysis-tab";
 import { sizeOf } from "@/components/intentions/attachments";
+import { useInDemo } from "@/components/demo/in-demo";
 import { DeleteIntention } from "@/components/intentions/delete-intention";
 import { JourneyNote } from "@/components/intentions/journey";
 import { phaseOf, Working } from "@/components/intentions/working";
@@ -58,6 +59,7 @@ import type {
 import { attachmentAddress } from "@/lib/intentions/attachments";
 import { intentionKeys, useDecide, useIntentionAnalysis, useIntentionOffer } from "@/lib/intentions/queries";
 import { notify } from "@/lib/notify";
+import { workspace as workspaceApi } from "@/lib/workspace";
 import { useSources } from "@/lib/sources-queries";
 import { subscription } from "@/lib/subscription";
 import type { SourceKind } from "@/lib/sources";
@@ -684,6 +686,8 @@ function OfferCard({
   const router = useRouter();
   const decide = useDecide(intention.id);
   const payer = usePermissions()?.includes("workspace:update") ?? false;
+  const inDemo = useInDemo();
+  const queries = useQueryClient();
   const [busy, setBusy] = useState(false);
   const plan = offer.plan;
   const planLine = offer.lines.find((l) => l.kind === "plan");
@@ -694,6 +698,19 @@ function OfferCard({
   const agentCount = offer.agents.filter((a) => a.chosen).length;
   // What the total pays for: the agents bought, never those the plan includes.
   const paidAgents = options.reduce((n, l) => n + (l.kind === "bundle" ? (l.agents ?? []).length : 1), 0);
+  async function simulate() {
+    setBusy(true);
+    try {
+      await workspaceApi.activateDemo();
+      notify.success({ title: w.simulated });
+      // The offer read again: nothing left to buy, it can be launched.
+      await queries.invalidateQueries({ queryKey: ["intentions"] });
+    } catch (error) {
+      notify.error({ title: error instanceof ApiError ? error.message : w.failed });
+    } finally {
+      setBusy(false);
+    }
+  }
   const launchOf = (agents: ProposedAgent[]): AgentLaunch[] =>
     agents.map((a) => ({
       key: a.key,
@@ -904,6 +921,24 @@ function OfferCard({
                 {w.launch}
                 <ArrowRight className="size-4 rtl:-scale-x-100" aria-hidden="true" />
               </Button>
+            ) : inDemo ? (
+              // A demonstration (LEKA-498): its payment simulated — no
+              // Stripe, no card —, what it gives on its own workspace only.
+              <>
+                <Button
+                  type="button"
+                  className="h-auto min-h-10 w-full py-2.5 whitespace-normal"
+                  disabled={busy}
+                  onClick={() => void simulate()}
+                  data-testid="detail-simulate"
+                >
+                  {w.simulate}
+                  <ArrowRight className="size-4 rtl:-scale-x-100" aria-hidden="true" />
+                </Button>
+                <p className="mt-2 text-center text-xs text-shell-muted" data-testid="detail-simulate-note">
+                  {w.simulateNote}
+                </p>
+              </>
             ) : payer && !(plan.contractual && offer.change_plan) ? (
               <Button
                 type="button"
