@@ -35,13 +35,17 @@ def alert(kind: str = "degraded", certainty: str = "confirmed") -> Open:
     return Open(uuid.uuid4(), "entity", PAYMENT, "health", kind, "medium", certainty)
 
 
+# The channels connected by a webhook, with e-mail (LEKA-496).
+WEBHOOKS = ("slack", "teams", "discord")
+
+
 def test_free_sees_paid_plans_are_alerted_email_from_growth() -> None:
     free = entitlement_of("free")
     assert not free.monitoring.proactive and free.monitoring.alerts == ()
     assert (free.alerts_from, free.email_from) == ("starter", "growth")
     assert entitlement_of("starter").monitoring.alerts == ("in_app",)
-    assert entitlement_of("growth").monitoring.alerts == ("in_app", "email")
-    assert entitlement_of("business").monitoring.alerts == ("in_app", "email")
+    assert entitlement_of("growth").monitoring.alerts == ("in_app", "email", *WEBHOOKS)
+    assert entitlement_of("business").monitoring.alerts == ("in_app", "email", *WEBHOOKS)
     assert entitlement_of("enterprise").monitoring.contractual
     # Decided for the launch: said provisional.
     assert all(p.monitoring.provisional or p.monitoring.contractual for p in catalogue().plans)

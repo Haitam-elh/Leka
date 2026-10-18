@@ -17,6 +17,12 @@
     DELETE /monitoring/rules/{id}       removed
     POST   /monitoring/rules/{id}/test  each of its channels tried now, each
                                         telling kept — a failure said
+    PUT    /monitoring/channels/{key}   Slack, Teams or Discord connected by
+                                        its webhook (LEKA-496): checked, kept
+                                        encrypted, shown by its hint only
+    DELETE /monitoring/channels/{key}   disconnected
+    POST   /monitoring/channels/{key}/test  a message sent now: where it
+                                        stands said
 
 Read by every member (`source:read`), as the environment is; acknowledged,
 and its rules set, by who manages the sources (`source:manage`). A Free
@@ -51,7 +57,9 @@ from leka.monitoring import (
     MonitoringEntitlementRead,
     MonitoringRead,
     WatchableRead,
+    WebhookConnect,
     entitled,
+    webhooks,
 )
 from leka.monitoring import rules as alert_rules
 
@@ -152,7 +160,7 @@ async def read_rules(session: SessionDep, principal: Reader) -> AlertRulesRead:
         used=used,
         upgrade=upgrade,
         channels=[
-            ChannelRead(key=c.key, status=c.status)
+            ChannelRead(key=c.key, status=c.status, hint=c.hint, error=c.error)
             for c in await alert_rules.channels(session, workspace)
         ],
         watchable=[
@@ -240,3 +248,51 @@ async def test_rule(rule_id: uuid.UUID, session: SessionDep, principal: Manager)
     except alert_rules.RuleRefusedError as error:
         raise _rule_refused(error) from None
     return (await _rule_read(session, principal, [row]))[0]
+
+
+# ── the channels connected by a webhook (LEKA-496) ──────────────────────────
+
+
+async def _channel_read(session: SessionDep, principal: Principal, key: str) -> ChannelRead:
+    found = next(
+        c for c in await alert_rules.channels(session, principal.workspace_id) if c.key == key
+    )
+    return ChannelRead(key=found.key, status=found.status, hint=found.hint, error=found.error)
+
+
+def _webhook_refused(error: webhooks.WebhookRefusedError) -> ApiError:
+    return ApiError(
+        422,
+        ErrorCode.VALIDATION_FAILED,
+        str(error),
+        details=[FieldError(field="url", message=error.code)],
+    )
+
+
+@router.put("/channels/{key}", response_model=ChannelRead)
+async def connect_channel(
+    key: str, body: WebhookConnect, session: SessionDep, principal: Manager
+) -> ChannelRead:
+    try:
+        await webhooks.connect(session, principal.workspace_id, key, body.url, by=principal.user_id)
+    except webhooks.WebhookRefusedError as error:
+        raise _webhook_refused(error) from None
+    await session.commit()
+    return await _channel_read(session, principal, key)
+
+
+@router.delete("/channels/{key}", status_code=status.HTTP_204_NO_CONTENT)
+async def disconnect_channel(key: str, session: SessionDep, principal: Manager) -> None:
+    if not await webhooks.disconnect(session, principal.workspace_id, key):
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "Not connected.")
+    await session.commit()
+
+
+@router.post("/channels/{key}/test", response_model=ChannelRead)
+async def test_channel(key: str, session: SessionDep, principal: Manager) -> ChannelRead:
+    endpoint = (await webhooks.endpoints(session, principal.workspace_id)).get(key)
+    if endpoint is None:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "Not connected.")
+    await webhooks.post(endpoint, "LEKA : test d'envoi / delivery test ✓", now=datetime.now(UTC))
+    await session.commit()
+    return await _channel_read(session, principal, key)

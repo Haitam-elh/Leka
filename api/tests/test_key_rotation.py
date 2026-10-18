@@ -37,6 +37,7 @@ from leka.db import Base, session_factory, system_scope
 from leka.intentions import ActionEndpoint
 from leka.intentions.tasks import ROTATED_COLUMNS as ENDPOINT_SECRETS
 from leka.intentions.tasks import rotate_endpoint_secrets
+from leka.monitoring.tasks import ROTATED_COLUMNS as CHANNEL_WEBHOOKS
 from leka.platform import DecryptionError, SecretBox, Workspace
 
 pytestmark = pytest.mark.integration
@@ -286,7 +287,7 @@ def test_every_encrypted_column_is_rotated() -> None:
     assert NOT_ENCRYPTED.keys() <= binary, sorted(NOT_ENCRYPTED.keys() - binary)
     encrypted = binary - NOT_ENCRYPTED.keys()
     assert encrypted, "no encrypted column found at all: are the models imported?"
-    rotated = ROTATED_COLUMNS | ENDPOINT_SECRETS | MODEL_KEYS
+    rotated = ROTATED_COLUMNS | ENDPOINT_SECRETS | MODEL_KEYS | CHANNEL_WEBHOOKS
     assert encrypted <= rotated, (
         f"encrypted but never rotated: {sorted(encrypted - rotated)}. "
         "Rotate it in its module's tasks.py and call that from "

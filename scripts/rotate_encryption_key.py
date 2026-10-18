@@ -38,6 +38,7 @@ from leka.connectors import RotationRefusedError, RotationReport, rotate_source_
 from leka.core.config import settings
 from leka.core.logging import configure_logging
 from leka.intentions.tasks import rotate_endpoint_secrets
+from leka.monitoring.tasks import rotate_channel_webhooks
 from leka.platform import secret_box
 
 
@@ -65,6 +66,7 @@ def main() -> int:
         )
         signing = asyncio.run(rotate_endpoint_secrets(secret_box, batch=batch, dry_run=dry_run))
         models = asyncio.run(rotate_model_keys(secret_box, batch=batch, dry_run=dry_run))
+        webhooks = asyncio.run(rotate_channel_webhooks(secret_box, batch=batch, dry_run=dry_run))
     except RotationRefusedError as refusal:
         print(f"refused: {refusal}", file=sys.stderr)
         return 2
@@ -72,7 +74,9 @@ def main() -> int:
     print(_said("credentials", credentials, dry_run=dry_run))
     print(_said("signing secrets", signing, dry_run=dry_run))
     print(_said("model keys", models, dry_run=dry_run))
-    return 1 if credentials.unreadable or signing.unreadable or models.unreadable else 0
+    print(_said("alert webhooks", webhooks, dry_run=dry_run))
+    unreadable = credentials.unreadable or signing.unreadable or models.unreadable
+    return 1 if unreadable or webhooks.unreadable else 0
 
 
 if __name__ == "__main__":

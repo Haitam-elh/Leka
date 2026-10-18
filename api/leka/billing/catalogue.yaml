@@ -106,7 +106,7 @@ plans:
     own_llm: false
     launch_offer: true
     annual: true
-    monitoring: { proactive: true, alerts: [in_app, email], provisional: true }
+    monitoring: { proactive: true, alerts: [in_app, email, slack, teams, discord], provisional: true }
     quotas: { users: 5, sources: 15, analyses: 500, alert_rules: 20, workflows: 10, provisional: true }
 
   - key: business
@@ -124,7 +124,7 @@ plans:
     own_llm: false
     launch_offer: true
     annual: true
-    monitoring: { proactive: true, alerts: [in_app, email], provisional: true }
+    monitoring: { proactive: true, alerts: [in_app, email, slack, teams, discord], provisional: true }
     quotas: { users: 15, sources: 30, analyses: 2000, alert_rules: 100, workflows: 50, provisional: true }
 
   - key: enterprise
@@ -143,7 +143,7 @@ plans:
     own_llm: true
     launch_offer: false
     annual: false
-    monitoring: { proactive: true, alerts: [in_app, email], contractual: true }
+    monitoring: { proactive: true, alerts: [in_app, email, slack, teams, discord], contractual: true }
     quotas: { contractual: true }
 
 # The agents (LEKA-454, the subscription mock-up of 14 October — it replaces

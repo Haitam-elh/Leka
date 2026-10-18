@@ -1,7 +1,7 @@
 """Watching the environment (LEKA-442): alerts on what is in trouble, kept
 to what the data supports, for the plans that include it."""
 
-from leka.monitoring.models import AlertDelivery, AlertRule, MonitoringAlert
+from leka.monitoring.models import AlertDelivery, AlertRule, ChannelEndpoint, MonitoringAlert
 from leka.monitoring.repository import AlertRepository
 from leka.monitoring.schemas import (
     AlertDeliveryRead,
@@ -14,6 +14,7 @@ from leka.monitoring.schemas import (
     MonitoringEntitlementRead,
     MonitoringRead,
     WatchableRead,
+    WebhookConnect,
 )
 from leka.monitoring.service import (
     Entitlement,
@@ -39,6 +40,7 @@ __all__ = [
     "AlertRuleRead",
     "AlertRuleWrite",
     "AlertRulesRead",
+    "ChannelEndpoint",
     "ChannelRead",
     "Entitlement",
     "MonitoringAlert",
@@ -47,6 +49,7 @@ __all__ = [
     "Open",
     "Seen",
     "WatchableRead",
+    "WebhookConnect",
     "entitled",
     "entitlement_of",
     "judge",

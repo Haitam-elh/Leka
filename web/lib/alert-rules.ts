@@ -25,6 +25,18 @@ export const alertRules = {
   test: (id: string) => apiFetch<AlertRule>(`${one(id)}/test`, { method: "POST" }),
 };
 
+/** The channels connected by a webhook (LEKA-496). */
+export const WEBHOOK_CHANNELS = ["slack", "teams", "discord"] as const;
+export type WebhookChannel = (typeof WEBHOOK_CHANNELS)[number];
+const channel = (key: string) => `/monitoring/channels/${encodeURIComponent(key)}`;
+
+export const alertChannels = {
+  connect: (key: WebhookChannel, url: string) =>
+    apiFetch<AlertChannel>(channel(key), { method: "PUT", body: JSON.stringify({ url }) }),
+  disconnect: (key: WebhookChannel) => apiFetch<void>(channel(key), { method: "DELETE" }),
+  test: (key: WebhookChannel) => apiFetch<AlertChannel>(`${channel(key)}/test`, { method: "POST" }),
+};
+
 /** A channel a rule may use now: integrated, in the plan. */
 export function usable(channel: AlertChannel): boolean {
   return channel.status === "operational" || channel.status === "untested" || channel.status === "failing";
