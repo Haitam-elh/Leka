@@ -81,6 +81,11 @@ class JiraConfig(BaseModel):
         description="Keys of the projects to read ('PAY'). "
         "Empty: every project the account can browse.",
     )
+    issues: bool = Field(
+        default=False,
+        description="Allow LEKA to create the tickets a person accepted — new issues in the "
+        "projects this source reads, never an edit. The account then needs Create issues there.",
+    )
 
     @field_validator("site")
     @classmethod

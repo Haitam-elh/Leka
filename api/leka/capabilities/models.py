@@ -579,3 +579,56 @@ class CodeChange(Base, WorkspaceScopedMixin):
     # Failed: why — CodeRefusedError's code, and what GitHub said.
     error: Mapped[str | None] = mapped_column(String(40), nullable=True)
     error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class Publication(Base, WorkspaceScopedMixin):
+    """What LEKA proposes to send out of a run's deliverable (2026-10-18):
+    tickets for a Jira project, or pages for a Confluence space — drafted
+    from what the agent delivered, for a person to choose and accept.
+    Accepted, LEKA creates them through the source, when its admin allowed
+    it (`issues`, `pages`); never an edit, never a deletion."""
+
+    __tablename__ = "publications"
+    __table_args__ = (
+        CheckConstraint("kind IN ('issues', 'pages')", name="kind"),
+        CheckConstraint(
+            "status IN ('drafting', 'proposed', 'applied', 'partly', 'rejected', 'failed')",
+            name="status",
+        ),
+        Index("ix_publications_workspace_run", "workspace_id", "run_id"),
+        Index("ix_publications_workspace_intention", "workspace_id", "intention_id"),
+    )
+
+    # The run it was drafted from, the intention it answers — no foreign key
+    # to intentions, capabilities sits below them.
+    run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    intention_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    kind: Mapped[str] = mapped_column(String(10), nullable=False)
+    source_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("sources.id", ondelete="CASCADE"), nullable=False
+    )
+    # The Jira project's key, or the Confluence space's.
+    target: Mapped[str] = mapped_column(String(255), nullable=False)
+    title: Mapped[str] = mapped_column(String(300), nullable=False, server_default="")
+    summary: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    # Each ticket or page: id, title, body (markdown), and for a ticket its
+    # kind, priority and labels.
+    items: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    proposed_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Each item sent: its id, and the key or page Atlassian gave it — or why
+    # not.
+    results: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    error: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)

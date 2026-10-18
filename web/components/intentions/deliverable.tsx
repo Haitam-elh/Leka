@@ -19,6 +19,7 @@ import { cn } from "cn";
 import { Deliverables } from "@/components/capabilities/agent-runs";
 import { RunCodeChanges } from "@/components/capabilities/code-changes";
 import { DesignSimulator } from "@/components/capabilities/design-simulator";
+import { RunPublications } from "@/components/capabilities/publications";
 import { Card } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
 import { exactDate } from "@/components/knowledge/time";
@@ -48,6 +49,9 @@ import { working } from "@/lib/intentions/journey";
  *                      comments on their lines: red for what is wrong, green
  *                      for what to do better or what is right — then its
  *                      report
+ *     every one, too   what to send out of it: tickets LEKA drafts for a
+ *                      Jira project, pages for a Confluence space, sent once
+ *                      a person chose them (2026-10-18)
  *
  * Only what the API kept is drawn. A comment the agent wrote on a line it
  * did not read was dropped there, and is counted here.
@@ -152,6 +156,8 @@ function Delivered({
           </Button>
         ) : null}
       </section>
+      {/* What to send out of it: tickets for Jira, pages for Confluence. */}
+      <RunPublications runId={run.id} />
       {views.length > 1 ? (
         <div className="flex gap-2" role="tablist" aria-label={w.title}>
           {views.map((each) => (

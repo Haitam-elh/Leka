@@ -42,6 +42,7 @@ from leka.api import (
     platform,
     pricing,
     protection,
+    publications,
     resolution,
     skills,
     subscriptions,
@@ -85,6 +86,7 @@ api_router.include_router(suggestions.router)
 api_router.include_router(agent_runs.router)
 # What the code-change agent proposes, accepted as a pull request or not.
 api_router.include_router(code_changes.router)
+api_router.include_router(publications.router)
 api_router.include_router(workflows.router)
 # The operations capabilities are made of, each with its contract (LEKA-396).
 api_router.include_router(skills.router)

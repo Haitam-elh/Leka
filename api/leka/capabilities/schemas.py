@@ -1228,3 +1228,69 @@ class CodeChangeDecision(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     note: str | None = Field(default=None, max_length=2000)
+
+
+# ── what LEKA proposes to send out of a deliverable (2026-10-18) ────────────
+
+
+class PublicationCreate(BaseModel):
+    """Tickets for a Jira project, or pages for a Confluence space, to draft
+    from a finished run's deliverable."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["issues", "pages"]
+    source_id: uuid.UUID = Field(description="The Jira source, or the Confluence one.")
+    target: str = Field(
+        min_length=1, max_length=255, description="The project's key ('PAY'), or the space's."
+    )
+
+
+class PublicationItemRead(BaseModel):
+    """One ticket or page — and, sent, what came of it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    title: str
+    body: str = Field(description="In markdown.")
+    kind: str | None = Field(default=None, description="A ticket's: task, bug, story.")
+    priority: str | None = None
+    labels: list[str] = Field(default_factory=list)
+    key: str | None = Field(default=None, description="Sent: the issue's key, or the page's id.")
+    url: str | None = None
+    error: str | None = Field(default=None, description="Not sent: why.")
+
+
+class PublicationRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    run_id: uuid.UUID | None
+    intention_id: uuid.UUID | None
+    kind: Literal["issues", "pages"]
+    source_id: uuid.UUID
+    target: str
+    title: str
+    summary: str
+    status: Literal["drafting", "proposed", "applied", "partly", "rejected", "failed"]
+    items: list[PublicationItemRead]
+    allowed: bool = Field(
+        description="Whether its source lets LEKA create issues, or publish pages."
+    )
+    proposed_by: uuid.UUID | None
+    decided_by: uuid.UUID | None
+    decided_at: datetime | None
+    note: str | None
+    error: str | None
+    error_detail: str | None
+    created_at: datetime
+
+
+class PublicationDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[str] | None = Field(
+        default=None, max_length=20, description="The ids chosen; every one when absent."
+    )
+    note: str | None = Field(default=None, max_length=2000)

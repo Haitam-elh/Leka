@@ -16,6 +16,8 @@
  *   - the comments dropped, counted;
  *   - its report one tab away.
  * - An agent still at work: said, no deliverable yet.
+ * - Every deliverable offers to send it out: tickets for Jira, pages for
+ *   Confluence (their flow: publications.test.tsx).
  * - The agent block on the intention leads to its deliverable.
  */
 
@@ -47,6 +49,14 @@ const changes = vi.hoisted(() => ({ list: vi.fn(), forRun: vi.fn(), accept: vi.f
 vi.mock("@/lib/code-changes", async (original) => ({
   ...(await original<typeof import("@/lib/code-changes")>()),
   codeChanges: changes,
+}));
+
+const shell = vi.hoisted(() => ({ permissions: ["intention:read", "intention:create", "intention:approve"] as string[] }));
+vi.mock("@/components/shell/shell-provider", () => ({ usePermissions: () => shell.permissions }));
+const sent = vi.hoisted(() => ({ forRun: vi.fn(), ask: vi.fn(), accept: vi.fn(), reject: vi.fn() }));
+vi.mock("@/lib/publications", async (original) => ({
+  ...(await original<typeof import("@/lib/publications")>()),
+  publications: sent,
 }));
 
 const { DeliverableView } = await import("@/components/intentions/deliverable");
@@ -183,6 +193,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   search.value = new URLSearchParams();
   changes.forRun.mockResolvedValue([]);
+  sent.forRun.mockResolvedValue([]);
 });
 
 describe("an agent's report", () => {
@@ -338,6 +349,11 @@ describe("the code review's deliverable", () => {
     show(<DeliverableView intention={INTENTION} />);
     expect(await screen.findByTestId("deliverable-report")).toHaveTextContent("Le solde change.");
     expect(screen.queryByTestId("code-review")).toBeNull();
+    // Sent out of it, when a person asks: tickets for Jira, pages for Confluence.
+    const out = screen.getByTestId("publications");
+    expect(within(out).getByRole("button", { name: "Proposer des tickets Jira" })).toBeVisible();
+    expect(within(out).getByRole("button", { name: "Documenter sur Confluence" })).toBeVisible();
+    expect(sent.forRun).toHaveBeenCalledWith("r1");
   });
 });
 

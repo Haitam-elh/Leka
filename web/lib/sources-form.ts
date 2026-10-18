@@ -16,7 +16,9 @@
  * phone's digit keyboard, and sent as text: the API reads "5432" as 5432.
  * A closed list of values (`enum`) is chosen from a menu; a field whose
  * format is `json` — a custom source's definition — is a document, typed
- * in a box of several lines and checked to be JSON before it is sent.
+ * in a box of several lines and checked to be JSON before it is sent. A
+ * yes or no — what LEKA may write, `pull_requests`, `issues`, `pages` — is a
+ * box to tick, sent as true or false.
  */
 
 import { z } from "@/lib/validation";
@@ -39,7 +41,7 @@ type JsonSchema = {
 export interface FieldSpec {
   name: string;
   title: string;
-  kind: "text" | "url" | "password" | "number" | "choice" | "json";
+  kind: "text" | "url" | "password" | "number" | "choice" | "json" | "toggle";
   /** For a choice: the values, as the API takes them. */
   options?: string[];
   required: boolean;
@@ -63,13 +65,15 @@ function propertiesOf(schema: Record<string, unknown>): [string, JsonSchema][] {
 export function fieldsOf(schema: Record<string, unknown>): FieldSpec[] {
   const required = new Set((schema.required as string[] | undefined) ?? []);
   return propertiesOf(schema)
-    .filter(([, property]) => ["string", "integer"].includes(concrete(property).type ?? ""))
+    .filter(([, property]) =>
+      ["string", "integer", "boolean"].includes(concrete(property).type ?? ""),
+    )
     .map(([name, property]) => {
       const inner = concrete(property);
       const secret = inner.format === "password" || inner.writeOnly === true;
       const whole = inner.type === "integer";
       const choices = (inner.enum ?? []).filter((value): value is string => typeof value === "string");
-      const kind: FieldSpec["kind"] = choices.length
+      const typed: FieldSpec["kind"] = choices.length
         ? "choice"
         : inner.format === "json"
           ? "json"
@@ -80,13 +84,14 @@ export function fieldsOf(schema: Record<string, unknown>): FieldSpec[] {
               : inner.format === "uri"
                 ? "url"
                 : "text";
+      const kind: FieldSpec["kind"] = inner.type === "boolean" ? "toggle" : typed;
       return {
         name,
         title: property.title ?? name,
         kind,
         options: choices.length ? choices : undefined,
         required: required.has(name),
-        default: ["string", "number"].includes(typeof property.default)
+        default: ["string", "number", "boolean"].includes(typeof property.default)
           ? String(property.default)
           : "",
         minLength: inner.minLength,
@@ -108,8 +113,12 @@ export function scopeFieldOf(schema: Record<string, unknown>): string | null {
  * `keepSecrets` lets a secret stay empty too, to keep the stored one.
  */
 export function zodOf(fields: FieldSpec[], { keepSecrets = false } = {}) {
-  const shape: Record<string, z.ZodType<string, string>> = {};
+  const shape: Record<string, z.ZodType<string | boolean, string | boolean>> = {};
   for (const field of fields) {
+    if (field.kind === "toggle") {
+      shape[field.name] = z.boolean();
+      continue;
+    }
     let rule = z.string().trim();
     if (field.maxLength !== undefined) rule = rule.max(field.maxLength);
     const mayBeEmpty = !field.required || (keepSecrets && field.kind === "password");
@@ -183,7 +192,18 @@ export function defaultsOf(fields: FieldSpec[]): Record<string, string> {
   return Object.fromEntries(fields.map((field) => [field.name, field.default]));
 }
 
-/** What the API takes: an empty field is left out, so its default applies. */
-export function filled(values: Record<string, string>): Record<string, string> {
-  return Object.fromEntries(Object.entries(values).filter(([, value]) => value.trim() !== ""));
+/** A field's value in the form: the source's own when it has one — a port,
+ * a yes or no, kept as they are when the source is edited — else the
+ * default. */
+export function initialOf(field: FieldSpec, value: unknown): string | boolean {
+  if (field.kind === "toggle") return typeof value === "boolean" ? value : field.default === "true";
+  return typeof value === "string" || typeof value === "number" ? String(value) : field.default;
+}
+
+/** What the API takes: an empty field is left out, so its default applies;
+ * a yes or no is always said. */
+export function filled<T extends string | boolean>(values: Record<string, T>): Record<string, T> {
+  return Object.fromEntries(
+    Object.entries(values).filter(([, value]) => typeof value !== "string" || value.trim() !== ""),
+  ) as Record<string, T>;
 }

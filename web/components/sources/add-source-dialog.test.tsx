@@ -4,7 +4,8 @@
  * What these protect: the form is the connector's schema, not a copy of it;
  * what the API refuses is shown where it can be fixed; nothing is activated
  * before a test succeeded; and a source saved half-way is edited, not
- * created twice.
+ * created twice. What LEKA may write — a yes or no — is a box, kept as the
+ * source has it when it is edited.
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -263,5 +264,58 @@ describe("adding a source", () => {
 
     expect(await screen.findByText("Connexion réussie")).toBeInTheDocument();
     expect(api.scopeOptions).not.toHaveBeenCalled();
+  });
+});
+
+describe("what LEKA may write", () => {
+  // GitHub's, as its schema says it: a yes or no, off by default.
+  const WRITES = {
+    ...GITHUB,
+    config_schema: {
+      properties: {
+        ...(GITHUB.config_schema as { properties: Record<string, unknown> }).properties,
+        pull_requests: { type: "boolean", default: false, title: "Pull Requests" },
+      },
+    },
+  } as unknown as CatalogEntry;
+
+  function edit(source: Source) {
+    return render(
+      <QueryClientProvider client={makeQueryClient()}>
+        <LocaleProvider>
+          <AddSourceDialog open onOpenChange={() => {}} onDone={onDone} editing={source} />
+        </LocaleProvider>
+      </QueryClientProvider>,
+    );
+  }
+
+  it("is a box to tick when the source is added, sent as true", async () => {
+    api.catalog.mockResolvedValue([WRITES]);
+    open();
+    await userEvent.click(await screen.findByRole("button", { name: /GitHub/ }));
+    const box = screen.getByRole("checkbox", { name: /Ouvrir les pull requests acceptées/ });
+    expect(box).not.toBeChecked();
+    await userEvent.type(screen.getByLabelText(/Token d'accès/), TOKEN);
+    await userEvent.click(box);
+    await userEvent.click(screen.getByRole("button", { name: "Enregistrer et continuer" }));
+    expect(api.create).toHaveBeenCalledWith(
+      expect.objectContaining({ config: expect.objectContaining({ pull_requests: true }) }),
+    );
+  });
+
+  it("stays as the source has it when the source is edited", async () => {
+    api.catalog.mockResolvedValue([WRITES]);
+    edit(
+      draft({
+        status: "active",
+        config: { organization: "acme", base_url: "https://api.github.com/", repositories: null, pull_requests: true },
+      }),
+    );
+    expect(await screen.findByRole("checkbox", { name: /Ouvrir les pull requests acceptées/ })).toBeChecked();
+    await userEvent.click(screen.getByRole("button", { name: "Continuer" }));
+    expect(api.update).toHaveBeenCalledWith("s1", {
+      display_name: "Acme GitHub",
+      config: expect.objectContaining({ organization: "acme", pull_requests: true }),
+    });
   });
 });
