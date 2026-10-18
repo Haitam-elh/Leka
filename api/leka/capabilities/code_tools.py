@@ -49,13 +49,19 @@ LIST_FILES = AgentTool(
 
 READ_FILE = AgentTool(
     name="read_file",
-    description="The text of one file of a connected GitHub repository, on a branch.",
+    description=(
+        "The text of one file of a connected GitHub repository, on a branch — with how many "
+        "lines it has and whether you were given all of them. A long file is read by ranges "
+        "of lines (from_line, to_line)."
+    ),
     parameters={
         "type": "object",
         "properties": {
             "repository": {"type": "string", "description": "Its full name: owner/repo."},
             "path": {"type": "string", "description": "The file's path in the repository."},
             "branch": {"type": "string", "description": "The branch; its default when empty."},
+            "from_line": {"type": "integer", "description": "The first line to read (1)."},
+            "to_line": {"type": "integer", "description": "The last line to read (its last)."},
         },
         "required": ["repository", "path"],
     },
@@ -102,6 +108,47 @@ CODE_NAMES = frozenset(t.name for t in CODE_TOOLS)
 
 def _said(payload: object) -> str:
     return json.dumps(payload, ensure_ascii=False, default=str)
+
+
+def _line(said: object, default: int) -> int:
+    try:
+        return max(1, int(str(said)))
+    except ValueError:
+        return default
+
+
+def lines_of(text: str, arguments: Mapping[str, Any]) -> dict[str, object]:
+    """A file's lines as the model is given them: those asked (all by
+    default), within MOST_CHARS — with how many it has, which ones it got,
+    and whether that is the whole file. It never has to guess a cut."""
+    lines = text.splitlines()
+    total = len(lines)
+    first = _line(arguments.get("from_line"), 1) if arguments.get("from_line") else 1
+    last = _line(arguments.get("to_line"), total) if arguments.get("to_line") else total
+    first, last = min(first, max(total, 1)), min(max(last, first), total)
+    given: list[str] = []
+    size = 0
+    for line in lines[first - 1 : last]:
+        if size + len(line) + 1 > MOST_CHARS and given:
+            break
+        given.append(line)
+        size += len(line) + 1
+    shown_to = first + len(given) - 1
+    content = "\n".join(given)
+    # One line longer than all a file may give (a minified file): cut too.
+    cut = len(content) > MOST_CHARS
+    content = content[:MOST_CHARS]
+    # To its very end: as the file is, its last newline included.
+    if given and not cut and shown_to >= total and text.endswith("\n"):
+        content += "\n"
+    return {
+        "content": content,
+        "lines": total,
+        "from_line": first if given else 0,
+        "to_line": shown_to if given else 0,
+        "complete": first == 1 and shown_to >= total and not cut,
+        "truncated": cut or shown_to < last,
+    }
 
 
 def code_handlers(
@@ -175,8 +222,7 @@ def code_handlers(
                     "repository": repository,
                     "branch": branch,
                     "path": path,
-                    "content": text[:MOST_CHARS],
-                    "truncated": len(text) > MOST_CHARS,
+                    **lines_of(text, arguments),
                 }
             ),
             "ok",

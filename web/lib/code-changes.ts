@@ -12,6 +12,8 @@ export type CodeChangeFile = components["schemas"]["CodeChangeFileRead"];
 export const codeChanges = {
   list: (intentionId: string) =>
     apiFetch<CodeChange[]>(`/code-changes?intention_id=${encodeURIComponent(intentionId)}`),
+  forRun: (runId: string) =>
+    apiFetch<CodeChange[]>(`/code-changes?run_id=${encodeURIComponent(runId)}`),
   accept: (id: string, note?: string) =>
     apiFetch<CodeChange>(`/code-changes/${encodeURIComponent(id)}/accept`, {
       method: "POST",

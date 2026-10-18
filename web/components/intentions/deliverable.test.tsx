@@ -43,6 +43,12 @@ vi.mock("@/lib/agent-runs", async (original) => ({
   agentRuns: runs,
 }));
 
+const changes = vi.hoisted(() => ({ list: vi.fn(), forRun: vi.fn(), accept: vi.fn(), reject: vi.fn() }));
+vi.mock("@/lib/code-changes", async (original) => ({
+  ...(await original<typeof import("@/lib/code-changes")>()),
+  codeChanges: changes,
+}));
+
 const { DeliverableView } = await import("@/components/intentions/deliverable");
 const { AgentWork } = await import("@/components/intentions/agent-work");
 
@@ -176,6 +182,7 @@ function show(node: React.ReactNode) {
 beforeEach(() => {
   vi.clearAllMocks();
   search.value = new URLSearchParams();
+  changes.forRun.mockResolvedValue([]);
 });
 
 describe("an agent's report", () => {
@@ -279,6 +286,50 @@ describe("the code review's deliverable", () => {
       "Revue de code travaille : son livrable s'affichera ici dès qu'il aura terminé.",
     );
     expect(runs.one).not.toHaveBeenCalled();
+  });
+
+  it("is the change it proposed first, before and after side by side, when it proposed one", async () => {
+    runs.forIntention.mockResolvedValue([run({ key: "code-change", title: "Modification de code" })]);
+    runs.one.mockResolvedValue(detail({ key: "code-change", title: "Modification de code", review: null }));
+    changes.forRun.mockResolvedValue([
+      {
+        id: "c1",
+        run_id: "r1",
+        intention_id: "i1",
+        repository: "acme/payments",
+        base_branch: "main",
+        title: "Déduire les paiements en attente",
+        summary: "Le solde ignorait les paiements en attente.",
+        status: "proposed",
+        files: [
+          {
+            path: "app/balance.py",
+            status: "modified",
+            additions: 2,
+            deletions: 1,
+            why: "Le calcul du solde",
+            diff: `--- a/app/balance.py\n+++ b/app/balance.py\n${PATCH}\n`,
+          },
+        ],
+        pull_requests_allowed: true,
+        error: null,
+        error_detail: null,
+        note: null,
+        pull_request_url: null,
+        pull_request_number: null,
+        created_at: new Date().toISOString(),
+        decided_at: null,
+      },
+    ]);
+    show(<DeliverableView intention={INTENTION} />);
+    const split = await screen.findByTestId("code-change-split");
+    expect(changes.forRun).toHaveBeenCalledWith("r1");
+    expect(screen.getByTestId("deliverable-tab-change")).toHaveAttribute("aria-selected", "true");
+    expect(split.querySelector('[data-change="remove"]')?.textContent).toBe("    return total");
+    expect(screen.getByRole("button", { name: "J'accepte d'appliquer ce changement sur GitHub" })).toBeEnabled();
+    // Its report, one tab away.
+    await userEvent.setup().click(screen.getByTestId("deliverable-tab-report"));
+    expect(screen.getByTestId("deliverable-report")).toHaveTextContent("Le solde change.");
   });
 
   it("is any agent's report when it read no code", async () => {

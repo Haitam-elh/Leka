@@ -33,6 +33,7 @@ from sqlalchemy import text
 
 from leka.capabilities import CodeChange, execute_run, sync_catalogue
 from leka.capabilities.changes import branch_of, diff_of, safe_path
+from leka.capabilities.code_tools import MOST_CHARS, lines_of
 from leka.connectors import SourceKind, SourceService
 from leka.connectors.base import Connector
 from leka.db import session_factory, workspace_scope
@@ -181,6 +182,47 @@ def _proposal() -> dict[str, Any]:
             # Said changed, the same: left out.
             {"path": "README.md", "content": README},
         ],
+    }
+
+
+def test_a_file_is_read_whole_or_by_ranges_and_says_which() -> None:
+    text = "".join(f"line {n}\n" for n in range(1, 744))
+    whole = lines_of(text, {})
+    assert (whole["lines"], whole["from_line"], whole["to_line"], whole["complete"]) == (
+        743,
+        1,
+        743,
+        True,
+    )
+    assert whole["content"] == text and whole["truncated"] is False
+    part = lines_of(text, {"from_line": 260, "to_line": 270})
+    assert (part["from_line"], part["to_line"], part["complete"], part["truncated"]) == (
+        260,
+        270,
+        False,
+        False,
+    )
+    assert str(part["content"]).splitlines()[0] == "line 260"
+    # Past its end, or upside down: what there is, never an error.
+    assert lines_of(text, {"from_line": 900})["to_line"] == 743
+    assert lines_of(text, {"from_line": 10, "to_line": 5})["to_line"] == 10
+    # Too long to give at once: cut where it fits, said so.
+    huge = "x" * 1_000 + "\n"
+    big = lines_of(huge * 100, {})
+    assert big["truncated"] is True and big["complete"] is False
+    assert len(str(big["content"])) <= MOST_CHARS
+    # One line longer than all it may give — a minified file: cut, said cut.
+    minified = lines_of("x" * (MOST_CHARS * 3), {})
+    assert len(str(minified["content"])) == MOST_CHARS
+    assert (minified["truncated"], minified["complete"], minified["lines"]) == (True, False, 1)
+    # An empty file: nothing, and that is all of it.
+    assert lines_of("", {}) == {
+        "content": "",
+        "lines": 0,
+        "from_line": 0,
+        "to_line": 0,
+        "complete": True,
+        "truncated": False,
     }
 
 
