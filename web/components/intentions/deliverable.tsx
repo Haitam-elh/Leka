@@ -27,6 +27,7 @@ import { StatePanel } from "@/components/states/state-panel";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Markdown } from "@/components/ui/markdown";
 import { routes } from "@/config/routes";
+import { agentTitle } from "@/lib/agent-title";
 import type { components } from "@/lib/api-types";
 import type { AgentRun, AgentRunDetail } from "@/lib/agent-runs";
 import { useAgentRun, useDrawFiles, useIntentionRuns } from "@/lib/agent-runs-queries";
@@ -87,7 +88,7 @@ export function DeliverableView({ intention }: { intention: IntentionDetail }) {
   if (!run) {
     return <StatePanel icon={FileText} title={w.none} description={w.noneBody} testId="deliverable-none" />;
   }
-  const agent = run.title ?? run.key;
+  const agent = agentTitle(t, run.key, run.title ?? run.key);
   if (run.status !== "succeeded") {
     const failed = run.status === "failed" || run.status === "cancelled";
     const errors = t.agentRuns.errors as Record<string, string>;
@@ -119,7 +120,7 @@ function Delivered({
   const t = useDictionary();
   const { format: locale } = useLocale();
   const w = t.intentions.deliverable;
-  const agent = run.title ?? run.key;
+  const agent = agentTitle(t, run.key, run.title ?? run.key);
   const report = run.report ?? run.output ?? "";
   // The change it proposed to the code, when it proposed one.
   const changes = useRunCodeChanges(run.id);

@@ -177,6 +177,43 @@ The logo's colours (`#0a0f2b`, `#5037fb` → `#6243fd`) are the logo's own
 and live in its files. They are close to, not equal to, `--brand-navy` and
 `--brand-violet`: aligning the interface on them is a separate decision.
 
+## Agents and bundles: one mark per domain (LEKA-493)
+
+An agent is drawn by its **marketplace domain** (`market`, else its registry
+category's: `marketOf`), the same on every screen: the home's cards, the
+marketplace's boxes and lines, a bundle's agents, an agent's page. One
+module holds it: `components/capabilities/market-mark.tsx` (`MarketTile`,
+`MARKET_ICON`, `marketText`). Never a second palette in a screen.
+
+| Domain | Icon | Hue |
+|---|---|---|
+| product | Target | blue |
+| architecture | Code | indigo |
+| testing | BadgeCheck | teal |
+| incident | TriangleAlert | rose |
+| security | ShieldCheck | slate |
+| performance | Zap | pink |
+| frontend | Layers | sky |
+| mobile | Smartphone | fuchsia |
+| devops | Cloud | cyan |
+| network | Network | lime |
+| documentation | FileText | stone |
+| orchestration | Workflow | purple |
+
+Rules:
+
+- **The colour never speaks alone.** The tile carries its domain's icon, and
+  its name is said for screen readers and on hover. The home's card writes
+  it beside the tile.
+- **A domain is never a state.** The states keep their own marks and words,
+  as pills: « Inclus dans votre plan » and « Déjà acheté » (success),
+  « Option payante » (violet), « Upgrade requis » (warning), « Indisponible »
+  and « Bientôt disponible » (neutral). No domain uses those hues.
+- **Contrast:** text and icon at -700 on a -50 or -100 background, above
+  4.5:1.
+- **Bundles:** each agent a bundle holds carries its own domain's tile, so
+  the bundle and the agent's own card are recognisably the same agent.
+
 ## Adding a primitive
 
 1. Wrap the Base UI primitive if one exists for it — check

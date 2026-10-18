@@ -30,10 +30,10 @@ describe("Pagination", () => {
       <Pagination>
         <PaginationContent>
           <PaginationItem>
-            <PaginationPrevious />
+            <PaginationPrevious label="Précédent" />
           </PaginationItem>
           <PaginationItem>
-            <PaginationNext />
+            <PaginationNext label="Suivant" />
           </PaginationItem>
         </PaginationContent>
       </Pagination>
@@ -51,10 +51,10 @@ describe("Pagination", () => {
       <Pagination>
         <PaginationContent>
           <PaginationItem>
-            <PaginationPrevious disabled />
+            <PaginationPrevious label="Précédent" disabled />
           </PaginationItem>
           <PaginationItem>
-            <PaginationNext onClick={onNext} />
+            <PaginationNext label="Suivant" onClick={onNext} />
           </PaginationItem>
         </PaginationContent>
       </Pagination>

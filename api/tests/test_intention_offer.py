@@ -270,6 +270,80 @@ async def test_several_agents_bought_together_back_to_the_intention_each_owned(
     assert (await client.get("/api/v1/billing/entitlements")).json() == []
 
 
+async def test_several_bundles_in_one_checkout_each_its_own_right_never_one_owned_again(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    paying: FakeStripe,
+) -> None:
+    """LEKA-500: two bundles in one Checkout — a line each at its Stripe
+    price, one subscription; paid, each bundle its own right; ended, both.
+    One bundle alone, one not on sale, or one already owned: refused."""
+    await _on(acme["globex"], "starter", ungranted=False)
+    _as(identity, acme, "other_admin")
+    await _synced(paying)
+    buy = "/api/v1/billing/add-ons/checkout"
+
+    for refused in ("engineering", "engineering,ship-safe"):
+        answer = await client.post(buy, json={"kind": "bundles", "key": refused})
+        assert answer.status_code == 404, (refused, answer.text)
+
+    keys = "engineering,frontend-craft"
+    bought = await client.post(buy, json={"kind": "bundles", "key": keys})
+    assert bought.status_code == 200, bought.text
+    [opened] = paying.posted("/v1/checkout/sessions")
+    assert (
+        opened["line_items[0][price]"] == paying.prices["leka_addon_bundle_engineering_month_5900"]
+    )
+    assert (
+        opened["line_items[1][price]"]
+        == paying.prices["leka_addon_bundle_frontend-craft_month_2900"]
+    )
+    assert "line_items[2][price]" not in opened
+    assert opened["subscription_data[metadata][leka_add_on_kind]"] == "bundles"
+
+    marks = {
+        "workspace_id": str(acme["globex"]),
+        "leka_add_on_kind": "bundles",
+        "leka_add_on_key": keys,
+    }
+    now = int(time.time())
+    paid = await _deliver(
+        client,
+        _event(
+            "checkout.session.completed",
+            {
+                "id": "cs_bundles",
+                "mode": "subscription",
+                "subscription": "sub_bundles",
+                "payment_status": "paid",
+                "metadata": marks,
+            },
+            created=now,
+        ),
+    )
+    assert paid.status_code == 200, paid.text
+    rights = (await client.get("/api/v1/billing/entitlements")).json()
+    assert sorted((r["kind"], r["key"]) for r in rights) == [
+        ("bundle", "engineering"),
+        ("bundle", "frontend-craft"),
+    ]
+    # Owned: never bought again, alone or with another.
+    again = await client.post(buy, json={"kind": "bundle", "key": "engineering"})
+    assert again.status_code in (409, 422)
+    assert again.json()["error"]["details"][0]["message"] == "owned"
+
+    ended = await _deliver(
+        client,
+        _event(
+            "customer.subscription.deleted",
+            {"id": "sub_bundles", "status": "canceled", "metadata": marks},
+            created=now + 60,
+        ),
+    )
+    assert ended.json() == {"received": "add_on_ended:2"}
+
+
 async def test_the_plan_bought_from_the_intention_comes_back_to_it(
     client: AsyncClient,
     identity: FakeIdentity,

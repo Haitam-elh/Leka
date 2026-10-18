@@ -711,6 +711,72 @@ function sides(
   ];
 }
 
+/** Where a relation's name may go, along its line, in the order tried. */
+const ALONG = [0.5, 0.35, 0.65, 0.22, 0.78];
+/** Its name's box, as drawn: 0.625rem text, a padded pill. */
+const LABEL_HEIGHT = 16;
+const labelWidth = (label: string) => label.length * 5.6 + 10;
+
+interface Box {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+const overlaps = (a: Box, b: Box) =>
+  a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+/**
+ * Each name on its line where it covers no card and no other name
+ * (LEKA-492): the chosen card's first, each at the first free spot along its
+ * line; none free, not drawn — the card's panel says every relation, by
+ * mouse and keyboard. A relation is never dropped: only its name.
+ */
+export function placeLabels(
+  lines: readonly (Drawn & { spots: readonly Point[]; own: boolean })[],
+  cards: readonly Box[],
+): Drawn[] {
+  const taken: Box[] = [];
+  const placed = new Map<string, Point | null>();
+  const order = [...lines].sort((a, b) => Number(b.own) - Number(a.own));
+  for (const line of order) {
+    if (!line.label) continue;
+    const width = labelWidth(line.label);
+    const free = line.spots.find((spot) => {
+      const box = {
+        left: spot.x - width / 2,
+        right: spot.x + width / 2,
+        top: spot.y - LABEL_HEIGHT / 2,
+        bottom: spot.y + LABEL_HEIGHT / 2,
+      };
+      return !cards.some((card) => overlaps(box, card)) && !taken.some((other) => overlaps(box, other));
+    });
+    if (free) {
+      taken.push({
+        left: free.x - width / 2,
+        right: free.x + width / 2,
+        top: free.y - LABEL_HEIGHT / 2,
+        bottom: free.y + LABEL_HEIGHT / 2,
+      });
+    }
+    placed.set(line.id, free ?? null);
+  }
+  return lines.map((line) => {
+    const spot = placed.get(line.id);
+    const drawn: Drawn = {
+      id: line.id,
+      d: line.d,
+      tone: line.tone,
+      dashed: line.dashed,
+      faded: line.faded,
+      label: spot ? line.label : null,
+      x: spot?.x ?? line.x,
+      y: spot?.y ?? line.y,
+    };
+    return drawn;
+  });
+}
+
 /** A point of a cubic curve, `at` of the way along. */
 function along(p0: Point, p1: Point, p2: Point, p3: Point, at: number): Point {
   const u = 1 - at;
@@ -761,7 +827,14 @@ export function useArrows(
       : [];
     const inside = (r: DOMRect, x: number, y: number) =>
       x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
-    const next: Drawn[] = [];
+    // Every card and every column's heading, where its name must not go (LEKA-492).
+    const cards = [...root.querySelectorAll<HTMLElement>("[data-card], [data-label-free]")].map((el) => {
+      const r = el.getBoundingClientRect();
+      const tl = local({ x: r.left, y: r.top });
+      const br = local({ x: r.right, y: r.bottom });
+      return { left: tl.x - 2, top: tl.y - 2, right: br.x + 2, bottom: br.y + 2 };
+    });
+    const next: (Drawn & { spots: Point[]; own: boolean })[] = [];
     for (const arrow of arrows) {
       const a = rect(arrow.from);
       const b = rect(arrow.to);
@@ -810,6 +883,9 @@ export function useArrows(
           label,
           x: gutter,
           y: (start.y + end.y) / 2,
+          // Down its gutter, the middle first.
+          spots: ALONG.map((at) => ({ x: gutter, y: start.y + (end.y - start.y) * at })),
+          own: Boolean(arrow.own),
         });
         continue;
       }
@@ -829,11 +905,13 @@ export function useArrows(
         faded,
         label,
         // Where its name goes: the curve's middle — the chosen card's, near
-        // what it reaches, out of the way of the cards it passes.
+        // what it reaches — else further along, where no card is.
         ...along(s, c1, c2, e, arrow.own ? 0.8 : 0.5),
+        spots: (arrow.own ? [0.8, ...ALONG] : ALONG).map((at) => along(s, c1, c2, e, at)),
+        own: Boolean(arrow.own),
       });
     }
-    setDrawn(next);
+    setDrawn(placeLabels(next, cards));
   }, [frame, arrows, selected, w, scale, around, labels]);
 
   useLayoutEffect(() => {
@@ -1292,7 +1370,8 @@ export function PanelHeader({
     );
   }
   return (
-    <div className="flex items-center gap-2">
+    // data-label-free: no relation's name over it (LEKA-492).
+    <div className="flex items-center gap-2" data-label-free>
       {logo}
       <div className="min-w-0">
         <h2 className="truncate text-[0.875rem] leading-5 font-semibold text-brand-navy">

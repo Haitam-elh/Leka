@@ -119,6 +119,12 @@ SCHEDULE: tuple[Scheduled, ...] = (
         "leka.intentions.verification.run_due_verifications",
         cron="2,7,12,17,22,27,32,37,42,47,52,57 * * * *",
     ),
+    # The intentions whose deletion waited on work still running (LEKA-487).
+    Scheduled(
+        "intention-deletions",
+        "leka.intentions.deletion.run_deletion_sweep",
+        cron="17,47 * * * *",
+    ),
     # The capability catalogue registered — every version, every move of its
     # lifecycle — as the API does when it starts, for a release whose API has
     # not restarted yet (LEKA-393).

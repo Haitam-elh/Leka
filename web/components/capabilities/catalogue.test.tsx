@@ -267,7 +267,8 @@ describe("the catalogue", () => {
     expect(screen.getByTestId("catalogue-top")).toHaveTextContent("Responsabilités");
     expect(screen.getByTestId("catalogue-latest")).toHaveTextContent("Architecte applicatif");
     expect(screen.getByTestId("catalogue-latest")).not.toHaveTextContent("Use when");
-    expect(screen.getByTestId("catalogue-ask")).toHaveAttribute("href", "/intentions/new");
+    // A suggestion to LEKA's team, not a new intention (LEKA-501).
+    expect(screen.getByTestId("catalogue-ask")).not.toHaveAttribute("href");
   });
 
   it("never puts agents and LEKA's skills in the same box — the skills apart, never priced (LEKA-467)", async () => {
@@ -331,6 +332,37 @@ describe("the catalogue", () => {
     sold.addOns.mockResolvedValue(addOns(false));
     show(<CatalogueScreen />);
     expect(await screen.findByRole("button", { name: "Acheter Architecte applicatif" })).toBeVisible();
+  });
+
+  it("several bundles picked, their total said and confirmed, bought in one order (LEKA-500)", async () => {
+    permissions.value = ["workspace:read", "workspace:update"];
+    const offer = addOns(false);
+    offer.bundles[1] = { ...offer.bundles[1], sellable: true };
+    sold.addOns.mockResolvedValue(offer);
+    sold.buy.mockReturnValue(new Promise(() => {}));
+    const user = userEvent.setup();
+    show(<CatalogueScreen />);
+
+    const picks = await screen.findAllByTestId("bundle-pick");
+    expect(picks).toHaveLength(2);
+    expect(screen.queryByTestId("bundle-selection")).not.toBeInTheDocument();
+    await user.click(within(picks[0]).getByRole("checkbox"));
+    await user.click(within(picks[1]).getByRole("checkbox"));
+    const bar = screen.getByTestId("bundle-selection");
+    expect(bar).toHaveTextContent("2 bundles sélectionnés");
+    expect(within(bar).getByTestId("bundle-selection-total")).toHaveTextContent(/108\s€/);
+
+    await user.click(within(bar).getByTestId("bundle-selection-buy"));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("Acheter 2 bundles ?");
+    expect(dialog).toHaveTextContent(/Architecture : 49\s€/);
+    expect(dialog).toHaveTextContent(/Engineering : 59\s€/);
+    expect(dialog).toHaveTextContent("en une seule commande");
+    expect(sold.buy).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole("button", { name: "Continuer vers le paiement" }));
+    await waitFor(() =>
+      expect(sold.buy).toHaveBeenCalledWith({ kind: "bundles", key: "architecture,engineering" }),
+    );
   });
 
   it("a favourite said, never a bare star; agents filtered by their state (LEKA-467)", async () => {

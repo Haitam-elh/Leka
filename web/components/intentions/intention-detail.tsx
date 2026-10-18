@@ -35,6 +35,8 @@ import { entityHref } from "@/components/environment/parts";
 import { AgentsAction, useProposal } from "@/components/intentions/agents-decision";
 import { AnalysisResults, EvidenceTab } from "@/components/intentions/analysis-tab";
 import { sizeOf } from "@/components/intentions/attachments";
+import { useInDemo } from "@/components/demo/in-demo";
+import { DeleteIntention } from "@/components/intentions/delete-intention";
 import { JourneyNote } from "@/components/intentions/journey";
 import { phaseOf, Working } from "@/components/intentions/working";
 import { useConfirm } from "@/components/interactions/confirm";
@@ -42,6 +44,7 @@ import { useCurrentUser, usePermissions } from "@/components/shell/shell-provide
 import { SourceLogo } from "@/components/sources/source-logo";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { routes } from "@/config/routes";
+import { agentTitle } from "@/lib/agent-title";
 import { ApiError } from "@/lib/api";
 import { useIntentionRuns } from "@/lib/agent-runs-queries";
 import { billing, euros } from "@/lib/billing";
@@ -57,6 +60,7 @@ import type {
 import { attachmentAddress } from "@/lib/intentions/attachments";
 import { intentionKeys, useDecide, useIntentionAnalysis, useIntentionOffer } from "@/lib/intentions/queries";
 import { notify } from "@/lib/notify";
+import { workspace as workspaceApi } from "@/lib/workspace";
 import { useSources } from "@/lib/sources-queries";
 import { subscription } from "@/lib/subscription";
 import type { SourceKind } from "@/lib/sources";
@@ -119,13 +123,16 @@ export function IntentionDetailPage({ intention }: { intention: IntentionDetail 
 
   return (
     <div className="space-y-4" data-testid="intention-detail-page">
-      <Link
-        href={routes.overview()}
-        className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-1.5 text-[0.8125rem] font-medium text-brand-navy shadow-sm ring-1 ring-shell-line hover:bg-shell-canvas"
-      >
-        <ArrowLeft className="size-4 rtl:-scale-x-100" aria-hidden="true" />
-        {w.back}
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Link
+          href={routes.overview()}
+          className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-1.5 text-[0.8125rem] font-medium text-brand-navy shadow-sm ring-1 ring-shell-line hover:bg-shell-canvas"
+        >
+          <ArrowLeft className="size-4 rtl:-scale-x-100" aria-hidden="true" />
+          {w.back}
+        </Link>
+        <DeleteIntention intention={intention} />
+      </div>
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] xl:items-start">
         {/* Laid out by the room each column has, not the screen's (container
             queries): the same blocks read well beside a panel, on a phone. */}
@@ -464,7 +471,7 @@ function AgentCard({
           <Icon className="size-5" aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[0.875rem] font-semibold text-brand-navy">{agent.title}</p>
+          <p className="text-[0.875rem] font-semibold text-brand-navy">{agentTitle(t, agent.key, agent.title)}</p>
           <p className="text-[0.8125rem] text-brand-navy">
             {agent.status === "included" ? (
               <span className="text-state-success">{included}</span>
@@ -482,7 +489,7 @@ function AgentCard({
           checked={checked}
           disabled={!selectable}
           onChange={onToggle}
-          aria-label={fill(w.choose, { name: agent.title })}
+          aria-label={fill(w.choose, { name: agentTitle(t, agent.key, agent.title) })}
           className="mt-1 size-4 accent-brand-violet"
           data-testid="detail-agent-choose"
         />
@@ -627,7 +634,7 @@ function CoveredCard({
           {agents.map((agent) => (
             <li key={agent.key} className="flex flex-wrap items-center gap-2 text-[0.8125rem] text-brand-navy">
               <Check className="size-3.5 text-[#15803d]" aria-hidden="true" />
-              <span className="font-medium">{agent.title}</span>
+              <span className="font-medium">{agentTitle(t, agent.key, agent.title)}</span>
               <span className="text-shell-muted">
                 — {agent.status === "owned" ? w.coveredBox.owned : w.coveredBox.included}
               </span>
@@ -680,6 +687,8 @@ function OfferCard({
   const router = useRouter();
   const decide = useDecide(intention.id);
   const payer = usePermissions()?.includes("workspace:update") ?? false;
+  const inDemo = useInDemo();
+  const queries = useQueryClient();
   const [busy, setBusy] = useState(false);
   const plan = offer.plan;
   const planLine = offer.lines.find((l) => l.kind === "plan");
@@ -690,6 +699,19 @@ function OfferCard({
   const agentCount = offer.agents.filter((a) => a.chosen).length;
   // What the total pays for: the agents bought, never those the plan includes.
   const paidAgents = options.reduce((n, l) => n + (l.kind === "bundle" ? (l.agents ?? []).length : 1), 0);
+  async function simulate() {
+    setBusy(true);
+    try {
+      await workspaceApi.activateDemo();
+      notify.success({ title: w.simulated });
+      // The offer read again: nothing left to buy, it can be launched.
+      await queries.invalidateQueries({ queryKey: ["intentions"] });
+    } catch (error) {
+      notify.error({ title: error instanceof ApiError ? error.message : w.failed });
+    } finally {
+      setBusy(false);
+    }
+  }
   const launchOf = (agents: ProposedAgent[]): AgentLaunch[] =>
     agents.map((a) => ({
       key: a.key,
@@ -766,6 +788,7 @@ function OfferCard({
     <section
       className="space-y-4 rounded-2xl p-4 ring-2 ring-brand-violet/25"
       aria-labelledby="detail-offer-title"
+      id="offer"
       data-testid="detail-offer"
     >
       <h2 id="detail-offer-title" className="flex items-center gap-2.5 text-[1.0625rem] font-semibold text-brand-navy">
@@ -899,6 +922,24 @@ function OfferCard({
                 {w.launch}
                 <ArrowRight className="size-4 rtl:-scale-x-100" aria-hidden="true" />
               </Button>
+            ) : inDemo ? (
+              // A demonstration (LEKA-498): its payment simulated — no
+              // Stripe, no card —, what it gives on its own workspace only.
+              <>
+                <Button
+                  type="button"
+                  className="h-auto min-h-10 w-full py-2.5 whitespace-normal"
+                  disabled={busy}
+                  onClick={() => void simulate()}
+                  data-testid="detail-simulate"
+                >
+                  {w.simulate}
+                  <ArrowRight className="size-4 rtl:-scale-x-100" aria-hidden="true" />
+                </Button>
+                <p className="mt-2 text-center text-xs text-shell-muted" data-testid="detail-simulate-note">
+                  {w.simulateNote}
+                </p>
+              </>
             ) : payer && !(plan.contractual && offer.change_plan) ? (
               <Button
                 type="button"
@@ -1016,7 +1057,7 @@ function PlanSteps({ intention, offer }: { intention: IntentionDetail; offer: In
                 <Icon className="size-5 shrink-0 text-brand-violet" aria-hidden="true" />
                 <div className="min-w-0 text-xs">
                   <p className="truncate font-medium text-brand-navy">
-                    {agent?.title ?? proposed?.title ?? w.assistant}
+                    {step.agent ? agentTitle(t, step.agent, agent?.title ?? proposed?.title ?? step.agent) : w.assistant}
                   </p>
                   <p className="text-shell-muted">
                     {agent

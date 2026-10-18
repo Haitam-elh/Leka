@@ -7,7 +7,7 @@ import { useState } from "react";
 import { cn } from "cn";
 
 import { usePermissions } from "@/components/shell/shell-provider";
-import { PageContainer } from "@/components/shell/page-container";
+import { BackHome, PageContainer } from "@/components/shell/page-container";
 import { ErrorState } from "@/components/states/error-state";
 import { Button } from "@/components/ui/button";
 import { routes } from "@/config/routes";
@@ -48,6 +48,10 @@ export function PlansPage() {
   const said = useSubscription().data;
   const { checkout, portal } = usePayment();
   const [interval, setInterval] = useState<Interval>("month");
+  // The plan chosen on the page (LEKA-490): the workspace's until another
+  // card is clicked — never stuck on « Votre formule ».
+  const [picked, setPicked] = useState<string | null>(null);
+  const selected = picked ?? current;
 
   const money = (cents: number) =>
     new Intl.NumberFormat(locale, {
@@ -87,6 +91,16 @@ export function PlansPage() {
           ? fill(w.yearTotal, { price: money(quote.charged) })
           : null;
     return { big: money(monthly), sub: w.perMonth, then };
+  }
+
+  /** What the chosen plan costs, and how often it is billed. */
+  function recap(plan: PricedPlan): string | null {
+    const quote = plan.quotes.find((q) => q.interval === interval);
+    if (!quote || plan.key === "free") return null;
+    const shown = price(plan).big;
+    return interval === "year"
+      ? fill(w.recapYear, { price: shown, total: money(quote.charged) })
+      : fill(w.recapMonth, { price: shown });
   }
 
   function features(plan: PricedPlan): { text: string; soon?: boolean; strong?: boolean }[] {
@@ -138,8 +152,9 @@ export function PlansPage() {
     const busy = checkout.isPending || portal.isPending;
     if (key === "free") {
       // Back to Free: the subscription ended in Stripe's portal, never here.
+      // Opened on ending it, at its period's end (LEKA-490).
       return subscribed ? (
-        <Button type="button" variant="outline" className="w-full" disabled={busy} onClick={() => portal.mutate(undefined, { onError: failed })} data-testid="plan-choose">
+        <Button type="button" variant="outline" className="w-full" disabled={busy} onClick={() => portal.mutate(true, { onError: failed })} data-testid="plan-choose">
           {w.toFree}
         </Button>
       ) : null;
@@ -151,11 +166,9 @@ export function PlansPage() {
         variant={plan.recommended ? "default" : "outline"}
         className="w-full"
         disabled={busy || said?.available === false}
-        onClick={() =>
-          subscribed
-            ? portal.mutate(undefined, { onError: failed })
-            : checkout.mutate({ plan: plan.key, interval }, { onError: failed })
-        }
+        // Subscribed or not, this exact plan: Checkout for a first one,
+        // Stripe's confirmation of the change once subscribed (LEKA-490).
+        onClick={() => checkout.mutate({ plan: plan.key, interval }, { onError: failed })}
         data-testid="plan-choose"
       >
         {label}
@@ -165,6 +178,7 @@ export function PlansPage() {
 
   return (
     <PageContainer>
+      <BackHome />
       <div className="mx-auto max-w-3xl text-center">
         <h1 className="text-[1.875rem] leading-tight font-bold tracking-[-0.02em] text-brand-navy md:text-[2.25rem]">
           {w.title}
@@ -212,19 +226,24 @@ export function PlansPage() {
             const shown = price(plan);
             const key = plan.key as PlanKey;
             const mine = key === current;
+            const chosen = plan.key === selected;
+            const said = chosen ? recap(plan) : null;
             return (
               <li
                 key={plan.key}
                 data-testid="plan-card"
                 data-plan={plan.key}
                 data-current={mine}
+                data-selected={chosen}
+                onClick={() => setPicked(plan.key)}
                 className={cn(
-                  "relative flex flex-col rounded-2xl border bg-white p-5",
+                  "relative flex cursor-pointer flex-col rounded-2xl border bg-white p-5 transition-shadow",
                   mine
                     ? "border-2 border-brand-navy"
                     : plan.recommended
                       ? "border-2 border-brand-violet"
                       : "border-shell-line",
+                  chosen && "ring-4 ring-brand-violet/30",
                 )}
               >
                 {mine || plan.recommended ? (
@@ -237,7 +256,18 @@ export function PlansPage() {
                     {mine ? w.current : w.recommended}
                   </span>
                 ) : null}
-                <h2 className="text-[1.375rem] font-bold text-brand-navy">{plan.name}</h2>
+                <h2 className="text-[1.375rem] font-bold text-brand-navy">
+                  {/* Chosen by keyboard as by a click on its card. */}
+                  <button
+                    type="button"
+                    aria-pressed={chosen}
+                    onClick={() => setPicked(plan.key)}
+                    className="rounded-md text-start outline-none focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+                    data-testid="plan-select"
+                  >
+                    {plan.name}
+                  </button>
+                </h2>
                 <p className="mt-1 min-h-10 text-[0.9375rem] text-shell-muted">
                   {(w.taglines as Record<PlanKey, string>)[key]}
                 </p>
@@ -267,6 +297,12 @@ export function PlansPage() {
                   ))}
                 </ul>
                 <div className="mt-5">{action(plan)}</div>
+                {said && !mine && pays ? (
+                  <p className="mt-2 text-center text-xs text-brand-navy" data-testid="plan-recap">
+                    {said}
+                    {subscribed ? <span className="block text-shell-muted">{w.changeNote}</span> : null}
+                  </p>
+                ) : null}
                 <p className="mt-3 text-center text-xs text-shell-muted">
                   {(w.audiences as Record<PlanKey, string>)[key]}
                 </p>

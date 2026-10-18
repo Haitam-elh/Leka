@@ -81,3 +81,21 @@ test.describe("Capabilities", () => {
     await expect(migration).not.toContainText("Désactivée :");
   });
 });
+
+test.describe("Demander une compétence (LEKA-501)", () => {
+  test("a suggestion for LEKA's team, never a new intention", async ({ page }) => {
+    await signIn(page);
+    await page.goto("/capabilities");
+    await page.getByTestId("catalogue-ask").click();
+
+    const dialog = page.getByTestId("suggestion-dialog");
+    await expect(dialog).toBeVisible();
+    await dialog.getByLabel("Compétence ou agent souhaité").fill(`Agent FinOps ${Date.now()}`);
+    await dialog.getByLabel("Le problème à résoudre").fill("Nos factures cloud montent sans explication.");
+    await dialog.getByLabel("Le cas d'usage").fill("Chaque lundi, dire quel service a coûté plus.");
+    await dialog.getByTestId("suggestion-send").click();
+
+    await expect(dialog.getByTestId("suggestion-sent")).toContainText("Demande reçue");
+    await expect(page).toHaveURL("http://localhost:3000/capabilities");
+  });
+});

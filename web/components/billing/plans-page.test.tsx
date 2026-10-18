@@ -180,14 +180,34 @@ describe("the plans compared", () => {
     expect(screen.getByRole("link", { name: /Facturation, factures/ })).toHaveAttribute("href", "/billing");
   });
 
-  it("subscribed: a change goes through Stripe's portal, never a second checkout", async () => {
+  it("subscribed: the exact plan chosen, confirmed in Stripe — Free its end (LEKA-490)", async () => {
     state.subscription = { status: "active", launch_offer_available: false, available: true };
     const user = userEvent.setup();
     show();
     await user.click(within(card("business")).getByTestId("plan-choose"));
-    expect(state.portal).toHaveBeenCalled();
-    expect(state.checkout).not.toHaveBeenCalled();
-    expect(within(card("free")).getByTestId("plan-choose")).toHaveTextContent("Passer à Free");
+    // The server opens Stripe on the change to that price, never a second subscription.
+    expect(state.checkout).toHaveBeenCalledWith({ plan: "business", interval: "month" }, expect.anything());
+    expect(state.portal).not.toHaveBeenCalled();
+    await user.click(within(card("free")).getByTestId("plan-choose"));
+    expect(state.portal).toHaveBeenCalledWith(true, expect.anything());
+  });
+
+  it("a card is chosen, never stuck on « Votre formule »: its price and how often it is billed said", async () => {
+    const user = userEvent.setup();
+    show();
+    expect(card("starter")).toHaveAttribute("data-selected", "true");
+    await user.click(within(card("growth")).getByTestId("plan-select"));
+    expect(card("growth")).toHaveAttribute("data-selected", "true");
+    expect(card("starter")).toHaveAttribute("data-selected", "false");
+    expect(within(card("growth")).getByTestId("plan-recap")).toHaveTextContent(
+      "143,20 € HT par mois, facturé chaque mois",
+    );
+    await user.click(screen.getByTestId("plans-year"));
+    expect(within(card("growth")).getByTestId("plan-recap")).toHaveTextContent(
+      /125,30 € HT par mois, soit 1\s503,60 € HT facturés chaque année/,
+    );
+    // The way back home, as on the other pages.
+    expect(screen.getByTestId("back-home")).toBeInTheDocument();
   });
 
   it("a member reads the plans and never buys", () => {

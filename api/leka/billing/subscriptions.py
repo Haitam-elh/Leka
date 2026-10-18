@@ -52,7 +52,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from leka.billing.catalogue import Catalogue, Interval, Quote, catalogue, quote
+from leka.billing.catalogue import Catalogue, Interval, Plan, Quote, catalogue, quote
 from leka.billing.models import BillingAccount, StripeEvent
 from leka.billing.stripe import SignatureError, Stripe, StripeError, verify
 from leka.billing.sync import coupon_id, lookup_key, portal_configuration
@@ -206,7 +206,9 @@ async def checkout(
 ) -> Checkout:
     """A Stripe Checkout session for a self-service plan, at the price the
     catalogue says — CheckoutRefusedError otherwise. Opened from an
-    intention (LEKA-458), Stripe brings the person back to it."""
+    intention (LEKA-458), Stripe brings the person back to it. Already
+    subscribed: Stripe's confirmation of the change to that exact price
+    (LEKA-490) — never a second subscription."""
     offer = catalogue()
     try:
         plan = offer.plan(plan_key)
@@ -218,9 +220,7 @@ async def checkout(
         raise CheckoutRefusedError("not_sold", "This plan is not sold yearly.")
     account = await account_of(session, workspace_id)
     if account.status in PAYING and account.stripe_subscription_id:
-        raise CheckoutRefusedError(
-            "subscribed", "Already subscribed: change plan from the customer portal."
-        )
+        return await _change(client, account, plan, interval, offer, today=today, locale=locale)
     launch = launch_eligible(account, offer, plan.key, interval, today)
     # Once a workspace, like the launch offer: never subscribed before.
     trial = bool(plan.trial_days) and not account.launch_offer_used
@@ -267,12 +267,66 @@ async def checkout(
     return Checkout(str(made["url"]), priced)
 
 
+async def _change(
+    client: Stripe,
+    account: BillingAccount,
+    plan: Plan,
+    interval: Interval,
+    offer: Catalogue,
+    *,
+    today: date,
+    locale: str,
+) -> Checkout:
+    """Stripe's portal opened on the change to this plan's exact price
+    (LEKA-490): what is prorated said by Stripe, confirmed there; the plan
+    changes only with its event. The same plan and interval: refused."""
+    if account.plan == plan.key and account.interval == interval:
+        raise CheckoutRefusedError("same_plan", "Already on this plan.")
+    price = await _price(client, lookup_key(plan, interval, offer, today=today))
+    subscription = await client.get(f"/v1/subscriptions/{account.stripe_subscription_id}")
+    items = (subscription.get("items") or {}).get("data") or []
+    if not items:
+        raise CheckoutRefusedError("not_subscribed", "No subscription to change.")
+    made = await client.post(
+        "/v1/billing_portal/sessions",
+        {
+            "customer": account.stripe_customer_id,
+            "return_url": f"{settings.web_url}/billing/plans",
+            "configuration": await portal_configuration(client),
+            "locale": locale,
+            "flow_data": {
+                "type": "subscription_update_confirm",
+                "subscription_update_confirm": {
+                    "subscription": account.stripe_subscription_id,
+                    "items": [{"id": items[0]["id"], "price": price, "quantity": 1}],
+                },
+                "after_completion": {
+                    "type": "redirect",
+                    "redirect": {"return_url": f"{settings.web_url}/billing?changed=success"},
+                },
+            },
+        },
+    )
+    # What it costs from now on: never an offer for a first subscription.
+    priced = quote(plan, interval, offer, today=today, launch=False, trial=False)
+    return Checkout(str(made["url"]), priced)
+
+
 async def portal(
-    session: AsyncSession, workspace_id: uuid.UUID, *, client: Stripe, locale: str = "auto"
+    session: AsyncSession,
+    workspace_id: uuid.UUID,
+    *,
+    client: Stripe,
+    locale: str = "auto",
+    cancel: bool = False,
 ) -> str:
+    """Stripe's customer portal — `cancel`: opened on ending the
+    subscription at its period's end, the way back to Free (LEKA-490)."""
     account = await account_of(session, workspace_id)
     if not account.stripe_customer_id:
         raise CheckoutRefusedError("no_customer", "Nothing was ever bought here.")
+    if cancel and not (account.stripe_subscription_id and account.status in PAYING):
+        raise CheckoutRefusedError("not_subscribed", "No subscription to end.")
     made = await client.post(
         "/v1/billing_portal/sessions",
         {
@@ -281,6 +335,12 @@ async def portal(
             # LEKA's own settings (sync.py), when they were made.
             "configuration": await portal_configuration(client),
             "locale": locale,
+            "flow_data": {
+                "type": "subscription_cancel",
+                "subscription_cancel": {"subscription": account.stripe_subscription_id},
+            }
+            if cancel
+            else None,
         },
     )
     return str(made["url"])

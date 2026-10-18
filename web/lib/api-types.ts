@@ -451,6 +451,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/demo/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Simulate Payment
+         * @description « Paiement simulé » (LEKA-498): in the demonstration one is in, what a
+         *     payment would give — a plan that runs agents, every agent — so an
+         *     analysis goes on to its result. No payment, nothing outside it; done
+         *     twice, the same. 403 anywhere else: a real workspace pays with Stripe.
+         */
+        post: operations["simulate_payment_api_v1_demo_activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/members": {
         parameters: {
             query?: never;
@@ -4500,6 +4523,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/capability-suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read */
+        get: operations["read_api_v1_capability_suggestions_get"];
+        put?: never;
+        /** Suggest */
+        post: operations["suggest_api_v1_capability_suggestions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agent-runs": {
         parameters: {
             query?: never;
@@ -5238,7 +5279,15 @@ export interface paths {
         get: operations["intention_api_v1_intentions__intention_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete
+         * @description « Supprimer l'analyse » (LEKA-487), whatever its status — by its asker
+         *     or who may approve. What is on its way is stopped first; gone at once
+         *     (`deleted`), or, while an analysis, an agent or an action still works on
+         *     it, out of every list and done once that ended (`pending`). What the bill
+         *     needs is kept (leka/intentions/deletion.py).
+         */
+        delete: operations["delete_api_v1_intentions__intention_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -5631,7 +5680,8 @@ export interface paths {
         /**
          * Analyses
          * @description Its analyses, the latest first: which capabilities ran and why, what
-         *     each did, the result and its evidence.
+         *     each did, the result and its evidence — locked while what it asks is
+         *     not had (LEKA-499).
          */
         get: operations["analyses_api_v1_intentions__intention_id__analyses_get"];
         put?: never;
@@ -5652,7 +5702,8 @@ export interface paths {
         /**
          * Analysis
          * @description Its latest analysis — running, complete, partial, inconclusive,
-         *     failed, or blocked by its context. 404 before any.
+         *     failed, or blocked by its context. 404 before any. Locked while what it
+         *     asks is not had (LEKA-499).
          */
         get: operations["analysis_api_v1_intentions__intention_id__analysis_get"];
         put?: never;
@@ -7128,7 +7179,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "agent" | "bundle" | "agents";
+            kind: "agent" | "bundle" | "agents" | "bundles";
             /** Key */
             key: string;
             /** Intention Id */
@@ -12921,6 +12972,11 @@ export interface components {
              */
             gone: number;
         };
+        /** DemoActivated */
+        DemoActivated: {
+            /** Activated */
+            activated: boolean;
+        };
         /** DemoRead */
         DemoRead: {
             workspace: components["schemas"]["WorkspaceSummary"];
@@ -16362,6 +16418,11 @@ export interface components {
             /** Steps */
             steps: components["schemas"]["AnalysisStepRead"][];
             result: components["schemas"]["IntentionAnalysisResult"] | null;
+            /**
+             * Locked
+             * @description What is missing to read its result (LEKA-499): only how it went and what it proposes are sent.
+             */
+            locked?: ("plan_required" | "agents_required") | null;
             /** Error */
             error: string | null;
             /** Detail */
@@ -16559,6 +16620,17 @@ export interface components {
             context: components["schemas"]["AssembledContext"];
         };
         /**
+         * IntentionDeleted
+         * @description Gone at once, or pending while something still worked on it.
+         */
+        IntentionDeleted: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "deleted" | "pending";
+        };
+        /**
          * IntentionDetail
          * @description An intention with what it is linked to, and what LEKA understood.
          */
@@ -16598,6 +16670,8 @@ export interface components {
             status_changed_at: string;
             /** Summary */
             summary: string | null;
+            /** Locked */
+            locked?: ("plan_required" | "agents_required") | null;
             /** Created By */
             created_by: string | null;
             /**
@@ -16991,6 +17065,8 @@ export interface components {
             status_changed_at: string;
             /** Summary */
             summary: string | null;
+            /** Locked */
+            locked?: ("plan_required" | "agents_required") | null;
             /** Created By */
             created_by: string | null;
             /**
@@ -23037,6 +23113,44 @@ export interface components {
             /** Has Customer */
             has_customer: boolean;
         };
+        /** SuggestionRead */
+        SuggestionRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Problem */
+            problem: string;
+            /** Use Case */
+            use_case: string;
+            /** Systems */
+            systems: string | null;
+            /** Context */
+            context: string | null;
+            /** Status */
+            status: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** SuggestionWrite */
+        SuggestionWrite: {
+            /** Name */
+            name: string;
+            /** Problem */
+            problem: string;
+            /** Use Case */
+            use_case: string;
+            /** Systems */
+            systems?: string | null;
+            /** Context */
+            context?: string | null;
+        };
         /** SyncRequested */
         SyncRequested: {
             /**
@@ -26663,6 +26777,98 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DemoRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    simulate_payment_api_v1_demo_activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DemoActivated"];
                 };
             };
             /** @description The request could not be understood. */
@@ -47185,6 +47391,194 @@ export interface operations {
             };
         };
     };
+    read_api_v1_capability_suggestions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuggestionRead"][];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    suggest_api_v1_capability_suggestions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuggestionWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuggestionRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     list_runs_api_v1_agent_runs_get: {
         parameters: {
             query?: {
@@ -51146,6 +51540,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IntentionDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    delete_api_v1_intentions__intention_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intention_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntentionDeleted"];
                 };
             };
             /** @description The request could not be understood. */
@@ -56653,7 +57141,10 @@ export interface operations {
     };
     open_portal_api_v1_billing_portal_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description cancel: opened on ending the subscription — back to Free */
+                flow?: "cancel" | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;

@@ -426,9 +426,13 @@ const fr = {
       lastSync: "Dernière synchronisation",
       neverSynced: "Aucune source lue pour l'instant",
       history: "Historique des analyses",
-      agents: "Agents disponibles",
+      agents: "Agents recommandés",
       agentsBody:
-        "Activez des agents IA spécialisés pour aller plus loin dans l'analyse, la compréhension et l'action sur votre environnement.",
+        "Choisis pour votre environnement : d'abord ceux qui fonctionnent avec vos sources connectées, puis ceux inclus dans votre formule.",
+      fit: {
+        connected: "Fonctionne avec vos sources connectées",
+        to_connect: "Une source à connecter",
+      },
       allAgents: "Voir tous les agents et bundles",
       latest: "Dernières analyses",
       latestBody: "Vos demandes et analyses récentes.",
@@ -1073,6 +1077,11 @@ const fr = {
       choose: "Choisir {plan}",
       start: "Commencer gratuitement",
       toFree: "Passer à Free",
+      /** The chosen plan, said before paying (LEKA-490). */
+      recapMonth: "{price} HT par mois, facturé chaque mois",
+      recapYear: "{price} HT par mois, soit {total} HT facturés chaque année",
+      changeNote: "Abonné : Stripe confirme le changement et le prorata avant tout paiement.",
+      changed: "Changement de formule enregistré : il s'applique dès que Stripe le confirme.",
       contact: "Contacter l'équipe",
       askAdmin: "Seul un administrateur peut changer de formule.",
       users: "{count} {count|utilisateur|utilisateurs}",
@@ -1982,6 +1991,24 @@ const fr = {
     subtitleMore:
       "Choisissez les agents dont vous avez besoin ou un bundle pour encore plus de valeur.",
     ask: "Demander une compétence",
+    suggestion: {
+      title: "Demander une compétence",
+      lead: "Décrivez l'agent ou la compétence qui vous manque : l'équipe LEKA lit chaque demande. Rien n'est lancé sur votre environnement.",
+      name: "Compétence ou agent souhaité",
+      namePlaceholder: "Ex. un agent FinOps",
+      problem: "Le problème à résoudre",
+      useCase: "Le cas d'usage",
+      systems: "Systèmes concernés",
+      systemsPlaceholder: "Ex. AWS, Datadog",
+      context: "Exemples ou contexte",
+      optional: "Facultatif",
+      send: "Envoyer la demande",
+      cancel: "Annuler",
+      close: "Fermer",
+      sent: "Demande reçue : l'équipe LEKA l'étudie. Voici sa référence :",
+      duplicate: "Cette compétence est déjà demandée dans votre espace : l'équipe LEKA l'étudie.",
+      tooMany: "Vous avez envoyé cinq demandes aujourd'hui : réessayez demain.",
+    },
     /** The four figures beside the title (LEKA-460) — counted, never said ahead. */
     stats: {
       agents: "{count|agent spécialisé|agents spécialisés}",
@@ -2145,6 +2172,22 @@ const fr = {
       // LEKA-467: an agent's state, in words, and its action.
       monthHt: "/ mois HT",
       buyNamed: "Acheter {name}",
+      /** From a card of the home (LEKA-497). */
+      open: "Ouvrir l'agent",
+      buyAgent: "Acheter l'agent",
+      seeOptions: "Voir les options",
+      buyTitle: "Acheter {name} ?",
+      buyBody:
+        "{price} HT par mois, ajouté à l'abonnement de votre espace. Vous passez ensuite par le paiement sécurisé de Stripe ; l'agent est activé dès que le paiement est confirmé.",
+      buyConfirm: "Continuer vers le paiement",
+      /** Several bundles in one order (LEKA-500). */
+      pick: "Ajouter à la sélection",
+      picked: "{count} {count|bundle sélectionné|bundles sélectionnés}",
+      clear: "Vider",
+      buySelection: "Acheter la sélection",
+      buySelectionTitle: "Acheter {count} {count|bundle|bundles} ?",
+      buySelectionBody:
+        "Total : {total}, en une seule commande, renouvelé chaque mois jusqu'à résiliation. Vous passez par le paiement sécurisé de Stripe ; chaque bundle est activé dès que le paiement est confirmé.",
       askAdminShort: "Un administrateur l'achète",
       manage: "Gérer",
       states: {
@@ -2315,6 +2358,30 @@ const fr = {
       trustNothing: "Rien d'inventé : ce que vos sources ne disent pas est signalé.",
       trustReadOnly: "Lecture seule : rien n'est modifié chez vous.",
       trustDecide: "Vous décidez : rien n'est appliqué sans votre accord.",
+    },
+    /** Each agent's name, by its key (LEKA-495): its file says it in French. */
+    agentTitles: {
+      "application-architecture": "Architecte applicatif",
+      "architecture-analysis": "Analyse d'architecture",
+      "codebase-explorer": "Exploration du code",
+      "data-analysis": "Analyse des données",
+      "build-fixer": "Réparation de build",
+      "code-change": "Modification de code",
+      "code-review": "Revue de code",
+      "regression-analysis": "Analyse de régression",
+      "release-analysis": "Analyse de release",
+      "test-analysis": "Analyse des tests",
+      "test-generation": "Génération de tests",
+      "documentation-assistant": "Assistant de documentation",
+      "accessibility-audit": "Audit d'accessibilité",
+      "design-review": "Revue de design",
+      "motion-review": "Revue des animations",
+      "ui-quality-review": "Revue de qualité d'interface",
+      "change-impact-analysis": "Analyse d'impact d'un changement",
+      "incident-investigation": "Investigation d'incident",
+      "infrastructure-analysis": "Analyse d'infrastructure",
+      "debug-assistant": "Aide au débogage",
+      "security-review": "Revue de sécurité",
     },
     summaries: {
       standing:
@@ -3568,6 +3635,17 @@ const fr = {
         never: "jamais",
         ask: "Demander à LEKA",
         none: "Aucun élément dans cet état.",
+        next: "Prochaine action",
+      },
+      /** What to do about a thing, by why it is in its state (LEKA-489). */
+      next: {
+        incident_open: "Suivre l'incident jusqu'à sa résolution",
+        resource_failed: "Vérifier la ressource chez son fournisseur",
+        resource_paused: "Vérifier qu'elle doit bien être arrêtée",
+        no_monitoring_source: "Connecter un outil de supervision qui le décrit",
+        no_signal: "Vérifier qu'une source le surveille vraiment",
+        sources_stale: "Relancer la synchronisation de ses sources",
+        sources_failing: "Réparer la source en erreur",
       },
       coverage: {
         title: "Sources et couverture",
@@ -3743,6 +3821,24 @@ const fr = {
       title: "État global",
       operational: "opérationnels",
       empty: "Aucun élément suivi pour l'instant.",
+      /** How the score is reckoned (LEKA-489), the same on the home. */
+      method: "Comment ce score est calculé",
+      rule:
+        "{operational} {operational|élément opérationnel|éléments opérationnels} sur {total} {total|suivi|suivis}. Chaque élément suivi compte autant. Seul ce qu'une source vérifie compte comme opérationnel : un élément inconnu, non couvert ou aux données obsolètes fait baisser le score sans être en panne.",
+      at: "Calculé sur les dernières lectures de vos sources, la plus récente {ago}.",
+      never: "Aucune source n'a encore été lue.",
+      limit:
+        "100 % n'est atteignable que si chaque élément est décrit par une source qui le surveille : ce que rien n'observe reste non vérifié.",
+      states: "Que veut dire chaque état ?",
+      improve: "Pour améliorer la couverture",
+      todo: {
+        not_covered: "Connecter un outil de supervision : {count} {count|élément n'est décrit|éléments ne sont décrits} par aucune source",
+        unknown: "Vérifier ce que surveillent vos sources : {count} {count|élément sans signal|éléments sans signal}",
+        stale: "Relancer la synchronisation : {count} {count|élément aux données obsolètes|éléments aux données obsolètes}",
+        troubled: "Traiter ce qui ne va pas : {count} {count|élément dégradé ou indisponible|éléments dégradés ou indisponibles}",
+      },
+      done: "Rien à améliorer : tout ce qui est suivi est vérifié.",
+      understand: "Comprendre ce score",
     },
     configuration: {
       sync: "Synchronisation des sources",
@@ -6103,6 +6199,7 @@ const fr = {
     adminOnly: "Seul un administrateur de l'espace modifie ces réglages.",
     timezone: "Fuseau horaire",
     defaultEnvironment: "Environnement par défaut",
+    environments: { production: "Production", staging: "Pré-production", dev: "Développement" },
     defaultPeriod: "Période d'analyse par défaut",
     saved: "Modifications enregistrées",
     savedBody: "Votre workspace a été mis à jour.",
@@ -6652,6 +6749,10 @@ const fr = {
       cancelled: "Paiement annulé : rien n'a été débité.",
       boughtSoon: "Paiement reçu : vos agents démarrent dans un instant.",
       launched: "Analyse lancée : vos agents travaillent.",
+      /** A demonstration's payment, simulated (LEKA-498). */
+      simulate: "Simuler le paiement (démo)",
+      simulateNote: "Démonstration : aucun paiement réel, aucune carte débitée. Les droits ne s'appliquent qu'à cet espace de démo.",
+      simulated: "Paiement simulé : les agents de la démo sont activés. Lancez l'analyse.",
       failed: "L'action n'a pas pu aboutir. Réessayez dans un instant.",
       executionTitle: "Exécution",
       tabs: {
@@ -7152,6 +7253,15 @@ const fr = {
       archive: "Archiver",
       restore: "Restaurer",
       done: "C'est fait.",
+      delete: "Supprimer l'analyse",
+      deleteTitle: "Supprimer définitivement cette analyse ?",
+      deleteBody:
+        "C'est irréversible : sa demande, son analyse, ses décisions, ses actions, son historique et ses fichiers sont supprimés. Ce qui est en cours est arrêté ; ce qui a déjà été consommé reste facturé.",
+      deleteConfirm: "Supprimer définitivement",
+      deleted: "Analyse supprimée.",
+      deletePending:
+        "Suppression en attente : un traitement se termine, l'analyse sera supprimée dès qu'il aura fini. Plus rien n'est fait dessus.",
+      deleteFailed: "La suppression a échoué. Réessayez.",
     },
     /** What LEKA understood of it (LEKA-385). */
     understanding: {
@@ -7456,6 +7566,16 @@ const fr = {
     /** Its analysis (LEKA-388): how it went, step by step, and what it
      * found, on what. */
     analysis: {
+      /** Its result kept from who has not the rights it asks (LEKA-499). */
+      locked: {
+        title: "Résultat verrouillé",
+        plan_required:
+          "L'analyse est faite, mais son résultat demande une formule qui lance des agents. Rien n'est affiché tant qu'elle n'est pas choisie.",
+        agents_required:
+          "L'analyse est faite, mais son résultat demande les agents proposés. Rien n'est affiché tant qu'ils ne sont pas ajoutés à votre espace.",
+        choosePlan: "Choisir une formule",
+        addAgents: "Ajouter les agents proposés",
+      },
       title: "Analyse de LEKA",
       scopeTitle: "Périmètre de l'analyse",
       scopeAll: "Tous",
@@ -8292,6 +8412,27 @@ const fr = {
     },
   },
   decision: {
+    /** The step's example (LEKA-495). */
+    sample: {
+      example: "Exemple",
+      deployed: "Déploiement payment-api v2.8.4",
+      latency: "Hausse de latence (p99)",
+      shared: "auth-service partage la base",
+      rollback: "Revenir à payment-api v2.8.3",
+      rollbackWhy: "La latence a commencé avec la version 2.8.4 ; la précédente tenait la charge.",
+      rollbackEffect: "3 services concernés",
+      pool: "Augmenter le pool de connexions",
+      poolWhy: "auth-service partage la base : ses connexions manquent à payment-api.",
+      alert: "Ajouter une alerte sur le p99",
+      alertWhy: "Le p99 est passé de 180 ms à 2,1 s sans alerte.",
+      alertEffect: "Aucun impact en production",
+      affected: "Touché",
+      dependents: "Qui en dépend",
+      service: "Service",
+      sources: "3 sources lues",
+      before: "1 déploiement juste avant",
+      more: "D'autres sources pourraient affiner l'analyse",
+    },
     title: "Recommandations de LEKA",
     example:
       "Cette étape est un exemple : ses recommandations, leur impact et leur confiance ne viennent pas de votre environnement. LEKA proposera les siennes quand son moteur d'analyse sera branché.",
@@ -8855,9 +8996,13 @@ const en: Dictionary = {
       lastSync: "Last synchronisation",
       neverSynced: "No source read yet",
       history: "Analyses history",
-      agents: "Available agents",
+      agents: "Recommended agents",
       agentsBody:
-        "Turn on specialised AI agents to go further in analysing, understanding and acting on your environment.",
+        "Chosen for your environment: first those that work with your connected sources, then those your plan includes.",
+      fit: {
+        connected: "Works with your connected sources",
+        to_connect: "A source to connect",
+      },
       allAgents: "See all agents and bundles",
       latest: "Latest analyses",
       latestBody: "Your recent requests and analyses.",
@@ -9461,6 +9606,10 @@ const en: Dictionary = {
       choose: "Choose {plan}",
       start: "Start for free",
       toFree: "Move to Free",
+      recapMonth: "{price} excl. VAT a month, billed monthly",
+      recapYear: "{price} excl. VAT a month, {total} excl. VAT billed yearly",
+      changeNote: "Subscribed: Stripe confirms the change and its proration before any payment.",
+      changed: "Plan change recorded: it applies as soon as Stripe confirms it.",
       contact: "Contact the team",
       askAdmin: "Only an administrator can change the plan.",
       users: "{count} {count|user|users}",
@@ -10348,6 +10497,24 @@ const en: Dictionary = {
       "Specialised AI agents to understand, decide and act on your environment.",
     subtitleMore: "Choose the agents you need, or a bundle for even more value.",
     ask: "Ask for a skill",
+    suggestion: {
+      title: "Ask for a skill",
+      lead: "Describe the agent or skill you are missing: LEKA's team reads every request. Nothing is run on your environment.",
+      name: "Skill or agent wanted",
+      namePlaceholder: "E.g. a FinOps agent",
+      problem: "The problem to solve",
+      useCase: "The use case",
+      systems: "Systems involved",
+      systemsPlaceholder: "E.g. AWS, Datadog",
+      context: "Examples or context",
+      optional: "Optional",
+      send: "Send the request",
+      cancel: "Cancel",
+      close: "Close",
+      sent: "Request received: LEKA's team is looking at it. Its reference:",
+      duplicate: "This skill is already requested in your workspace: LEKA's team is looking at it.",
+      tooMany: "You have sent five requests today: try again tomorrow.",
+    },
     stats: {
       agents: "{count|specialised agent|specialised agents}",
       agentsLead: "Across your technical lifecycle",
@@ -10498,6 +10665,20 @@ const en: Dictionary = {
       fromPlan: "From the {plan} plan",
       monthHt: "/ month excl. VAT",
       buyNamed: "Buy {name}",
+      open: "Open the agent",
+      buyAgent: "Buy the agent",
+      seeOptions: "See the options",
+      buyTitle: "Buy {name}?",
+      buyBody:
+        "{price} excl. VAT a month, added to your workspace's subscription. You then go through Stripe's secure payment; the agent is turned on as soon as the payment is confirmed.",
+      buyConfirm: "Continue to payment",
+      pick: "Add to the selection",
+      picked: "{count} {count|bundle selected|bundles selected}",
+      clear: "Clear",
+      buySelection: "Buy the selection",
+      buySelectionTitle: "Buy {count} {count|bundle|bundles}?",
+      buySelectionBody:
+        "Total: {total}, in a single order, renewed monthly until cancelled. You go through Stripe's secure payment; each bundle is turned on as soon as the payment is confirmed.",
       askAdminShort: "An admin buys it",
       manage: "Manage",
       states: {
@@ -10665,6 +10846,29 @@ const en: Dictionary = {
       trustNothing: "Nothing made up: what your sources do not say is reported.",
       trustReadOnly: "Read-only: nothing is changed on your side.",
       trustDecide: "You decide: nothing is applied without your consent.",
+    },
+    agentTitles: {
+      "application-architecture": "Application architect",
+      "architecture-analysis": "Architecture analysis",
+      "codebase-explorer": "Codebase exploration",
+      "data-analysis": "Data analysis",
+      "build-fixer": "Build fixing",
+      "code-change": "Code change",
+      "code-review": "Code review",
+      "regression-analysis": "Regression analysis",
+      "release-analysis": "Release analysis",
+      "test-analysis": "Test analysis",
+      "test-generation": "Test generation",
+      "documentation-assistant": "Documentation assistant",
+      "accessibility-audit": "Accessibility audit",
+      "design-review": "Design review",
+      "motion-review": "Motion review",
+      "ui-quality-review": "Interface quality review",
+      "change-impact-analysis": "Change impact analysis",
+      "incident-investigation": "Incident investigation",
+      "infrastructure-analysis": "Infrastructure analysis",
+      "debug-assistant": "Debugging assistant",
+      "security-review": "Security review",
     },
     summaries: {
       standing:
@@ -11878,6 +12082,16 @@ const en: Dictionary = {
         never: "never",
         ask: "Ask LEKA",
         none: "No element in this state.",
+        next: "Next step",
+      },
+      next: {
+        incident_open: "Follow the incident until it is resolved",
+        resource_failed: "Check the resource with its provider",
+        resource_paused: "Check it is meant to be stopped",
+        no_monitoring_source: "Connect a monitoring tool that describes it",
+        no_signal: "Check a source really monitors it",
+        sources_stale: "Restart its sources' synchronisation",
+        sources_failing: "Fix the failing source",
       },
       coverage: {
         title: "Sources and coverage",
@@ -12050,6 +12264,23 @@ const en: Dictionary = {
       title: "Overall state",
       operational: "operational",
       empty: "Nothing tracked yet.",
+      method: "How this score is reckoned",
+      rule:
+        "{operational} operational out of {total} tracked. Each tracked thing counts the same. Only what a source verifies counts as operational: a thing unknown, not covered or with stale data lowers the score without being down.",
+      at: "Reckoned from your sources' latest reads, the most recent {ago}.",
+      never: "No source has been read yet.",
+      limit:
+        "100 % is only reachable when every thing is described by a source that monitors it: what nothing observes stays unverified.",
+      states: "What does each state mean?",
+      improve: "To improve the coverage",
+      todo: {
+        not_covered: "Connect a monitoring tool: {count} {count|thing is|things are} described by no source",
+        unknown: "Check what your sources monitor: {count} {count|thing|things} with no signal",
+        stale: "Restart the synchronisation: {count} {count|thing|things} with stale data",
+        troubled: "Deal with what is wrong: {count} {count|thing|things} degraded or unavailable",
+      },
+      done: "Nothing to improve: everything tracked is verified.",
+      understand: "Understand this score",
     },
     configuration: {
       sync: "Source synchronisation",
@@ -14349,6 +14580,7 @@ const en: Dictionary = {
     adminOnly: "Only an admin of the workspace changes these settings.",
     timezone: "Time zone",
     defaultEnvironment: "Default environment",
+    environments: { production: "Production", staging: "Staging", dev: "Development" },
     defaultPeriod: "Default analysis period",
     saved: "Changes saved",
     savedBody: "Your workspace has been updated.",
@@ -14877,6 +15109,9 @@ const en: Dictionary = {
       cancelled: "Payment cancelled: nothing was charged.",
       boughtSoon: "Payment received: your agents start in a moment.",
       launched: "Analysis launched: your agents are at work.",
+      simulate: "Simulate the payment (demo)",
+      simulateNote: "Demonstration: no real payment, no card charged. The rights apply to this demo workspace only.",
+      simulated: "Payment simulated: the demo's agents are on. Launch the analysis.",
       failed: "That did not go through. Try again in a moment.",
       executionTitle: "Execution",
       tabs: {
@@ -15363,6 +15598,15 @@ const en: Dictionary = {
       archive: "Archive",
       restore: "Restore",
       done: "Done.",
+      delete: "Delete the analysis",
+      deleteTitle: "Delete this analysis for good?",
+      deleteBody:
+        "This cannot be undone: its request, analysis, decisions, actions, history and files are deleted. What is running is stopped; what was already used stays billed.",
+      deleteConfirm: "Delete for good",
+      deleted: "Analysis deleted.",
+      deletePending:
+        "Deletion pending: a task is finishing; the analysis will be deleted as soon as it ends. Nothing more is done on it.",
+      deleteFailed: "The deletion failed. Try again.",
     },
     understanding: {
       title: "What LEKA understood",
@@ -15654,6 +15898,15 @@ const en: Dictionary = {
       see: "See the context",
     },
     analysis: {
+      locked: {
+        title: "Result locked",
+        plan_required:
+          "The analysis is done, but its result needs a plan that runs agents. Nothing is shown until one is chosen.",
+        agents_required:
+          "The analysis is done, but its result needs the agents proposed. Nothing is shown until they are added to your workspace.",
+        choosePlan: "Choose a plan",
+        addAgents: "Add the agents proposed",
+      },
       recommendBasis: { stated: "Stated", inferred: "Suspected" },
       recommendRisks: {
         high: "high",
@@ -16458,6 +16711,26 @@ const en: Dictionary = {
     },
   },
   decision: {
+    sample: {
+      example: "Example",
+      deployed: "Deployment payment-api v2.8.4",
+      latency: "Latency rise (p99)",
+      shared: "auth-service shares the database",
+      rollback: "Roll back to payment-api v2.8.3",
+      rollbackWhy: "Latency began with version 2.8.4; the one before held the load.",
+      rollbackEffect: "3 services affected",
+      pool: "Increase the connection pool",
+      poolWhy: "auth-service shares the database: its connections starve payment-api.",
+      alert: "Add an alert on the p99",
+      alertWhy: "The p99 went from 180 ms to 2.1 s with no alert.",
+      alertEffect: "No impact in production",
+      affected: "Affected",
+      dependents: "Depending on it",
+      service: "Service",
+      sources: "3 sources read",
+      before: "1 deployment just before",
+      more: "Other sources could refine the analysis",
+    },
     title: "LEKA's recommendations",
     example:
       "This step is an example: its recommendations, their impact and their confidence do not come from your environment. LEKA will propose its own once its analysis engine is connected.",

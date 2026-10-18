@@ -37,6 +37,7 @@ import {
   StepBadge,
   STEPS,
 } from "@/components/intentions/intention-stepper";
+import { DeleteIntention } from "@/components/intentions/delete-intention";
 import { JourneyNote, StopAnalysis, useRights } from "@/components/intentions/journey";
 import { BriefView } from "@/components/intentions/brief";
 import { DeliverableView } from "@/components/intentions/deliverable";
@@ -435,6 +436,7 @@ function Actions({ intention }: { intention: IntentionDetail }) {
           {w.restore}
         </Button>
       ) : null}
+      <DeleteIntention intention={intention} />
     </div>
   );
 }

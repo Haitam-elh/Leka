@@ -5,6 +5,7 @@ import { Check, CircleAlert, CircleCheck, LoaderCircle } from "lucide-react";
 import { cn } from "cn";
 
 import { timeAgo } from "@/components/knowledge/time";
+import { agentTitle } from "@/lib/agent-title";
 import { useAgentRun, useIntentionRuns } from "@/lib/agent-runs-queries";
 import type { AgentRun } from "@/lib/agent-runs";
 import { fill } from "@/lib/i18n/dictionaries";
@@ -153,7 +154,7 @@ function RunSteps({ run }: { run: AgentRun }) {
         {run.status === "succeeded" ? (
           <CircleCheck className="size-4 text-[#15803d]" aria-hidden="true" />
         ) : null}
-        {run.title ?? run.key}
+        {agentTitle(t, run.key, run.title ?? run.key)}
       </p>
       <ol className="space-y-1.5" data-testid="working-steps">
         {lines.map(([kind, { at, count }], index) => (

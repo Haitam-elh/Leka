@@ -797,6 +797,8 @@ class IntentionService:
         if intention is None:
             return None
         _yours(intention, by, steward)
+        if intention.deletion_requested_at is not None:
+            return None
         if intention.archived_at is not None:
             at = _now(now)
             intention.archived_at = None
@@ -973,7 +975,8 @@ class IntentionService:
 
     async def detail(self, intention_id: uuid.UUID) -> IntentionDetail | None:
         intention = await self._repository.intention(intention_id)
-        if intention is None:
+        # Its deletion pending (LEKA-487): gone, for whoever reads it.
+        if intention is None or intention.deletion_requested_at is not None:
             return None
         found = await self.journeys([intention])
         return self.detail_of(

@@ -2,14 +2,18 @@
 
 import { ArrowRight, BadgeCheck, Check, Clock, Lock, Package, Plus, ShoppingCart } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 
 import { cn } from "cn";
 
 import { Card } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
+import { MarketTile, marketOf } from "@/components/capabilities/market-mark";
+import { useConfirm } from "@/components/interactions/confirm";
 import { usePermissions } from "@/components/shell/shell-provider";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { routes } from "@/config/routes";
+import { agentTitle } from "@/lib/agent-title";
 import { ApiError } from "@/lib/api";
 import { euros, type AddOns, type AgentOffer, type BundleOffer } from "@/lib/billing";
 import { useAddOns, useBuy, useEntitlements } from "@/lib/billing-queries";
@@ -126,7 +130,7 @@ export function AgentOfferAction({ agentKey }: { agentKey: string }) {
             type="button"
             size="xs"
             disabled={buy.isPending}
-            aria-label={fill(w.buyNamed, { name: offer.title })}
+            aria-label={fill(w.buyNamed, { name: agentTitle(t, offer.key, offer.title) })}
             onClick={() => buy.mutate({ kind: "agent", key: offer.key }, { onError: (error) => bought(t, error) })}
             data-testid="agent-buy"
           >
@@ -159,6 +163,67 @@ export function AgentOfferAction({ agentKey }: { agentKey: string }) {
   );
 }
 
+/** What a card of the home does, by the agent's state (LEKA-497): « Ouvrir
+ * l'agent » where it is the workspace's, « Acheter l'agent » — its price and
+ * what happens said, confirmed, then Stripe's page — where it is an option
+ * this person may buy, « Voir les options » where a plan above is needed;
+ * nothing where it is not sold. The agent is granted once Stripe says paid. */
+export function AgentCardAction({ agentKey }: { agentKey: string }) {
+  const t = useDictionary();
+  const w = t.catalogue.offers;
+  const { format } = useLocale();
+  const confirm = useConfirm();
+  const offers = useAddOns();
+  const buy = useBuy();
+  const may = useMayBuy();
+  const offer = offers.data?.agents.find((a) => a.key === agentKey);
+  const state = agentStateOf(offers.data, agentKey);
+  if (!offer || !state || state === "unavailable") return null;
+  const link = "relative z-10 text-xs font-medium text-shell-nav-active hover:underline";
+  if (state === "included" || state === "owned") {
+    return (
+      <Link href={routes.capability(offer.key)} className={link} data-testid="agent-open">
+        {w.open}
+      </Link>
+    );
+  }
+  if (state === "upgrade") {
+    return (
+      <Link href={routes.billingPlans()} className={link} data-testid="agent-upgrade">
+        {w.seeOptions}
+      </Link>
+    );
+  }
+  if (!may) {
+    return (
+      <span className="text-xs text-shell-muted" title={w.askAdmin}>
+        {w.askAdminShort}
+      </span>
+    );
+  }
+  return (
+    <Button
+      type="button"
+      size="xs"
+      className="relative z-10"
+      disabled={buy.isPending}
+      aria-label={fill(w.buyNamed, { name: agentTitle(t, offer.key, offer.title) })}
+      data-testid="agent-buy"
+      onClick={async () => {
+        const ok = await confirm({
+          title: fill(w.buyTitle, { name: agentTitle(t, offer.key, offer.title) }),
+          description: fill(w.buyBody, { price: euros(offer.monthly_price, format) }),
+          confirmLabel: w.buyConfirm,
+        });
+        if (ok) buy.mutate({ kind: "agent", key: offer.key }, { onError: (error) => bought(t, error) });
+      }}
+    >
+      <ShoppingCart className="size-3" aria-hidden="true" />
+      {w.buyAgent}
+    </Button>
+  );
+}
+
 /** Buying an agent from anywhere (LEKA-471): whether this person may, and
  * the purchase — Stripe's page, the agent granted once Stripe says paid. */
 export function useAgentPurchase() {
@@ -182,7 +247,7 @@ export function AgentAdd({ agentKey }: { agentKey: string }) {
   const may = useMayBuy();
   const offer = offers.data?.agents.find((a) => a.key === agentKey);
   if (!offer || !may || agentStateOf(offers.data, agentKey) !== "option") return null;
-  const named = fill(w.buyNamed, { name: offer.title });
+  const named = fill(w.buyNamed, { name: agentTitle(t, offer.key, offer.title) });
   return (
     <button
       type="button"
@@ -243,8 +308,8 @@ export function AgentPrice({ agentKey, compact = false }: { agentKey: string; co
             type="button"
             className={cn(round, "border-shell-line text-shell-nav-active hover:bg-brand-violet-soft disabled:opacity-50")}
             disabled={buy.isPending}
-            title={`${w.buy} — ${offer.title}`}
-            aria-label={`${w.buy} — ${offer.title}`}
+            title={`${w.buy} — ${agentTitle(t, offer.key, offer.title)}`}
+            aria-label={`${w.buy} — ${agentTitle(t, offer.key, offer.title)}`}
             onClick={() =>
               buy.mutate({ kind: "agent", key: offer.key }, { onError: (error) => bought(t, error) })
             }
@@ -306,11 +371,19 @@ export function AgentPrice({ agentKey, compact = false }: { agentKey: string; co
 function BundleCard({
   bundle,
   titles,
+  markets,
   minimum,
   runsAgents,
+  picked,
+  onPick,
 }: {
   bundle: BundleOffer;
   titles: Map<string, string>;
+  /** In the marketplace: picked to buy with others, in one order (LEKA-500). */
+  picked?: boolean;
+  onPick?: () => void;
+  /** Each agent's domain, to draw it as on its own card (LEKA-493). */
+  markets: Map<string, string>;
   minimum: string;
   runsAgents: boolean;
 }) {
@@ -356,7 +429,14 @@ function BundleCard({
               data-built={member.agent ? "true" : "false"}
               title={member.agent ? undefined : w.notBuilt}
             >
-              {member.agent ? (
+              {member.agent && markets.get(member.agent) ? (
+                // Its domain's mark, as on its own card (LEKA-493).
+                <MarketTile
+                  market={markets.get(member.agent) as string}
+                  label={(t.catalogue.markets as Record<string, string>)[markets.get(member.agent) as string] ?? ""}
+                  className="size-5 rounded [&_svg]:size-3"
+                />
+              ) : member.agent ? (
                 <BadgeCheck className="size-3.5 shrink-0 text-state-success" aria-hidden="true" />
               ) : (
                 <Clock className="size-3.5 shrink-0" aria-hidden="true" />
@@ -404,6 +484,17 @@ function BundleCard({
         ) : (
           <p className="text-xs text-shell-muted">{w.askAdmin}</p>
         )}
+        {onPick && bundle.sellable && !bundle.owned && runsAgents && may ? (
+          <label className="flex cursor-pointer items-center justify-center gap-2 text-xs text-brand-navy" data-testid="bundle-pick">
+            <input
+              type="checkbox"
+              checked={Boolean(picked)}
+              onChange={onPick}
+              className="size-4 accent-brand-violet"
+            />
+            {w.pick}
+          </label>
+        ) : null}
       </div>
     </li>
   );
@@ -424,13 +515,15 @@ const BUNDLE_TONES: Record<string, { band: string; button: string }> = {
 
 /** The bundles, as the reference composes them: sold once every agent they
  * name is built, their saving computed (LEKA-454). */
-export function Bundles() {
+export function Bundles({ selectable = false }: { selectable?: boolean }) {
   const t = useDictionary();
   const w = t.catalogue.offers;
   const offers = useAddOns();
+  const [picked, setPicked] = useState<string[]>([]);
   const data = offers.data;
   if (!data?.available || !data.bundles.length) return null;
-  const titles = new Map(data.agents.map((a: AgentOffer) => [a.key, a.title]));
+  const titles = new Map(data.agents.map((a: AgentOffer) => [a.key, agentTitle(t, a.key, a.title)]));
+  const markets = new Map(data.agents.map((a: AgentOffer) => [a.key, marketOf(a)]));
   const savings = data.bundles
     .filter((b) => b.sellable && b.discount_percent !== null)
     .map((b) => b.discount_percent as number);
@@ -458,12 +551,84 @@ export function Bundles() {
             key={bundle.key}
             bundle={bundle}
             titles={titles}
+            markets={markets}
+            picked={picked.includes(bundle.key)}
+            onPick={
+              selectable
+                ? () =>
+                    setPicked((now) =>
+                      now.includes(bundle.key) ? now.filter((k) => k !== bundle.key) : [...now, bundle.key],
+                    )
+                : undefined
+            }
             minimum={data.minimum_plan}
             runsAgents={data.runs_agents}
           />
         ))}
       </ul>
+      {selectable && picked.length ? (
+        <BundleSelection
+          picked={data.bundles.filter((b) => picked.includes(b.key))}
+          onClear={() => setPicked([])}
+        />
+      ) : null}
     </section>
+  );
+}
+
+/** « Acheter la sélection » (LEKA-500): the bundles picked, each its price,
+ * their total, said and confirmed — then one Stripe Checkout, one
+ * subscription, each bundle its own right once Stripe says paid. */
+function BundleSelection({ picked, onClear }: { picked: BundleOffer[]; onClear: () => void }) {
+  const t = useDictionary();
+  const w = t.catalogue.offers;
+  const { format, locale } = useLocale();
+  const confirm = useConfirm();
+  const buy = useBuy();
+  const name = (b: BundleOffer) => (locale.startsWith("en") ? b.name.en : b.name.fr);
+  const total = picked.reduce((sum, b) => sum + b.monthly_price, 0);
+  return (
+    <div
+      className="sticky bottom-3 z-20 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-violet/30 bg-white px-4 py-3 shadow-md"
+      data-testid="bundle-selection"
+    >
+      <p className="text-[0.875rem] text-brand-navy">
+        <span className="font-semibold">{fill(w.picked, { count: picked.length })}</span>
+        {" · "}
+        <span className="tabular-nums" data-testid="bundle-selection-total">
+          {euros(total, format)} {w.monthHt}
+        </span>
+      </p>
+      <div className="flex items-center gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={onClear}>
+          {w.clear}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          disabled={buy.isPending}
+          data-testid="bundle-selection-buy"
+          onClick={async () => {
+            const lines = picked.map((b) => `${name(b)} : ${euros(b.monthly_price, format)} ${w.monthHt}`);
+            const ok = await confirm({
+              title: fill(w.buySelectionTitle, { count: picked.length }),
+              description: `${lines.join(" · ")}. ${fill(w.buySelectionBody, {
+                total: `${euros(total, format)} ${w.monthHt}`,
+              })}`,
+              confirmLabel: w.buyConfirm,
+            });
+            if (!ok) return;
+            const keys = picked.map((b) => b.key).join(",");
+            buy.mutate(
+              picked.length === 1 ? { kind: "bundle", key: keys } : { kind: "bundles", key: keys },
+              { onError: (error) => bought(t, error) },
+            );
+          }}
+        >
+          {w.buySelection}
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -476,7 +641,7 @@ export function Owned() {
   const owned = useEntitlements();
   const data = offers.data;
   if (!data || !owned.data) return null;
-  const titles = new Map(data.agents.map((a) => [a.key, a.title]));
+  const titles = new Map(data.agents.map((a) => [a.key, agentTitle(t, a.key, a.title)]));
   const bundles = new Map(data.bundles.map((b) => [b.key, b]));
   return (
     <Card title={w.ownedTitle} icon={<BadgeCheck className="size-4 text-shell-muted" aria-hidden="true" />}>

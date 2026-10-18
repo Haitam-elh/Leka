@@ -6,13 +6,19 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from leka.billing import grant
 from leka.connectors import SourceService
 from leka.connectors.demo import SOURCES
 from leka.db import workspace_scope
 from leka.demo.repository import DemoRepository
+from leka.governance import plan_of, set_plan
 from leka.platform import Workspace, WorkspaceRepository, WorkspaceService
 
 DEMO_NAME = "Nova Retail (démo)"
+
+
+# What a simulated payment gives a demonstration: a plan that runs agents.
+DEMO_PLAN = "business"
 
 
 class DemoService:
@@ -49,3 +55,28 @@ class DemoService:
                 # Its first pass starts once this is committed, as a customer's.
                 await sources.activate(source)
         return workspace, True
+
+    async def activate(self, workspace: Workspace, *, by: uuid.UUID) -> bool:
+        """« Paiement simulé » (LEKA-498): in a demonstration only, what a
+        payment would have given — a plan that runs agents, every agent —
+        so its journey goes on to its result. No Stripe, no card, nothing
+        outside it. Done twice, the same. False: not a demonstration."""
+        if not workspace.demo:
+            return False
+        with workspace_scope(workspace.id):
+            if (await plan_of(self._session, workspace.id)).name != DEMO_PLAN:
+                await set_plan(
+                    self._session,
+                    workspace.id,
+                    DEMO_PLAN,
+                    by=f"demo:{by}",
+                    reason="Paiement simulé de la démonstration",
+                )
+            await grant(
+                self._session,
+                workspace.id,
+                # LEKA's own grant, said why: no subscription stands behind it.
+                by=f"demo:{by}",
+                reason="Paiement simulé de la démonstration",
+            )
+        return True
