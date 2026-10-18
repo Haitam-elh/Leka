@@ -2,14 +2,15 @@
 name: design-review
 title: "Revue de design"
 description: "Use when someone asks whether the interface of an application built from a connected GitHub repository is well designed and feels right — its design system followed, hierarchy, typography, components, animations and their timing, behaviour on a phone, what breaks with real-world data — reviewed as a senior design engineer would, with the exact fix for each finding, read from its front-end code."
-version: 2.0.0
+version: 2.1.0
 category: development
 entity_types: [repository, application, service, pull_request, release, deployment, team, person, document]
 requires: ["github"]
 mode: read_only
 risk: low
 outputs: analysis
-deliverables: [markdown]
+deliverables: [markdown, html]
+renders: design_mockups
 tools: [search_entities, read_entity, list_files, read_file, list_pull_requests, read_pull_request, read_method]
 skills: [repository-profile]
 method: _library/emilkowalski-skills
@@ -31,8 +32,8 @@ inputs:
     type: text
     required: false
     description: "Ce que vous attendez, ex. « une revue complète », « les animations », « le pire des cas sur la liste des membres », « le téléphone », « ce qui pourrait s'animer »."
-goals: [check_compliance, investigate]
-kinds: [compliance]
+goals: [check_compliance, investigate, act]
+kinds: [compliance, change]
 examples:
   - "Fais une revue de design de l'accueil de acme/web"
   - "Nos écrans respectent-ils notre système de design ?"
@@ -40,6 +41,8 @@ examples:
   - "Les animations de acme/web sont-elles justes ?"
   - "Qu'est-ce qui casse avec des noms très longs dans la liste des membres de acme/web ?"
   - "Notre application web donne-t-elle l'impression d'une app native sur téléphone ?"
+  - "Propose-moi un meilleur design pour la page d'accueil de acme/web"
+  - "Redessine l'écran de facturation de acme/web, avec un avant / après"
 origin: internal
 ---
 
@@ -59,6 +62,13 @@ lecture seule, selon les droits de la personne qui demande. Il lit le code
 front d'un dépôt GitHub connecté (`list_files`, `read_file`) et ses pull
 requests ; il ne voit ni l'écran rendu, ni une image de maquette, ni une
 animation jouée — une maquette compte seulement par ce qui en est décrit.
+
+**Ce qu'on attend d'abord de lui : un design.** Quand on lui demande de
+proposer, d'améliorer ou de revoir un écran, il ne s'arrête pas à des
+constats : il propose l'écran redessiné. LEKA dessine alors, à partir de sa
+revue et du code qu'il a lu, l'écran tel qu'il est aujourd'hui et chacune de
+ses propositions, et les montre côte à côte — avant, après — dans son
+simulateur (voir « La proposition »).
 
 ## Quand il s'exécute
 
@@ -210,16 +220,20 @@ Zéro constat est une revue valide.
 ## Ce qu'il produit
 
 Un document markdown, dans la langue de la demande — les tableaux gardent les
-colonnes des guides :
+colonnes des guides. Court là où il peut l'être : ce qui compte est la
+proposition et les constats, pas l'inventaire de ce qui a été lu.
 
-1. **Ce qui a été relu** — le dépôt, la branche, les fichiers lus ; la pile,
-   les jetons trouvés, la personnalité et la carte des fréquences ; ce qui a
-   fait foi ; les guides chargés.
-2. **Le verdict** — en trois lignes : l'état de l'interface, ce qui pèse le
+1. **Ce qui a été relu** — en cinq lignes au plus : le dépôt et la branche,
+   les fichiers qui dessinent l'écran, la pile, ce qui a fait foi, les guides
+   chargés.
+2. **La proposition** — dès que la demande est de proposer, d'améliorer, de
+   redessiner ou de revoir en entier un écran : la section décrite plus bas,
+   qui fait dessiner l'avant et l'après.
+3. **Le verdict** — en trois lignes : l'état de l'interface, ce qui pèse le
    plus, le constat qui a le plus d'effet pour le moins d'effort. Quand le
    mouvement a été revu, la décision de `review-animations` : **Block** ou
    **Approve**, et pourquoi.
-3. **Constats** — un seul tableau, le plus grave d'abord, au format qu'exige
+4. **Constats** — un seul tableau, le plus grave d'abord, au format qu'exige
    la méthode (avant, après, pourquoi), avec la sévérité et l'emplacement :
 
    | # | Sévérité | Où | Avant | Après | Pourquoi |
@@ -227,30 +241,67 @@ colonnes des guides :
    | 1 | HIGH | `components/menu.css:14` | `transition: all 300ms ease-in` | `transition: transform 200ms var(--ease-out), opacity 200ms var(--ease-out)` | `ease-in` retarde l'instant que l'œil regarde ; `all` anime des propriétés hors GPU |
 
    Vide s'il n'y a rien : dis-le.
-4. **Le pire des cas** — quand des données réelles ont été essayées
+5. **Le pire des cas** — quand des données réelles ont été essayées
    (`break-ui`) : son tableau (sévérité Broken, Ugly ou Fragile ; le champ ;
    la valeur du pire cas ; ce qui arrive ; la correction), puis les
    « Décisions pour vous » — tronquer ou passer à la ligne, ce qu'affiche un
    champ vide —, une ligne chacune, avec ta recommandation.
-5. **Sur téléphone** — pour une application web (`mobile-native`) : le
+6. **Sur téléphone** — pour une application web (`mobile-native`) : le
    symptôme, la correction exacte, ce qui demande un vrai téléphone.
-6. **Ce qui devrait bouger — et ce qui ne doit pas** — les opportunités qui
+7. **Ce qui devrait bouger — et ce qui ne doit pas** — les opportunités qui
    passent la porte de `find-animation-opportunities`, au plus cinq à sept,
    avec leurs valeurs exactes, et les candidats rejetés, chacun avec la
    question qui l'a écarté.
-7. **Les plans de correction** — pour les trois à cinq constats de plus fort
+8. **Les plans de correction** — pour les trois à cinq constats de plus fort
    effet, chacun au format de `PLAN-TEMPLATE.md` : le problème avec le code
    actuel cité tel quel, la cible exacte, les conventions du dépôt à suivre
    (un exemple qui le fait déjà), les étapes, les limites, la vérification —
    mécanique et au ressenti. Autonomes : quelqu'un qui n'a pas lu le reste
    doit pouvoir l'appliquer, ou demander à LEKA d'en proposer le diff.
-8. **Ce qui est bien fait** — ce qu'il faut garder, cité ; ce que le pire des
+9. **Ce qui est bien fait** — ce qu'il faut garder, cité ; ce que le pire des
    cas n'a pas cassé.
-9. **Limites** — ce qui ne se juge qu'à l'écran rendu, à l'animation jouée
+10. **Limites** — ce qui ne se juge qu'à l'écran rendu, à l'animation jouée
    ou sur un appareil, et comment le vérifier.
 
 Une section sans objet pour la demande s'omet — jamais Constats, Ce qui est
 bien fait ni Limites.
+
+### La proposition — ce que LEKA dessine
+
+Quand on te demande de proposer, d'améliorer, de redessiner ou de revoir en
+entier un écran, ta revue contient la section **La proposition**, ouverte par
+cette ligne seule — elle demande à LEKA de dessiner :
+
+<!-- leka-design -->
+
+Avant de l'écrire, lis en entier les fichiers qui dessinent l'écran : la
+page, les composants qu'elle emploie, les feuilles de style et les jetons —
+LEKA dessine l'écran à partir de ta revue et de ce que tu as lu, rien
+d'autre. Puis, dans la section :
+
+1. **L'écran aujourd'hui** — sa structure de haut en bas (en-tête, sections,
+   cartes, actions), ses textes tels que le code et ses dictionnaires les
+   écrivent, ses couleurs, tailles, espacements, rayons, ombres et polices
+   **avec leurs valeurs** (`#1e1b4b`, `16px`, `0.75rem`), relevées dans les
+   feuilles de style et les jetons lus. Fidèle, pas amélioré : ses défauts
+   sont ce que tes propositions corrigent.
+2. **Deux ou trois propositions** — chacune une vraie direction sur un axe
+   nommé (la hiérarchie et l'action principale, la densité, la personnalité,
+   le mouvement…), pas trois teintes de la même idée (`prototype`) : ce qui
+   change, élément par élément, avec les valeurs ; pourquoi, selon les
+   guides ; quand c'est le bon choix ; ce qu'elle coûte. Le même contenu que
+   l'écran d'aujourd'hui — aucune fonction, aucun chiffre, aucun texte que le
+   code n'a pas. Chacune tient la barre de la méthode : une action
+   principale, une hiérarchie claire, les jetons du dépôt étendus jamais
+   doublés, le retour au toucher (`scale(0.97)` à l'appui), le survol réservé
+   aux pointeurs fins, les entrées en `ease-out` sous 300 ms, le mouvement
+   réduit respecté.
+3. **Celle que tu recommandes** — et pourquoi, selon la personnalité du
+   produit et la fréquence d'usage de l'écran.
+
+N'écris aucun HTML : LEKA dessine. Sans la ligne `<!-- leka-design -->`,
+LEKA ne dessine rien — une revue des seules animations, ou d'une seule pull
+request, n'appelle pas de maquette.
 
 **Puis, quand tu as lu le diff d'une pull request**, termine par un bloc
 `leka-review` : l'écran le montre sur le diff, chaque commentaire sur sa

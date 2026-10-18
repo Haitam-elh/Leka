@@ -17,6 +17,7 @@ import { useMemo, useState } from "react";
 import { cn } from "cn";
 
 import { Deliverables } from "@/components/capabilities/agent-runs";
+import { DesignSimulator } from "@/components/capabilities/design-simulator";
 import { Card } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
 import { exactDate } from "@/components/knowledge/time";
@@ -114,7 +115,14 @@ function Delivered({
   const w = t.intentions.deliverable;
   const agent = run.title ?? run.key;
   const report = run.report ?? run.output ?? "";
-  const [view, setView] = useState<"code" | "report">(run.review ? "code" : "report");
+  // What it delivered, the most telling first: the screen it redrew, its
+  // comments on the code, its report.
+  const views = [
+    ...(run.design ? (["design"] as const) : []),
+    ...(run.review ? (["code"] as const) : []),
+    "report" as const,
+  ];
+  const [view, setView] = useState<(typeof views)[number]>(views[0]);
   return (
     <div className="flex flex-col gap-4" data-testid="deliverable" data-agent={run.key}>
       <section className="flex flex-wrap items-center gap-3 rounded-xl border border-shell-line bg-white px-5 py-4">
@@ -136,9 +144,9 @@ function Delivered({
           </Button>
         ) : null}
       </section>
-      {run.review ? (
+      {views.length > 1 ? (
         <div className="flex gap-2" role="tablist" aria-label={w.title}>
-          {(["code", "report"] as const).map((each) => (
+          {views.map((each) => (
             <button
               key={each}
               type="button"
@@ -151,12 +159,14 @@ function Delivered({
                 view === each ? "bg-brand-violet-soft text-brand-violet" : "text-shell-nav hover:bg-shell-canvas",
               )}
             >
-              {each === "code" ? w.onCode : w.report}
+              {each === "design" ? w.design : each === "code" ? w.onCode : w.report}
             </button>
           ))}
         </div>
       ) : null}
-      {run.review && view === "code" ? (
+      {run.design && view === "design" ? (
+        <DesignSimulator runId={run.id} />
+      ) : run.review && view === "code" ? (
         <CodeReview review={run.review} />
       ) : report ? (
         <section className="rounded-xl border border-shell-line bg-white px-6 py-5" data-testid="deliverable-report">

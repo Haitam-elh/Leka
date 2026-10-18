@@ -9,6 +9,7 @@ export const agentRunKeys = {
   list: (key: string) => ["agent-runs", "list", key] as const,
   intention: (id: string) => ["agent-runs", "intention", id] as const,
   one: (id: string) => ["agent-runs", "one", id] as const,
+  design: (id: string) => ["agent-runs", "design", id] as const,
 };
 
 /** How often a run on its way is read again. */
@@ -35,6 +36,18 @@ export function useAgentRuns(key: string) {
     enabled: Boolean(key),
     refetchInterval: (query) =>
       query.state.data?.some((run) => MOVING.has(run.status)) ? FOLLOW_MS : false,
+  });
+}
+
+/** The designer's mock-ups of a run — read once: a run's design never
+ * changes, and one that is not there will not come. */
+export function useAgentRunDesign(id: string | null) {
+  return useQuery({
+    queryKey: agentRunKeys.design(id ?? ""),
+    queryFn: () => agentRuns.design(id ?? ""),
+    enabled: Boolean(id),
+    staleTime: Infinity,
+    retry: false,
   });
 }
 

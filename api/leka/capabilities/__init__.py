@@ -50,6 +50,7 @@ from leka.capabilities.definition import (
     validated,
 )
 from leka.capabilities.definition import discover as discover_capabilities
+from leka.capabilities.deliverables.design import DesignMockup, page
 from leka.capabilities.delivery import deliverable_of, read_deliverable
 from leka.capabilities.gateway import (
     Gateway,
@@ -89,6 +90,7 @@ from leka.capabilities.loader import (
     parse_agent,
     read_index,
 )
+from leka.capabilities.mockups import read_design, without_mark
 from leka.capabilities.models import (
     AgentRun,
     AgentRunEvent,
@@ -176,6 +178,10 @@ from leka.capabilities.schemas import (
     CodeChangeRead,
     CodeReviewRead,
     DeliverableRead,
+    DesignChangeRead,
+    DesignMockupRead,
+    DesignRead,
+    DesignSummaryRead,
     LLMRunRead,
     ModelBreakdownRead,
     ModelCallRead,
@@ -324,6 +330,11 @@ __all__ = [
     "Definition",
     "DefinitionError",
     "DeliverableRead",
+    "DesignChangeRead",
+    "DesignMockup",
+    "DesignMockupRead",
+    "DesignRead",
+    "DesignSummaryRead",
     "Entry",
     "Execution",
     "Gateway",
@@ -445,6 +456,7 @@ __all__ = [
     "needs_of",
     "offered",
     "output_of",
+    "page",
     "parse_agent",
     "permitted",
     "provide",
@@ -452,6 +464,7 @@ __all__ = [
     "queue_run",
     "queue_workflow",
     "read_deliverable",
+    "read_design",
     "read_index",
     "redraw",
     "register",
@@ -473,5 +486,6 @@ __all__ = [
     "tool_schema",
     "validated",
     "without_block",
+    "without_mark",
     "workflow_catalogue",
 ]

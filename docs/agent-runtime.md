@@ -333,3 +333,30 @@ while on its way; one's own cancelled.
   agent.
 - More tools — a document's text, a source's records — each read-only, each
   with its permission.
+
+## 6 quinquies. The designer's mock-ups (`renders: design_mockups`)
+
+The designer (`design-review`) proposes screens, not only findings. When a
+request asks it to propose, improve, redraw or fully review a screen, its
+review holds « La proposition », opened by the line `<!-- leka-design -->`:
+the screen today with its values, then two or three proposals on named axes,
+and the one it recommends. Then (`capabilities/mockups.py`):
+
+- the model is asked again, no tools, with the review and the files the run
+  read (`read_file`, kept with the run, at most 40,000 characters each and
+  160,000 in all) for the screen today and each proposal — each a mock-up,
+  its CSS and its body (`deliverables/design.py`, `DesignProposal`);
+- every mock-up is cleaned: no script, frame or embedded object, no event
+  handler, no link that leads anywhere, no source but `data:` images, no
+  `@import`; LEKA makes the page itself, opened by a Content-Security-Policy
+  that allows inline styles and `data:` only;
+- kept at `{workspace}/agent-runs/{run}/design.json`; the run's detail says
+  it in short (`design`), its report reads without the mark;
+- `GET /agent-runs/{id}/design` gives each mock-up as its page, to whoever
+  may read the run. The screen shows them in frames sandboxed with no
+  permission at all, before and after, side by side, at a desktop's, a
+  tablet's or a phone's width; the browser draws a PNG capture itself.
+
+A review without the mark draws nothing and asks no model. What fails here
+never fails the run: its review stands, `deliverables_error` says why.
+

@@ -111,8 +111,9 @@ def code_handlers(
 ) -> dict[str, Handler]:
     """Each code tool, bound to the workspace's GitHub sources — each opened
     once per run, its credentials decrypted for this run only. What it read
-    of pull requests goes into `kept`: `listed` (repository → its pulls),
-    `pulls` (repository#number → the pull and its files)."""
+    goes into `kept`: `listed` (repository → its pulls), `pulls`
+    (repository#number → the pull and its files), `files`
+    (repository:path → the file's text)."""
     seen: dict[str, Any] = kept if kept is not None else {}
     # Here, not at the top: changes.py reads the catalogue, which reads the
     # registry, which reads these tools' names.
@@ -165,6 +166,9 @@ def code_handlers(
             return Answer(_said({"error": refused.code}), "refused", refused.code)
         if text is None:
             return Answer(_said({"error": "not_found"}), "refused", "not_found")
+        # What it read, kept with the run: the designer's mock-ups are drawn
+        # from it (mockups.py).
+        seen.setdefault("files", {})[f"{repository}:{path}"] = text
         return Answer(
             _said(
                 {

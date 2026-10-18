@@ -47,7 +47,7 @@ LIBRARY = "_library/emilkowalski-skills"
 VERSIONS = {
     "ui-quality-review": "1.1.0",
     "accessibility-audit": "1.0.0",
-    "design-review": "2.0.0",
+    "design-review": "2.1.0",
     "motion-review": "1.1.0",
 }
 
@@ -66,7 +66,9 @@ def test_each_is_registered_read_only_reading_the_code_it_cites() -> None:
         reads = {"read_method"} if d.method else set()
         assert {"search_entities", "read_entity"} | CODE | reads == set(d.tools), key
         assert d.method == (None if key == "accessibility-audit" else LIBRARY), key
-        assert d.contract.formats == ("markdown",), key
+        # The designer draws its proposal too: the screen before and after.
+        drawn = ("markdown", "html") if key == "design-review" else ("markdown",)
+        assert d.contract.formats == drawn, key
         assert all(not i.required for i in d.contract.inputs), key
         given, withheld = agent_skill_tools(d)
         assert [t.name for t in given] == ["repository-profile"] and withheld == [], key
@@ -145,8 +147,15 @@ def test_the_designer_works_by_emil_kowalski_s_method_whole() -> None:
         "**Ce qui devrait bouger — et ce qui ne doit pas**",
         "**Les plans de correction**",
         "```leka-review",
+        # A design proposed is drawn: the line that asks LEKA to, and what
+        # the section holds for it to draw the screen before and after.
+        "### La proposition — ce que LEKA dessine",
+        "<!-- leka-design -->",
+        "**avec leurs valeurs**",
+        "N'écris aucun HTML : LEKA dessine.",
     ):
         assert part in said, part
+    assert designer.renders == "design_mockups"
 
 
 def test_each_is_sold_at_its_reference_tier_and_frontend_craft_is_on_sale() -> None:
@@ -173,6 +182,7 @@ ASKED = [
         "Qu'est-ce qui casse avec des noms très longs dans la liste des membres de acme/web ?",
         "design-review",
     ),
+    ("Propose-moi un meilleur design pour la page d'accueil de acme/web", "design-review"),
 ]
 
 

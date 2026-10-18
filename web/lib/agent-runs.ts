@@ -11,6 +11,9 @@ export type AgentRun = components["schemas"]["AgentRunRead"];
 export type AgentRunDetail = components["schemas"]["AgentRunDetail"];
 export type AgentRunEvent = components["schemas"]["AgentRunEventRead"];
 export type AgentRunCreate = components["schemas"]["AgentRunCreate"];
+/** The designer's mock-ups: the screen today, then each proposal. */
+export type Design = components["schemas"]["DesignRead"];
+export type DesignMockup = components["schemas"]["DesignMockupRead"];
 export type RunInputs = AgentRunCreate["inputs"];
 
 /** Still on its way — waiting for approval included (LEKA-406): it may
@@ -28,6 +31,8 @@ export const agentRuns = {
   forIntention: (intentionId: string) =>
     apiFetch<AgentRun[]>(`/agent-runs?intention_id=${encodeURIComponent(intentionId)}`),
   one: (id: string) => apiFetch<AgentRunDetail>(`/agent-runs/${encodeURIComponent(id)}`),
+  /** The screens the designer drew of its review — each a page to show sandboxed. */
+  design: (id: string) => apiFetch<Design>(`/agent-runs/${encodeURIComponent(id)}/design`),
   start: (body: AgentRunCreate) =>
     apiFetch<AgentRun>("/agent-runs", { method: "POST", body: JSON.stringify(body) }),
   cancel: (id: string) =>

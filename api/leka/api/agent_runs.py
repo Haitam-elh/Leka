@@ -8,6 +8,8 @@
     GET    /agent-runs/{id}/deliverables/{format}
                                         a file LEKA drew of it (the
                                         architect's pptx, pdf): to download
+    GET    /agent-runs/{id}/design      the screens the designer drew of its
+                                        review: today's, then each proposal
     POST   /agent-runs/{id}/cancel      cancelled — by who asked, or who may
                                         approve
     POST   /agent-runs/{id}/approve     held for approval (LEKA-406): queued
@@ -52,6 +54,11 @@ from leka.capabilities import (
     CapabilityRunRepository,
     CodeReviewRead,
     DeliverableRead,
+    DesignChangeRead,
+    DesignMockup,
+    DesignMockupRead,
+    DesignRead,
+    DesignSummaryRead,
     NotAwaitingError,
     NotYoursError,
     OwnRunError,
@@ -60,10 +67,13 @@ from leka.capabilities import (
     capability_resource,
     deliverable_of,
     find,
+    page,
     queue_files,
     queue_run,
     read_deliverable,
+    read_design,
     without_block,
+    without_mark,
 )
 from leka.capabilities.definition import Definition
 from leka.capabilities.deliverables import MEDIA_TYPES
@@ -142,6 +152,16 @@ def _refused(error: RunRefusedError) -> ApiError:
         for r in refusal.reasons
     ]
     return ApiError(code, kind, message, details=details or None)
+
+
+def design_read(detail: Mapping[str, object]) -> DesignSummaryRead | None:
+    """The designer's mock-ups, said in short, when its run kept them."""
+    kept = detail.get("design")
+    if not isinstance(kept, Mapping):
+        return None
+    return DesignSummaryRead.model_validate(
+        {k: kept.get(k) for k in ("screen", "viewport", "proposals", "recommended")}
+    )
 
 
 def review_read(detail: Mapping[str, object]) -> CodeReviewRead | None:
@@ -377,8 +397,9 @@ async def get_run(run_id: uuid.UUID, session: SessionDep, principal: Reader) -> 
     return AgentRunDetail(
         **run_read(run, principal).model_dump(),
         output=run.output,
-        report=without_block(run.output) if run.output else None,
+        report=without_mark(without_block(run.output)) if run.output else None,
         review=review_read(run.detail),
+        design=design_read(run.detail),
         events=[AgentRunEventRead.model_validate(e) for e in events],
         usage=AgentRunUsage(calls=calls, tokens_in=tokens_in, tokens_out=tokens_out, cost_usd=cost),
     )
@@ -424,6 +445,42 @@ async def get_deliverable(
             f"filename*=UTF-8''{quote(name)}",
             "Cache-Control": "private, no-store",
         },
+    )
+
+
+@router.get(
+    "/{run_id}/design",
+    response_model=DesignRead,
+    summary="The screens the designer drew of its review: today's, then each proposal",
+)
+async def get_design(run_id: uuid.UUID, session: SessionDep, principal: Reader) -> DesignRead:
+    """Each mock-up as the page to show — sandboxed, it runs nothing and
+    reaches nothing (capabilities/deliverables/design.py). 404 when the run,
+    or its mock-ups, are not there."""
+    run = await CapabilityRunRepository(session, principal.workspace_id).run(run_id)
+    if run is None:
+        raise _missing()
+    found = await read_design(run)
+    if found is None:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "This run drew no screen.")
+
+    def shown(mockup: DesignMockup) -> DesignMockupRead:
+        return DesignMockupRead(
+            name=mockup.name,
+            axis=mockup.axis,
+            when=mockup.when,
+            cost=mockup.cost,
+            page=page(mockup),
+        )
+
+    return DesignRead(
+        screen=found.screen,
+        viewport=found.viewport,
+        before=shown(found.before),
+        after=[shown(m) for m in found.after],
+        recommended=found.recommended,
+        why=found.why,
+        changes=[DesignChangeRead.model_validate(c.model_dump()) for c in found.changes],
     )
 
 

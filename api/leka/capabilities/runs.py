@@ -487,8 +487,9 @@ async def _run(
         KnowledgeService(EntityRepository(session, workspace_id)),
         content=_contents(session, workspace_id),
     )
-    # What it reads of pull requests, kept with the run: its deliverable
-    # shows its comments on the diff it read (review.py).
+    # What it reads of pull requests and files, kept with the run: its
+    # deliverable shows its comments on the diff it read (review.py); the
+    # designer's mock-ups are drawn from the files (mockups.py).
     read: dict[str, Any] = {}
     if CODE_NAMES & {t.name for t in given}:
         bound |= code_handlers(session, workspace_id, read)
@@ -582,7 +583,9 @@ async def _run(
         definition.renders != "architecture_deck" or wanted != []
     ):
         await session.commit()
-        drawn = await draw(session, run, definition, output, formats=wanted)
+        drawn = await draw(
+            session, run, definition, output, formats=wanted, read=read.get("files") or {}
+        )
         if drawn.error is None:
             steps.add(drawn.step, **drawn.said())
         else:

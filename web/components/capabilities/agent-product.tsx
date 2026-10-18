@@ -146,11 +146,13 @@ const LEVEL_TONE: Record<Level, "danger" | "warning" | "info" | "success"> = {
 const SECTIONS = ["overview", "features", "use-cases", "integrations", "results", "pricing", "faq"] as const;
 type SectionId = (typeof SECTIONS)[number];
 
-type Deliverable = "report" | "deck" | "diff" | "proposal";
+type Deliverable = "report" | "deck" | "diff" | "design" | "proposal";
 
 function deliverableOf(capability: CapabilityDetail): Deliverable {
   if (capability.formats.includes("pptx") || capability.formats.includes("pdf")) return "deck";
   if (capability.formats.includes("diff")) return "diff";
+  // The designer: its report, and the screen it proposes drawn before and after.
+  if (capability.formats.includes("html")) return "design";
   if (capability.mode === "proposes_action") return "proposal";
   return "report";
 }
