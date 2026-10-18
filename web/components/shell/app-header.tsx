@@ -1,10 +1,11 @@
 "use client";
 
-import { Crown, LayoutGrid, Search } from "lucide-react";
+import { Crown, Search } from "lucide-react";
 import Link from "next/link";
 
 import { Wordmark } from "@/components/brand/logo";
 import { NotificationBell } from "@/components/notifications/bell";
+import { MainNav, WaitingDecisions } from "@/components/shell/main-nav";
 import { RunningIntentions } from "@/components/shell/running-intentions";
 import { useShell } from "@/components/shell/shell-provider";
 import { UserMenu } from "@/components/shell/user-menu";
@@ -14,8 +15,6 @@ import { useCredits } from "@/lib/billing-queries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 
 interface AppHeaderProps {
-  /** Opens the drawer that holds every page. */
-  onOpenNavigation: () => void;
   /** Opens the command palette — the same thing ⌘K does. */
   onOpenSearch: () => void;
   /** So the palette can hand the keyboard back to the button that opened it. */
@@ -27,11 +26,11 @@ const ICON_BUTTON =
 
 /**
  * The header of the sprint's mockups (LEKA-455): the logo, the way home, on
- * the left; the workspace, its plan and who you are on the right. Search
- * (⌘K) and every page (the menu) sit before them: the mockups draw neither,
- * and both are features nothing else on screen gives.
+ * the left, then the main pages (LEKA-494); the workspace, its plan and who
+ * you are on the right — the pages of running it in the profile menu.
+ * Search (⌘K) finds every page.
  */
-export function AppHeader({ onOpenNavigation, onOpenSearch, searchTriggerRef }: AppHeaderProps) {
+export function AppHeader({ onOpenSearch, searchTriggerRef }: AppHeaderProps) {
   const t = useDictionary();
   // Nothing asked of the API before the session is known: a visitor signed
   // out is sent to sign in by the shell, not bounced by a 401 of the plan's.
@@ -43,10 +42,11 @@ export function AppHeader({ onOpenNavigation, onOpenSearch, searchTriggerRef }: 
         href={routes.overview()}
         aria-label={t.shell.home}
         data-testid="home-logo"
-        className="me-auto rounded-md outline-none focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+        className="me-auto shrink-0 rounded-md outline-none focus-visible:ring-3 focus-visible:ring-brand-violet/40 xl:me-4"
       >
         <Wordmark className="h-[23px]" priority />
       </Link>
+      {ready && <MainNav />}
 
       {ready && <RunningIntentions />}
       <button
@@ -59,24 +59,16 @@ export function AppHeader({ onOpenNavigation, onOpenSearch, searchTriggerRef }: 
       >
         <Search className="size-5" aria-hidden="true" />
       </button>
-      <button
-        type="button"
-        onClick={onOpenNavigation}
-        aria-label={t.shell.openNavigation}
-        data-testid="open-navigation"
-        className={ICON_BUTTON}
-      >
-        <LayoutGrid className="size-5" aria-hidden="true" />
-      </button>
 
       {/* What happened, told (LEKA-476): once the session is known. */}
+      {ready ? <WaitingDecisions className={ICON_BUTTON} /> : null}
       {ready ? <NotificationBell className={ICON_BUTTON} /> : null}
 
       <div className="hidden sm:block">
         <WorkspaceSwitcher />
       </div>
       {ready && <PlanBadge />}
-      <UserMenu variant="header" />
+      <UserMenu />
     </header>
   );
 }
@@ -99,7 +91,8 @@ function PlanBadge() {
       className={`${BADGE} hover:bg-brand-violet/90 focus-visible:ring-3 focus-visible:ring-brand-violet/40`}
     >
       <Crown className="size-4" aria-hidden="true" />
-      {plan}
+      {/* Its name only where the header has room beside its pages. */}
+      <span className="hidden sm:inline xl:hidden 2xl:inline">{plan}</span>
     </Link>
   );
 }

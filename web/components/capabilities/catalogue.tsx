@@ -8,7 +8,6 @@ import {
   BadgeCheck,
   BookOpen,
   Bookmark,
-  Bot,
   Briefcase,
   Cloud,
   Code,
@@ -18,14 +17,11 @@ import {
   Lightbulb,
   type LucideIcon,
   Network,
-  Plus,
   Search,
   ShieldCheck,
-  Smartphone,
   Target,
   TriangleAlert,
   Users,
-  Workflow,
   Zap,
 } from "lucide-react";
 import Link from "next/link";
@@ -49,6 +45,8 @@ import { useConfirm } from "@/components/interactions/confirm";
 import { BackHome, PageContainer } from "@/components/shell/page-container";
 import { hasSourceLogo, sourceTitle } from "@/components/sources/source-logo";
 import { usePermissions } from "@/components/shell/shell-provider";
+import { MARKET_ICON, MARKET_OF_CATEGORY, MARKETS, MarketTile, marketOf, marketText } from "@/components/capabilities/market-mark";
+import { SuggestCapability } from "@/components/capabilities/suggestion-dialog";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Select,
@@ -69,6 +67,7 @@ import {
   useCapabilityChange,
   useCatalogueSummary,
 } from "@/lib/capabilities-queries";
+import { agentTitle } from "@/lib/agent-title";
 import { useAddOns } from "@/lib/billing-queries";
 import { type Dictionary, fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
@@ -128,59 +127,6 @@ const CATEGORY_FILL: Record<string, string> = {
 /** The marketplace's categories (LEKA-467): the reference's, as the
  * mockup lays the agents out — product first, then the code, its tests, its
  * incidents… An agent outside the reference: by its registry's category. */
-const MARKETS = [
-  "product",
-  "architecture",
-  "testing",
-  "incident",
-  "security",
-  "performance",
-  "frontend",
-  "mobile",
-  "devops",
-  "network",
-  "documentation",
-  "orchestration",
-] as const;
-const MARKET_OF_CATEGORY: Record<string, string> = {
-  architecture: "architecture",
-  development: "architecture",
-  operations: "incident",
-  security: "security",
-  compliance: "security",
-  data: "performance",
-  infrastructure: "devops",
-  documentation: "documentation",
-};
-export const MARKET_ICON: Record<string, LucideIcon> = {
-  product: Target,
-  architecture: Code,
-  testing: BadgeCheck,
-  incident: TriangleAlert,
-  security: ShieldCheck,
-  performance: Zap,
-  frontend: Layers,
-  mobile: Smartphone,
-  devops: Cloud,
-  network: Network,
-  documentation: FileText,
-  orchestration: Workflow,
-};
-export const MARKET_TEXT: Record<string, string> = {
-  product: "text-blue-600",
-  architecture: "text-shell-nav-active",
-  testing: "text-state-success",
-  incident: "text-state-danger",
-  security: "text-chart-4",
-  performance: "text-state-warning",
-  frontend: "text-state-info",
-  mobile: "text-chart-1",
-  devops: "text-chart-3",
-  network: "text-chart-2",
-  documentation: "text-state-warning",
-  orchestration: "text-chart-5",
-};
-
 const CATEGORY_TEXT: Record<string, string> = {
   architecture: "text-shell-nav-active",
   development: "text-blue-600",
@@ -217,7 +163,7 @@ export function titleOf(
   t: Dictionary,
   c: Pick<Capability, "key" | "title"> & { kind?: Capability["kind"] },
 ): string {
-  if (c.kind === "agent") return c.title;
+  if (c.kind === "agent") return agentTitle(t, c.key, c.title);
   return (t.intentions.analysis.capabilities as Record<string, string>)[c.key] ?? c.title;
 }
 
@@ -355,7 +301,10 @@ function Favourite({ capability }: { capability: Capability }) {
 function Row({ capability }: { capability: Capability }) {
   const t = useDictionary();
   const agent = capability.kind === "agent";
-  const Icon = agent ? Bot : (CATEGORY_ICON[capability.category] ?? Lightbulb);
+  // An agent: its domain's mark, as on the home and in its bundles (LEKA-493).
+  const offer = useAddOns().data?.agents.find((a) => a.key === capability.key);
+  const market = agent ? marketOf(offer ?? capability) : null;
+  const Icon = CATEGORY_ICON[capability.category] ?? Lightbulb;
   // Available and nothing to say: the line says nothing about it.
   const plain = capability.available && !capability.notes.length;
   return (
@@ -366,11 +315,15 @@ function Row({ capability }: { capability: Capability }) {
       data-kind={capability.kind}
       data-available={capability.available ? "true" : "false"}
     >
-      <IconTile
-        icon={Icon}
-        tone={agent ? "violet" : (CATEGORY_TONE[capability.category] ?? "neutral")}
-        className="size-8"
-      />
+      {market ? (
+        <MarketTile
+          market={market}
+          label={(t.catalogue.markets as Record<string, string>)[market] ?? market}
+          className="size-8"
+        />
+      ) : (
+        <IconTile icon={Icon} tone={CATEGORY_TONE[capability.category] ?? "neutral"} className="size-8" />
+      )}
       <div className="min-w-0 flex-1">
         <Link
           href={routes.capability(capability.key)}
@@ -430,7 +383,7 @@ function Domain({ category, items, kind }: { category: string; items: Capability
   const w = t.catalogue;
   const agents = kind === "agent";
   const Icon = (agents ? MARKET_ICON[category] : CATEGORY_ICON[category]) ?? Lightbulb;
-  const text = (agents ? MARKET_TEXT[category] : CATEGORY_TEXT[category]) ?? "text-brand-navy";
+  const text = agents ? marketText(category) : (CATEGORY_TEXT[category] ?? "text-brand-navy");
   const label = agents
     ? ((w.markets as Record<string, string>)[category] ?? categorySaid(t, category))
     : ((w.domains as Record<string, string>)[category] ?? categorySaid(t, category));
@@ -1079,14 +1032,8 @@ export function CatalogueScreen() {
           <h1 className="text-[2.125rem] leading-tight font-bold tracking-[-0.02em] text-brand-navy">{w.title}</h1>
           <p className="mt-1 text-[1.0625rem] text-shell-accent-muted">{w.subtitle}</p>
           <p className="text-[0.9375rem] text-shell-muted">{w.subtitleMore}</p>
-          <Link
-            href={routes.intentionNew()}
-            className={buttonVariants({ variant: "default", className: "mt-3" })}
-            data-testid="catalogue-ask"
-          >
-            <Plus className="size-4" aria-hidden="true" />
-            {w.ask}
-          </Link>
+          {/* A suggestion to LEKA's team, not an intention (LEKA-501). */}
+          <SuggestCapability />
         </div>
         <Stats />
       </div>
@@ -1166,7 +1113,7 @@ export function CatalogueScreen() {
               keep={view === "mine" ? owned : undefined}
             />
           ) : null}
-          {view === "available" && shown !== "capabilities" ? <Bundles /> : null}
+          {view === "available" && shown !== "capabilities" ? <Bundles selectable /> : null}
           {/* LEKA's own skills, apart (LEKA-467): what they are, never a
               price — they are not sold. Hidden while a level or a state of
               agents is asked: they have neither. */}

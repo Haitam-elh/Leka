@@ -63,10 +63,22 @@ PAID = frozenset({"paid", "no_payment_required"})
 
 @dataclass(frozen=True)
 class AddOn:
-    kind: str  # agent, bundle, agents (several bought together, LEKA-458)
+    # agent, bundle; agents, bundles: several bought together in one
+    # Checkout (LEKA-458, LEKA-500), `key` their keys comma-separated.
+    kind: str
     key: str
     monthly_price: int  # cents
     agents: tuple[str, ...]
+
+
+def _bundle_agents(key: str) -> tuple[str, ...]:
+    bundle = catalogue().add_ons.bundle(key)
+    return tuple(bundle.agents) if bundle is not None else ()
+
+
+def _bundle_price(key: str) -> int:
+    bundle = catalogue().add_ons.bundle(key)
+    return bundle.monthly_price if bundle is not None else 0
 
 
 def add_on(kind: str, key: str) -> AddOn | None:
@@ -79,6 +91,19 @@ def add_on(kind: str, key: str) -> AddOn | None:
         if len(keys) >= 2 and all(k in sold.agents for k in keys):
             return AddOn("agents", ",".join(keys), sum(sold.prices[k] for k in keys), keys)
         return None
+    if kind == "bundles":
+        keys = tuple(dict.fromkeys(k for k in key.split(",") if k))
+        found = [sold.bundle(k) for k in keys]
+        # Each on sale (LEKA-454), at least two: one is a bundle's own Checkout.
+        if len(keys) < 2 or not all(b is not None and b.sellable for b in found):
+            return None
+        bundles = [b for b in found if b is not None]
+        return AddOn(
+            "bundles",
+            ",".join(keys),
+            sum(b.monthly_price for b in bundles),
+            tuple(dict.fromkeys(a for b in bundles for a in b.agents)),
+        )
     bundle = sold.bundle(key) if kind == "bundle" else None
     # Sold only once every agent it names is (LEKA-454).
     if bundle is not None and bundle.sellable:
@@ -110,9 +135,19 @@ async def checkout_add_on(
             "plan_required", f"Agents run from the {sold.minimum_plan.title()} plan."
         )
     mine = [a for a in found.agents if a in has.agents or a in has.included]
-    # A bundle owned whole, or an agent — one of several — already here:
-    # never paid twice.
-    if has.every or (mine and found.kind != "bundle") or len(mine) == len(found.agents):
+    # A bundle owned whole — one of several too —, or an agent — one of
+    # several — already here: never paid twice.
+    whole = [
+        k
+        for k in (found.key.split(",") if found.kind == "bundles" else [])
+        if set(_bundle_agents(k)) <= set(mine)
+    ]
+    if (
+        has.every
+        or whole
+        or (mine and found.kind not in ("bundle", "bundles"))
+        or len(mine) == len(found.agents)
+    ):
         raise CheckoutRefusedError("owned", "Already owned here.")
     account = await account_of(session, workspace_id)
     customer = await _customer(client, account)
@@ -131,11 +166,13 @@ async def checkout_add_on(
     prices = sold.prices
     # Each at its Stripe price, found by its lookup key (LEKA-461) — several
     # agents a line each, one subscription.
-    lines = (
-        [add_on_lookup_key("agent", k, prices[k]) for k in found.agents]
-        if found.kind == "agents"
-        else [add_on_lookup_key(found.kind, found.key, found.monthly_price)]
-    )
+    if found.kind == "agents":
+        lines = [add_on_lookup_key("agent", k, prices[k]) for k in found.agents]
+    elif found.kind == "bundles":
+        # Several bundles, a line each at its own price, one subscription (LEKA-500).
+        lines = [add_on_lookup_key("bundle", k, _bundle_price(k)) for k in found.key.split(",")]
+    else:
+        lines = [add_on_lookup_key(found.kind, found.key, found.monthly_price)]
     items = [{"quantity": 1, "price": await _price(client, each)} for each in lines]
     made = await client.post(
         "/v1/checkout/sessions",
@@ -196,8 +233,10 @@ async def apply_add_on(
         subscription = str(data.get("subscription") or "") or None
         # Several agents bought together: each its own right, one
         # subscription ending them all (LEKA-458).
+        # Several bundles too, each its own (LEKA-500).
+        each_of = {"agents": "agent", "bundles": "bundle"}
         for each_kind, each_key in (
-            [("agent", k) for k in key.split(",") if k] if what == "agents" else [(what, key)]
+            [(each_of[what], k) for k in key.split(",") if k] if what in each_of else [(what, key)]
         ):
             await grant(
                 session,

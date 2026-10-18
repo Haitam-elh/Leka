@@ -31,6 +31,7 @@ import { StatePanel } from "@/components/states/state-panel";
 import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { routes } from "@/config/routes";
+import { agentTitle } from "@/lib/agent-title";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import { useCapabilities } from "@/lib/capabilities-queries";
@@ -265,7 +266,8 @@ function Filters({
   value: IntentionFilters;
   onChange: (next: IntentionFilters) => void;
 }) {
-  const w = useDictionary().intentions.filters;
+  const t = useDictionary();
+  const w = t.intentions.filters;
   const agents = (useCapabilities({}).data ?? []).filter(
     (c) => c.kind === "agent",
   );
@@ -283,7 +285,7 @@ function Filters({
         <option value="">{w.anyAgent}</option>
         {agents.map((agent) => (
           <option key={agent.key} value={agent.key}>
-            {agent.title}
+            {agentTitle(t, agent.key, agent.title)}
           </option>
         ))}
       </select>

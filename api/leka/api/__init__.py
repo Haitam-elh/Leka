@@ -45,6 +45,7 @@ from leka.api import (
     resolution,
     skills,
     subscriptions,
+    suggestions,
     webhooks,
     workflows,
 )
@@ -80,6 +81,7 @@ api_router.include_router(graph.router)
 api_router.include_router(context.router)
 api_router.include_router(intelligence.router)
 api_router.include_router(capabilities.router)
+api_router.include_router(suggestions.router)
 api_router.include_router(agent_runs.router)
 # What the code-change agent proposes, accepted as a pull request or not.
 api_router.include_router(code_changes.router)

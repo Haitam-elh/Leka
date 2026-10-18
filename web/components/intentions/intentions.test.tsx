@@ -27,9 +27,10 @@ import { sampleJourney } from "@/lib/intentions/journey-sample";
 const ID = "0c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
 const ME = "9c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
 const route = vi.hoisted(() => ({ pathname: "/intentions" }));
+const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => router,
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => route.pathname,
   useParams: () => ({ intentionId: route.pathname.split("/")[2] }),
@@ -47,6 +48,7 @@ const api = vi.hoisted(() => ({
   cancel: vi.fn(),
   archive: vi.fn(),
   restore: vi.fn(),
+  remove: vi.fn(),
   analysis: vi.fn(),
   answer: vi.fn(),
   feasibility: vi.fn(),
@@ -512,6 +514,29 @@ describe("an intention's page", () => {
     expect(api.cancel).toHaveBeenCalledWith(ID, "asked twice");
     expect(await screen.findByTestId("intention-archive")).toBeInTheDocument();
     expect(screen.queryByTestId("intention-cancel")).not.toBeInTheDocument();
+  });
+
+  it("is deleted for good once confirmed — what goes said — then the history (LEKA-487)", async () => {
+    route.pathname = `/intentions/${ID}/overview`;
+    api.remove.mockResolvedValue({ status: "deleted" });
+    const user = userEvent.setup();
+    show(<IntentionScreen />);
+
+    await user.click(await screen.findByTestId("intention-delete"));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("C'est irréversible");
+    // Backing out deletes nothing.
+    await user.click(within(dialog).getByRole("button", { name: "Annuler" }));
+    expect(api.remove).not.toHaveBeenCalled();
+
+    await user.click(screen.getByTestId("intention-delete"));
+    await user.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", {
+        name: "Supprimer définitivement",
+      }),
+    );
+    expect(api.remove).toHaveBeenCalledWith(ID);
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith("/intentions"));
   });
 
   it("tells its story again once it moved", async () => {

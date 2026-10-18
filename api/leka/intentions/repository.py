@@ -81,6 +81,8 @@ class IntentionRepository(WorkspaceScopedRepository):
         """The intentions, for a page."""
         f = filters
         statement = self.select(Intention)
+        # Its deletion pending (LEKA-487): in no list, archived included.
+        statement = statement.where(Intention.deletion_requested_at.is_(None))
         if f.phase == "archived":
             statement = statement.where(Intention.archived_at.is_not(None))
         else:
@@ -202,6 +204,7 @@ class IntentionRepository(WorkspaceScopedRepository):
             select(func.count()).where(
                 Intention.workspace_id == self.workspace_id,
                 Intention.archived_at.is_not(None),
+                Intention.deletion_requested_at.is_(None),
                 *mine,
             )
         )

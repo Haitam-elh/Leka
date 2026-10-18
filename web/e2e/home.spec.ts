@@ -59,7 +59,7 @@ test.describe("The home on a wide screen", () => {
     }
   });
 
-  test("no example, no bundle banner, one link to the agents and bundles; six agents a row", async ({ page }) => {
+  test("no example, no bundle banner, one link to the agents and bundles; one row of agents, the bundles, the latest", async ({ page }) => {
     await home(page);
     for (const example of ["Analyser un incident récent", "Comprendre un changement", "Préparer un plan de migration"]) {
       await expect(page.getByRole("button", { name: example })).toHaveCount(0);
@@ -71,15 +71,39 @@ test.describe("The home on a wide screen", () => {
 
     const cards = page.getByTestId("home-agent");
     await expect(cards.first()).toBeVisible();
-    const tops: number[] = [];
-    for (const card of await cards.all()) {
-      tops.push(Math.round((await card.boundingBox())?.y ?? -1));
+    // Those its columns hold: the rest are hidden, never on a second row.
+    for (const card of await cards.filter({ visible: true }).all()) {
       // Its state in words, always; a price only where there is one to pay.
       await expect(card.getByTestId("agent-state")).toBeVisible();
     }
-    expect(tops.length).toBeLessThanOrEqual(12);
-    expect(tops.filter((top) => top === tops[0])).toHaveLength(Math.min(6, tops.length));
+    // Measured at once, the page settled: nothing loading above moves some
+    // cards between two readings.
+    const tops = await cards.evaluateAll((all) =>
+      all
+        .filter((card) => (card as HTMLElement).offsetParent !== null)
+        .map((card) => Math.round(card.getBoundingClientRect().top)),
+    );
+    // One row (LEKA-488): every card on the same line.
+    expect(tops.length).toBeLessThanOrEqual(6);
+    expect(tops.filter((top) => top === tops[0])).toHaveLength(tops.length);
     await expect(page.getByTestId("home-bundles-cards").getByTestId("bundle").first()).toBeVisible();
+    // The bundles right after the agents, the latest analyses after them.
+    const agents = await box(page, "home-agents");
+    const bundles = await box(page, "home-bundles-cards");
+    expect(bundles.y).toBeGreaterThan(agents.y + agents.height - 1);
+    if (await page.getByTestId("home-latest").count()) {
+      const latest = await box(page, "home-latest");
+      expect(latest.y).toBeGreaterThan(bundles.y + bundles.height - 1);
+    }
+  });
+
+  test("an agent's card opens its page; its state says what may be done (LEKA-497)", async ({ page }) => {
+    await home(page);
+    const first = page.getByTestId("home-agent").filter({ visible: true }).first();
+    const key = await first.getAttribute("data-key");
+    await expect(first.getByTestId("agent-state")).toBeVisible();
+    await first.getByTestId("home-agent-open").click();
+    await expect(page).toHaveURL(new RegExp(`/capabilities/${key}$`));
   });
 
   test("« Historique des analyses » opens the intentions asked", async ({ page }) => {
@@ -106,7 +130,8 @@ test.describe("The home on a phone", () => {
     await expect(page.getByRole("link", { name: "Historique des analyses" })).toBeVisible();
 
     const cards = await page.getByTestId("home-agent").filter({ visible: true }).all();
-    expect(cards.length).toBeLessThanOrEqual(6);
+    // One row: two on a phone (LEKA-488).
+    expect(cards.length).toBeLessThanOrEqual(2);
     if (cards.length >= 2) {
       const [first, second] = await Promise.all(cards.slice(0, 2).map((card) => card.boundingBox()));
       expect(Math.round(first?.y ?? 0)).toBe(Math.round(second?.y ?? 1));

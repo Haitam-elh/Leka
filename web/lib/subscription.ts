@@ -23,7 +23,9 @@ export const subscription = {
         intentionId ? { plan, interval, intention_id: intentionId } : { plan, interval },
       ),
     }),
-  portal: () => apiFetch<{ url: string }>("/billing/portal", { method: "POST" }),
+  /** `cancel`: opened on ending the subscription — back to Free (LEKA-490). */
+  portal: (cancel = false) =>
+    apiFetch<{ url: string }>(cancel ? "/billing/portal?flow=cancel" : "/billing/portal", { method: "POST" }),
   /** « Ne pas renouveler » / « Réactiver le renouvellement » (2026-10-14). */
   renewal: (renew: boolean) =>
     apiFetch<Subscription>("/billing/subscription/renewal", {

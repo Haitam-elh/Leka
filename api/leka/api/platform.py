@@ -165,10 +165,13 @@ async def configure_current_workspace(
     if workspace is None:  # pragma: no cover
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Workspace not found.")
     before, language_before = workspace.name, workspace.default_language
+    # The workspace's preferences as sent, read off the payload: an alias of
+    # its `settings` would look, to test_secret_access, like leka's config.
+    preferences = payload.model_dump(mode="json", by_alias=True, exclude_unset=True).get("settings")
     updated = await workspaces.configure(
         workspace,
         name=payload.name,
-        settings=payload.settings,
+        settings=preferences,
         default_language=payload.default_language,
     )
     audit_as(
@@ -183,7 +186,7 @@ async def configure_current_workspace(
                 if before != updated.name
                 else {}
             ),
-            **({"settings": sorted(payload.settings)} if payload.settings else {}),
+            **({"settings": sorted(preferences)} if preferences else {}),
             **(
                 {
                     "default_language": {

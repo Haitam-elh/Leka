@@ -84,8 +84,11 @@ vi.mock("@/components/intentions/analysis-tab", () => ({
 
 const checkout = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/subscription", () => ({ subscription: { checkout } }));
+const activateDemo = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/workspace", () => ({ workspace: { activateDemo } }));
 
 const { IntentionDetailPage } = await import("@/components/intentions/intention-detail");
+const { InDemoContext } = await import("@/components/demo/in-demo");
 
 function intention(): IntentionDetail {
   return {
@@ -203,6 +206,27 @@ describe("an intention's page", () => {
     expect(checkout).not.toHaveBeenCalled();
     await user.click(within(dialog).getByRole("button", { name: "Payer et activer" }));
     await waitFor(() => expect(checkout).toHaveBeenCalledWith("starter", "month", "i1"));
+  });
+
+  it("in a demonstration: its payment simulated, said so — never Stripe (LEKA-498)", async () => {
+    const user = userEvent.setup();
+    activateDemo.mockResolvedValue({ activated: true });
+    render(
+      <QueryClientProvider client={makeQueryClient()}>
+        <LocaleProvider>
+          <ConfirmProvider>
+            <InDemoContext.Provider value>
+              <IntentionDetailPage intention={intention()} />
+            </InDemoContext.Provider>
+          </ConfirmProvider>
+        </LocaleProvider>
+      </QueryClientProvider>,
+    );
+    expect(screen.queryByTestId("detail-activate")).not.toBeInTheDocument();
+    expect(screen.getByTestId("detail-simulate-note")).toHaveTextContent("aucun paiement réel");
+    await user.click(screen.getByTestId("detail-simulate"));
+    await waitFor(() => expect(activateDemo).toHaveBeenCalled());
+    expect(checkout).not.toHaveBeenCalled();
   });
 
   it("an agent the plan to take includes: said included with it, never sold", () => {

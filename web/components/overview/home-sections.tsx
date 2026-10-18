@@ -2,31 +2,28 @@
 
 import {
   ArrowRight,
-  Bug,
-  ChartColumn,
   ChevronRight,
-  Code2,
-  FileText,
   History,
-  Network,
-  ShieldCheck,
-  type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 
 import { cn } from "cn";
-import { AgentAdd, agentStateOf, AgentStateSaid, Bundles } from "@/components/capabilities/offers";
+import { MarketTile, marketOf } from "@/components/capabilities/market-mark";
+import { AgentCardAction, agentStateOf, AgentStateSaid, Bundles } from "@/components/capabilities/offers";
 import { type TileTone } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
 import { StatusPill } from "@/components/intentions/intentions-list";
 import { exactDate, timeAgo } from "@/components/knowledge/time";
 import { routes } from "@/config/routes";
+import { agentTitle } from "@/lib/agent-title";
 import { euros } from "@/lib/billing";
 import { useAddOns } from "@/lib/billing-queries";
+import { useCapabilities } from "@/lib/capabilities-queries";
 import { useEnvironment } from "@/lib/environment-queries";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import { useIntentions } from "@/lib/intentions/queries";
+import { recommend } from "@/lib/recommend-agents";
 import { useSources } from "@/lib/sources-queries";
 import { type Health, overallOf } from "@/lib/twin";
 
@@ -169,6 +166,15 @@ export function EnvironmentCard() {
           {fill(w.sourcesFailing, { count: failing })}
         </Link>
       ) : null}
+      {/* Its rule, its states, what would raise it: on Mon environnement,
+          the same definition (LEKA-489). */}
+      <Link
+        href={routes.environment()}
+        className="mt-2 block rounded text-center text-xs text-shell-nav-active outline-none hover:underline focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+        data-testid="home-health-explained"
+      >
+        {t.environment.overall.understand}
+      </Link>
     </section>
   );
 }
@@ -191,23 +197,6 @@ export function HistoryLink() {
   );
 }
 
-/** An agent's tile: its category's mark, the catalogue's own colours. */
-const CATEGORY_MARK: Record<string, { icon: LucideIcon; tone: string }> = {
-  code: { icon: Code2, tone: "bg-violet-100 text-violet-600" },
-  architecture: { icon: Network, tone: "bg-sky-100 text-sky-600" },
-  security: { icon: ShieldCheck, tone: "bg-emerald-100 text-emerald-600" },
-  incident: { icon: Bug, tone: "bg-rose-100 text-rose-600" },
-  performance: { icon: ChartColumn, tone: "bg-amber-100 text-amber-600" },
-  documentation: { icon: FileText, tone: "bg-blue-100 text-blue-600" },
-};
-
-function markOf(category: string) {
-  const key = Object.keys(CATEGORY_MARK).find((k) =>
-    category.toLowerCase().includes(k),
-  );
-  return CATEGORY_MARK[key ?? "code"];
-}
-
 /** « Agents disponibles » (LEKA-470, its mockup): the agents on sale,
  * dense — six a row on a wide screen, four, three, two on a phone, twelve
  * at most (six on a phone) so no row is left half empty — each its name,
@@ -219,7 +208,10 @@ export function AgentsSection() {
   const w = t.overview.home;
   const { format } = useLocale();
   const offers = useAddOns().data;
+  // What each needs, to recommend what works here first (LEKA-488).
+  const catalogue = useCapabilities({}).data;
   if (!offers?.available || offers.agents.length === 0) return null;
+  const row = recommend(offers.agents, (key) => agentStateOf(offers, key), catalogue, 6);
   return (
     <section
       className="mt-10"
@@ -247,33 +239,50 @@ export function AgentsSection() {
         className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"
         data-testid="home-agents-grid"
       >
-        {offers.agents.slice(0, 12).map((agent) => {
-          const { icon: Icon, tone } = markOf(agent.category);
-          const payable = agentStateOf(offers, agent.key) === "option";
+        {/* One row, at every width: as many as its columns. */}
+        {row.map(({ agent, fit }) => {
+          // Its domain, drawn as in the marketplace and its bundles (LEKA-493).
+          const market = marketOf(agent);
+          const marketName = (t.catalogue.markets as Record<string, string>)[market] ?? market;
+          // Its price wherever it is to pay for — bought, or with a plan above (LEKA-497).
+          const state = agentStateOf(offers, agent.key);
+          const payable = state === "option" || state === "upgrade";
           return (
             <li
               key={agent.key}
-              className={cn(CARD, "flex flex-col p-3.5 max-md:nth-[n+7]:hidden")}
+              className={cn(
+                CARD,
+                "relative flex flex-col p-3.5 hover:border-brand-violet/40 max-md:nth-[n+3]:hidden md:max-lg:nth-[n+4]:hidden lg:max-xl:nth-[n+5]:hidden",
+              )}
               data-testid="home-agent"
               data-key={agent.key}
+              data-fit={fit ?? undefined}
             >
-              <div className="flex items-start justify-between gap-2">
-                <span
-                  className={cn(
-                    "flex size-9 shrink-0 items-center justify-center rounded-lg",
-                    tone,
-                  )}
-                >
-                  <Icon className="size-4.5" aria-hidden="true" />
+              <div className="flex items-center gap-2">
+                <MarketTile market={market} label={marketName} />
+                <span className="min-w-0 truncate text-xs text-shell-muted" data-testid="home-agent-market">
+                  {marketName}
                 </span>
-                <AgentAdd agentKey={agent.key} />
               </div>
               <h3 className="mt-2.5 text-[0.875rem] leading-snug font-semibold text-brand-navy">
-                {agent.title}
+                {/* The whole card opens its page (LEKA-497); its action stays its own. */}
+                <Link
+                  href={routes.capability(agent.key)}
+                  className="rounded outline-none after:absolute after:inset-0 after:rounded-2xl hover:underline focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+                  data-testid="home-agent-open"
+                >
+                  {agentTitle(t, agent.key, agent.title)}
+                </Link>
               </h3>
               <p className="mt-1 line-clamp-2 flex-1 text-xs text-shell-muted">
                 {(t.catalogue.summaries as Record<string, string>)[agent.key] ?? agent.summary}
               </p>
+              {/* Why it is here: what it reads, against what is connected. */}
+              {fit === "connected" || fit === "to_connect" ? (
+                <p className="mt-2 text-xs text-shell-muted" data-testid="home-agent-fit">
+                  {w.fit[fit]}
+                </p>
+              ) : null}
               <div className="mt-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
                 <AgentStateSaid agentKey={agent.key} />
                 {payable ? (
@@ -288,6 +297,9 @@ export function AgentsSection() {
                     </span>
                   </span>
                 ) : null}
+              </div>
+              <div className="mt-2.5">
+                <AgentCardAction agentKey={agent.key} />
               </div>
             </li>
           );
