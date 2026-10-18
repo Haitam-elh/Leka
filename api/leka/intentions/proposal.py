@@ -52,6 +52,7 @@ from leka.intentions.schemas import (
     AgentFieldRead,
     AgentProposalRead,
     PlanStepRead,
+    PlanStepWords,
     ProposedAgentRead,
     Understanding,
 )
@@ -301,10 +302,24 @@ def named(text: str, entries: Sequence[Any]) -> str | None:
 
 def plan_by_rules(goal: str, language: str | None, agents: Sequence[str]) -> list[PlanStepRead]:
     lang = "en" if (language or "fr").startswith("en") else "fr"
-    steps = PLANS.get(goal, {}).get(lang) or (
-        PLANS["explain_cause"][lang] if goal == "investigate" else GENERIC[lang]
-    )
-    planned = [PlanStepRead(title=title, detail=detail) for title, detail in steps]
+
+    def table(each: str) -> tuple[tuple[str, str], ...]:
+        return PLANS.get(goal, {}).get(each) or (
+            PLANS["explain_cause"][each] if goal == "investigate" else GENERIC[each]
+        )
+
+    both = {each: table(each) for each in ("fr", "en")}
+    planned = [
+        PlanStepRead(
+            title=title,
+            detail=detail,
+            words={
+                each: PlanStepWords(title=both[each][at][0], detail=both[each][at][1])
+                for each in both
+            },
+        )
+        for at, (title, detail) in enumerate(both[lang])
+    ]
     if agents and planned:
         # The work itself is the first agent's.
         middle = min(1, len(planned) - 1)
