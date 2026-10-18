@@ -67,6 +67,7 @@ from leka.capabilities.runtime import (
     Injected,
     Refusal,
     RunStatus,
+    Withheld,
     inject,
     messages,
     offered,
@@ -101,6 +102,10 @@ RUN_JOB = "leka.capabilities.runs.run_agent"
 # A finished run's files drawn after it (2026-10-16): its deck, from the
 # analysis it delivered — the run itself never done again.
 FILES_JOB = "leka.capabilities.runs.draw_files"
+# A code change written again from a finished run's analysis (2026-10-18).
+CHANGE_JOB = "leka.capabilities.runs.rewrite_change_job"
+# The files a run read, named to be read again when its change is: at most.
+MOST_READ_KEPT = 60
 # The files a deck may be drawn as.
 DECK_FILES = ("pdf", "pptx")
 # Asked longer ago and still not drawn: lost (a worker gone) — asked again.
@@ -400,6 +405,15 @@ async def _fail(
     return {"status": "failed" if ended else "cancelled", "error": code}
 
 
+async def _reads_code(session: AsyncSession, workspace_id: uuid.UUID) -> bool:
+    """Whether a GitHub source is connected, its code there to read."""
+    # Here, not at the top: changes.py reads the catalogue, which reads the
+    # registry, which reads the code tools' names.
+    from leka.capabilities.changes import github_sources
+
+    return bool(await github_sources(session, workspace_id))
+
+
 async def _run(
     session: AsyncSession,
     run: AgentRun,
@@ -468,11 +482,19 @@ async def _run(
     )
     # Its tools: those it declares (LEKA-400), what it may use, by who asked.
     declared = [t for t in tools if not definition.tools or t.name in definition.tools]
-    # The code tools: only to an agent that names them (code_tools.py).
-    declared += [t for t in CODE_TOOLS if t.name in definition.tools]
+    # The code tools: only to an agent that names them (code_tools.py), and
+    # only when there is code to read — a GitHub source connected; else the
+    # model never hears of them (2026-10-18: the documentation assistant
+    # reads the code when it can, and works without it).
+    coded = [t for t in CODE_TOOLS if t.name in definition.tools]
+    no_code: list[Withheld] = []
+    if coded and not await _reads_code(session, workspace_id):
+        no_code, coded = [Withheld(t.name, "no_source") for t in coded], []
+    declared += coded
     # Its method's guides: only to an agent that names them and has a library.
     declared += [t for t in METHOD_TOOLS if t.name in definition.tools and definition.method]
     given, withheld = offered(declared, permissions)
+    withheld += no_code
     # Its skills: those it names, within what it reads (LEKA-401).
     named, out_of_reach = agent_skill_tools(definition)
     skilled, unskilled = offered(named, permissions)
@@ -579,6 +601,10 @@ async def _run(
     # was drawn) — every one when the run says nothing of it.
     asked = run.detail.get("formats")
     wanted = None if not isinstance(asked, list) else [str(f) for f in asked]
+    # The files a code change is written from, named: read again when it is
+    # written again (rewrite_change).
+    if definition.renders == "code_change" and read.get("files"):
+        detail["read_files"] = list(read["files"])[:MOST_READ_KEPT]
     if definition.renders is not None and (
         definition.renders != "architecture_deck" or wanted != []
     ):
@@ -737,6 +763,131 @@ async def _redraw(
         run.detail = {**run.detail, **drawn.detail(), **done}
     await session.commit()
     return {"drawn": [f["format"] for f in drawn.files], "error": drawn.error}
+
+
+# ── its change, written again ───────────────────────────────────────────────
+
+
+async def queue_change(workspace_id: uuid.UUID, run_id: uuid.UUID) -> bool:
+    """Its change to write again, for a worker: the model takes minutes."""
+    job = await enqueue_job(
+        CHANGE_JOB,
+        str(workspace_id),
+        str(run_id),
+        for_workspace_id=workspace_id,
+        queue=JobQueue.HIGH,
+        concurrency_key=f"agent-run-change:{run_id}",
+    )
+    return job is not None
+
+
+async def _read_again(
+    session: AsyncSession, workspace_id: uuid.UUID, names: object
+) -> dict[str, str]:
+    """The files a run read (« owner/repo:path »), read again on their
+    repository's default branch — those it cannot, left out."""
+    # Here, not at the top: changes.py reads the catalogue, which reads the
+    # registry, which reads the code tools' names.
+    from leka.capabilities.changes import code_for
+    from leka.connectors import CodeRefusedError
+
+    read: dict[str, str] = {}
+    opened: dict[str, tuple[Any, str] | None] = {}
+    for name in names if isinstance(names, list) else []:
+        repository, _, path = str(name).partition(":")
+        if not path:
+            continue
+        if repository not in opened:
+            found = await code_for(session, workspace_id, repository)
+            opened[repository] = (
+                (found[1], await found[1].default_branch(repository)) if found else None
+            )
+        reader = opened[repository]
+        if reader is None:
+            continue
+        code, branch = reader
+        try:
+            text = await code.read(repository, path, branch)
+        except CodeRefusedError:
+            continue
+        if text is not None:
+            read[str(name)] = text
+    return read
+
+
+async def rewrite_change(workspace_id: uuid.UUID, run_id: uuid.UUID) -> dict[str, object]:
+    """A finished code-change run's change written again from the analysis it
+    delivered and the files it read, read again — never the run done again
+    (2026-10-18: its change was not written, the analysis alone shown).
+    Whatever goes wrong, « being written » ends, said why."""
+    with workspace_scope(workspace_id):
+        async with session_factory() as session:
+            try:
+                return await _rewrite_change(session, workspace_id, run_id)
+            except Exception:
+                logger.exception("run_change_not_written", run=str(run_id))
+                await session.rollback()
+                runs = CapabilityRunRepository(session, workspace_id)
+                run = await runs.run(run_id, lock=True)
+                if run is not None:
+                    Steps(session, run, await runs.last_seq(run_id)).add(
+                        "render_failed", code="error"
+                    )
+                    run.detail = {
+                        **run.detail,
+                        "drawing": None,
+                        "drawing_since": None,
+                        "deliverables_error": "error",
+                    }
+                    await session.commit()
+                return {"proposed": None, "error": "error"}
+
+
+async def _rewrite_change(
+    session: AsyncSession, workspace_id: uuid.UUID, run_id: uuid.UUID
+) -> dict[str, object]:
+    runs = CapabilityRunRepository(session, workspace_id)
+    run = await runs.run(run_id)
+    done = {"drawing": None, "drawing_since": None}
+    if run is None or run.status != RunStatus.SUCCEEDED or not run.output:
+        return {"proposed": None, "skipped": "not_finished"}
+    subject = await subject_of(session, workspace_id, run.requested_by)
+    permissions = frozenset(p.value for p in subject.permissions) if subject else frozenset()
+    entry = await CatalogueService(session, workspace_id).entry(run.key, permissions=permissions)
+    if entry is None or entry.definition.renders != "code_change":
+        run.detail = {**run.detail, **done}
+        await session.commit()
+        return {"proposed": None, "skipped": "not_a_change"}
+    read = await _read_again(session, workspace_id, run.detail.get("read_files"))
+    output = run.output
+    # Nothing held while the model writes: minutes.
+    await session.commit()
+    drawn = await draw(session, run, entry.definition, output, read=read)
+    run = await runs.run(run_id, lock=True)
+    if run is None:
+        return {"proposed": None, "skipped": "gone"}
+    steps = Steps(session, run, await runs.last_seq(run_id))
+    if drawn.error is None:
+        steps.add(drawn.step, **drawn.said())
+        run.detail = {
+            **{
+                k: v
+                for k, v in run.detail.items()
+                if k not in ("deliverables_error", "deliverables_said")
+            },
+            **drawn.detail(),
+            **done,
+        }
+    else:
+        steps.add("render_failed", code=drawn.error, said=drawn.refusal)
+        run.detail = {**run.detail, **drawn.detail(), **done}
+    await session.commit()
+    return {"proposed": run.detail.get("code_change"), "error": drawn.error}
+
+
+def rewrite_change_job(workspace_id: str, run_id: str) -> dict[str, object]:
+    """Entry point for the job runner, which is synchronous."""
+    return asyncio.run(rewrite_change(uuid.UUID(workspace_id), uuid.UUID(run_id)))
 
 
 def draw_files(workspace_id: str, run_id: str, formats: str) -> dict[str, object]:

@@ -2,7 +2,7 @@
 name: change-impact-analysis
 title: "Analyse d'impact d'un changement"
 description: "Use when someone asks how far a planned or shipped change reaches — the services, applications, data, teams and business processes it touches directly and indirectly, and who must know — from the company model and its diff."
-version: 1.0.0
+version: 1.1.0
 category: development
 entity_types: [pull_request, change, deployment, release, repository, service, application, database, infra_resource, incident, business_capability, business_process, team, person]
 requires: ["github|gitlab|bitbucket"]
@@ -65,6 +65,13 @@ Le changement demandé, sinon celui que le contexte nomme (`search_entities`,
    modèle — une chose sans responsable connu se signale comme telle.
 4. **Le bon moment.** Un incident ouvert ou un changement concurrent sur la
    même zone est un constat : il change le moment, pas la portée.
+5. **Le retour arrière.** Le changement se défait-il sans perte ? Une donnée
+   réécrite, un contrat changé entre deux services ou un message déjà
+   envoyé ne reviennent pas : dis-le, avec ce que cela touche.
+6. **Comment le livrer.** Une portée large ou critique part par paliers —
+   une petite part, puis davantage, puis tout —, avec les signaux qui
+   l'arrêtent, fixés avant, et qui décide ; qui prévenir avant, et qui
+   après.
 
 Une portée vide (le changement ne touche rien de connu) se dit, avec ce qui
 manque pour en juger.
@@ -79,7 +86,9 @@ Un document markdown, dans la langue de la demande :
 3. **Le métier** — les capacités et processus métier atteints.
 4. **Qui prévenir** — les responsables, regroupés.
 5. **Le moment** — ce qui se passe déjà sur la zone.
-6. **Limites** — ce que le modèle ne couvre pas.
+6. **Comment le livrer** — le retour arrière (possible, partiel ou non), et
+   pour une portée large, les paliers et les signaux qui l'arrêtent.
+7. **Limites** — ce que le modèle ne couvre pas.
 
 ## Ce qu'il ne doit jamais faire
 

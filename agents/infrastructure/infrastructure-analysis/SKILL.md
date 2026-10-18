@@ -2,7 +2,7 @@
 name: infrastructure-analysis
 title: "Analyse d'infrastructure"
 description: "Use when someone wants to understand the infrastructure behind a service or an environment — where it runs, on which accounts and resources, what is shared, what is a single point of failure."
-version: 1.2.0
+version: 1.3.0
 category: infrastructure
 entity_types: [infra_resource, cloud_account, resource_group, environment, service, database, application, team]
 requires: ["aws|azure|gcp"]
@@ -65,7 +65,20 @@ cet ordre :
 4. **L'étiquetage.** Une ressource sans responsable, sans environnement ou
    sans service connu ne peut être ni surveillée ni nettoyée sans risque :
    c'est un écart, jamais une ressource à supprimer.
-5. **Ce que le modèle ne dit pas.** Les réglages internes — limites de
+5. **Ce qui traverse les régions.** Un service d'une région qui dépend d'une
+   base ou d'un service d'une autre : chaque appel paie la latence et le
+   trafic sortant, et une panne de région en emporte deux. Un constat quand
+   le modèle montre les deux régions.
+6. **Ce qui est exposé.** Une ressource ouverte à internet que le modèle
+   montre — une base, un stockage public, une interface d'administration —
+   est un constat, avec ce qu'elle porte ; une interface d'administration ne
+   s'expose jamais directement.
+7. **Économiser sans fragiliser.** Une piste d'économie — un environnement
+   en double, une ressource sans service — ne retire jamais la redondance
+   d'un service critique. L'attribution d'abord : ce qui n'a ni service ni
+   responsable ne se coupe pas, il se rattache ; chaque piste nomme l'équipe
+   qui tient la ressource.
+8. **Ce que le modèle ne dit pas.** Les réglages internes — limites de
    ressources, sondes de santé, mise à l'échelle automatique, droits fins —
    ne sont pas dans le modèle. Quand ils comptent pour la question, dis
    qu'ils restent à vérifier par l'équipe qui tient la plateforme.
@@ -78,7 +91,11 @@ Un document markdown, dans la langue de la demande :
 2. **Ce qui est partagé** — une ressource portant plusieurs services.
 3. **Points uniques de défaillance** — d'après le modèle.
 4. **Écarts** — ressources sans service ni responsable connus.
-5. **Limites** — LEKA ne lit pas les coûts, les métriques en direct ni les réglages internes : ce qui reste à vérifier, et par qui.
+5. **Exposé et transrégional** — ce qui est ouvert à internet, ce qui dépend
+   d'une autre région.
+6. **Pistes d'économie** — quand la demande en parle : chacune avec l'équipe
+   qui la porterait, jamais au prix de la redondance d'un service critique.
+7. **Limites** — LEKA ne lit pas les coûts, les métriques en direct ni les réglages internes : ce qui reste à vérifier, et par qui.
 
 ## Ce qu'il ne doit jamais faire
 
@@ -92,7 +109,3 @@ Un document markdown, dans la langue de la demande :
 ## Ses compétences
 
 Il peut aussi appeler la compétence `infrastructure-inventory` de la bibliothèque LEKA (LEKA-401, docs/skills.md) : l'inventaire de l'infrastructure : les ressources par fournisseur, type, région et état, celles sans propriétaire, exposées, en échec ou arrêtées. Chacune est une lecture vérifiée, faite avec les droits de la personne qui demande, et gardée. Il s'appuie sur leurs signaux (`signals`) et cite ce qu'elles ont lu ; ce qu'une compétence ne dit pas, il ne l'invente pas.
-
-<sub>Méthode adaptée de la liste de fiabilité et de sécurité du skill `kubernetes-patterns`
-d'[ECC](https://github.com/affaan-m/ECC) @ `b92f181` (MIT, © 2026 Affaan Mustafa), réécrite pour ce
-que LEKA voit. Voir `THIRD_PARTY_LICENSES.md`.</sub>

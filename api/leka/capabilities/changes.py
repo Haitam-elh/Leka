@@ -2,11 +2,15 @@
 
     the run's analysis   markdown: what to change and why, from the code it
                          read (list_files, read_file — code_tools.py)
-        ──▶ the model again, no tools: the change, structured
-            (ChangeProposal): the repository, the branch, each file as it
-            would be — whole
-        ──▶ each file read again on that branch: its diff, computed here,
-            never the model's (a file it says changed but did not is left out)
+        ──▶ the model again, no tools, given the analysis and the files the
+            agent read: the change, structured (ChangeProposal) — the
+            repository, the branch, and for each file its edits: an exact
+            text found once in the file, and what replaces it (2026-10-18:
+            asked for whole files it had not been given, it wrote none)
+        ──▶ each file read again on that branch, its edits applied here, its
+            diff computed here — never the model's (an edit whose text is not
+            in the file is said, never guessed; a file said changed but not
+            is left out)
         ──▶ kept, proposed (`code_changes`) — linked to its run and intention
     a person who may approve (intention:approve)
         ──▶ rejects it, said why — or accepts it: LEKA opens a pull request on
@@ -55,6 +59,14 @@ from leka.connectors import (
 logger = structlog.get_logger(__name__)
 
 MAX_FILES = 20
+# Why a file was not changed, as the summary says it.
+SKIPPED_SAID = {
+    "not_found": "le texte à remplacer n'y est pas",
+    "ambiguous": "le texte à remplacer y est plusieurs fois",
+}
+# What the writer is shown of the files the agent read: each, and all.
+MOST_SHOWN = 60_000
+MOST_SHOWN_ALL = 240_000
 CHANGE_TOKENS = 16_000
 CHANGE_BUDGET = 8 * 60.0
 # A diff kept, at most, per file.
@@ -62,14 +74,29 @@ MAX_DIFF_CHARS = 120_000
 CONNECTED = (SourceStatus.ACTIVE, SourceStatus.DEGRADED)
 
 
+class Edit(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    find: str = Field(
+        description="Le texte exact à remplacer, recopié du fichier lu, assez long pour n'y "
+        "apparaître qu'une fois (quelques lignes entières)."
+    )
+    replace: str = Field(description="Le texte qui le remplace ; vide pour le retirer.")
+
+
 class ProposedFile(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
     path: str = Field(description="Le chemin du fichier dans le dépôt, ex. « api/app/main.py ».")
-    content: str | None = Field(
-        description="Le contenu COMPLET du fichier après la modification — pas un extrait, "
-        "pas un diff. null pour supprimer le fichier."
+    edits: list[Edit] = Field(
+        default_factory=list,
+        description="Un fichier qui existe : ses remplacements, dans l'ordre — jamais le fichier "
+        "entier.",
     )
+    content: str | None = Field(
+        default=None, description="Seulement pour un fichier nouveau : son contenu complet."
+    )
+    delete: bool = Field(default=False, description="true pour supprimer le fichier.")
     why: str = Field(default="", description="Pourquoi ce fichier change, en une phrase.")
 
 
@@ -129,6 +156,44 @@ def diff_of(path: str, before: str | None, after: str | None) -> tuple[str, int,
     return "".join(said)[:MAX_DIFF_CHARS], added, removed
 
 
+def _lines_at(text: str, find: str) -> list[int]:
+    """Where a text's lines stand in another's, each line's trailing spaces
+    aside — the starts of its whole-line matches."""
+    lines = text.split("\n")
+    wanted = [line.rstrip() for line in find.strip("\n").split("\n")]
+    if not wanted or wanted == [""]:
+        return []
+    stripped = [line.rstrip() for line in lines]
+    return [
+        i for i in range(len(lines) - len(wanted) + 1) if stripped[i : i + len(wanted)] == wanted
+    ]
+
+
+def apply_edits(text: str, edits: Sequence[Edit]) -> tuple[str | None, str | None]:
+    """The file after its edits, in order — or why not: `not_found` when an
+    edit's text is not in it, `ambiguous` when it is there more than once.
+    Exact first; else line by line, trailing spaces aside (a copy that lost
+    them still lands where it was copied from)."""
+    after = text
+    for edit in edits:
+        if not edit.find:
+            return None, "not_found"
+        found = after.count(edit.find)
+        if found == 1:
+            after = after.replace(edit.find, edit.replace, 1)
+            continue
+        if found > 1:
+            return None, "ambiguous"
+        starts = _lines_at(after, edit.find)
+        if len(starts) != 1:
+            return None, "ambiguous" if starts else "not_found"
+        lines = after.split("\n")
+        size = len(edit.find.strip("\n").split("\n"))
+        replaced = edit.replace.strip("\n").split("\n") if edit.replace.strip("\n") else []
+        after = "\n".join([*lines[: starts[0]], *replaced, *lines[starts[0] + size :]])
+    return after, None
+
+
 def branch_of(title: str, change_id: uuid.UUID) -> str:
     """leka/<the title, as a slug>-<its id>: new, never one that exists."""
     slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:40].strip("-") or "change"
@@ -136,25 +201,47 @@ def branch_of(title: str, change_id: uuid.UUID) -> str:
 
 
 CHANGE_RULES = """You are LEKA's change writer for the agent whose instructions \
-follow. From its analysis — and from nothing else — write the change it \
-proposes, as one JSON object:
+follow. From its analysis and the files it read — and from nothing else — \
+write the change it proposes, as one JSON object:
 - repository: the full name (owner/repo) the analysis read; base_branch: \
 the branch it read, or empty for the default one.
-- files: each file to change, add or remove, with its COMPLETE new content \
-— the whole file as it must be after the change, every line, never an \
-excerpt, never « … », never a diff. null removes the file. At most 20 files; \
-only the files the analysis says must change.
+- files: each file to change, add or remove. A file that exists changes by \
+edits: each edit's `find` is a text copied exactly from that file as you were \
+given it — whole lines, enough of them to appear only once — and `replace` \
+what stands there after. Never the whole file, never « … », never a diff. A \
+new file gives its whole `content`; `delete: true` removes one. At most 20 \
+files; only the files the analysis says must change.
 - title: a short pull request title in the imperative; summary: what changes \
 and why, for the person who decides, in the language of the inputs.
-Never invent a file's content you did not read: a file the analysis did not \
-read is not changed. Answer with the JSON object only."""
+Never change a file you were not given: a file the agent did not read is not \
+changed. Answer with the JSON object only."""
+
+
+def shown(read: Mapping[str, str]) -> dict[str, str]:
+    """The files the agent read, as the writer is shown them: each whole up
+    to MOST_SHOWN, all up to MOST_SHOWN_ALL — the last ones read left out
+    first, said so."""
+    given: dict[str, str] = {}
+    left = MOST_SHOWN_ALL
+    for name, text in read.items():
+        if left <= 0:
+            given[name] = "[non montré : trop de fichiers lus]"
+            continue
+        cut = text[: min(MOST_SHOWN, left)]
+        given[name] = cut if len(cut) == len(text) else cut + "\n[… coupé]"
+        left -= len(cut)
+    return given
 
 
 def change_messages(
-    definition: Definition, inputs: Mapping[str, object], analysis: str
+    definition: Definition,
+    inputs: Mapping[str, object],
+    analysis: str,
+    read: Mapping[str, str] | None = None,
 ) -> list[Message]:
     system = f"{CHANGE_RULES}\n\n---\n\n{definition.instructions or ''}"
-    material = {"inputs": dict(inputs), "analysis": analysis}
+    # The files it read, keyed « owner/repo:path »: what the edits copy from.
+    material = {"inputs": dict(inputs), "analysis": analysis, "files": shown(read or {})}
     return [
         Message.system(system),
         Message.user(json.dumps(material, ensure_ascii=False, default=str)),
@@ -171,6 +258,8 @@ class Proposed:
     change: CodeChange | None
     error: str | None = None
     usage: dict[str, Any] = field(default_factory=dict)
+    # The files it could not change, each with why (an edit not found…).
+    skipped: list[dict[str, str]] = field(default_factory=list)
 
 
 async def github_sources(session: AsyncSession, workspace_id: uuid.UUID) -> list[Source]:
@@ -203,12 +292,15 @@ async def propose_change(
     definition: Definition,
     analysis: str,
     *,
+    read: Mapping[str, str] | None = None,
     budget: float = CHANGE_BUDGET,
 ) -> Proposed:
-    """The change a run's analysis proposes, written, diffed and kept."""
+    """The change a run's analysis proposes, written from it and the files
+    the agent read (`read`, « owner/repo:path » → text), applied, diffed and
+    kept."""
     request = Request(
         purpose=f"agent:{definition.key}:change"[:100],
-        messages=change_messages(definition, run.inputs, analysis),
+        messages=change_messages(definition, run.inputs, analysis, read),
         tier=Tier.DEEP,
         max_tokens=CHANGE_TOKENS,
         ref=f"agent_run:{run.id}",
@@ -245,13 +337,30 @@ async def propose_change(
     try:
         base = proposal.base_branch.strip() or await code.default_branch(repository)
         files: list[dict[str, object]] = []
+        skipped: list[dict[str, str]] = []
         for proposed in proposal.files[:MAX_FILES]:
             path = safe_path(proposed.path)
             if path is None or any(f["path"] == path for f in files):
                 continue
             before = await code.read(repository, path, base)
-            after = proposed.content
-            if before == after or (before is None and after is None):
+            after: str | None
+            if proposed.delete:
+                if before is None:
+                    continue
+                after = None
+            elif proposed.edits:
+                if before is None:
+                    skipped.append({"path": path, "why": "not_found"})
+                    continue
+                after, why = apply_edits(before, proposed.edits)
+                if after is None:
+                    skipped.append({"path": path, "why": why or "not_found"})
+                    continue
+            elif proposed.content is not None:
+                after = proposed.content
+            else:
+                continue
+            if before == after:
                 continue
             diff, added, removed = diff_of(path, before, after)
             files.append(
@@ -276,7 +385,14 @@ async def propose_change(
         logger.exception("change_not_read", run=str(run.id))
         return Proposed(None, "error", usage)
     if not files:
-        return Proposed(None, "no_change", usage)
+        # Its edits did not land: said, never guessed — another try reads
+        # the files again.
+        return Proposed(None, "edits_not_applied" if skipped else "no_change", usage, skipped)
+    summary = proposal.summary.strip()
+    if skipped:
+        summary += "\n\nNon appliqué : " + ", ".join(
+            f"`{s['path']}` ({SKIPPED_SAID.get(s['why'], s['why'])})" for s in skipped
+        )
     change = CodeChange(
         workspace_id=run.workspace_id,
         id=uuid.uuid4(),
@@ -286,14 +402,14 @@ async def propose_change(
         repository=repository,
         base_branch=base[:200],
         title=proposal.title.strip()[:300] or "Modification proposée par LEKA",
-        summary=proposal.summary.strip(),
+        summary=summary,
         files=files,
         status="proposed",
         proposed_by=run.requested_by,
     )
     session.add(change)
     await session.flush()
-    return Proposed(change, None, usage)
+    return Proposed(change, None, usage, skipped)
 
 
 # ── deciding ────────────────────────────────────────────────────────────────
@@ -431,8 +547,10 @@ __all__ = [
     "ChangeProposal",
     "ChangeRefusedError",
     "ChangeService",
+    "Edit",
     "Proposed",
     "ProposedFile",
+    "apply_edits",
     "body_of",
     "branch_of",
     "code_for",

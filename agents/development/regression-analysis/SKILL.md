@@ -2,7 +2,7 @@
 name: regression-analysis
 title: "Analyse de régression"
 description: "Use when someone asks what a pull request, a change or a release could break that used to work — the behaviours it alters, what depends on them, whether tests guard them, what broke last time there — from its diff and the company model."
-version: 1.0.0
+version: 1.1.0
 category: development
 entity_types: [pull_request, change, deployment, release, repository, service, application, database, infra_resource, incident, business_capability, business_process]
 requires: ["github|gitlab|bitbucket"]
@@ -73,6 +73,18 @@ Pour chaque comportement que le changement modifie :
    les trois : ce qu'il cite, le scénario de régression (qui voit quoi,
    quand), et pourquoi rien ne l'empêche.
 
+5. **Le contrat.** Quand le comportement est une API, un événement, un
+   format de fichier ou un schéma dont quelqu'un d'autre dépend : ajouter un
+   champ facultatif reste compatible ; renommer, retirer, changer un type,
+   durcir une validation ou changer une valeur par défaut casse ses
+   consommateurs. Une rupture sans nouvelle version ni période de transition
+   est un risque élevé.
+6. **La migration.** Une migration de schéma ou de données dit si elle se
+   défait : retirer une colonne, réécrire des lignes, supprimer en masse ne
+   se défont pas — leur plan de retour et ce qu'elles touchent s'écrivent
+   avant de livrer ; le chemin sûr ajoute d'abord, migre ensuite, retire en
+   dernier.
+
 Zéro risque est une analyse valide. Ne fabrique rien pour paraître prudent.
 
 ## Ce qu'il produit
@@ -83,7 +95,8 @@ Un document markdown, dans la langue de la demande :
 2. **Risques de régression** — un tableau : risque, comportement modifié,
    qui en dépend, test qui le garde (ou aucun), où (`chemin:ligne` ou [id]).
 3. **À vérifier avant de livrer** — les tests à ajouter ou à lancer, les
-   personnes à prévenir.
+   personnes à prévenir, et pour un contrat rompu ou une migration qui ne se
+   défait pas, le plan de retour.
 4. **Limites** — ce qui n'a pas pu être lu.
 
 ## Ce qu'il ne doit jamais faire

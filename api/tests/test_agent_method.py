@@ -1,6 +1,6 @@
 """What an agent works by, read while it runs: a method library
-(agents/_library/README.md) and the read_method tool — the designer's, Emil
-Kowalski's design engineering skills (emilkowalski/skills @ 2d22863, MIT).
+(agents/_library/README.md) and the read_method tool — the designer's, LEKA's
+own design guides (agents/_library/design).
 
 What these protect:
 - A library is never an agent: the loader skips every directory named `_…`,
@@ -10,9 +10,9 @@ What these protect:
 - read_method gives the index — every guide, with what it is for — or one
   guide's text; never a file outside the library, never anything but a .md
   file; a guide too long is cut, said so. Without a library, no tool.
-- The library is upstream's, unmodified: its fifteen skills with their
-  references and its licence — a change to it is a new pinned tree, read
-  line by line, and new versions of the agents that read it.
+- The library is LEKA's own: its fifteen guides and their index, each with
+  what it is for, all in French; none names an author, a repository or a
+  licence — a deliverable speaks as LEKA (provenance: THIRD_PARTY_LICENSES.md).
 - End to end, the designer reads a guide while it runs: the tool declared to
   the model, the guide's text given back to it, the call kept with the run.
 """
@@ -20,8 +20,8 @@ What these protect:
 # ruff: noqa: F811 — fixtures imported to be requested by name.
 from __future__ import annotations
 
-import hashlib
 import json
+import re
 import uuid
 from collections.abc import Callable
 from dataclasses import replace
@@ -41,26 +41,26 @@ from tests.test_code_changes_api import REPO, GitHub, _github_source, github  # 
 from tests.test_context_engine import model  # noqa: F401
 from tests.test_sources_api import _as, acme, fake_connector  # noqa: F401
 
-LIBRARY = settings.agents_dir / "_library" / "emilkowalski-skills"
-SKILLS = (
-    "animate",
-    "animate-expo",
-    "animation-performance",
-    "animation-vocabulary",
-    "apple-design",
-    "ask-sonner",
-    "break-ui",
-    "emil-design-eng",
-    "find-animation-opportunities",
-    "improve-animations",
-    "mobile-native",
-    "pick-ui-library",
-    "prototype",
-    "review-animations",
-    "write-swift",
+LIBRARY = settings.agents_dir / "_library" / "design"
+GUIDES = (
+    "audit-mouvement",
+    "bibliotheques",
+    "construire-animation",
+    "directions",
+    "interfaces-fluides",
+    "notifications-sonner",
+    "opportunites-animation",
+    "performance-animation",
+    "pire-des-cas",
+    "principes",
+    "react-native",
+    "revue-animations",
+    "swift",
+    "telephone-web",
+    "vocabulaire-mouvement",
 )
-# The whole tree, as upstream has it at 2d22863 — every path and its bytes.
-PINNED = "d41fb24676c53baf9b8fedbdba9a7f552a05c7286138bac786c73d29cb4036ab"
+# What a guide must never say: where a method came from.
+SOURCES = re.compile(r"kowalski|emilkowalski|github\.com|licen[cs]e|copyright|©", re.IGNORECASE)
 
 HEADER = """---
 name: {name}
@@ -85,25 +85,14 @@ def _agent(root: Path, name: str, extra: str) -> None:
     (folder / "SKILL.md").write_text(HEADER.format(name=name, extra=extra), encoding="utf-8")
 
 
-def _tree(root: Path) -> str:
-    said = hashlib.sha256()
-    for path in sorted(p for p in root.rglob("*") if p.is_file()):
-        said.update(path.relative_to(root).as_posix().encode())
-        said.update(b"\0")
-        said.update(path.read_bytes())
-        said.update(b"\0")
-    return said.hexdigest()
-
-
 # ── a library is never an agent ─────────────────────────────────────────────
 
 
 def test_a_library_is_never_loaded_as_an_agent() -> None:
-    held = sorted(LIBRARY.rglob("SKILL.md"))
-    assert len(held) == len(SKILLS)
+    assert sorted(p.stem for p in LIBRARY.glob("*.md") if p.name != "README.md") == list(GUIDES)
     found = discover(settings.agents_dir)
     assert not any("_library" in path.parts for path in found)
-    assert {d.key for d in catalogue()}.isdisjoint(SKILLS)
+    assert {d.key for d in catalogue()}.isdisjoint(GUIDES)
 
 
 def test_an_agent_names_a_library_that_is_there_and_reads_it_with_read_method(
@@ -172,20 +161,19 @@ async def test_read_method_gives_the_index_or_one_guide_never_more() -> None:
 
     listed = await read({})
     said = json.loads(listed.text)
-    assert (listed.outcome, said["library"]) == ("ok", "_library/emilkowalski-skills")
+    assert (listed.outcome, said["library"]) == ("ok", "_library/design")
     paths = {f["path"]: f for f in said["files"]}
-    assert {f"skills/{s}/SKILL.md" for s in SKILLS} <= set(paths)
-    assert {"README.md", "performance-cheatsheet.md", "skills/break-ui/CATALOG.md"} <= set(paths)
-    assert paths["skills/animate/SKILL.md"]["about"].startswith("Build an animation from scratch")
+    assert {f"{g}.md" for g in GUIDES} | {"README.md"} == set(paths)
+    assert paths["construire-animation.md"]["about"].startswith("Écrire une animation")
     assert all(f["about"] and f["lines"] > 1 for f in said["files"])
 
-    standards = await read({"path": "skills/review-animations/STANDARDS.md"})
-    text = json.loads(standards.text)
-    assert standards.outcome == "ok"
-    assert text["path"] == "skills/review-animations/STANDARDS.md"
-    assert "**Never `ease-in` on UI.**" in text["text"] and text["truncated"] is False
+    review = await read({"path": "revue-animations.md"})
+    text = json.loads(review.text)
+    assert review.outcome == "ok"
+    assert text["path"] == "revue-animations.md"
+    assert "jamais `ease-in`" in text["text"] and text["truncated"] is False
 
-    for wrong in ("../registry.yaml", "/etc/passwd", "LICENSE", "skills"):
+    for wrong in ("../registry.yaml", "/etc/passwd", "LICENSE", "design"):
         refused = await read({"path": wrong})
         assert (refused.outcome, refused.why) == ("refused", "not_in_method"), wrong
 
@@ -206,16 +194,22 @@ async def test_a_guide_too_long_is_cut_and_said_cut(tmp_path: Path) -> None:
     assert (len(said["text"]), said["truncated"]) == (MOST_CHARS, True)
 
 
-# ── the library: upstream's, unmodified ─────────────────────────────────────
+# ── the library: LEKA's own ─────────────────────────────────────────────────
 
 
-def test_the_library_is_emil_kowalski_s_skills_unmodified() -> None:
-    for skill in SKILLS:
-        assert (LIBRARY / "skills" / skill / "SKILL.md").is_file(), skill
-    assert "Copyright (c) 2026 Emil Kowalski" in (LIBRARY / "LICENSE").read_text(encoding="utf-8")
-    # A change to it is a new upstream commit, read line by line: pin it here,
-    # and give the agents that read it new versions (agents/_library/README.md).
-    assert _tree(LIBRARY) == PINNED
+def test_the_library_is_leka_s_own_guides_and_names_no_source() -> None:
+    for name in (*GUIDES, "README"):
+        text = (LIBRARY / f"{name}.md").read_text(encoding="utf-8")
+        front = text.split("\n---\n", 1)[0]
+        # The index reads each guide's title and what it is for.
+        assert front.startswith("---\ntitre: ") and "\ndescription: " in front, name
+        assert not SOURCES.search(text), (name, SOURCES.search(text))
+    # Its provenance is in the licence notices, with the licence's text.
+    notices = (settings.agents_dir.parent / "THIRD_PARTY_LICENSES.md").read_text(encoding="utf-8")
+    assert "`agents/_library/design/`" in notices
+    assert (
+        settings.agents_dir.parent / "third_party" / "licenses" / "emilkowalski-skills-MIT.txt"
+    ).is_file()
 
 
 # ── end to end: the designer reads a guide while it runs ────────────────────
@@ -237,9 +231,7 @@ async def test_the_designer_reads_its_method_while_it_runs(
     await sync_catalogue()
     script = leka_gemini(
         gemini(call={"name": "read_method", "args": {}}),
-        gemini(
-            call={"name": "read_method", "args": {"path": "skills/review-animations/STANDARDS.md"}}
-        ),
+        gemini(call={"name": "read_method", "args": {"path": "revue-animations.md"}}),
         gemini(call={"name": "read_method", "args": {"path": "../registry.yaml"}}),
         gemini(REPORT),
     )
@@ -263,15 +255,20 @@ async def test_the_designer_reads_its_method_while_it_runs(
         "repository-profile",
     }
     system = script.asked[0]["systemInstruction"]["parts"][0]["text"]
-    assert "Le cœur de sa méthode" in system and "Never use ease-in for UI animations" in system
+    assert "Le cœur de sa méthode" in system and "`ease-in` retarde le premier mouvement" in system
+    # It speaks as LEKA: no source named, and told never to name one.
+    assert "Your deliverable speaks as LEKA" in system
+    assert not SOURCES.search(
+        system.split("Your deliverable speaks as LEKA", 1)[1].split("\n", 1)[1]
+    )
 
     def answered(asked: int) -> dict[str, object]:
         part = script.asked[asked]["contents"][-1]["parts"][0]["functionResponse"]
         said: dict[str, object] = json.loads(part["response"]["result"])
         return said
 
-    assert answered(1)["library"] == "_library/emilkowalski-skills"
-    assert "Never `ease-in` on UI." in str(answered(2)["text"])
+    assert answered(1)["library"] == "_library/design"
+    assert "jamais `ease-in`" in str(answered(2)["text"])
     assert answered(3) == {"error": "not_in_method", "path": "../registry.yaml"}
 
     run = (await client.get(f"/api/v1/agent-runs/{run_id}")).json()

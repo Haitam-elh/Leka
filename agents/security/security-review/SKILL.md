@@ -2,7 +2,7 @@
 name: security-review
 title: "Revue de sécurité"
 description: "Use when someone asks whether an application, a service or its infrastructure is exposed — sensitive data it holds, what reaches it, who owns it, what is undocumented — and what to check first."
-version: 1.2.0
+version: 1.3.0
 category: security
 entity_types: [application, service, infra_resource, cloud_account, database, data_object, repository, team]
 requires: []
@@ -57,6 +57,19 @@ Des preuves avant l'assurance. Dans cet ordre :
 2. **La surface, recensée** : chaque point d'entrée et chaque frontière que les
    sources montrent. Ce que tu n'as pas pu regarder est une lacune, dite comme
    telle — jamais un « rien à signaler ».
+   **Les six menaces, à chaque frontière** — des angles pour chercher, pas des
+   constats :
+   - **usurpation** — qui peut se faire passer pour qui : un service exposé
+     sans fournisseur d'identité connu, un compte partagé ;
+   - **altération** — qui peut écrire les données sensibles, par quel chemin ;
+   - **répudiation** — une action sensible (paiement, droits, suppression)
+     sans journal connu ;
+   - **divulgation** — des données sensibles lisibles hors de leur périmètre :
+     une ressource publique, un dépôt public qui les porte ;
+   - **déni de service** — un point unique, une dépendance externe critique
+     sans solution de repli ;
+   - **élévation de privilège** — un accès administrateur large, un compte de
+     service partagé entre environnements.
 3. **Trois jugements, séparés** pour chaque constat :
    - **sévérité** — l'impact et ce qu'un attaquant réaliste devrait déjà avoir ;
      un motif seul ne fait pas une sévérité ;
@@ -73,6 +86,13 @@ Des preuves avant l'assurance. Dans cet ordre :
    périmètre — la sévérité suit le pire.
 7. **L'inconnu reste inconnu** : ce dont tu ne sais pas s'il est joignable n'est
    pas « injoignable ».
+8. **L'exposition et l'impact métier, pas un score** : la même faiblesse pèse
+   plus sur une API de paiement ouverte à internet que sur un outil interne.
+   Un risque accepté se note avec la personne qui en répond ; sans elle, il
+   reste ouvert.
+9. **Un secret exposé est déjà compromis** : la correction commence par sa
+   révocation chez le fournisseur ; le retirer de l'endroit où il traîne ne
+   suffit pas. Sa valeur ne s'écrit jamais, seulement son type et où il est.
 
 Ce qu'il regarde, à la manière de l'OWASP mais au niveau du système : les
 données sensibles stockées ou lues, le contrôle d'accès (qui est
@@ -92,10 +112,13 @@ Un document markdown, dans la langue de la demande :
 3. **Données sensibles** — ce qu'il stocke ou lit, d'après le modèle.
 4. **Constats** — un tableau : sévérité, confiance, constat, scénario, ce qu'il
    cite ([id]), ce qui est à vérifier pour le corriger.
-5. **Hypothèses** — à part, chacune avec ce qui manque pour l'appuyer.
-6. **Signaux** — sans responsable, non documenté, ressource cloud partagée,
+5. **Exigences** — une par constat appuyé, écrite pour qu'un test ou une revue
+   la vérifie : « chaque appel à … vérifie que … », « … n'est lisible que
+   par … ».
+6. **Hypothèses** — à part, chacune avec ce qui manque pour l'appuyer.
+7. **Signaux** — sans responsable, non documenté, ressource cloud partagée,
    dépendance critique externe.
-7. **Limites** — LEKA ne scanne pas de vulnérabilités et ne lit pas le code : il
+8. **Limites** — LEKA ne scanne pas de vulnérabilités et ne lit pas le code : il
    dit ce que le modèle de l'entreprise montre.
 
 ## Ce qu'il ne doit jamais faire
@@ -110,7 +133,3 @@ Un document markdown, dans la langue de la demande :
 ## Ses compétences
 
 Il peut aussi appeler la compétence `security-posture` de la bibliothèque LEKA (LEKA-401, docs/skills.md) : la posture de sécurité : ce qui est exposé à internet, les dépôts publics, les données personnelles et les secrets stockés, ce qui n'a pas de propriétaire. Chacune est une lecture vérifiée, faite avec les droits de la personne qui demande, et gardée. Il s'appuie sur leurs signaux (`signals`) et cite ce qu'elles ont lu ; ce qu'une compétence ne dit pas, il ne l'invente pas.
-
-<sub>Méthode adaptée du skill `cso` de [gstack](https://github.com/garrytan/gstack) @ `945ac30`
-(MIT, © 2026 Garry Tan) et de l'agent `security-reviewer` d'[ECC](https://github.com/affaan-m/ECC)
-@ `b92f181` (MIT, © 2026 Affaan Mustafa), réécrite pour ce que LEKA voit. Voir `THIRD_PARTY_LICENSES.md`.</sub>

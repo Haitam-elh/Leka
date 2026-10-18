@@ -2,7 +2,7 @@
 name: data-analysis
 title: "Analyse des données"
 description: "Use when someone asks about data — where it lives, which applications read or write it, who owns it, where it flows — from the databases and the company model."
-version: 1.2.0
+version: 1.3.0
 category: data
 entity_types: [database, schema, data_object, application, service, team, infra_resource]
 requires: ["postgresql|mysql|mariadb|sqlserver|oracle|mongodb|supabase"]
@@ -67,7 +67,19 @@ changer. Avant d'écrire, dans cet ordre :
    Un changement sûr se fait en trois temps — ajouter le nouveau, faire
    migrer chacun, retirer l'ancien quand plus personne ne s'en sert. Retirer
    avant casse ses lecteurs ; une donnée réécrite ne revient pas.
-5. **Ce qui ne se voit pas.** Les index, les requêtes, les verrous et les
+5. **La reprise.** Pour chaque base critique, ce que le modèle montre de sa
+   sauvegarde, de sa réplication et de sa bascule, et les objectifs de
+   reprise s'ils sont documentés — la perte de données acceptable (RPO), la
+   durée d'arrêt acceptable (RTO). Absents : « inconnus », jamais
+   « assurés ». Une sauvegarde dont aucune restauration n'est documentée
+   reste à prouver ; un service qui lit une copie en lecture peut lire une
+   donnée en retard sur ce qu'il vient d'écrire.
+6. **Les flux.** Une chaîne qui alimente un jeu de données : son contrat (un
+   schéma documenté, ce qui arrive quand il change), ses consommateurs. Un
+   consommateur qui lit la source brute plutôt que la donnée préparée pour
+   lui est un couplage ; une chaîne qu'on ne peut pas relancer sans doublons
+   se dit quand les sources le montrent.
+7. **Ce qui ne se voit pas.** Les index, les requêtes, les verrous et les
    volumes ne sont pas dans le modèle : quand ils comptent, dis qu'ils
    restent à vérifier par les responsables de la base.
 
@@ -79,7 +91,9 @@ Un document markdown, dans la langue de la demande :
 2. **Qui l'utilise** — applications et services, en lecture ou en écriture quand c'est connu.
 3. **D'où elle vient, où elle va** — son lignage.
 4. **Responsables** — et ce qui n'en a pas.
-5. **Limites** — LEKA ne lit pas le contenu des tables, seulement leur structure ; ni les index, les requêtes ou les volumes : ce qui reste à vérifier, et par qui.
+5. **Reprise** — sauvegardes, réplication, objectifs de reprise : connus ou
+   inconnus.
+6. **Limites** — LEKA ne lit pas le contenu des tables, seulement leur structure ; ni les index, les requêtes ou les volumes : ce qui reste à vérifier, et par qui.
 
 ## Ce qu'il ne doit jamais faire
 
@@ -93,7 +107,3 @@ Un document markdown, dans la langue de la demande :
 ## Ses compétences
 
 Il peut aussi appeler la compétence `data-landscape` de la bibliothèque LEKA (LEKA-401, docs/skills.md) : le paysage des données : les bases, ce qu'elles contiennent de sensible, qui les utilise, les tables qui portent des données personnelles ou des secrets. Chacune est une lecture vérifiée, faite avec les droits de la personne qui demande, et gardée. Il s'appuie sur leurs signaux (`signals`) et cite ce qu'elles ont lu ; ce qu'une compétence ne dit pas, il ne l'invente pas.
-
-<sub>Méthode adaptée de l'agent `database-reviewer` et du skill `database-migrations`
-d'[ECC](https://github.com/affaan-m/ECC) @ `b92f181` (MIT, © 2026 Affaan Mustafa), réécrite pour ce
-que LEKA voit. Voir `THIRD_PARTY_LICENSES.md`.</sub>

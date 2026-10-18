@@ -7,9 +7,15 @@ What these protect:
   file and a removed one said; a branch is always a new leka/… one.
 - The agent reads the code with its own tools (list_files, read_file),
   never offered to an agent that does not name them; its change is asked
-  again of the model, structured, then diffed against the branch it read —
-  a file it says changed but did not, or one outside the repository, is
-  left out — and kept, proposed, with its run.
+  again of the model, structured, given the files the agent read — exact
+  edits, applied here to each file read again on its branch, never whole
+  files written from memory (2026-10-18: asked for them, it wrote none) —
+  then diffed: a file it says changed but did not, or one outside the
+  repository, is left out; kept, proposed, with its run.
+- An edit whose text is not in the file is said, never guessed: no change,
+  the run's analysis stands, and its change can be written again — from the
+  analysis it delivered and the files it read, read again — never the run
+  done again; once its change is there, not again.
 - Deciding takes intention:approve: a member cannot. Accepted on a source
   that does not allow pull requests, it stays proposed, said why; allowed,
   LEKA opens ONE pull request — a new branch leka/…, one commit with the
@@ -31,8 +37,9 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 
-from leka.capabilities import CodeChange, execute_run, sync_catalogue
-from leka.capabilities.changes import branch_of, diff_of, safe_path
+from leka.api import agent_runs as agent_runs_api
+from leka.capabilities import CodeChange, execute_run, rewrite_change, sync_catalogue
+from leka.capabilities.changes import Edit, apply_edits, branch_of, diff_of, safe_path
 from leka.capabilities.code_tools import MOST_CHARS, lines_of
 from leka.connectors import SourceKind, SourceService
 from leka.connectors.base import Connector
@@ -176,13 +183,40 @@ def _proposal() -> dict[str, Any]:
         "title": "Déduire les paiements en attente du solde",
         "summary": "Le solde affiché ignore les paiements en attente.",
         "files": [
-            {"path": "app/balance.py", "content": AFTER, "why": "le calcul du solde"},
+            {
+                "path": "app/balance.py",
+                # An edit, copied from the file it read — not the whole file.
+                "edits": [
+                    {
+                        "find": "    return account.total\n",
+                        "replace": "    return account.total - account.pending\n",
+                    }
+                ],
+                "why": "le calcul du solde",
+            },
             # Outside the repository: left out.
             {"path": "../secrets.txt", "content": "x"},
             # Said changed, the same: left out.
             {"path": "README.md", "content": README},
         ],
     }
+
+
+def test_edits_land_where_they_were_copied_from_or_say_why() -> None:
+    text = "a\nb  \nc\nb\n"
+    # Exact.
+    assert apply_edits(text, [Edit(find="c\n", replace="C\n")]) == ("a\nb  \nC\nb\n", None)
+    # In order, each on the file as the last left it.
+    assert apply_edits("x\ny\n", [Edit(find="x", replace="z"), Edit(find="z\ny", replace="w")]) == (
+        "w\n",
+        None,
+    )
+    # A copy that lost its trailing spaces lands on its lines.
+    assert apply_edits(text, [Edit(find="a\nb\nc", replace="a\nB\nc")]) == ("a\nB\nc\nb\n", None)
+    # Not there, or there twice: said, never guessed.
+    assert apply_edits(text, [Edit(find="zzz", replace="y")]) == (None, "not_found")
+    assert apply_edits(text, [Edit(find="b", replace="y")]) == (None, "ambiguous")
+    assert apply_edits(text, [Edit(find="", replace="y")]) == (None, "not_found")
 
 
 def test_a_file_is_read_whole_or_by_ranges_and_says_which() -> None:
@@ -268,10 +302,14 @@ async def test_a_change_is_proposed_diffed_and_accepted_as_a_pull_request(
         script.asked[2]["contents"][-1]["parts"][0]["functionResponse"]["response"]["result"]
     )
     assert read["content"] == BEFORE and read["branch"] == "main"
-    # The change, asked structured with no tool, from the analysis.
+    # The change, asked structured with no tool, from the analysis and the
+    # files the agent read.
     asked = script.asked[3]
     assert asked["generationConfig"]["responseMimeType"] == "application/json"
     assert "tools" not in asked
+    material = json.loads(asked["contents"][-1]["parts"][0]["text"])
+    assert material["analysis"] == analysis
+    assert material["files"] == {f"{REPO}:app/balance.py": BEFORE}
 
     run = (await client.get(f"{RUNS}/{run_id}")).json()
     assert [e["kind"] for e in run["events"]][-2:] == ["proposed", "succeeded"]
@@ -370,3 +408,64 @@ async def test_a_change_is_rejected_and_another_workspace_sees_nothing(
     assert (rejected.json()["status"], rejected.json()["note"]) == ("rejected", "Pas maintenant")
     assert (await client.post(f"{API}/{change_id}/accept", json={})).status_code == 409
     assert github.writes() == []
+
+
+async def test_an_edit_not_found_is_said_and_the_change_written_again(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    leka_gemini: Callable[..., Script],
+    github: GitHub,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _as(identity, acme, "member")
+    await _github_source(acme["acme"])
+    await sync_catalogue()
+    asked: list[uuid.UUID] = []
+
+    async def queue(workspace_id: uuid.UUID, run_id: uuid.UUID) -> bool:
+        asked.append(run_id)
+        return True
+
+    monkeypatch.setattr(agent_runs_api, "queue_change", queue)
+    wrong = _proposal()
+    wrong["files"][0]["edits"] = [{"find": "    return total\n", "replace": "x"}]
+    leka_gemini(
+        gemini(call={"name": "read_file", "args": {"repository": REPO, "path": "app/balance.py"}}),
+        gemini("# Analyse\n\nLe solde ignore les paiements en attente."),
+        gemini(json.dumps(wrong)),
+        # Written again: the edit copied right.
+        gemini(json.dumps(_proposal())),
+    )
+    started = await client.post(
+        RUNS,
+        json={"key": "code-change", "inputs": {"demande": "Corrige le solde", "depot": REPO}},
+    )
+    run_id = started.json()["id"]
+    assert await execute_run(acme["acme"], uuid.UUID(run_id)) == {"status": "succeeded"}
+
+    # No change, said why: the analysis stands.
+    run = (await client.get(f"{RUNS}/{run_id}")).json()
+    assert (run["status"], run["draw_failed"]) == ("succeeded", "edits_not_applied")
+    failed = [e["detail"] for e in run["events"] if e["kind"] == "render_failed"]
+    assert failed[-1]["code"] == "edits_not_applied" and "app/balance.py" in failed[-1]["said"]
+    assert (await client.get(API, params={"run_id": run_id})).json() == []
+
+    # Written again, from its analysis: queued, being written.
+    again = await client.post(f"{RUNS}/{run_id}/change")
+    assert again.status_code == 202, again.text
+    assert (again.json()["drawing"], again.json()["draw_failed"]) == (["change"], None)
+    assert asked == [uuid.UUID(run_id)]
+    assert (await client.post(f"{RUNS}/{run_id}/change")).status_code == 409
+    done = await rewrite_change(acme["acme"], uuid.UUID(run_id))
+    assert done["error"] is None and done["proposed"]
+    [change] = (await client.get(API, params={"run_id": run_id})).json()
+    assert "+    return account.total - account.pending" in change["files"][0]["diff"]
+    run = (await client.get(f"{RUNS}/{run_id}")).json()
+    assert (run["drawing"], run["draw_failed"]) == ([], None)
+    # Its change there: never written twice.
+    assert (await client.post(f"{RUNS}/{run_id}/change")).status_code == 409
+    # Only a code change is written again.
+    architect = (await client.post(f"{RUNS}/{uuid.uuid4()}/change")).status_code
+    assert architect == 404

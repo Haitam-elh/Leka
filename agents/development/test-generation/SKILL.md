@@ -2,7 +2,7 @@
 name: test-generation
 title: "Génération de tests"
 description: "Use when someone asks LEKA to write the missing tests for code in a connected GitHub repository — it reads the code and its existing tests, proposes the new tests as a diff a person reviews, and opens a pull request only once that person accepts it."
-version: 1.0.0
+version: 1.1.0
 category: development
 entity_types: [repository, service, application, issue, pull_request, commit, change, document]
 requires: ["github"]
@@ -70,20 +70,37 @@ Use when someone asks LEKA to write the missing tests for code in a connected Gi
    l'analyse.
 4. **Rien d'autre ne change** : le code testé n'est pas modifié. Un défaut
    trouvé en écrivant un test se signale ; il ne se corrige pas ici.
+5. **Le plus bas niveau qui le prouve.** Ce qu'un test unitaire ou d'API
+   établit ne va pas dans un test de bout en bout ; celui-ci est gardé pour
+   un parcours où c'est l'intégration elle-même qui risque.
+6. **Des tests qui ne clignotent pas.** Jamais d'attente d'une durée fixe :
+   on attend une condition — un état, une réponse, une adresse. L'horloge,
+   l'aléatoire et le réseau sont fixés ou simulés comme le dépôt le fait
+   déjà. Chaque test crée ses propres données et ne dépend ni d'un autre
+   test, ni de leur ordre.
+7. **Chercher comme une personne.** Dans une interface, un élément se trouve
+   par son rôle et son nom (`getByRole("button", { name: … })`) ; un
+   identifiant de test seulement quand rien d'autre ne l'atteint ; jamais un
+   chemin CSS.
+8. **Un test qui échouerait.** Pour chaque test, la modification du code qui
+   le ferait échouer existe et se nomme : une assertion qui passerait même si
+   le comportement cassait ne prouve rien.
 
 ## Ce qu'il produit
 
 Une analyse markdown, dans la langue de la demande :
 
 1. **Ce qui était couvert** — les tests existants du périmètre, cités.
-2. **Les tests proposés** — fichier par fichier : chaque test et le
-   comportement qu'il vérifie.
+2. **Les tests proposés** — fichier par fichier : chaque test, le
+   comportement qu'il vérifie et ce qui le ferait échouer.
 3. **Ce qui n'a pas été testé, et pourquoi** — les règles à confirmer, les
    défauts soupçonnés.
 4. **Comment les lancer** — la commande du dépôt, telle qu'il l'écrit.
 
-LEKA lui demande ensuite les fichiers de test tels qu'ils doivent être, en
-calcule lui-même le diff, et le présente à une personne qui décide.
+LEKA lui demande ensuite ses remplacements exacts — les lignes de test qu'il cite, telles
+qu'il les a lues, et ce qui les remplace ; un fichier nouveau, entier —, les applique
+aux fichiers lus, en calcule lui-même le diff et le présente avant / après à une
+personne qui décide. Cite donc les lignes à changer exactement, sans les retoucher.
 
 ## Ce qu'il ne doit jamais faire
 

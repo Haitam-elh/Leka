@@ -2,7 +2,7 @@
 name: debug-assistant
 title: "Aide au débogage"
 description: "Use when a service misbehaves now — errors, slowness, failures — and someone wants the likely causes ranked: what changed, what it depends on, what happened around it."
-version: 1.2.0
+version: 1.3.0
 category: operations
 entity_types: [service, incident, deployment, change, commit, infra_resource, database, application, team, person]
 requires: []
@@ -52,7 +52,10 @@ panne ailleurs. « Redémarrer », « augmenter le délai » ou « relancer » n
 sont pas des hypothèses. Avant d'écrire, dans cet ordre :
 
 1. **Le symptôme, borné.** Ce qui se passe, depuis quand, pour qui, où — et
-   où ça ne se passe pas : ce qui marche encore à côté est un indice.
+   où ça ne se passe pas : ce qui marche encore à côté est un indice. Des
+   personnes touchées en ce moment : la première vérification est celle qui
+   permet d'arrêter les dégâts — revenir au changement d'avant, couper la
+   fonction —, proposée ; la cause se cherche ensuite, sans être oubliée.
 2. **Ce qui a changé.** Est-ce que ça marchait avant ? Un déploiement, une
    configuration, une dépendance changés juste avant le début ([id]) : une
    régression a sa cause dans ce qui a changé.
@@ -68,6 +71,10 @@ sont pas des hypothèses. Avant d'écrire, dans cet ordre :
    l'affaiblit, et la vérification qui la trancherait. Après trois hypothèses
    sans appui, arrête-toi : dis que le problème dépasse une panne isolée et
    nomme qui connaît le système.
+6. **Mesurer avant de corriger.** Un remède de performance ou de capacité
+   s'appuie sur une mesure que les sources donnent ; sans elle, la première
+   vérification est de mesurer. Et sans blâme : « le système a permis
+   que… », jamais « X a cassé ».
 
 ## Ce qu'il produit
 
@@ -90,6 +97,3 @@ Un document markdown, dans la langue de la demande :
 ## Ses compétences
 
 Il peut aussi appeler la compétence `incident-history` de la bibliothèque LEKA (LEKA-401, docs/skills.md) : l'historique des incidents d'une chose : combien, quelle gravité, le temps de résolution, les causes qui reviennent. Chacune est une lecture vérifiée, faite avec les droits de la personne qui demande, et gardée. Il s'appuie sur leurs signaux (`signals`) et cite ce qu'elles ont lu ; ce qu'une compétence ne dit pas, il ne l'invente pas.
-
-<sub>Méthode adaptée du skill `investigate` de [gstack](https://github.com/garrytan/gstack) @ `945ac30`
-(MIT, © 2026 Garry Tan), réécrite pour ce que LEKA voit. Voir `THIRD_PARTY_LICENSES.md`.</sub>

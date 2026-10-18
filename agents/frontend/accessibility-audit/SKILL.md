@@ -2,7 +2,7 @@
 name: accessibility-audit
 title: "Audit d'accessibilité"
 description: "Use when someone asks whether a web application built from a connected GitHub repository is accessible — to the keyboard, to screen readers, in contrast and text size — against WCAG 2.2 and the RGAA, read from its front-end code."
-version: 1.0.0
+version: 1.1.0
 category: development
 entity_types: [repository, application, service, pull_request, release, deployment, team, person, document]
 requires: ["github"]
@@ -85,9 +85,27 @@ il existe, au critère RGAA correspondant. Dans cet ordre :
    pixels qui empêche l'agrandissement est un constat.
 6. **Le mouvement.** Une animation qui ne respecte pas
    `prefers-reduced-motion` est un constat.
+7. **Les composants faits maison** — onglets, menus, fenêtres modales,
+   carrousels, sélecteurs de date — sont suspects jusqu'à preuve du
+   contraire : leur clavier suit le modèle ARIA de leur rôle (les flèches
+   entre les onglets, Début et Fin, Échap qui ferme et rend le focus à ce qui
+   a ouvert). Le HTML natif d'abord : un `<button>` vaut mieux qu'un `div`
+   avec un rôle, et un ARIA mal posé est pire qu'aucun — `aria-hidden` sur ce
+   qui prend le focus, un `aria-label` sur ce qui n'est pas interactif, un
+   rôle qui répète celui de la balise.
+8. **Les changements de page** d'une application monopage : le titre du
+   document change, et le focus va au contenu nouveau ou un message
+   l'annonce.
+9. **L'agrandissement et les cibles.** À 200 % puis 400 %, rien ne se coupe :
+   une hauteur fixe sur un bloc de texte, un `overflow: hidden` qui le
+   tronque, un viewport qui interdit le zoom (`user-scalable=no`,
+   `maximum-scale=1`) sont des constats. Une cible de pointeur fait au moins
+   24 × 24 px (2.5.8) ; ce qui reçoit le focus n'est pas caché par un en-tête
+   ou un pied collant (2.4.11).
 
 La porte avant chaque constat : le fichier et la ligne, le critère, la
-personne gênée et comment. Sévérité : **bloquant** (une tâche impossible
+personne gênée et comment, et la façon de vérifier que la correction
+marche. Sévérité : **bloquant** (une tâche impossible
 pour certaines personnes), **majeur** (possible au prix d'un détour),
 **mineur**. Zéro constat est un audit valide — jamais une conformité
 déclarée : un audit du code ne remplace pas un test avec des personnes et
@@ -99,10 +117,13 @@ Un document markdown, dans la langue de la demande :
 
 1. **Ce qui a été audité** — le dépôt, la branche, les fichiers lus.
 2. **Constats** — un tableau : sévérité, critère WCAG (et RGAA), constat,
-   qui est gêné, où (`chemin:ligne`), correction proposée. Vide s'il n'y a
-   rien : dis-le.
-3. **Ce qui est bien fait** — ce qu'il faut garder, cité.
-4. **Limites** — ce qu'un audit du code ne peut pas établir (rendu réel,
+   qui est gêné, où (`chemin:ligne`), correction proposée, comment vérifier.
+   Vide s'il n'y a rien : dis-le.
+3. **Par où commencer** — les bloquants avant la prochaine mise en
+   production, les majeurs au cycle suivant, les mineurs au fil de l'eau ;
+   d'abord ce qui empêche une tâche, pas ce qui se voit le plus.
+4. **Ce qui est bien fait** — ce qu'il faut garder, cité.
+5. **Limites** — ce qu'un audit du code ne peut pas établir (rendu réel,
    lecteurs d'écran, contrastes non résolus), à vérifier à la main.
 
 ## Ce qu'il ne doit jamais faire

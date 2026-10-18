@@ -43,12 +43,12 @@ FRONTEND = {
 }
 CODE = {"list_files", "read_file", "list_pull_requests", "read_pull_request"}
 # The designer's library, and who reads it (agents/_library/README.md).
-LIBRARY = "_library/emilkowalski-skills"
+LIBRARY = "_library/design"
 VERSIONS = {
-    "ui-quality-review": "1.1.0",
-    "accessibility-audit": "1.0.0",
-    "design-review": "2.1.0",
-    "motion-review": "1.1.0",
+    "ui-quality-review": "2.0.0",
+    "accessibility-audit": "1.1.0",
+    "design-review": "3.0.0",
+    "motion-review": "2.0.0",
 }
 
 
@@ -83,6 +83,11 @@ def test_each_is_registered_read_only_reading_the_code_it_cites() -> None:
             assert section in said, (key, section)
         assert "Rien d'inventé" in said and "fichier et la ligne" in said, key
         assert "Zéro constat" in said, key
+        # It speaks as LEKA: it names no source of its method, and its
+        # deliverable never will (2026-10-18).
+        assert not any(w in said for w in ("Kowalski", "emilkowalski", "agency-agents", "<sub>")), (
+            key
+        )
 
 
 def test_the_accessibility_audit_cites_its_criteria_and_never_declares_conformity() -> None:
@@ -90,6 +95,17 @@ def test_the_accessibility_audit_cites_its_criteria_and_never_declares_conformit
     assert "WCAG 2.2" in said and "RGAA" in said
     assert "4,5:1" in said and "sans ratio inventé" in said
     assert "jamais une\nconformité" in said or "jamais une conformité" in said
+    # 2026-10-18: home-made widgets suspect until their keyboard is proven,
+    # native HTML before ARIA, a page change announced, zoom and targets;
+    # each finding with how to check its fix, and where to start.
+    for step in (
+        "Les composants faits maison",
+        "Les changements de page",
+        "L'agrandissement et les cibles",
+    ):
+        assert step in said, step
+    assert "2.5.8" in said and "2.4.11" in said
+    assert "comment vérifier" in said and "**Par où commencer**" in said
 
 
 def test_the_motion_review_respects_reduced_motion_and_what_composes() -> None:
@@ -99,16 +115,35 @@ def test_the_motion_review_respects_reduced_motion_and_what_composes() -> None:
     # Its bar is the designer's: never ease-in, an exit included (it once
     # asked for one), and the guides read before it judges.
     assert "**Jamais `ease-in`" in said and "sortie en accélération" not in said
-    assert "skills/review-animations/STANDARDS.md" in said and "**Block** ou **Approve**" in said
+    assert "`revue-animations.md`" in said and "**Bloquer** ou **Approuver**" in said
+    assert "Le livrable ne cite jamais les guides" in said
 
 
 def test_the_interface_s_quality_breaks_it_with_real_world_data_and_on_a_phone() -> None:
     said = {d.key: d for d in catalogue()}["ui-quality-review"].instructions or ""
-    assert "skills/break-ui/CATALOG.md" in said and "skills/mobile-native/SKILL.md" in said
+    assert "`pire-des-cas.md`" in said and "`telephone-web.md`" in said
     assert "« 1 membres »" in said and "non bornée" in said
+    # 2026-10-18: the product lens before the pixels, its states including
+    # an error that takes the screen down, an exact fix and how to check it,
+    # a decision — and a file cut read by ranges, never left half-judged.
+    assert "**Le regard du produit, d'abord**" in said
+    assert "fait tomber l'écran entier" in said and "comment vérifier" in said
+    # An error is followed to what catches it before it is said to take the
+    # screen down — Haitam's first test called one blocking that a form
+    # hook caught and showed (2026-10-18); an impossible case is not one.
+    assert "jusqu'à ce qui\n   l'attrape" in said and "Un cas que le code rend impossible" in said
+    for part in (
+        "**Prêt**",
+        "**À reprendre**",
+        "**En bref**",
+        "**Avant d'être prêt**",
+        "**Les décisions pour vous**",
+    ):
+        assert part in said, part
+    assert "`from_line`" in said and "Le livrable ne cite jamais les guides" in said
 
 
-def test_the_designer_works_by_emil_kowalski_s_method_whole() -> None:
+def test_the_designer_works_by_leka_s_design_method_whole() -> None:
     designer = {d.key: d for d in catalogue()}["design-review"]
     said = designer.instructions or ""
     assert (designer.rounds, designer.method) == (30, LIBRARY)
@@ -118,30 +153,27 @@ def test_the_designer_works_by_emil_kowalski_s_method_whole() -> None:
         "reference",
         "demande",
     ]
-    # Its core, word for word: emil-design-eng from « You are a design
-    # engineer » to its last line, its headings one level down.
-    guide = (settings.agents_dir / LIBRARY / "skills/emil-design-eng/SKILL.md").read_text()
-    core = guide[guide.index("You are a design engineer") :].rstrip()
-    demoted = "\n".join(
-        line[1:] if line.startswith("##") else line
-        for line in said[said.index("You are a design engineer") :].rstrip().split("\n")
-    )
-    assert demoted == core
-    assert "emilkowalski/skills" in said and "MIT, © 2026 Emil Kowalski" in said
+    # Its core, word for word: LEKA's principles, after its title, their
+    # headings one level down.
+    guide = (settings.agents_dir / LIBRARY / "principes.md").read_text()
+    body = guide.split("\n---\n", 1)[1].lstrip("\n").split("\n", 1)[1].strip()
+    core = said[said.index("## Le cœur de sa méthode") :]
+    demoted = "\n".join(line[1:] if line.startswith("###") else line for line in core.split("\n"))
+    assert body in demoted
     # Every guide of its library named, read before it judges.
-    for skill in sorted((settings.agents_dir / LIBRARY / "skills").iterdir()):
-        assert f"`skills/{skill.name}/SKILL.md`" in said, skill.name
-    for reference in ("STANDARDS.md", "AUDIT.md", "PLAN-TEMPLATE.md", "CATALOG.md", "RECIPES.md"):
-        assert reference in said, reference
+    for guide_file in sorted((settings.agents_dir / LIBRARY).glob("*.md")):
+        if guide_file.name != "README.md":
+            assert f"`{guide_file.name}`" in said, guide_file.name
     assert "**Sans précision" in said and "c'est la revue\ncomplète" in said
-    # How its guides apply here: nothing written, run, opened — nor claimed.
-    assert "« Initial Response » ne s'applique pas" in said
+    # How its guides apply here: nothing written, run, opened — nor claimed,
+    # nor a guide named in what it delivers.
     assert "Tu n'écris aucun fichier" in said and "« à vérifier à l'écran »" in said
+    assert "**Le livrable parle au nom de LEKA.**" in said
     assert "Tu ne dis jamais l'avoir appliqué" in said
     # Its deliverable: the method's, and on a pull request, its lines.
     for part in (
         "| # | Sévérité | Où | Avant | Après | Pourquoi |",
-        "**Block** ou\n   **Approve**",
+        "**Bloquer**\n   ou **Approuver**",
         "**Le pire des cas**",
         "**Sur téléphone**",
         "**Ce qui devrait bouger — et ce qui ne doit pas**",
