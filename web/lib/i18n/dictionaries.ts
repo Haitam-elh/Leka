@@ -7404,6 +7404,16 @@ const fr = {
     /** Its analysis (LEKA-388): how it went, step by step, and what it
      * found, on what. */
     analysis: {
+      /** Its result kept from who has not the rights it asks (LEKA-499). */
+      locked: {
+        title: "Résultat verrouillé",
+        plan_required:
+          "L'analyse est faite, mais son résultat demande une formule qui lance des agents. Rien n'est affiché tant qu'elle n'est pas choisie.",
+        agents_required:
+          "L'analyse est faite, mais son résultat demande les agents proposés. Rien n'est affiché tant qu'ils ne sont pas ajoutés à votre espace.",
+        choosePlan: "Choisir une formule",
+        addAgents: "Ajouter les agents proposés",
+      },
       title: "Analyse de LEKA",
       scopeTitle: "Périmètre de l'analyse",
       scopeAll: "Tous",
@@ -15548,6 +15558,15 @@ const en: Dictionary = {
       see: "See the context",
     },
     analysis: {
+      locked: {
+        title: "Result locked",
+        plan_required:
+          "The analysis is done, but its result needs a plan that runs agents. Nothing is shown until one is chosen.",
+        agents_required:
+          "The analysis is done, but its result needs the agents proposed. Nothing is shown until they are added to your workspace.",
+        choosePlan: "Choose a plan",
+        addAgents: "Add the agents proposed",
+      },
       recommendBasis: { stated: "Stated", inferred: "Suspected" },
       recommendRisks: {
         high: "high",

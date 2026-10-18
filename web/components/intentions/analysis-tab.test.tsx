@@ -267,6 +267,17 @@ describe("an intention's analysis", () => {
     expect(screen.queryByText("Recommandations de LEKA")).not.toBeInTheDocument();
   });
 
+  it("locked by the server: what is missing and the way to it — nothing found shown (LEKA-499)", async () => {
+    route.pathname = `/intentions/${ID}/results`;
+    api.analysis.mockResolvedValue(analysis({ locked: "plan_required" }));
+    show();
+    const locked = await screen.findByTestId("result-locked");
+    expect(locked).toHaveAttribute("data-lock", "plan_required");
+    expect(locked).toHaveTextContent("Résultat verrouillé");
+    expect(screen.getByRole("link", { name: "Choisir une formule" })).toHaveAttribute("href", "/billing/plans");
+    expect(screen.queryByTestId("analysis-summary")).not.toBeInTheDocument();
+  });
+
   it("lays out, as mockup 03, the first of what it found and the scope beside it", async () => {
     show();
     const first = await screen.findByTestId("analysis-see-results");

@@ -770,6 +770,7 @@ function OfferCard({
     <section
       className="space-y-4 rounded-2xl p-4 ring-2 ring-brand-violet/25"
       aria-labelledby="detail-offer-title"
+      id="offer"
       data-testid="detail-offer"
     >
       <h2 id="detail-offer-title" className="flex items-center gap-2.5 text-[1.0625rem] font-semibold text-brand-navy">
