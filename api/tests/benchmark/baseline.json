@@ -695,7 +695,7 @@
    "standing": 1,
    "synthesis": 1
   },
-  "commit": "3527c86",
+  "commit": "576ab25b",
   "company_model_version": 9,
   "dataset_sha256": "9395fa0a808d005485c9a11c467305f7817e0e5d1a9625498b32bcf58b890370",
   "dataset_version": 4,
@@ -709,7 +709,7 @@
   "read_by": [
    "rules"
   ],
-  "understanding_version": 5
+  "understanding_version": 6
  },
  "summary": {
   "cases": 71,
