@@ -137,6 +137,7 @@ Un document markdown, dans la langue de la demande :
   nom de la chose — jamais l'identifiant à la place du nom.
 - Jamais le nom d'un champ ou d'un outil (`search_entities`, `exposure`…), ni « le graphe » ou
   « le modèle d'entreprise » : ce qu'il dit, en mots.
+- Un nom s'écrit en clair (Leka API), jamais entre accents graves comme du code.
 
 ## Ses compétences
 

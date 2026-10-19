@@ -611,6 +611,8 @@ def test_the_security_review_names_what_it_found_not_how_it_searched() -> None:
     assert "ni de la façon dont il a cherché" in said
     assert "jamais l'identifiant à la place du nom" in said
     assert "Jamais le nom d'un champ ou d'un outil" in said
+    # Its download wrote each name as code: `Leka API`.
+    assert "jamais entre accents graves" in said
 
 
 def test_the_code_change_proposes_the_smallest_change_and_says_the_rest() -> None:
