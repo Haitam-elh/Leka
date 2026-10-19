@@ -75,6 +75,16 @@ type PullFile = components["schemas"]["PullFileRead"];
 type PullBrief = components["schemas"]["PullBriefRead"];
 
 /** Where a run's deliverable is read. */
+const CITED = String.raw`\[[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\]`;
+
+/** A report as a person reads it: the ids it cites — kept in its download,
+ *  its evidence one link away — never shown in its text (2026-10-19). */
+export function readable(report: string): string {
+  return report
+    .replace(new RegExp(String.raw`\s*\((?:\s*${CITED}\s*,?)+\)`, "gi"), "")
+    .replace(new RegExp(String.raw`\s*${CITED}`, "gi"), "");
+}
+
 export function deliverableHref(intentionId: string, runId: string): string {
   return `${routes.intention(intentionId)}/deliverable?run=${encodeURIComponent(runId)}`;
 }
@@ -212,7 +222,7 @@ function Delivered({
         <CodeReview review={run.review} />
       ) : report ? (
         <section className="rounded-xl border border-shell-line bg-white px-6 py-5" data-testid="deliverable-report">
-          <Markdown source={report} />
+          <Markdown source={readable(report)} />
         </section>
       ) : (
         <StatePanel icon={FileText} title={w.empty} />
