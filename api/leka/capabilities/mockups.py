@@ -3,10 +3,16 @@
     the run's review     markdown, from the code it read (list_files,
                          read_file — code_tools.py) and its method's guides;
                          a proposal opened by MARK when it proposes a design
-        ──▶ the model again, no tools: the screen today and one to three
-            proposals, each a mock-up — its CSS and its body —, the one
-            recommended and why (deliverables/design.py); from the review and
-            the files the run read, nothing else
+        ──▶ the model again, no tools, one mock-up at a time (2026-10-18:
+            asked all at once, the answer outgrew its tokens and the review
+            came alone, said nothing):
+              the plan — the screen, one to three directions, the one
+              recommended and why — without a line of HTML;
+              the screen today, drawn — its CSS and its body;
+              each direction, drawn from today's mock-up, at once;
+            from the review and the files the run read, nothing else
+            (deliverables/design.py). A direction not drawn leaves the
+            others; today not drawn, or none, is said why
         ──▶ cleaned — nothing run, nothing fetched —, kept:
             {workspace}/agent-runs/{run}/design.json, erased with the
             workspace
@@ -22,26 +28,46 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any
 
 import structlog
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.capabilities.catalogue import needs_of
 from leka.capabilities.definition import Definition
-from leka.capabilities.deliverables.design import DesignProposal, cleaned, design_key, summary
+from leka.capabilities.deliverables.design import (
+    DesignDirection,
+    DesignPlan,
+    DesignProposal,
+    MockupDrawing,
+    assembled,
+    cleaned,
+    design_key,
+    summary,
+)
 from leka.capabilities.gateway import Gateway, Message, NoModelError, Request, Tier
 from leka.capabilities.models import AgentRun
+from leka.db import session_factory
 from leka.platform import ObjectStoreError, from_bytes, object_store
 
 logger = structlog.get_logger(__name__)
 
 # The line that opens a review's proposal: what asks LEKA to draw it.
 MARK = "<!-- leka-design -->"
-DESIGN_TOKENS = 24_000
-DESIGN_BUDGET = 8 * 60.0
+# Each answer's room, thinking included — held to what each model gives back.
+PLAN_TOKENS = 16_000
+DRAW_TOKENS = 48_000
+# Each step's time: the plan, then today, then the directions at once —
+# within the half hour after which a running run is said abandoned.
+PLAN_BUDGET = 3 * 60.0
+DRAW_BUDGET = 5 * 60.0
+DESIGN_BUDGET = PLAN_BUDGET + 2 * DRAW_BUDGET
+# A gateway's reason for no answer, as the design's error.
+NO_MODEL = {"none": "no_model", "timeout": "timeout", "limited": "limited", "blocked": "refused"}
 # The source the writer is given, at most: per file, and in all.
 MOST_FILE = 40_000
 MOST_FILES = 160_000
@@ -82,10 +108,70 @@ viewport's width, at most 40 000 characters of body each, in the language \
 the screen speaks.
 Answer with the JSON object only."""
 
+PLAN_RULES = """You are LEKA's mock-up planner for the agent whose \
+instructions follow. From its review and the source files it read — and from \
+nothing else — plan the screens its proposal draws, as one JSON object, \
+without a line of HTML:
+- screen: the screen's name; viewport: "desktop", or "mobile" when the \
+review proposes for a phone.
+- directions: the proposals the review makes — one to three, in its order, \
+each its name, its axis, when it is the right choice, what it costs, and \
+changes: what it changes on the screen, element by element, with the values \
+(sizes, colours, spacing, order, texts) — what a drawer needs to draw it.
+- recommended: the index of the direction the review recommends; why: in one \
+or two sentences.
+- changes: the recommended direction's main changes — where (file and line), \
+before, after, why — as the review states them.
+Answer with the JSON object only."""
+
+DRAW_RULES = """You are LEKA's mock-up drawer for the agent whose \
+instructions follow. Draw ONE screen, as one JSON object {"css": …, "body": …}: \
+css, its complete style sheet; body, the HTML inside <body>. No script, no \
+event handler, no external resource — no <link>, no @import, no url() but \
+data: —, no link that leads anywhere: icons are inline SVG, images are CSS \
+shapes or inline SVG, fonts are named with a system fallback. What the code \
+takes from data when it runs — a name, a count, a date — is a plausible \
+example shaped like the code's types. Self-contained, laid out for the \
+viewport's width, at most 40 000 characters of body, in the language the \
+screen speaks, as finished as a real product screen.
+Answer with the JSON object only."""
+
+TODAY = """Draw the screen as its code draws it TODAY: its structure from top to \
+bottom, its texts as the code and its dictionaries write them, its colours, \
+sizes, spacing, radii, shadows and fonts as its style sheets and tokens give \
+them, by their values. Faithful, not improved: its flaws are what the \
+directions answer."""
+
+PROPOSED = """Draw the direction named in `direction`, starting from `today` — the \
+screen as it is drawn now: the same content, the same example data, no \
+feature, figure or text the code does not have — redrawn as the direction \
+changes it. It meets the method's bar: one primary action, a clear \
+hierarchy, the repository's tokens extended and never a parallel palette, \
+every pressable element with press feedback (:active { transform: \
+scale(0.97) } with transition: transform 160ms cubic-bezier(0.23, 1, 0.32, \
+1)), hover only inside @media (hover: hover) and (pointer: fine), entrances \
+eased out under 300 ms and never from scale(0), @media \
+(prefers-reduced-motion: reduce) honoured."""
+
+# A review's proposal, said by its heading when the mark was left out.
+_PROPOSAL = re.compile(
+    r"^\s{0,3}(?:#{1,6}\s*)?(?:\d+\.\s*)?\**\s*(?:la proposition|les directions de design)\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+class _NotDrawnError(Exception):
+    def __init__(self, code: str, said: str | None = None) -> None:
+        super().__init__(code)
+        self.code = code
+        self.said = said
+
 
 def proposes(analysis: str) -> bool:
-    """Whether a review proposes a design to draw."""
-    return MARK in analysis
+    """Whether a review proposes a design to draw: its mark — or, the mark
+    left out, its section « La proposition » (2026-10-18: a review with
+    its whole proposal drew nothing, its mark forgotten)."""
+    return MARK in analysis or bool(_PROPOSAL.search(analysis))
 
 
 def without_mark(report: str) -> str:
@@ -138,6 +224,62 @@ class Designed:
     refusal: str | None = None
 
 
+async def _asked[T: BaseModel](
+    session: AsyncSession | None,
+    run: AgentRun,
+    definition: Definition,
+    purpose: str,
+    rules: str,
+    material: dict[str, object],
+    model: type[T],
+    *,
+    tokens: int,
+    budget: float,
+    usage: dict[str, Any],
+) -> T:
+    """One answer of the shape asked — in `session`, or in its own when
+    drawn alongside others — its tokens counted; else _NotDrawnError, said why."""
+    request = Request(
+        purpose=f"agent:{definition.key}:{purpose}"[:100],
+        messages=[
+            Message.system(f"{rules}\n\n---\n\n{definition.instructions or ''}"),
+            Message.user(json.dumps(material, ensure_ascii=False, default=str)),
+        ],
+        tier=Tier.DEEP,
+        max_tokens=tokens,
+        ref=f"agent_run:{run.id}",
+    )
+    needs = replace(needs_of(definition), tools=False)
+
+    async def ask(own: AsyncSession) -> T:
+        answered = await asyncio.wait_for(
+            Gateway(own, run.workspace_id).structured(request, model, needs), timeout=budget
+        )
+        done = answered.completion
+        usage["provider"], usage["model"] = done.provider, done.model
+        usage["tokens_in"] = int(usage.get("tokens_in", 0)) + done.usage.tokens_in
+        usage["tokens_out"] = int(usage.get("tokens_out", 0)) + done.usage.tokens_out
+        return answered.value
+
+    try:
+        if session is not None:
+            return await ask(session)
+        async with session_factory() as own:
+            try:
+                return await ask(own)
+            finally:
+                await own.commit()
+    except NoModelError as error:
+        said = next((a.error for a in reversed(error.attempts) if a.error), None)
+        logger.warning("design_not_drawn", run=str(run.id), step=purpose, reason=error.reason)
+        raise _NotDrawnError(NO_MODEL.get(error.reason, "unanswered"), said) from error
+    except TimeoutError as error:
+        raise _NotDrawnError("timeout") from error
+    except Exception as error:
+        logger.exception("design_not_drawn", run=str(run.id), step=purpose)
+        raise _NotDrawnError("error") from error
+
+
 async def propose_design(
     session: AsyncSession,
     run: AgentRun,
@@ -147,40 +289,76 @@ async def propose_design(
     *,
     budget: float = DESIGN_BUDGET,
 ) -> Designed:
-    """The screen a run's review proposes, drawn before and after, kept."""
-    request = Request(
-        purpose=f"agent:{definition.key}:design"[:100],
-        messages=design_messages(definition, run.inputs, analysis, files),
-        tier=Tier.DEEP,
-        max_tokens=DESIGN_TOKENS,
-        ref=f"agent_run:{run.id}",
-    )
-    try:
-        answered = await asyncio.wait_for(
-            Gateway(session, run.workspace_id).structured(
-                request, DesignProposal, replace(needs_of(definition), tools=False)
-            ),
-            timeout=budget,
-        )
-    except NoModelError as error:
-        said = next((a.error for a in reversed(error.attempts) if a.error), None)
-        logger.warning("design_not_drawn", run=str(run.id), reason=error.reason, said=said)
-        code = "no_model" if error.reason == "none" else error.reason
-        return Designed(None, code, refusal=said[:300] if said else None)
-    except TimeoutError:
-        return Designed(None, "timeout")
-    except Exception:
-        # Whatever else: the run's review stands, said why no mock-up is.
-        logger.exception("design_not_drawn", run=str(run.id))
-        return Designed(None, "error")
-    proposal = cleaned(answered.value)
-    done = answered.completion
-    usage = {
-        "provider": done.provider,
-        "model": done.model,
-        "tokens_in": done.usage.tokens_in,
-        "tokens_out": done.usage.tokens_out,
+    """The screen a run's review proposes, drawn before and after, kept: its
+    plan, then today, then each direction at once — each answer on its own."""
+    usage: dict[str, Any] = {}
+    material: dict[str, object] = {
+        "inputs": dict(run.inputs or {}),
+        "review": without_mark(analysis),
+        "files": read_files(files),
     }
+    plan_budget = min(PLAN_BUDGET, budget)
+    draw_budget = min(DRAW_BUDGET, budget)
+    try:
+        plan = await _asked(
+            session,
+            run,
+            definition,
+            "design-plan",
+            PLAN_RULES,
+            material,
+            DesignPlan,
+            tokens=PLAN_TOKENS,
+            budget=plan_budget,
+            usage=usage,
+        )
+    except _NotDrawnError as failed:
+        return Designed(None, failed.code, usage, _said("plan", failed.said))
+    planned = {**material, "screen": plan.screen, "viewport": plan.viewport}
+    try:
+        today = await _asked(
+            session,
+            run,
+            definition,
+            "design-today",
+            f"{DRAW_RULES}\n\n{TODAY}",
+            planned,
+            MockupDrawing,
+            tokens=DRAW_TOKENS,
+            budget=draw_budget,
+            usage=usage,
+        )
+    except _NotDrawnError as failed:
+        return Designed(None, failed.code, usage, _said("aujourd'hui", failed.said))
+    # Nothing held while the directions are drawn, each in its own session.
+    await session.commit()
+
+    async def direction(each: DesignDirection) -> MockupDrawing:
+        return await _asked(
+            None,
+            run,
+            definition,
+            "design-direction",
+            f"{DRAW_RULES}\n\n{PROPOSED}",
+            {**planned, "today": today.model_dump(), "direction": each.model_dump()},
+            MockupDrawing,
+            tokens=DRAW_TOKENS,
+            budget=draw_budget,
+            usage=usage,
+        )
+
+    results = await asyncio.gather(
+        *(direction(each) for each in plan.directions), return_exceptions=True
+    )
+    drawn = [
+        (each, result)
+        for each, result in zip(plan.directions, results, strict=True)
+        if isinstance(result, MockupDrawing)
+    ]
+    if not drawn:
+        first = next((r for r in results if isinstance(r, _NotDrawnError)), _NotDrawnError("error"))
+        return Designed(None, first.code, usage, _said("propositions", first.said))
+    proposal = cleaned(assembled(plan, today, drawn))
     key = design_key(run.workspace_id, run.id)
     try:
         await object_store().put(
@@ -191,7 +369,20 @@ async def propose_design(
     except ObjectStoreError:
         logger.exception("design_not_kept", run=str(run.id))
         return Designed(None, "storage", usage)
-    return Designed({"design": summary(proposal, key)}, usage=usage)
+    kept = summary(proposal, key)
+    missing = [
+        each.name
+        for each, result in zip(plan.directions, results, strict=True)
+        if not isinstance(result, MockupDrawing)
+    ]
+    if missing:
+        kept["missing"] = missing
+    return Designed({"design": kept}, usage=usage)
+
+
+def _said(step: str, said: str | None) -> str:
+    """Which step did not draw, and what its model's provider said."""
+    return f"{step} : {said}"[:300] if said else step
 
 
 async def read_design(run: AgentRun) -> DesignProposal | None:
@@ -213,7 +404,9 @@ async def read_design(run: AgentRun) -> DesignProposal | None:
 __all__ = [
     "DESIGN_BUDGET",
     "DESIGN_RULES",
+    "DRAW_RULES",
     "MARK",
+    "PLAN_RULES",
     "Designed",
     "design_messages",
     "propose_design",

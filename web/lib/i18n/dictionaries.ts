@@ -6918,6 +6918,11 @@ const fr = {
         "LEKA écrit le changement proposé : il s'affichera ici, avant / après, dans quelques minutes.",
       changeFailed: "L'analyse est là, mais LEKA n'a pas pu écrire le changement : {why}.",
       changeAgain: "Réessayer d'écrire le changement",
+      designDrawing:
+        "LEKA dessine les maquettes, aujourd'hui et chaque proposition : elles s'afficheront ici dans quelques minutes.",
+      designFailed: "La revue est là, mais LEKA n'a pas pu dessiner les maquettes : {why}.",
+      designAgain: "Redessiner les maquettes",
+      designNotDrawn: "La revue propose un design, mais ses maquettes n'ont pas été dessinées.",
       changeErrors: {
         edits_not_applied: "le texte à remplacer n'a pas été retrouvé dans le fichier",
         no_change: "aucune modification n'a été proposée",
@@ -6929,6 +6934,7 @@ const fr = {
         timeout: "l'écriture a pris trop de temps",
         not_found: "GitHub ne trouve plus un des fichiers",
         error: "une erreur inattendue",
+        storage: "elles n'ont pas pu être enregistrées",
       },
       open: "Voir le livrable",
       openReview: "Ouvrir la revue sur le code",
@@ -15348,6 +15354,11 @@ const en: Dictionary = {
       changeWriting: "LEKA is writing the proposed change: it will show here, before / after, in a few minutes.",
       changeFailed: "The analysis is here, but LEKA could not write the change: {why}.",
       changeAgain: "Write the change again",
+      designDrawing:
+        "LEKA is drawing the mock-ups, today and each proposal: they will show here in a few minutes.",
+      designFailed: "The review is here, but LEKA could not draw the mock-ups: {why}.",
+      designAgain: "Draw the mock-ups again",
+      designNotDrawn: "The review proposes a design, but its mock-ups were not drawn.",
       changeErrors: {
         edits_not_applied: "the text to replace was not found in the file",
         no_change: "no modification was proposed",
@@ -15359,6 +15370,7 @@ const en: Dictionary = {
         timeout: "writing it took too long",
         not_found: "GitHub no longer finds one of the files",
         error: "an unexpected error",
+        storage: "they could not be stored",
       },
       open: "See the deliverable",
       openReview: "Open the review on the code",

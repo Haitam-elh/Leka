@@ -102,8 +102,13 @@ RUN_JOB = "leka.capabilities.runs.run_agent"
 # A finished run's files drawn after it (2026-10-16): its deck, from the
 # analysis it delivered — the run itself never done again.
 FILES_JOB = "leka.capabilities.runs.draw_files"
-# A code change written again from a finished run's analysis (2026-10-18).
+# A code change written again from a finished run's analysis (2026-10-18),
+# a design drawn again from its review.
 CHANGE_JOB = "leka.capabilities.runs.rewrite_change_job"
+DESIGN_JOB = "leka.capabilities.runs.redraw_design_job"
+# What LEKA draws of a run, written again on asking: the job, and the word
+# its « being drawn » says.
+REDRAWN = {"code_change": (CHANGE_JOB, "change"), "design_mockups": (DESIGN_JOB, "design")}
 # The files a run read, named to be read again when its change is: at most.
 MOST_READ_KEPT = 60
 # The files a deck may be drawn as.
@@ -601,9 +606,9 @@ async def _run(
     # was drawn) — every one when the run says nothing of it.
     asked = run.detail.get("formats")
     wanted = None if not isinstance(asked, list) else [str(f) for f in asked]
-    # The files a code change is written from, named: read again when it is
-    # written again (rewrite_change).
-    if definition.renders == "code_change" and read.get("files"):
+    # The files a code change or a design is drawn from, named: read again
+    # when it is drawn again (rewrite).
+    if definition.renders in REDRAWN and read.get("files"):
         detail["read_files"] = list(read["files"])[:MOST_READ_KEPT]
     if definition.renders is not None and (
         definition.renders != "architecture_deck" or wanted != []
@@ -770,15 +775,22 @@ async def _redraw(
 
 async def queue_change(workspace_id: uuid.UUID, run_id: uuid.UUID) -> bool:
     """Its change to write again, for a worker: the model takes minutes."""
-    job = await enqueue_job(
-        CHANGE_JOB,
+    return await queue_redraw(workspace_id, run_id, "code_change")
+
+
+async def queue_redraw(workspace_id: uuid.UUID, run_id: uuid.UUID, renders: str) -> bool:
+    """What LEKA draws of it — its change, its design — drawn again, for a
+    worker: the model takes minutes."""
+    job, word = REDRAWN[renders]
+    queued = await enqueue_job(
+        job,
         str(workspace_id),
         str(run_id),
         for_workspace_id=workspace_id,
         queue=JobQueue.HIGH,
-        concurrency_key=f"agent-run-change:{run_id}",
+        concurrency_key=f"agent-run-{word}:{run_id}",
     )
-    return job is not None
+    return queued is not None
 
 
 async def _read_again(
@@ -820,10 +832,25 @@ async def rewrite_change(workspace_id: uuid.UUID, run_id: uuid.UUID) -> dict[str
     delivered and the files it read, read again — never the run done again
     (2026-10-18: its change was not written, the analysis alone shown).
     Whatever goes wrong, « being written » ends, said why."""
+    return await redraw_render(workspace_id, run_id, "code_change")
+
+
+async def redraw_design(workspace_id: uuid.UUID, run_id: uuid.UUID) -> dict[str, object]:
+    """A finished design review's mock-ups drawn again from the review it
+    delivered — never the run done again (2026-10-18: a review came alone,
+    its mock-ups not drawn)."""
+    return await redraw_render(workspace_id, run_id, "design_mockups")
+
+
+async def redraw_render(
+    workspace_id: uuid.UUID, run_id: uuid.UUID, renders: str
+) -> dict[str, object]:
+    """What LEKA draws of a finished run, drawn again; whatever goes wrong,
+    « being drawn » ends, said why."""
     with workspace_scope(workspace_id):
         async with session_factory() as session:
             try:
-                return await _rewrite_change(session, workspace_id, run_id)
+                return await _redraw_render(session, workspace_id, run_id, renders)
             except Exception:
                 logger.exception("run_change_not_written", run=str(run_id))
                 await session.rollback()
@@ -843,8 +870,8 @@ async def rewrite_change(workspace_id: uuid.UUID, run_id: uuid.UUID) -> dict[str
                 return {"proposed": None, "error": "error"}
 
 
-async def _rewrite_change(
-    session: AsyncSession, workspace_id: uuid.UUID, run_id: uuid.UUID
+async def _redraw_render(
+    session: AsyncSession, workspace_id: uuid.UUID, run_id: uuid.UUID, renders: str
 ) -> dict[str, object]:
     runs = CapabilityRunRepository(session, workspace_id)
     run = await runs.run(run_id)
@@ -854,11 +881,16 @@ async def _rewrite_change(
     subject = await subject_of(session, workspace_id, run.requested_by)
     permissions = frozenset(p.value for p in subject.permissions) if subject else frozenset()
     entry = await CatalogueService(session, workspace_id).entry(run.key, permissions=permissions)
-    if entry is None or entry.definition.renders != "code_change":
+    if entry is None or entry.definition.renders != renders:
         run.detail = {**run.detail, **done}
         await session.commit()
-        return {"proposed": None, "skipped": "not_a_change"}
+        return {"proposed": None, "skipped": "not_drawn"}
     read = await _read_again(session, workspace_id, run.detail.get("read_files"))
+    if not read:
+        # A run from before its files were kept: those its report names.
+        from leka.capabilities.changes import files_named
+
+        read = await files_named(session, run, run.output)
     output = run.output
     # Nothing held while the model writes: minutes.
     await session.commit()
@@ -882,12 +914,20 @@ async def _rewrite_change(
         steps.add("render_failed", code=drawn.error, said=drawn.refusal)
         run.detail = {**run.detail, **drawn.detail(), **done}
     await session.commit()
-    return {"proposed": run.detail.get("code_change"), "error": drawn.error}
+    return {
+        "proposed": run.detail.get("code_change") or run.detail.get("design"),
+        "error": drawn.error,
+    }
 
 
 def rewrite_change_job(workspace_id: str, run_id: str) -> dict[str, object]:
     """Entry point for the job runner, which is synchronous."""
     return asyncio.run(rewrite_change(uuid.UUID(workspace_id), uuid.UUID(run_id)))
+
+
+def redraw_design_job(workspace_id: str, run_id: str) -> dict[str, object]:
+    """Entry point for the job runner, which is synchronous."""
+    return asyncio.run(redraw_design(uuid.UUID(workspace_id), uuid.UUID(run_id)))
 
 
 def draw_files(workspace_id: str, run_id: str, formats: str) -> dict[str, object]:

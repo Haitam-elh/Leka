@@ -39,7 +39,15 @@ from sqlalchemy import text
 
 from leka.api import agent_runs as agent_runs_api
 from leka.capabilities import CodeChange, execute_run, rewrite_change, sync_catalogue
-from leka.capabilities.changes import Edit, apply_edits, branch_of, diff_of, safe_path
+from leka.capabilities.changes import (
+    Edit,
+    apply_edits,
+    branch_of,
+    diff_of,
+    edits_from_diff,
+    paths_named,
+    safe_path,
+)
 from leka.capabilities.code_tools import MOST_CHARS, lines_of
 from leka.connectors import SourceKind, SourceService
 from leka.connectors.base import Connector
@@ -217,6 +225,62 @@ def test_edits_land_where_they_were_copied_from_or_say_why() -> None:
     assert apply_edits(text, [Edit(find="zzz", replace="y")]) == (None, "not_found")
     assert apply_edits(text, [Edit(find="b", replace="y")]) == (None, "ambiguous")
     assert apply_edits(text, [Edit(find="", replace="y")]) == (None, "not_found")
+
+
+# Haitam's analysis, 2026-10-18, as its deliverable gave it: the diff was
+# there, the change still « not written ».
+HIS_DIFF = """Diff proposé pour web/components/intentions/intention-composer.tsx :
+```diff
+--- a/web/components/intentions/intention-composer.tsx
++++ b/web/components/intentions/intention-composer.tsx
+@@ -221,7 +221,7 @@ export function IntentionComposer({
+               placeholder={t.composer.compactPlaceholder}
+               rows={1}
+               data-testid="intention-input"
+-              className="px-1 py-3 text-[0.9375rem] shadow-none"
++              className="px-1 py-3 text-base shadow-none md:text-[0.9375rem]"
+             />
+```
+B. `web/e2e/home.spec.ts` gagne une assertion.
+"""
+COMPOSER = (
+    "export function IntentionComposer() {\n"
+    "  return (\n"
+    "            <Textarea\n"
+    "              placeholder={t.composer.compactPlaceholder}\n"
+    "              rows={1}\n"
+    '              data-testid="intention-input"\n'
+    '              className="px-1 py-3 text-[0.9375rem] shadow-none"\n'
+    "            />\n"
+    "  );\n"
+    "}\n"
+)
+
+
+def test_an_analysis_diff_becomes_edits_that_land_on_the_file() -> None:
+    [proposed] = edits_from_diff(HIS_DIFF)
+    assert proposed.path == "web/components/intentions/intention-composer.tsx"
+    [edit] = proposed.edits
+    after, why = apply_edits(COMPOSER, [edit])
+    assert why is None and after is not None
+    assert 'className="px-1 py-3 text-base shadow-none md:text-[0.9375rem]"' in after
+    assert "text-[0.9375rem] shadow-none" not in after
+    # The files it names, in its diffs or quoted, in order.
+    assert paths_named(HIS_DIFF) == [
+        "web/components/intentions/intention-composer.tsx",
+        "web/e2e/home.spec.ts",
+    ]
+    # A new file, its whole content; a context line that lost its space.
+    [new] = edits_from_diff("--- /dev/null\n+++ b/app/new.py\n@@ -0,0 +1,2 @@\n+a = 1\n+b = 2\n")
+    assert (new.path, new.content) == ("app/new.py", "a = 1\nb = 2\n")
+    [blank] = edits_from_diff("--- a/x.py\n+++ b/x.py\n@@ -1,3 +1,3 @@\n a\n\n-b\n+c\n")
+    assert blank.edits[0].find == "a\n\nb" and blank.edits[0].replace == "a\n\nc"
+
+
+def test_an_edit_copied_with_other_indentation_lands_with_the_file_s() -> None:
+    text = "def f():\n    if x:\n        return 1\n"
+    edit = Edit(find="if x:\n    return 1", replace="if x:\n    return 2")
+    assert apply_edits(text, [edit]) == ("def f():\n    if x:\n        return 2\n", None)
 
 
 def test_a_file_is_read_whole_or_by_ranges_and_says_which() -> None:
@@ -502,3 +566,79 @@ async def test_a_change_not_written_says_why_as_it_was(
     run = (await client.get(f"{RUNS}/{run_id}")).json()
     assert run["draw_failed"] == "unanswered"
     assert "Cut at its limit of 48000 tokens" in (run["draw_said"] or "")
+
+
+async def test_the_analysis_own_diff_is_the_change_no_model_asked_again(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    leka_gemini: Callable[..., Script],
+    github: GitHub,
+) -> None:
+    _as(identity, acme, "member")
+    await _github_source(acme["acme"])
+    await sync_catalogue()
+    analysis = (
+        "# Analyse\n\nLe solde ignore les paiements en attente.\n\n```diff\n"
+        "--- a/app/balance.py\n+++ b/app/balance.py\n@@ -1,2 +1,2 @@\n"
+        " def balance(account):\n-    return account.total\n"
+        "+    return account.total - account.pending\n```\n"
+    )
+    # The analysis only: no answer scripted for a change — none is asked.
+    script = leka_gemini(gemini(analysis))
+    started = await client.post(
+        RUNS,
+        json={"key": "code-change", "inputs": {"demande": "Corrige le solde", "depot": REPO}},
+    )
+    run_id = started.json()["id"]
+    assert await execute_run(acme["acme"], uuid.UUID(run_id)) == {"status": "succeeded"}
+    assert len(script.asked) == 1
+    [change] = (await client.get(API, params={"run_id": run_id})).json()
+    assert change["title"] == "Corrige le solde" and change["repository"] == REPO
+    assert "Le solde ignore les paiements en attente." in change["summary"]
+    assert "+    return account.total - account.pending" in change["files"][0]["diff"]
+
+
+async def test_a_run_without_its_files_kept_reads_those_its_analysis_names(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    leka_gemini: Callable[..., Script],
+    github: GitHub,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # 2026-10-18: a run from before its files were kept, written again, was
+    # given no file — and wrote none.
+    _as(identity, acme, "member")
+    await _github_source(acme["acme"])
+    await sync_catalogue()
+
+    async def queue(workspace_id: uuid.UUID, run_id: uuid.UUID) -> bool:
+        return True
+
+    monkeypatch.setattr(agent_runs_api, "queue_change", queue)
+    script = leka_gemini(
+        gemini("# Analyse\n\n`app/balance.py` ignore les paiements en attente."),
+        gemini(json.dumps({"repository": REPO, "title": "x", "summary": "y", "files": []})),
+        gemini(json.dumps(_proposal())),
+    )
+    started = await client.post(
+        RUNS,
+        json={"key": "code-change", "inputs": {"demande": "Corrige le solde", "depot": REPO}},
+    )
+    run_id = started.json()["id"]
+    assert await execute_run(acme["acme"], uuid.UUID(run_id)) == {"status": "succeeded"}
+    with workspace_scope(acme["acme"]):
+        async with session_factory() as session:
+            await session.execute(
+                text("UPDATE agent_runs SET detail = detail - 'read_files' WHERE id = :r"),
+                {"r": uuid.UUID(run_id)},
+            )
+            await session.commit()
+    assert (await client.post(f"{RUNS}/{run_id}/change")).status_code == 202
+    done = await rewrite_change(acme["acme"], uuid.UUID(run_id))
+    assert done["error"] is None
+    material = json.loads(script.asked[2]["contents"][-1]["parts"][0]["text"])
+    assert material["files"] == {f"{REPO}:app/balance.py": BEFORE}
