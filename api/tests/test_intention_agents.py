@@ -254,6 +254,35 @@ async def test_its_analysis_proposes_the_agents_and_the_plan_and_starts_nothing(
     assert written["proposed"]["agents"][0]["title"] == "Architecte applicatif"
 
 
+async def test_a_question_is_never_proposed_what_proposes_a_change(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[tuple[uuid.UUID, str]],
+    gemini: Callable[..., Gemini],
+    started: list[uuid.UUID],
+) -> None:
+    # 2026-10-19: « pourquoi … échouent ? » was proposed the build fixer,
+    # and not the debugging agent.
+    await _ready(acme)
+    scripted = gemini(
+        {
+            "agents": [{"key": "build-fixer"}, {"key": "debug-assistant"}],
+            "steps": [{"title": "Diagnostiquer", "agent": "debug-assistant"}],
+            "informative": False,
+        }
+    )
+    _as(identity, acme, "member")
+    intention = await _ask(client, "Pourquoi les déploiements de Billing API échouent-ils ?")
+    await _analysed(acme, intention)
+
+    assert "build-fixer" not in scripted.offered
+    assert "debug-assistant" in scripted.offered
+    proposal = (await _get(client, f"/{intention['id']}/analysis"))["result"]["proposal"]
+    assert [a["key"] for a in proposal["agents"]] == ["debug-assistant"]
+
+
 async def test_launched_by_a_person_only_what_was_proposed_and_the_files_asked(
     client: AsyncClient,
     identity: FakeIdentity,
