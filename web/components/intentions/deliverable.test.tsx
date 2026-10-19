@@ -206,6 +206,16 @@ describe("an agent's report", () => {
     expect(readable(`Leka API ([${id}]) est opérationnel [${id}].`)).toBe("Leka API est opérationnel.");
     expect(readable(`Les services ([${id}], [${id}]) tournent.`)).toBe("Les services tournent.");
     expect(readable("Voir [la PR](https://x.y/1).")).toBe("Voir [la PR](https://x.y/1).");
+    // 2026-10-19: ids said as a list, or beside other words.
+    expect(readable(`les déploiements [${id}], [${id}] et [${id}] jusqu'au soir`)).toBe(
+      "les déploiements jusqu'au soir",
+    );
+    expect(readable(`l'hôte leka-production ([${id}], instance EC2 i-0d75)`)).toBe(
+      "l'hôte leka-production (instance EC2 i-0d75)",
+    );
+    expect(readable(`la doc ([${id}] : « limites »)`)).toBe("la doc (« limites »)");
+    // French spacing before « : » stays.
+    expect(readable("Cause : inconnue.")).toBe("Cause : inconnue.");
   });
 
   it("is drawn as a page, never as HTML", () => {

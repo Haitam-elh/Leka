@@ -80,9 +80,13 @@ const CITED = String.raw`\[[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a
 /** A report as a person reads it: the ids it cites — kept in its download,
  *  its evidence one link away — never shown in its text (2026-10-19). */
 export function readable(report: string): string {
+  // A run of ids — « [a], [b] et [c] » — goes with what joins it, then
+  // what it leaves: « ( » or « () » around nothing.
   return report
-    .replace(new RegExp(String.raw`\s*\((?:\s*${CITED}\s*,?)+\)`, "gi"), "")
-    .replace(new RegExp(String.raw`\s*${CITED}`, "gi"), "");
+    .replace(new RegExp(String.raw`(?:\s*(?:,|\bet\b|\band\b)?\s*${CITED})+`, "gi"), "")
+    .replace(/\s*\(\s*[,;:]?\s*\)/g, "")
+    .replace(/\(\s*[,;:]\s*/g, "(")
+    .replace(/ +([,.)])/g, "$1");
 }
 
 export function deliverableHref(intentionId: string, runId: string): string {

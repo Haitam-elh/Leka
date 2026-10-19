@@ -861,6 +861,14 @@ class GraphService:
             entity_id: EntityBrief.model_validate(entity) for entity_id, entity in found.items()
         }
 
+    async def states(self, ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, str]:
+        """Where each of these stands, as its source says — a deployment
+        succeeded or failed, an incident resolved: those that say one."""
+        found = await self._graph.by_ids(list(ids))
+        return {
+            i: str(e.attributes["state"]) for i, e in found.items() if e.attributes.get("state")
+        }
+
     async def owners(self, ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, list[EntityBrief]]:
         """Who owns each of these (LEKA-377): the teams and the people a
         source names as owners — `owned_by` from it, or `owns` to it — the

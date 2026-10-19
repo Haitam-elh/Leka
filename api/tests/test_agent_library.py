@@ -33,7 +33,7 @@ VERSIONS = {
     "build-fixer": "1.2.0",
     "code-review": "1.4.0",
     "data-analysis": "1.3.0",
-    "debug-assistant": "1.3.0",
+    "debug-assistant": "1.4.0",
     "documentation-assistant": "2.0.0",
     "incident-investigation": "1.3.0",
     "infrastructure-analysis": "1.3.0",
@@ -588,6 +588,19 @@ def test_the_incident_investigation_finds_the_incident_or_says_it_briefly() -> N
     assert "Jamais le nom d'un champ" in said
     assert "Trois à cinq actions" in said
     assert credited("incident-investigation", "msitarzewski/agency-agents")
+
+
+def test_the_debugging_agent_checks_the_failure_before_ranking_causes() -> None:
+    # 2026-10-19, tested on leka-core: « why do deployments fail? » while
+    # every deployment had succeeded — three causes ranked for a failure
+    # nothing showed, a signal's code quoted, a person named for a merge.
+    said = {d.key: d for d in catalogue()}["debug-assistant"].instructions or ""
+    assert "Vérifier le symptôme d'abord" in said and "`state`" in said
+    assert "## Quand les sources ne montrent pas l'échec" in said
+    assert "**Le symptôme n'est pas confirmé**" in said and "Ni causes classées" in said
+    assert "jamais l'identifiant à la place du nom" in said
+    assert "Jamais le nom d'un champ ou d'un signal" in said
+    assert "parce\n  qu'elle a fusionné" in said
 
 
 def test_the_code_change_proposes_the_smallest_change_and_says_the_rest() -> None:
