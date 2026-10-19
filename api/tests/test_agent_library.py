@@ -35,7 +35,7 @@ VERSIONS = {
     "data-analysis": "1.3.0",
     "debug-assistant": "1.3.0",
     "documentation-assistant": "2.0.0",
-    "incident-investigation": "1.2.0",
+    "incident-investigation": "1.3.0",
     "infrastructure-analysis": "1.3.0",
     "release-analysis": "1.3.0",
     "security-review": "1.3.0",
@@ -573,6 +573,20 @@ def test_the_incident_investigation_stops_the_harm_first_and_blames_no_one() -> 
     ):
         assert part in said, part
     assert "Jamais d'échéance inventée" in said and "LEKA, jamais" in said
+    assert credited("incident-investigation", "msitarzewski/agency-agents")
+
+
+def test_the_incident_investigation_finds_the_incident_or_says_it_briefly() -> None:
+    # 2026-10-19, tested on leka-core: no incident in the sources, yet a
+    # full post-mortem of nothing, « leka-core » read as a person, ids in
+    # place of names, a data field quoted, an action on LEKA's own model.
+    said = {d.key: d for d in catalogue()}["incident-investigation"].instructions or ""
+    assert "Trouver l'incident d'abord" in said and "jamais une\npersonne" in said
+    assert "## Quand aucun incident n'est trouvé" in said
+    assert "**Signaux à vérifier**" in said and "ni post-mortem" in said
+    assert "jamais l'identifiant à la place du nom" in said
+    assert "Jamais le nom d'un champ" in said
+    assert "Trois à cinq actions" in said
     assert credited("incident-investigation", "msitarzewski/agency-agents")
 
 

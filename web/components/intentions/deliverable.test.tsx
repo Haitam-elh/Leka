@@ -63,7 +63,7 @@ vi.mock("@/lib/publications", async (original) => ({
   publications: sent,
 }));
 
-const { DeliverableView } = await import("@/components/intentions/deliverable");
+const { DeliverableView, readable } = await import("@/components/intentions/deliverable");
 const { AgentWork } = await import("@/components/intentions/agent-work");
 
 const PATCH = [
@@ -201,6 +201,13 @@ beforeEach(() => {
 });
 
 describe("an agent's report", () => {
+  it("reads without the ids it cites", () => {
+    const id = "607b3d1b-2334-5f23-ab2b-268fc9be7d11";
+    expect(readable(`Leka API ([${id}]) est opérationnel [${id}].`)).toBe("Leka API est opérationnel.");
+    expect(readable(`Les services ([${id}], [${id}]) tournent.`)).toBe("Les services tournent.");
+    expect(readable("Voir [la PR](https://x.y/1).")).toBe("Voir [la PR](https://x.y/1).");
+  });
+
   it("is drawn as a page, never as HTML", () => {
     render(
       <Markdown
