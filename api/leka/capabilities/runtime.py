@@ -276,11 +276,13 @@ How this runs in LEKA:
 each file you would change and for what it depends on. A file you did not \
 read, you do not change.
 - This answer is the analysis, in markdown: the problem, where it is in the \
-code (paths, functions), the change file by file and why — quoting the lines \
-to change exactly as you read them —, its risks, how to test it. LEKA then \
-asks you for exact edits of the files you read, applies them, computes the \
-diff itself and shows it to a person, before and after, who accepts or \
-rejects it.
+code (paths, functions), the change file by file and why, its risks, how to \
+test it. For each file, give the change as a unified diff in a ```diff block \
+— `--- a/path`, `+++ b/path`, then each `@@` hunk with three lines of \
+context, every line copied exactly as you read it, indentation included. \
+LEKA applies that diff to the file itself and shows it to a person, before \
+and after, who accepts or rejects it; what does not apply, it asks you again \
+as exact edits.
 - Nothing is written to the repository by you or by LEKA before that \
 person accepts; then LEKA opens a pull request, never a merge.""",
     "design_mockups": """---

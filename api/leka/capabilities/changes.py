@@ -168,17 +168,29 @@ def diff_of(path: str, before: str | None, after: str | None) -> tuple[str, int,
     return "".join(said)[:MAX_DIFF_CHARS], added, removed
 
 
-def _lines_at(text: str, find: str) -> list[int]:
+def _lines_at(text: str, find: str, *, loose: bool = False) -> list[int]:
     """Where a text's lines stand in another's, each line's trailing spaces
-    aside — the starts of its whole-line matches."""
+    aside — and, `loose`, its indentation too — the starts of its
+    whole-line matches."""
     lines = text.split("\n")
-    wanted = [line.rstrip() for line in find.strip("\n").split("\n")]
+    shape = str.strip if loose else str.rstrip
+    wanted = [shape(line) for line in find.strip("\n").split("\n")]
     if not wanted or wanted == [""]:
         return []
-    stripped = [line.rstrip() for line in lines]
-    return [
-        i for i in range(len(lines) - len(wanted) + 1) if stripped[i : i + len(wanted)] == wanted
-    ]
+    shaped = [shape(line) for line in lines]
+    return [i for i in range(len(lines) - len(wanted) + 1) if shaped[i : i + len(wanted)] == wanted]
+
+
+def _indent(line: str) -> int:
+    return len(line) - len(line.lstrip(" "))
+
+
+def _reindented(lines: list[str], by: int) -> list[str]:
+    """Lines moved right (`by` > 0) or left by that many spaces — as far as
+    each has them."""
+    if by > 0:
+        return [" " * by + line if line.strip() else line for line in lines]
+    return [line[min(-by, _indent(line)) :] for line in lines]
 
 
 def apply_edits(text: str, edits: Sequence[Edit]) -> tuple[str | None, str | None]:
@@ -196,14 +208,102 @@ def apply_edits(text: str, edits: Sequence[Edit]) -> tuple[str | None, str | Non
             continue
         if found > 1:
             return None, "ambiguous"
+        lines = after.split("\n")
+        found_lines = edit.find.strip("\n").split("\n")
+        replaced = edit.replace.strip("\n").split("\n") if edit.replace.strip("\n") else []
         starts = _lines_at(after, edit.find)
+        if not starts:
+            # Copied with other indentation (a diff pasted in markdown): the
+            # same lines, the file's indentation kept for what replaces them.
+            starts = _lines_at(after, edit.find, loose=True)
+            if len(starts) == 1:
+                first = next((i for i, line in enumerate(found_lines) if line.strip()), 0)
+                by = _indent(lines[starts[0] + first]) - _indent(found_lines[first])
+                replaced = _reindented(replaced, by)
         if len(starts) != 1:
             return None, "ambiguous" if starts else "not_found"
-        lines = after.split("\n")
-        size = len(edit.find.strip("\n").split("\n"))
-        replaced = edit.replace.strip("\n").split("\n") if edit.replace.strip("\n") else []
+        size = len(found_lines)
         after = "\n".join([*lines[: starts[0]], *replaced, *lines[starts[0] + size :]])
     return after, None
+
+
+_CODE_FILE = re.compile(
+    r"`([\w.@-]+(?:/[\w.@-]+)+\.(?:tsx?|jsx?|mjs|cjs|py|css|scss|html|md|mdx|json|ya?ml|toml|"
+    r"sql|go|rs|java|kt|swift|rb|php|cs|vue|svelte|sh))`"
+)
+
+
+def edits_from_diff(analysis: str) -> list[ProposedFile]:
+    """The unified diffs an analysis holds, as edits: each hunk its lines
+    before (context and removed) for its lines after (context and added); a
+    file new, its content (2026-10-18: the analysis held the exact diff, and
+    the change was still « not written »)."""
+    found: dict[str, dict[str, Any]] = {}
+    lines = analysis.replace("\r\n", "\n").split("\n")
+    current: dict[str, Any] | None = None
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if line.startswith("--- ") and i + 1 < len(lines) and lines[i + 1].startswith("+++ "):
+            old, new = line[4:].strip(), lines[i + 1][4:].strip()
+            deleted = new == "/dev/null"
+            named = old if deleted else new
+            path = named[2:] if named[:2] in ("a/", "b/") else named
+            current = found.setdefault(
+                path, {"edits": [], "content": None, "delete": deleted, "new": old == "/dev/null"}
+            )
+            i += 2
+            continue
+        if line.startswith("@@") and current is not None:
+            before: list[str] = []
+            after: list[str] = []
+            i += 1
+            while i < len(lines):
+                said = lines[i]
+                if said.startswith(("@@", "```", "--- ", "+++ ")):
+                    break
+                if said.startswith("\\"):
+                    i += 1
+                    continue
+                if said.startswith("+"):
+                    after.append(said[1:])
+                elif said.startswith("-"):
+                    before.append(said[1:])
+                elif said.startswith(" "):
+                    before.append(said[1:])
+                    after.append(said[1:])
+                elif said == "" and i + 1 < len(lines) and lines[i + 1][:1] in (" ", "+", "-"):
+                    # A blank context line that lost its leading space.
+                    before.append("")
+                    after.append("")
+                else:
+                    break
+                i += 1
+            if current["new"]:
+                current["content"] = "\n".join(after) + "\n"
+            elif before and before != after:
+                current["edits"].append(Edit(find="\n".join(before), replace="\n".join(after)))
+            continue
+        i += 1
+    return [
+        ProposedFile(
+            path=path,
+            edits=said["edits"],
+            content=said["content"],
+            delete=said["delete"],
+            why="d'après le diff de l'analyse",
+        )
+        for path, said in found.items()
+        if said["edits"] or said["content"] is not None or said["delete"]
+    ][:MAX_FILES]
+
+
+def paths_named(analysis: str) -> list[str]:
+    """The code files an analysis names — in its diffs, or quoted — in the
+    order it names them."""
+    named = [p.path for p in edits_from_diff(analysis)]
+    named += _CODE_FILE.findall(analysis)
+    return [p for p in dict.fromkeys(named) if safe_path(p)][:MAX_FILES]
 
 
 def branch_of(title: str, change_id: uuid.UUID) -> str:
@@ -300,6 +400,111 @@ async def code_for(
     return None
 
 
+async def _changed(
+    code: GitHubCode, repository: str, base: str, proposed: Sequence[ProposedFile]
+) -> tuple[list[dict[str, object]], list[dict[str, str]]]:
+    """Each file proposed, read on the branch, changed here: its diff — or
+    why it could not be."""
+    files: list[dict[str, object]] = []
+    skipped: list[dict[str, str]] = []
+    for each in proposed[:MAX_FILES]:
+        path = safe_path(each.path)
+        if path is None or any(f["path"] == path for f in files):
+            continue
+        before = await code.read(repository, path, base)
+        after: str | None
+        if each.delete:
+            if before is None:
+                continue
+            after = None
+        elif each.edits:
+            if before is None:
+                skipped.append({"path": path, "why": "not_found"})
+                continue
+            after, why = apply_edits(before, each.edits)
+            if after is None:
+                skipped.append({"path": path, "why": why or "not_found"})
+                continue
+        elif each.content is not None:
+            after = each.content
+        else:
+            continue
+        if before == after:
+            continue
+        diff, added, removed = diff_of(path, before, after)
+        files.append(
+            {
+                "path": path,
+                "status": "added" if before is None else "deleted" if after is None else "modified",
+                "content": after,
+                "diff": diff,
+                "additions": added,
+                "deletions": removed,
+                "why": each.why[:500],
+            }
+        )
+    return files, skipped
+
+
+async def _repository_of(
+    session: AsyncSession, run: AgentRun, analysis: str
+) -> tuple[Source, GitHubCode, str] | None:
+    """The repository the change is for: the one it was asked, else the
+    first the analysis names that a connected GitHub source reads."""
+    asked = str((run.inputs or {}).get("depot") or "").strip()
+    named = [asked] if asked else []
+    named += re.findall(r"\b([A-Za-z0-9][\w.-]*/[A-Za-z0-9][\w.-]*)\b", analysis)
+    for repository in dict.fromkeys(named):
+        if repository.count("/") != 1 or "." in repository.split("/")[0]:
+            continue
+        found = await code_for(session, run.workspace_id, repository)
+        if found is not None:
+            return found[0], found[1], repository
+    return None
+
+
+def _summary_of(analysis: str) -> str:
+    """What the analysis says first, without its code: the change's summary
+    when it is written from the analysis' own diff."""
+    prose = re.sub(r"```.*?```", "", analysis, flags=re.DOTALL)
+    paragraphs = [
+        p.strip()
+        for p in prose.split("\n\n")
+        if p.strip() and not p.strip().startswith(("#", "---", "+++", "@@"))
+    ]
+    return " ".join(paragraphs[:2])[:800]
+
+
+def _kept(
+    run: AgentRun,
+    source: Source,
+    repository: str,
+    base: str,
+    title: str,
+    summary: str,
+    files: list[dict[str, object]],
+    skipped: list[dict[str, str]],
+) -> CodeChange:
+    if skipped:
+        summary += "\n\nNon appliqué : " + ", ".join(
+            f"`{s['path']}` ({SKIPPED_SAID.get(s['why'], s['why'])})" for s in skipped
+        )
+    return CodeChange(
+        workspace_id=run.workspace_id,
+        id=uuid.uuid4(),
+        run_id=run.id,
+        intention_id=run.intention_id,
+        source_id=source.id,
+        repository=repository,
+        base_branch=base[:200],
+        title=title.strip()[:300] or "Modification proposée par LEKA",
+        summary=summary,
+        files=files,
+        status="proposed",
+        proposed_by=run.requested_by,
+    )
+
+
 async def propose_change(
     session: AsyncSession,
     run: AgentRun,
@@ -309,9 +514,45 @@ async def propose_change(
     read: Mapping[str, str] | None = None,
     budget: float = CHANGE_BUDGET,
 ) -> Proposed:
-    """The change a run's analysis proposes, written from it and the files
-    the agent read (`read`, « owner/repo:path » → text), applied, diffed and
-    kept."""
+    """The change a run's analysis proposes, applied, diffed and kept:
+
+    1. its own diff, when it holds one that lands whole on the files read
+       again — no model asked again;
+    2. else the model, given the analysis and the files the agent read — or,
+       none kept, the files the analysis names, read again;
+    3. the model failing, what of its own diff did land."""
+    found = await _repository_of(session, run, analysis)
+    from_diff: tuple[list[dict[str, object]], list[dict[str, str]]] = ([], [])
+    base = ""
+    if found is not None:
+        source, code, repository = found
+        try:
+            base = await code.default_branch(repository)
+            proposed = edits_from_diff(analysis)
+            if proposed:
+                from_diff = await _changed(code, repository, base, proposed)
+        except CodeRefusedError as refused:
+            logger.warning("change_not_read", run=str(run.id), code=refused.code)
+        except Exception:
+            logger.exception("change_not_read", run=str(run.id))
+        files, skipped = from_diff
+        if files and not skipped:
+            title = str((run.inputs or {}).get("demande") or "").strip().split("\n")[0][:120]
+            change = _kept(
+                run, source, repository, base, title, _summary_of(analysis), files, skipped
+            )
+            session.add(change)
+            await session.flush()
+            return Proposed(change, None, {"from": "analysis"}, skipped)
+        if not read:
+            read = {}
+            for path in paths_named(analysis):
+                try:
+                    text = await code.read(repository, path, base)
+                except CodeRefusedError:
+                    continue
+                if text is not None:
+                    read[f"{repository}:{path}"] = text
     request = Request(
         purpose=f"agent:{definition.key}:change"[:100],
         messages=change_messages(definition, run.inputs, analysis, read),
@@ -319,6 +560,7 @@ async def propose_change(
         max_tokens=CHANGE_TOKENS,
         ref=f"agent_run:{run.id}",
     )
+    failed: Proposed | None = None
     try:
         answered = await asyncio.wait_for(
             Gateway(session, run.workspace_id).structured(
@@ -331,13 +573,15 @@ async def propose_change(
         # not kept — never all said « no model » (2026-10-18).
         said = next((a.error for a in reversed(error.attempts) if a.error), None)
         logger.warning("change_not_written", run=str(run.id), reason=error.reason, said=said)
-        return Proposed(None, NO_MODEL.get(error.reason, "unanswered"), said=(said or "")[:300])
+        failed = Proposed(None, NO_MODEL.get(error.reason, "unanswered"), said=(said or "")[:300])
     except TimeoutError:
-        return Proposed(None, "timeout")
+        failed = Proposed(None, "timeout")
     except Exception:
         # Whatever else: the run's analysis stands, said why no change is.
         logger.exception("change_not_written", run=str(run.id))
-        return Proposed(None, "error")
+        failed = Proposed(None, "error")
+    if failed is not None:
+        return _from_diff_else(session, run, analysis, found, base, from_diff, failed)
     proposal = answered.value
     done = answered.completion
     usage = {
@@ -346,55 +590,16 @@ async def propose_change(
         "tokens_in": done.usage.tokens_in,
         "tokens_out": done.usage.tokens_out,
     }
-    found = await code_for(session, run.workspace_id, proposal.repository.strip())
-    if found is None:
-        return Proposed(None, "no_repository", usage)
-    source, code = found
+    written = await code_for(session, run.workspace_id, proposal.repository.strip())
+    if written is None:
+        return _from_diff_else(
+            session, run, analysis, found, base, from_diff, Proposed(None, "no_repository", usage)
+        )
+    source, code = written
     repository = proposal.repository.strip()
     try:
         base = proposal.base_branch.strip() or await code.default_branch(repository)
-        files: list[dict[str, object]] = []
-        skipped: list[dict[str, str]] = []
-        for proposed in proposal.files[:MAX_FILES]:
-            path = safe_path(proposed.path)
-            if path is None or any(f["path"] == path for f in files):
-                continue
-            before = await code.read(repository, path, base)
-            after: str | None
-            if proposed.delete:
-                if before is None:
-                    continue
-                after = None
-            elif proposed.edits:
-                if before is None:
-                    skipped.append({"path": path, "why": "not_found"})
-                    continue
-                after, why = apply_edits(before, proposed.edits)
-                if after is None:
-                    skipped.append({"path": path, "why": why or "not_found"})
-                    continue
-            elif proposed.content is not None:
-                after = proposed.content
-            else:
-                continue
-            if before == after:
-                continue
-            diff, added, removed = diff_of(path, before, after)
-            files.append(
-                {
-                    "path": path,
-                    "status": "added"
-                    if before is None
-                    else "deleted"
-                    if after is None
-                    else "modified",
-                    "content": after,
-                    "diff": diff,
-                    "additions": added,
-                    "deletions": removed,
-                    "why": proposed.why[:500],
-                }
-            )
+        files, skipped = await _changed(code, repository, base, proposal.files)
     except CodeRefusedError as refused:
         logger.warning("change_not_read", run=str(run.id), code=refused.code)
         return Proposed(None, refused.code, usage)
@@ -402,31 +607,37 @@ async def propose_change(
         logger.exception("change_not_read", run=str(run.id))
         return Proposed(None, "error", usage)
     if not files:
-        # Its edits did not land: said, never guessed — another try reads
-        # the files again.
-        return Proposed(None, "edits_not_applied" if skipped else "no_change", usage, skipped)
-    summary = proposal.summary.strip()
-    if skipped:
-        summary += "\n\nNon appliqué : " + ", ".join(
-            f"`{s['path']}` ({SKIPPED_SAID.get(s['why'], s['why'])})" for s in skipped
-        )
-    change = CodeChange(
-        workspace_id=run.workspace_id,
-        id=uuid.uuid4(),
-        run_id=run.id,
-        intention_id=run.intention_id,
-        source_id=source.id,
-        repository=repository,
-        base_branch=base[:200],
-        title=proposal.title.strip()[:300] or "Modification proposée par LEKA",
-        summary=summary,
-        files=files,
-        status="proposed",
-        proposed_by=run.requested_by,
+        # Its edits did not land: said, never guessed — unless the
+        # analysis' own diff did.
+        none = Proposed(None, "edits_not_applied" if skipped else "no_change", usage, skipped)
+        return _from_diff_else(session, run, analysis, found, base, from_diff, none)
+    change = _kept(
+        run, source, repository, base, proposal.title, proposal.summary.strip(), files, skipped
     )
     session.add(change)
     await session.flush()
     return Proposed(change, None, usage, skipped)
+
+
+def _from_diff_else(
+    session: AsyncSession,
+    run: AgentRun,
+    analysis: str,
+    found: tuple[Source, GitHubCode, str] | None,
+    base: str,
+    from_diff: tuple[list[dict[str, object]], list[dict[str, str]]],
+    failed: Proposed,
+) -> Proposed:
+    """What of the analysis' own diff landed, when the model gave nothing
+    better — else why nothing did."""
+    files, skipped = from_diff
+    if found is None or not files:
+        return failed
+    source, _, repository = found
+    title = str((run.inputs or {}).get("demande") or "").strip().split("\n")[0][:120]
+    change = _kept(run, source, repository, base, title, _summary_of(analysis), files, skipped)
+    session.add(change)
+    return Proposed(change, None, {"from": "analysis"}, skipped)
 
 
 # ── deciding ────────────────────────────────────────────────────────────────
