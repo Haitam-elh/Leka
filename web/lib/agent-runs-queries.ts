@@ -82,6 +82,15 @@ export function useRewriteChange(id: string) {
   });
 }
 
+/** Its mock-ups drawn again: the run read again until they are. */
+export function useRedrawDesign(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => agentRuns.redrawDesign(id),
+    onSuccess: () => client.invalidateQueries({ queryKey: agentRunKeys.one(id) }),
+  });
+}
+
 /** Run, cancelled — the runs read again. */
 export function useAgentRunChange() {
   const client = useQueryClient();

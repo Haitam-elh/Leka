@@ -463,6 +463,26 @@ async def _repository_of(
     return None
 
 
+async def files_named(session: AsyncSession, run: AgentRun, analysis: str) -> dict[str, str]:
+    """The code files an analysis names, read on its repository's default
+    branch (« owner/repo:path » → text) — for a run that did not keep the
+    files it read."""
+    found = await _repository_of(session, run, analysis)
+    if found is None:
+        return {}
+    _, code, repository = found
+    read: dict[str, str] = {}
+    try:
+        base = await code.default_branch(repository)
+        for path in paths_named(analysis):
+            text = await code.read(repository, path, base)
+            if text is not None:
+                read[f"{repository}:{path}"] = text
+    except CodeRefusedError:
+        pass
+    return read
+
+
 def _summary_of(analysis: str) -> str:
     """What the analysis says first, without its code: the change's summary
     when it is written from the analysis' own diff."""
@@ -783,6 +803,7 @@ __all__ = [
     "branch_of",
     "code_for",
     "diff_of",
+    "files_named",
     "files_read",
     "propose_change",
     "safe_path",

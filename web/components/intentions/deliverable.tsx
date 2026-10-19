@@ -32,7 +32,13 @@ import { routes } from "@/config/routes";
 import { agentTitle } from "@/lib/agent-title";
 import type { components } from "@/lib/api-types";
 import type { AgentRun, AgentRunDetail } from "@/lib/agent-runs";
-import { useAgentRun, useDrawFiles, useIntentionRuns, useRewriteChange } from "@/lib/agent-runs-queries";
+import {
+  useAgentRun,
+  useDrawFiles,
+  useIntentionRuns,
+  useRedrawDesign,
+  useRewriteChange,
+} from "@/lib/agent-runs-queries";
 import { useRunCodeChanges } from "@/lib/code-changes-queries";
 import { type DiffRow, diffRows, rowOf } from "@/lib/diff";
 import { fill } from "@/lib/i18n/dictionaries";
@@ -174,6 +180,8 @@ function Delivered({
       {CHANGE_AGENTS.has(run.key) && changes.data && !changes.data.length ? (
         <ChangeMissing run={run} writing={writing} />
       ) : null}
+      {/* The designer, its mock-ups not there: why, and again (2026-10-18). */}
+      {DESIGN_AGENTS.has(run.key) && !run.design ? <DesignMissing run={run} /> : null}
       {/* What to send out of it: tickets for Jira, pages for Confluence. */}
       <RunPublications runId={run.id} />
       {views.length > 1 ? (
@@ -230,6 +238,9 @@ function Delivered({
 /** The agents whose deliverable is a change to the code, shown before and
  * after (`renders: code_change`). */
 const CHANGE_AGENTS: ReadonlySet<string> = new Set(["code-change", "test-generation"]);
+/** The agents whose deliverable is a screen redrawn, before and after
+ * (`renders: design_mockups`). */
+const DESIGN_AGENTS: ReadonlySet<string> = new Set(["design-review"]);
 
 /** Its analysis delivered, its change not written (2026-10-18: the analysis
  * alone was shown, nothing said): why, and the way to write it again — from
@@ -283,6 +294,62 @@ function ChangeMissing({ run, writing }: { run: AgentRunDetail; writing: boolean
   );
 }
 
+/** Its review delivered, its mock-ups not drawn: being drawn, or why not and
+ * the way to draw them again — never the review done again. A review that
+ * proposes no design says nothing here. */
+function DesignMissing({ run }: { run: AgentRunDetail }) {
+  const t = useDictionary();
+  const w = t.intentions.deliverable;
+  const again = useRedrawDesign(run.id);
+  if ((run.drawing ?? []).includes("design")) {
+    return (
+      <p
+        className="flex items-center gap-2 rounded-xl border border-shell-line bg-white px-5 py-3 text-[0.8125rem] text-shell-muted"
+        role="status"
+        data-testid="deliverable-design-drawing"
+      >
+        <Loader2 className={cn("size-4", SPINNING)} aria-hidden="true" />
+        {w.designDrawing}
+      </p>
+    );
+  }
+  const failed = run.draw_failed ?? null;
+  // Not drawn though its review proposes a design — its mark forgotten, or
+  // drawn before mock-ups were drawn one at a time.
+  const undrawn = (run.drawable ?? []).includes("design");
+  if (!failed && !undrawn) return null;
+  const why = failed ? ((w.changeErrors as Record<string, string>)[failed] ?? failed) : null;
+  return (
+    <section
+      className="flex flex-wrap items-center gap-3 rounded-xl border border-state-warning/30 bg-state-warning-soft px-5 py-3"
+      data-testid="deliverable-design-missing"
+      data-error={failed ?? undefined}
+    >
+      <CircleAlert className="size-4 shrink-0 text-state-warning" aria-hidden="true" />
+      <div className="min-w-0 flex-1">
+        <p className="text-[0.8125rem] text-brand-navy">
+          {why ? fill(w.designFailed, { why }) : w.designNotDrawn}
+        </p>
+        {run.draw_said ? (
+          <p className="mt-0.5 font-mono text-xs break-words text-shell-muted" data-testid="deliverable-design-said">
+            {run.draw_said}
+          </p>
+        ) : null}
+      </div>
+      <Button
+        type="button"
+        size="sm"
+        disabled={again.isPending}
+        onClick={() => again.mutate()}
+        data-testid="deliverable-design-again"
+      >
+        {again.isPending ? <Loader2 className={cn("size-3.5", SPINNING)} aria-hidden="true" /> : null}
+        {w.designAgain}
+      </Button>
+    </section>
+  );
+}
+
 /** Delivered without its deck (launched asking for no file): drawn after it
  * on asking, from what it delivered — never run again (2026-10-16). */
 function DrawFiles({ run }: { run: AgentRunDetail }) {
@@ -291,7 +358,7 @@ function DrawFiles({ run }: { run: AgentRunDetail }) {
   const draw = useDrawFiles(run.id);
   // Its files only: a change being written again is said elsewhere.
   const drawing = (run.drawing ?? []).filter((f) => f === "pdf" || f === "pptx");
-  const drawable = run.drawable ?? [];
+  const drawable = (run.drawable ?? []).filter((f) => f === "pdf" || f === "pptx");
   if (drawing.length) {
     return (
       <span className="text-[0.8125rem] text-shell-muted" role="status" data-testid="deliverable-drawing">

@@ -9,10 +9,17 @@ What these protect:
 - A proposal holds one to three proposals; the one recommended is one of
   them.
 - A review that proposes no design draws nothing, and no model is asked.
+- A design not drawn is said: which step, and what its model said — and is
+  drawn again on asking, from the review it delivered, never the run done
+  again; once drawn, not again.
+- A review proposes a design by LEKA's mark — or, the mark left out, by its
+  section « La proposition » (2026-10-18: a whole proposal drew nothing).
 - End to end: the designer reads the code, its review opens « La
-  proposition » with LEKA's mark; LEKA asks the model again, no tools, for
-  the screen today and its proposals — from the review and the files the
-  run read —, cleans them and keeps them; the run says it drew; its report
+  proposition » with LEKA's mark; LEKA asks the model again, no tools, one
+  mock-up at a time — its plan without HTML, the screen today, then each
+  direction from today's mock-up, at once (2026-10-18: asked all at once,
+  the answer outgrew its tokens and the review came alone) — from the
+  review and the files the run read, cleans them and keeps them; the run says it drew; its report
   has no mark; GET /agent-runs/{id}/design gives each mock-up as its page,
   to whoever may read the run — another workspace sees nothing.
 """
@@ -29,7 +36,8 @@ import pytest
 from httpx import AsyncClient
 from pydantic import ValidationError
 
-from leka.capabilities import execute_run, sync_catalogue
+from leka.api import agent_runs as agent_runs_api
+from leka.capabilities import execute_run, redraw_design, sync_catalogue
 from leka.capabilities.deliverables.design import (
     POLICY,
     DesignMockup,
@@ -160,6 +168,10 @@ def test_a_proposal_holds_one_to_three_proposals_and_recommends_one_of_them() ->
 def test_only_a_review_with_the_mark_is_drawn_and_the_mark_is_not_read() -> None:
     review = f"# Revue\n\n## La proposition\n\n{MARK}\n\nL'écran aujourd'hui…"
     assert proposes(review) and not proposes("# Revue\n\nAucun constat.")
+    # The mark left out, its section said: still drawn.
+    assert proposes("Ce qui a été relu\n\nLa proposition\n1. L'écran aujourd'hui")
+    assert proposes("## 2. Les directions de design\n\n| # | Direction |")
+    assert not proposes("Les constats ne proposent rien ; la proposition de la PR tient.")
     assert MARK not in without_mark(review) and "La proposition" in without_mark(review)
 
 
@@ -171,6 +183,32 @@ def test_the_writer_is_given_the_files_read_within_its_budget() -> None:
 
 
 # ── end to end ─────────────────────────────────────────────────────────────
+
+
+def _plan(*names: str) -> dict[str, Any]:
+    return {
+        "screen": "Accueil",
+        "viewport": "desktop",
+        "directions": [
+            {"name": n, "axis": f"L'axe de {n}", "when": "…", "cost": "…", "changes": "…"}
+            for n in names
+        ],
+        "recommended": 0,
+        "why": "Un outil de tous les jours : sobre.",
+        "changes": [
+            {"where": "web/app/page.tsx:12", "before": "3 boutons", "after": "1 action", "why": "…"}
+        ],
+    }
+
+
+TODAY_DRAWN = {"css": "h1 { font-size: 20px; }", "body": "<main><h1>Accueil</h1></main>"}
+# Drawn for each direction, whichever answers first: scripts and handlers
+# in it are cleaned away.
+DRAWN = {
+    "css": "@import url('https://evil.example/x.css'); button:active { transform: scale(0.97); }",
+    "body": '<main><h1>Accueil</h1><button onclick="steal()">Lancer</button>'
+    '<script>fetch("https://evil.example")</script></main>',
+}
 
 REVIEW = (
     "# Revue de design\n\n## Ce qui a été relu\n\n`README.md`.\n\n## La proposition\n\n"
@@ -195,7 +233,10 @@ async def test_the_designer_draws_the_screen_before_and_after(
     script = leka_gemini(
         gemini(call={"name": "read_file", "args": {"repository": REPO, "path": "README.md"}}),
         gemini(REVIEW),
-        gemini(json.dumps(_proposal())),
+        gemini(json.dumps(_plan("Calme", "Dense"))),
+        gemini(json.dumps(TODAY_DRAWN)),
+        gemini(json.dumps(DRAWN)),
+        gemini(json.dumps(DRAWN)),
     )
     started = await client.post(
         RUNS,
@@ -205,13 +246,20 @@ async def test_the_designer_draws_the_screen_before_and_after(
     run_id = started.json()["id"]
     assert await execute_run(acme["acme"], uuid.UUID(run_id)) == {"status": "succeeded"}
 
-    # Asked again, structured, no tools: the review and the files it read.
+    # Asked again, structured, no tools: the review and the files it read —
+    # the plan first, then today, then each direction from today's mock-up.
     asked = script.asked[2]
     assert asked["generationConfig"]["responseMimeType"] == "application/json"
     assert "tools" not in asked
     material = json.loads(asked["contents"][-1]["parts"][0]["text"])
     assert material["files"] == {f"{REPO}:README.md": README}
     assert MARK not in material["review"]
+    assert len(script.asked) == 6
+    directions = [json.loads(a["contents"][-1]["parts"][0]["text"]) for a in script.asked[4:]]
+    assert {d["direction"]["name"] for d in directions} == {"Calme", "Dense"}
+    assert all(d["today"] == TODAY_DRAWN for d in directions)
+    # Each with room to think and draw.
+    assert script.asked[3]["generationConfig"]["maxOutputTokens"] == 48_000
 
     detail = (await client.get(f"{RUNS}/{run_id}")).json()
     assert detail["design"] == {
@@ -261,5 +309,91 @@ async def test_a_review_without_a_proposal_draws_nothing(
     assert await execute_run(acme["acme"], uuid.UUID(run_id)) == {"status": "succeeded"}
     assert len(script.asked) == 1
     detail = (await client.get(f"{RUNS}/{run_id}")).json()
-    assert detail["design"] is None
+    assert (detail["design"], detail["drawable"]) == (None, [])
     assert (await client.get(f"{RUNS}/{run_id}/design")).status_code == 404
+
+
+@pytest.mark.integration
+async def test_a_design_not_drawn_says_which_step_and_why(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    leka_gemini: Callable[..., Script],
+    github: GitHub,
+    store: LocalObjectStore,
+) -> None:
+    _as(identity, acme, "member")
+    await _github_source(acme["acme"])
+    await sync_catalogue()
+    cut = gemini('{"css": "h1 {", "body": "<main>')
+    cut["candidates"][0]["finishReason"] = "MAX_TOKENS"
+    leka_gemini(gemini(REVIEW), gemini(json.dumps(_plan("Calme"))), cut, cut)
+    started = await client.post(
+        RUNS,
+        json={"key": "design-review", "inputs": {"depot": REPO, "demande": "propose un design"}},
+    )
+    run_id = started.json()["id"]
+    assert await execute_run(acme["acme"], uuid.UUID(run_id)) == {"status": "succeeded"}
+    detail = (await client.get(f"{RUNS}/{run_id}")).json()
+    assert detail["design"] is None
+    assert detail["draw_failed"] == "unanswered"
+    assert detail["draw_said"].startswith("aujourd'hui : Cut at its limit")
+    # Its review proposes a design it does not have: drawable, on asking.
+    assert "design" in detail["drawable"]
+
+
+@pytest.mark.integration
+async def test_a_design_not_drawn_is_drawn_again_on_asking(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    leka_gemini: Callable[..., Script],
+    github: GitHub,
+    store: LocalObjectStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _as(identity, acme, "member")
+    await _github_source(acme["acme"])
+    await sync_catalogue()
+    asked: list[tuple[uuid.UUID, str]] = []
+
+    async def queue(workspace_id: uuid.UUID, run_id: uuid.UUID, renders: str) -> bool:
+        asked.append((run_id, renders))
+        return True
+
+    monkeypatch.setattr(agent_runs_api, "queue_redraw", queue)
+    cut = gemini('{"screen": "Acc')
+    cut["candidates"][0]["finishReason"] = "MAX_TOKENS"
+    leka_gemini(
+        gemini(REVIEW),
+        cut,
+        cut,
+        # Drawn again: the plan, today, its one direction.
+        gemini(json.dumps(_plan("Calme"))),
+        gemini(json.dumps(TODAY_DRAWN)),
+        gemini(json.dumps(DRAWN)),
+    )
+    started = await client.post(
+        RUNS,
+        json={"key": "design-review", "inputs": {"depot": REPO, "demande": "propose un design"}},
+    )
+    run_id = started.json()["id"]
+    assert await execute_run(acme["acme"], uuid.UUID(run_id)) == {"status": "succeeded"}
+    failed = (await client.get(f"{RUNS}/{run_id}")).json()
+    assert (failed["design"], failed["draw_failed"]) == (None, "unanswered")
+    assert failed["draw_said"].startswith("plan : Cut at its limit")
+
+    again = await client.post(f"{RUNS}/{run_id}/design")
+    assert again.status_code == 202, again.text
+    assert (again.json()["drawing"], again.json()["draw_failed"]) == (["design"], None)
+    assert asked == [(uuid.UUID(run_id), "design_mockups")]
+    assert (await client.post(f"{RUNS}/{run_id}/design")).status_code == 409
+    done = await redraw_design(acme["acme"], uuid.UUID(run_id))
+    assert done["error"] is None
+    drawn = (await client.get(f"{RUNS}/{run_id}")).json()
+    assert drawn["design"]["proposals"] == ["Calme"] and drawn["drawing"] == []
+    assert (await client.get(f"{RUNS}/{run_id}/design")).status_code == 200
+    # Drawn: never again.
+    assert (await client.post(f"{RUNS}/{run_id}/design")).status_code == 409

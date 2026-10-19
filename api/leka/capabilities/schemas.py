@@ -715,7 +715,8 @@ class AgentRunRead(BaseModel):
     drawable: list[str] = Field(
         default_factory=list,
         description="Finished, the files its agent draws that it does not have yet: drawn "
-        "after it on asking (POST /agent-runs/{id}/files), the run never done again.",
+        "after it on asking (POST /agent-runs/{id}/files), the run never done again — and "
+        "« design », a design review's mock-ups not drawn (POST /agent-runs/{id}/design).",
     )
     drawing: list[str] = Field(
         default_factory=list, description="The files being drawn after it, by a worker."

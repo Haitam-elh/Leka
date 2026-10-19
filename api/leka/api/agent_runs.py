@@ -68,8 +68,10 @@ from leka.capabilities import (
     deliverable_of,
     find,
     page,
+    proposes,
     queue_change,
     queue_files,
+    queue_redraw,
     queue_run,
     read_deliverable,
     read_design,
@@ -219,6 +221,21 @@ def _drawable(run: AgentRun, definition: Definition | None, files: list[object])
     return [f for f in DECK_FILES if f not in have]
 
 
+def _designable(run: AgentRun, definition: Definition | None) -> list[str]:
+    """A finished design review whose review proposes a design it did not
+    draw: « design », to draw on asking (POST /agent-runs/{id}/design) —
+    whatever left it undrawn, its mark forgotten included."""
+    if (
+        run.status != "succeeded"
+        or not run.output
+        or definition is None
+        or definition.renders != "design_mockups"
+        or run.detail.get("design")
+    ):
+        return []
+    return ["design"] if proposes(run.output) else []
+
+
 def _drawing(run: AgentRun, now: datetime | None = None) -> list[str]:
     """The files a worker is drawing — none once asked so long ago it is
     lost (a worker gone): asked again."""
@@ -257,7 +274,7 @@ def run_read(run: AgentRun, principal: Principal) -> AgentRunRead:
         format=run.format,
         pending=[str(p) for p in pending] if isinstance(pending, list) else [],
         expected=_expected(run, definition),
-        drawable=_drawable(run, definition, files),
+        drawable=_drawable(run, definition, files) + _designable(run, definition),
         drawing=_drawing(run),
         draw_failed=str(failed) if (failed := run.detail.get("deliverables_error")) else None,
         draw_said=str(said)[:300] if (said := run.detail.get("deliverables_said")) else None,
@@ -592,6 +609,60 @@ async def rewrite_run_change(
     )
     await session.commit()
     await queue_change(principal.workspace_id, run.id)
+    return run_read(run, principal)
+
+
+@router.post(
+    "/{run_id}/design",
+    response_model=AgentRunRead,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Draw a finished design review's mock-ups again",
+)
+async def redraw_run_design(
+    run_id: uuid.UUID, session: SessionDep, principal: Runner
+) -> AgentRunRead:
+    """Its mock-ups drawn again from the review it delivered — the run never
+    done again (2026-10-18: a review came alone, its mock-ups not drawn).
+    202, a worker draws them; 409 when it is not finished, already has
+    them, or they are being drawn; 422 when its agent draws none."""
+    run = await CapabilityRunRepository(session, principal.workspace_id).run(run_id, lock=True)
+    if run is None:
+        raise _missing()
+    definition = find(run.key)
+    if definition is None or definition.renders != "design_mockups":
+        raise ApiError(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ErrorCode.VALIDATION_FAILED,
+            "This agent draws no mock-up.",
+            details=[FieldError(field="run_id", message="not_a_design")],
+        )
+    if run.status != "succeeded" or not run.output:
+        raise ApiError(
+            status.HTTP_409_CONFLICT, ErrorCode.CONFLICT, "Its review is not delivered yet."
+        )
+    if run.detail.get("design"):
+        raise ApiError(status.HTTP_409_CONFLICT, ErrorCode.CONFLICT, "Its mock-ups are there.")
+    if _drawing(run):
+        raise ApiError(status.HTTP_409_CONFLICT, ErrorCode.CONFLICT, "They are being drawn.")
+    run.detail = {
+        **{
+            k: v
+            for k, v in run.detail.items()
+            if k not in ("deliverables_error", "deliverables_said")
+        },
+        "drawing": ["design"],
+        "drawing_since": datetime.now(UTC).isoformat(),
+    }
+    audit_as(
+        session,
+        principal,
+        "ai",
+        "agent_run.design_asked",
+        target=Target("agent_run", run.id, run.key),
+        detail={},
+    )
+    await session.commit()
+    await queue_redraw(principal.workspace_id, run.id, "design_mockups")
     return run_read(run, principal)
 
 

@@ -89,6 +89,73 @@ class DesignProposal(BaseModel):
     changes: list[DesignChange] = Field(default_factory=list, max_length=20)
 
 
+# ── drawn one mock-up at a time (2026-10-18) ────────────────────────────────
+# Asked whole — today and up to three proposals, each its CSS and its body —
+# one answer outgrew its tokens, thinking included, and the review came
+# alone, said nothing. Now: a plan, without a line of HTML; then each
+# mock-up, drawn on its own.
+
+
+class DesignDirection(BaseModel):
+    """One proposal, planned: what it is before it is drawn."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    name: str = Field(max_length=80, description="Son nom, ex. « Galerie orientée métiers ».")
+    axis: str = Field(default="", max_length=400, description="Son axe, en une phrase.")
+    when: str = Field(default="", max_length=400, description="Quand c'est le bon choix.")
+    cost: str = Field(default="", max_length=400, description="Ce qu'elle coûte.")
+    changes: str = Field(
+        default="",
+        max_length=4_000,
+        description="Ce qu'elle change, élément par élément, avec les valeurs — ce qu'on dessine.",
+    )
+
+
+class DesignPlan(BaseModel):
+    """The screen and the proposals to draw, the one recommended and why —
+    no HTML yet."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    screen: str = Field(max_length=120, description="L'écran dessiné, ex. « Agents ».")
+    viewport: Literal["desktop", "mobile"] = Field(default="desktop")
+    directions: list[DesignDirection] = Field(min_length=1, max_length=MOST_PROPOSALS)
+    recommended: int = Field(default=0, ge=0)
+    why: str = Field(default="", max_length=1_200)
+    changes: list[DesignChange] = Field(default_factory=list, max_length=20)
+
+
+class MockupDrawing(BaseModel):
+    """One mock-up, drawn: its style sheet and its body."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    css: str = Field(default="", max_length=MOST_CSS, description="Sa feuille de style, complète.")
+    body: str = Field(max_length=MOST_BODY, description="Le contenu de son <body>, en HTML.")
+
+
+def assembled(
+    plan: DesignPlan, before: MockupDrawing, drawn: list[tuple[DesignDirection, MockupDrawing]]
+) -> DesignProposal:
+    """The proposal as one: today, and each direction drawn — the one
+    recommended kept among those drawn."""
+    wanted = plan.directions[min(plan.recommended, len(plan.directions) - 1)].name
+    names = [d.name for d, _ in drawn]
+    return DesignProposal(
+        screen=plan.screen,
+        viewport=plan.viewport,
+        before=DesignMockup(name="Aujourd'hui", css=before.css, body=before.body),
+        after=[
+            DesignMockup(name=d.name, axis=d.axis, when=d.when, cost=d.cost, css=m.css, body=m.body)
+            for d, m in drawn
+        ],
+        recommended=names.index(wanted) if wanted in names else 0,
+        why=plan.why,
+        changes=plan.changes,
+    )
+
+
 # ── what a mock-up may not hold ─────────────────────────────────────────────
 
 _GONE = re.compile(
@@ -186,8 +253,12 @@ __all__ = [
     "MOST_PROPOSALS",
     "POLICY",
     "DesignChange",
+    "DesignDirection",
     "DesignMockup",
+    "DesignPlan",
     "DesignProposal",
+    "MockupDrawing",
+    "assembled",
     "clean_body",
     "clean_css",
     "cleaned",
