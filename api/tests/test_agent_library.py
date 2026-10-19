@@ -33,7 +33,7 @@ VERSIONS = {
     "build-fixer": "1.2.0",
     "code-review": "1.4.0",
     "data-analysis": "1.3.0",
-    "debug-assistant": "1.4.0",
+    "debug-assistant": "1.4.1",
     "documentation-assistant": "2.0.0",
     "incident-investigation": "1.3.0",
     "infrastructure-analysis": "1.3.0",
@@ -601,6 +601,9 @@ def test_the_debugging_agent_checks_the_failure_before_ranking_causes() -> None:
     assert "jamais l'identifiant à la place du nom" in said
     assert "Jamais le nom d'un champ ou d'un signal" in said
     assert "parce\n  qu'elle a fusionné" in said
+    # 2026-10-20, relaunched: right answer, but it explained that leka-core
+    # was not a person, and dated each deployment to the second.
+    assert "le livrable n'en\ndit rien" in said and "daté à la\n   minute" in said
 
 
 def test_the_code_change_proposes_the_smallest_change_and_says_the_rest() -> None:
