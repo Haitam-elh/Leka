@@ -38,7 +38,7 @@ VERSIONS = {
     "incident-investigation": "1.3.0",
     "infrastructure-analysis": "1.3.0",
     "release-analysis": "1.3.0",
-    "security-review": "1.3.0",
+    "security-review": "1.4.0",
     "test-analysis": "1.3.0",
 }
 # The code an agent may read, beside the runtime's tools: the code review its
@@ -601,6 +601,16 @@ def test_the_debugging_agent_checks_the_failure_before_ranking_causes() -> None:
     assert "jamais l'identifiant à la place du nom" in said
     assert "Jamais le nom d'un champ ou d'un signal" in said
     assert "parce\n  qu'elle a fusionné" in said
+
+
+def test_the_security_review_names_what_it_found_not_how_it_searched() -> None:
+    # 2026-10-20, tested on leka-core: it said the search returned nothing
+    # under that name and spoke of the company model, ids after each name.
+    said = {d.key: d for d in catalogue()}["security-review"].instructions or ""
+    assert "jamais une personne ou une adresse" in said
+    assert "ni de la façon dont il a cherché" in said
+    assert "jamais l'identifiant à la place du nom" in said
+    assert "Jamais le nom d'un champ ou d'un outil" in said
 
 
 def test_the_code_change_proposes_the_smallest_change_and_says_the_rest() -> None:

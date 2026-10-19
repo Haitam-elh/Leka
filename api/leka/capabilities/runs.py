@@ -58,6 +58,7 @@ from leka.capabilities.gateway import (
     Tool,
     ToolRoundsError,
 )
+from leka.capabilities.gateway.service import CUT
 from leka.capabilities.method_tools import METHOD_NAMES, METHOD_TOOLS, method_handlers
 from leka.capabilities.models import AgentRun, AgentRunEvent
 from leka.capabilities.repository import CapabilityRunRepository, stale_runs
@@ -121,8 +122,10 @@ RUN_BUDGET = 15 * 60.0
 # long, its job — said failed, never left « en cours » (2026-10-14).
 ABANDONED = timedelta(minutes=30)
 FORGOTTEN = timedelta(minutes=45)
-# What an agent may write, at most: a deck's worth of markdown.
-MAX_TOKENS = 16_000
+# What an agent may write, at most: a deck's worth of markdown — its thinking
+# counts: a security review was cut mid-sentence at 16,000 (2026-10-20). Each
+# model is held to what it gives back at most (the gateway).
+MAX_TOKENS = 48_000
 # Rounds of tools an agent may take before it answers. Its last round is
 # offered none: it answers with what it read, rather than fail — the
 # architect's instructions ask it to look brick by brick.
@@ -584,6 +587,9 @@ async def _run(
         tokens_in=done.usage.tokens_in,
         tokens_out=done.usage.tokens_out,
     )
+    # Cut at its limit, it is said so — never delivered as done (2026-10-20).
+    if str(done.finish or "").upper() in CUT:
+        return await _fail(session, run, "invalid_output", format=run.format, cut=True)
     output = output_of(done.text, run.format)
     if output is None:
         return await _fail(session, run, "invalid_output", format=run.format)

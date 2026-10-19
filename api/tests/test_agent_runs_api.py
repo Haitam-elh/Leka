@@ -727,6 +727,14 @@ async def test_failures_are_said(
     assert await _run(acme, late["id"], budget=0.2) == {"status": "failed", "error": "timeout"}
     assert (await _detail(client, late["id"]))["finished_at"] is not None
 
+    # Cut at its token limit mid-sentence (2026-10-20): said, never « done ».
+    cut = gemini("# Revue de sécurité\n\n1. État\n\nLeka Caddy ([d4d687bc-e9c6-53")
+    cut["candidates"][0]["finishReason"] = "MAX_TOKENS"
+    leka_gemini(cut)
+    halted = await _start(client)
+    assert await _run(acme, halted["id"]) == {"status": "failed", "error": "invalid_output"}
+    assert (await _detail(client, halted["id"]))["events"][-1]["detail"]["cut"] is True
+
 
 # ── cancelled ──────────────────────────────────────────────────────────────
 
