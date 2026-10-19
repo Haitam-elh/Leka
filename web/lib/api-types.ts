@@ -4652,7 +4652,14 @@ export interface paths {
          */
         get: operations["get_design_api_v1_agent_runs__run_id__design_get"];
         put?: never;
-        post?: never;
+        /**
+         * Draw a finished design review's mock-ups again
+         * @description Its mock-ups drawn again from the review it delivered — the run never
+         *     done again (2026-10-18: a review came alone, its mock-ups not drawn).
+         *     202, a worker draws them; 409 when it is not finished, already has
+         *     them, or they are being drawn; 422 when its agent draws none.
+         */
+        post: operations["redraw_run_design_api_v1_agent_runs__run_id__design_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7500,7 +7507,7 @@ export interface components {
             expected?: string[];
             /**
              * Drawable
-             * @description Finished, the files its agent draws that it does not have yet: drawn after it on asking (POST /agent-runs/{id}/files), the run never done again.
+             * @description Finished, the files its agent draws that it does not have yet: drawn after it on asking (POST /agent-runs/{id}/files), the run never done again — and « design », a design review's mock-ups not drawn (POST /agent-runs/{id}/design).
              */
             drawable?: string[];
             /**
@@ -7659,7 +7666,7 @@ export interface components {
             expected?: string[];
             /**
              * Drawable
-             * @description Finished, the files its agent draws that it does not have yet: drawn after it on asking (POST /agent-runs/{id}/files), the run never done again.
+             * @description Finished, the files its agent draws that it does not have yet: drawn after it on asking (POST /agent-runs/{id}/files), the run never done again — and « design », a design review's mock-ups not drawn (POST /agent-runs/{id}/design).
              */
             drawable?: string[];
             /**
@@ -48371,6 +48378,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DesignRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    redraw_run_design_api_v1_agent_runs__run_id__design_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunRead"];
                 };
             };
             /** @description The request could not be understood. */

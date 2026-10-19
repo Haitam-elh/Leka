@@ -90,7 +90,7 @@ from leka.capabilities.loader import (
     parse_agent,
     read_index,
 )
-from leka.capabilities.mockups import read_design, without_mark
+from leka.capabilities.mockups import proposes, read_design, without_mark
 from leka.capabilities.models import (
     AgentRun,
     AgentRunEvent,
@@ -138,8 +138,10 @@ from leka.capabilities.runs import (
     execute_run,
     queue_change,
     queue_files,
+    queue_redraw,
     queue_run,
     redraw,
+    redraw_design,
     rewrite_change,
     sweep_runs,
 )
@@ -486,16 +488,19 @@ __all__ = [
     "page",
     "parse_agent",
     "permitted",
+    "proposes",
     "provide",
     "queue_change",
     "queue_draft",
     "queue_files",
+    "queue_redraw",
     "queue_run",
     "queue_workflow",
     "read_deliverable",
     "read_design",
     "read_index",
     "redraw",
+    "redraw_design",
     "register",
     "register_step",
     "review_of",

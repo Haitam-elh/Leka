@@ -43,7 +43,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => search.value,
   useRouter: () => ({ push }),
 }));
-const runs = vi.hoisted(() => ({ forIntention: vi.fn(), one: vi.fn(), start: vi.fn(), rewriteChange: vi.fn() }));
+const runs = vi.hoisted(() => ({ forIntention: vi.fn(), one: vi.fn(), start: vi.fn(), rewriteChange: vi.fn(), redrawDesign: vi.fn() }));
 vi.mock("@/lib/agent-runs", async (original) => ({
   ...(await original<typeof import("@/lib/agent-runs")>()),
   agentRuns: runs,
@@ -334,6 +334,51 @@ describe("the code review's deliverable", () => {
     const missing = await screen.findByTestId("deliverable-change-missing");
     expect(missing).toHaveTextContent("le modèle a répondu, mais pas sous la forme attendue");
     expect(within(missing).getByTestId("deliverable-change-said")).toHaveTextContent("Cut at its limit of 48000 tokens");
+  });
+
+  it("says why the designer's mock-ups are missing, and draws them again on asking", async () => {
+    // 2026-10-18: a design review came alone, its mock-ups not drawn, said nothing.
+    runs.forIntention.mockResolvedValue([run({ key: "design-review", title: "Revue de design" })]);
+    runs.one.mockResolvedValue(
+      detail({
+        key: "design-review",
+        title: "Revue de design",
+        review: null,
+        design: null,
+        draw_failed: "unanswered",
+        draw_said: "plan : Cut at its limit of 16000 tokens, thinking included.",
+      }),
+    );
+    runs.redrawDesign.mockResolvedValue(run({ key: "design-review" }));
+    show(<DeliverableView intention={INTENTION} />);
+    const missing = await screen.findByTestId("deliverable-design-missing");
+    expect(missing).toHaveTextContent("LEKA n'a pas pu dessiner les maquettes");
+    expect(within(missing).getByTestId("deliverable-design-said")).toHaveTextContent("plan : Cut at its limit");
+    await userEvent.click(within(missing).getByRole("button", { name: "Redessiner les maquettes" }));
+    expect(runs.redrawDesign).toHaveBeenCalledWith("r1");
+  });
+
+  it("offers to draw a proposed design whose mock-ups were never drawn", async () => {
+    runs.forIntention.mockResolvedValue([run({ key: "design-review", title: "Revue de design" })]);
+    runs.one.mockResolvedValue(
+      detail({ key: "design-review", title: "Revue de design", review: null, design: null, drawable: ["design"] }),
+    );
+    show(<DeliverableView intention={INTENTION} />);
+    const missing = await screen.findByTestId("deliverable-design-missing");
+    expect(missing).toHaveTextContent("ses maquettes n'ont pas été dessinées");
+    expect(within(missing).getByRole("button", { name: "Redessiner les maquettes" })).toBeEnabled();
+    // Not a deck: no PDF to draw.
+    expect(screen.queryByTestId("deliverable-draw")).toBeNull();
+  });
+
+  it("says the designer's mock-ups are being drawn", async () => {
+    runs.forIntention.mockResolvedValue([run({ key: "design-review", title: "Revue de design" })]);
+    runs.one.mockResolvedValue(
+      detail({ key: "design-review", title: "Revue de design", review: null, design: null, drawing: ["design"] }),
+    );
+    show(<DeliverableView intention={INTENTION} />);
+    expect(await screen.findByTestId("deliverable-design-drawing")).toHaveTextContent("LEKA dessine les maquettes");
+    expect(screen.queryByTestId("deliverable-drawing")).toBeNull();
   });
 
   it("says its change is being written", async () => {
