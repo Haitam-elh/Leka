@@ -54,7 +54,8 @@ from leka.knowledge import fold
 # 5: what is planned, explained or already done is not asked; updating
 #    documentation is documenting; a question about something known, with
 #    no goal said, asks what is known of it (LEKA-440).
-UNDERSTANDING_VERSION = 5
+# 6: drafting LEKA's own answer — a post-mortem, a report — is not an action.
+UNDERSTANDING_VERSION = 6
 
 # ── actions ─────────────────────────────────────────────────────────────
 
@@ -110,6 +111,12 @@ UPDATE = re.compile(r"\b(?:mettre|mets|mettez|met) (?:a|à) jour\b|\bupdate\b")
 DOCUMENTS = _words(
     "documentation documentations doc docs runbook runbooks page pages wiki procedure "
     "procedures readme fiche fiches notice confluence"
+)
+# What LEKA's answer itself is: drafting it is the answer, not an action
+# — « rédige le post-mortem » asks for the analysis written down.
+ANSWERED = _words(
+    "post mortem postmortem rapport rapports report reports synthese summary resume bilan "
+    "compte analyse analysis brouillon draft"
 )
 ROLL_BACK = re.compile(r"\broll(?:ed)? back\b")
 TICKET = re.compile(
@@ -319,6 +326,8 @@ def actions_of(text: str) -> list[Found]:
             before = [*earlier, *clause[:index]]
             left = clause[max(0, index - 3) : index]
             head = word.split()[0]
+            if verb.code == "document" and set(clause[index + 1 : index + 4]) & ANSWERED:
+                continue
             if _planned(head, left, before):
                 continue
             polarity = DONE if _done(head, left) else _polarity(clause, index, before)

@@ -477,6 +477,21 @@ def test_updating_documentation_is_writing_it_not_changing_a_system() -> None:
     assert (update.code, update.changes_systems) == ("update", True)
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Investigue le dernier incident de production de leka-core et rédige le post-mortem",
+        "Rédige un rapport sur Billing API",
+        "Draft the post-mortem of the Billing API incident",
+    ],
+)
+def test_drafting_leka_s_own_answer_is_not_an_action(text: str) -> None:
+    # Blocked as an action, the incident investigator never ran (2026-10-19).
+    understood = understand(text, plan(text, "diagnose", ["incident"]))
+    assert "document" not in [a.code for a in understood.actions]
+    assert understood.goal.code != "act"
+
+
 def test_a_question_about_something_known_asks_what_is_known_of_it() -> None:
     for text in ("Quel est le SLA de Billing API ?", "Sur quoi travaille Billing API ?"):
         understood = understand(text, plan(text, "general", []))
