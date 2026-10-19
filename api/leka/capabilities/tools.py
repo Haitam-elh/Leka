@@ -344,6 +344,9 @@ def handlers(
             [wanted], since=until - timedelta(days=days), until=until, limit=MOST_EVENTS
         )
         briefs = await graph.briefs(list({e for e, _, _, _ in events}))
+        # Whether a deployment succeeded: « why do they fail? » is first
+        # checked against it (2026-10-19).
+        states = await graph.states(list(briefs))
         kept = [
             (briefs[e], at, kind)
             for e, at, kind, _ in events
@@ -361,6 +364,7 @@ def handlers(
                             "name": b.name,
                             "what": kind,
                             "at": at.isoformat(),
+                            **({"state": states[b.id]} if b.id in states else {}),
                         }
                         for b, at, kind in kept
                     ],
