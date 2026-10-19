@@ -695,14 +695,14 @@
    "standing": 1,
    "synthesis": 1
   },
-  "commit": "576ab25b",
+  "commit": "d406e60a",
   "company_model_version": 9,
   "dataset_sha256": "9395fa0a808d005485c9a11c467305f7817e0e5d1a9625498b32bcf58b890370",
   "dataset_version": 4,
   "fixture": "demo-seed",
   "prompts": {
    "analyst": "5c2a6a0f195f193e",
-   "proposal": "3bdb8e76883edb39",
+   "proposal": "ee77432f6eb0bd4d",
    "reading": "d86e769f887bc575",
    "synthesis": "39372efe66d07999"
   },

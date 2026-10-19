@@ -47,6 +47,7 @@ from leka.capabilities import (
 )
 from leka.capabilities.definition import Query, discover
 from leka.capabilities.runtime import DRAWN
+from leka.intentions.grounding import acting
 from leka.intentions.models import Intention
 from leka.intentions.schemas import (
     AgentFieldRead,
@@ -76,7 +77,9 @@ answered by LEKA's own analysis. A request to build, develop, change, test, \
 review, document, investigate, secure or draw needs the agent that does it \
 — developing a feature needs the code change, its tests and its review. \
 Choose an agent that cannot run here too when it is the one the work \
-needs: the person is told what it takes.
+needs: the person is told what it takes. Why something fails or broke is \
+investigated by the agent that diagnoses it — debugging, incidents —, \
+never fixed unasked.
 - inputs: each agent's, from the request's own words — « le parcours De \
 l'intention à l'action » is the parcours. Never invent a value the request \
 does not say or plainly imply. A boolean is true only when asked. A \
@@ -87,7 +90,9 @@ required input the request does not give goes in `missing`.
 - steps: the plan to get it done, three to eight concrete steps in order, \
 in the request's language — each a short title and one sentence of \
 detail; `agent` is the key of the agent that would do it, none when the \
-person does it. A migration: what moves and what depends on it, the \
+person does it. A step does only what its agent can read, as its \
+description says: never logs, live metrics or a pipeline's output it \
+does not read. A migration: what moves and what depends on it, the \
 target provisioned, data and backups moved, services deployed, the DNS TTL \
 lowered then traffic switched, checked, the old one retired.
 - informative: true when the request only asks to know something — who, \
@@ -359,6 +364,17 @@ async def propose(
     # Named by the person — « /architecte … »: proposed, whatever a model or
     # the catalogue would have chosen; still launched by a person only.
     asked = named(intention.text, entries)
+    # The router's policy (router.policed): a question never goes to what
+    # proposes actions — « pourquoi le build casse ? » to the debugging, not
+    # the build fixer — unless the person named it. Only a question asked
+    # as one: « Développe … » names no verb the rules know, yet asks to act.
+    if intention.text.strip().endswith("?") and not acting(understood):
+        entries = [
+            e
+            for e in entries
+            if e.definition.mode != "proposes_action" or e.definition.key == asked
+        ]
+        by_key = {e.definition.key: e for e in entries}
     said: Proposed | None = None
     if entries:
         runtime = LLMRuntime(session, workspace_id)
