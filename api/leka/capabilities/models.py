@@ -579,6 +579,10 @@ class CodeChange(Base, WorkspaceScopedMixin):
     # Failed: why — CodeRefusedError's code, and what GitHub said.
     error: Mapped[str | None] = mapped_column(String(40), nullable=True)
     error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Applied, its pull request followed, read only (2026-10-20): its stage
+    # (changes.stage_of), its checks, its merge, the deployment that took
+    # it, when read, whether it is done.
+    follow: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
 
 
 class Publication(Base, WorkspaceScopedMixin):

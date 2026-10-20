@@ -8,6 +8,8 @@
                 request — a new branch from the base, one commit, the pull
                 request. Never a merge, never a push to a branch that exists,
                 never the default branch.
+    follow      the pull request after, read only (2026-10-20): its checks,
+                whether a person merged it, the deployment that took it
 
 Everything goes through the connector's own client: its token, public
 addresses only, pinned against DNS rebinding (connectors/network.py).
@@ -33,8 +35,8 @@ MAX_PATHS = 2_000
 
 class CodeRefusedError(Exception):
     """Why GitHub, or the source, refused: out_of_scope, not_found,
-    not_allowed (the token cannot write), branch_exists, too_large,
-    binary, unavailable."""
+    not_allowed (the token cannot write), workflow_scope (a workflow file
+    needs its own right), branch_exists, too_large, binary, unavailable."""
 
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
@@ -55,6 +57,51 @@ class PullRequest:
     url: str
     branch: str
     commit: str
+
+
+# A check's conclusions that fail it; the rest — success, neutral, skipped —
+# pass. A commit status says failure or error.
+FAILED = frozenset(
+    {"failure", "cancelled", "timed_out", "action_required", "startup_failure", "stale", "error"}
+)
+# The deployments read after a merge, at most, and those compared with it.
+MAX_DEPLOYMENTS = 20
+MAX_COMPARED = 4
+# The checks a pull request names, at most.
+MAX_CHECKS = 100
+
+
+def checks_of(runs: Sequence[dict[str, Any]], statuses: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    """A commit's checks, as one word and what makes it: each check's latest
+    run (a run again replaces the first), and the commit statuses.
+    `none` when nothing ran yet."""
+    latest: dict[str, dict[str, Any]] = {}
+    for run in runs:
+        name = str(run.get("name") or "")
+        if name not in latest or int(run.get("id") or 0) > int(latest[name].get("id") or 0):
+            latest[name] = run
+    seen: list[tuple[str, str, str]] = []
+    for name, run in latest.items():
+        if run.get("status") != "completed":
+            state = "pending"
+        else:
+            state = "failure" if run.get("conclusion") in FAILED else "success"
+        seen.append((name, state, str(run.get("html_url") or "")))
+    for status in statuses:
+        said = str(status.get("state") or "pending")
+        state = "failure" if said in FAILED else "success" if said == "success" else "pending"
+        seen.append((str(status.get("context") or ""), state, str(status.get("target_url") or "")))
+    failed = [name for name, state, _ in seen if state == "failure"]
+    pending = sum(1 for _, state, _ in seen if state == "pending")
+    overall = "none" if not seen else "failure" if failed else "pending" if pending else "success"
+    return {
+        "state": overall,
+        "total": len(seen),
+        "passed": sum(1 for _, state, _ in seen if state == "success"),
+        "pending": pending,
+        "failed": failed[:10],
+        "failed_url": next((url for name, state, url in seen if state == "failure" and url), None),
+    }
 
 
 # Read of its pull requests, at most: how many listed, how many files of
@@ -130,6 +177,13 @@ class GitHubCode:
     @staticmethod
     def _refused(response: httpx.Response, what: str) -> CodeRefusedError:
         status = response.status_code
+        if status in (403, 404, 422) and "workflow" in response.text.lower():
+            # A classic token without `workflow`, an app without Workflows.
+            return CodeRefusedError(
+                "workflow_scope",
+                "Ce changement touche .github/workflows : la clé GitHub de cette source doit "
+                "aussi avoir le droit Workflows en écriture.",
+            )
         if status == 404:
             return CodeRefusedError("not_found", f"GitHub ne trouve pas {what}.")
         if status in (401, 403):
@@ -143,6 +197,14 @@ class GitHubCode:
         return CodeRefusedError("unavailable", f"GitHub a répondu {status} pour {what}.")
 
     # ── reading ──────────────────────────────────────────────────────────────
+
+    async def head(self, repository: str, branch: str) -> str:
+        """The commit a branch stands at."""
+        async with self._client() as client:
+            answer = await client.get(f"/repos/{self._checked(repository)}/git/ref/heads/{branch}")
+        if answer.status_code != 200:
+            raise self._refused(answer, f"la branche {branch}")
+        return str(answer.json()["object"]["sha"])
 
     async def default_branch(self, repository: str) -> str:
         async with self._client() as client:
@@ -285,10 +347,14 @@ class GitHubCode:
         title: str,
         body: str,
         changes: Sequence[FileChange],
+        parent: str | None = None,
     ) -> PullRequest:
-        """A new branch from `base`, one commit with `changes`, its pull
-        request. Refused when the source does not allow it — and GitHub
-        refuses a branch that exists: nothing is ever overwritten."""
+        """A new branch from `base` — at `parent`, the commit its files were
+        read at, else where it stands — one commit with `changes`, its pull
+        request. Refused when the source does not allow it. A branch that
+        exists is never overwritten: the pull request already open from it
+        is the one (a try whose answer was lost), else the next name
+        (2026-10-20)."""
         if not self.writes:
             raise CodeRefusedError(
                 "pull_requests_off",
@@ -298,10 +364,21 @@ class GitHubCode:
         if branch == base or not branch.startswith("leka/"):
             raise CodeRefusedError("branch_exists", "LEKA n'écrit que sur une branche leka/ neuve.")
         async with self._client() as client:
-            head = await client.get(f"/repos/{name}/git/ref/heads/{base}")
-            if head.status_code != 200:
-                raise self._refused(head, f"la branche {base}")
-            parent = str(head.json()["object"]["sha"])
+            opened = await client.get(
+                f"/repos/{name}/pulls", params={"state": "open", "base": base, "per_page": 100}
+            )
+            if opened.status_code != 200:
+                raise self._refused(opened, f"les pull requests de {repository}")
+            for each in opened.json():
+                head_ref = str(((each or {}).get("head") or {}).get("ref") or "")
+                if head_ref == branch or head_ref.startswith(f"{branch}-"):
+                    sha = str((each.get("head") or {}).get("sha") or "")
+                    return PullRequest(int(each["number"]), str(each["html_url"]), head_ref, sha)
+            if parent is None:
+                head = await client.get(f"/repos/{name}/git/ref/heads/{base}")
+                if head.status_code != 200:
+                    raise self._refused(head, f"la branche {base}")
+                parent = str(head.json()["object"]["sha"])
             commit = await client.get(f"/repos/{name}/git/commits/{parent}")
             if commit.status_code != 200:
                 raise self._refused(commit, f"le dernier commit de {base}")
@@ -328,19 +405,107 @@ class GitHubCode:
             if made.status_code != 201:
                 raise self._refused(made, "le commit")
             sha = str(made.json()["sha"])
-            ref = await client.post(
-                f"/repos/{name}/git/refs", json={"ref": f"refs/heads/{branch}", "sha": sha}
-            )
-            if ref.status_code != 201:
-                raise self._refused(ref, f"la branche {branch}")
+            # Its name, else the next: one a try left without a pull request.
+            for name_tried in [branch, *(f"{branch}-{n}" for n in range(2, 6))]:
+                ref = await client.post(
+                    f"/repos/{name}/git/refs", json={"ref": f"refs/heads/{name_tried}", "sha": sha}
+                )
+                if ref.status_code == 201:
+                    branch = name_tried
+                    break
+                refused = self._refused(ref, f"la branche {name_tried}")
+                if refused.code != "branch_exists":
+                    raise refused
+            else:
+                raise CodeRefusedError("branch_exists", f"Les branches {branch}… existent déjà.")
             pull = await client.post(
                 f"/repos/{name}/pulls",
                 json={"title": title, "head": branch, "base": base, "body": body},
             )
             if pull.status_code != 201:
                 raise self._refused(pull, "la pull request")
-        opened = pull.json()
-        return PullRequest(int(opened["number"]), str(opened["html_url"]), branch, sha)
+        made_pull = pull.json()
+        return PullRequest(int(made_pull["number"]), str(made_pull["html_url"]), branch, sha)
+
+    # ── after, read only: its checks, its merge, its deployment (2026-10-20) ─
+
+    async def follow(self, repository: str, number: int) -> dict[str, Any]:
+        """Where a pull request stands: open, merged or closed; its checks
+        while open; merged, the latest deployment that took its merge — any
+        environment, production first."""
+        name = self._checked(repository)
+        async with self._client() as client:
+            pull = await client.get(f"/repos/{name}/pulls/{number}")
+            if pull.status_code != 200:
+                raise self._refused(pull, f"la pull request #{number}")
+            meta = pull.json()
+            merged_at = meta.get("merged_at")
+            head_sha = str((meta.get("head") or {}).get("sha") or "")
+            seen: dict[str, Any] = {
+                "state": "merged" if merged_at else str(meta.get("state") or "open"),
+                "head_sha": head_sha,
+                "mergeable": meta.get("mergeable"),
+                "mergeable_state": meta.get("mergeable_state"),
+                "merged_at": merged_at,
+                "merge_sha": meta.get("merge_commit_sha") if merged_at else None,
+                "checks": None,
+                "deployment": None,
+            }
+            if seen["state"] == "open" and head_sha:
+                seen["checks"] = await self._checks(client, name, head_sha)
+            if merged_at and seen["merge_sha"]:
+                seen["deployment"] = await self._deployment(
+                    client, name, str(seen["merge_sha"]), str(merged_at)
+                )
+        return seen
+
+    async def _checks(self, client: httpx.AsyncClient, name: str, sha: str) -> dict[str, Any]:
+        runs = await client.get(
+            f"/repos/{name}/commits/{sha}/check-runs", params={"per_page": MAX_CHECKS}
+        )
+        statuses = await client.get(f"/repos/{name}/commits/{sha}/status")
+        if runs.status_code != 200 and statuses.status_code != 200:
+            return {"state": "unreadable", "total": 0, "passed": 0, "pending": 0, "failed": []}
+        found = (runs.json().get("check_runs") or []) if runs.status_code == 200 else []
+        said = (statuses.json().get("statuses") or []) if statuses.status_code == 200 else []
+        return checks_of(found, said)
+
+    async def _deployment(
+        self, client: httpx.AsyncClient, name: str, merge_sha: str, merged_at: str
+    ) -> dict[str, Any] | None:
+        """The latest deployment made since the merge whose commit holds it
+        — production's first — and how it went."""
+        listed = await client.get(
+            f"/repos/{name}/deployments", params={"per_page": MAX_DEPLOYMENTS}
+        )
+        if listed.status_code != 200:
+            return None
+        since = [
+            d
+            for d in listed.json()
+            if isinstance(d, dict) and str(d.get("created_at")) >= merged_at
+        ]
+        since.sort(key=lambda d: "prod" not in str(d.get("environment") or "").lower())
+        for deployment in since[:MAX_COMPARED]:
+            sha = str(deployment.get("sha") or "")
+            if sha != merge_sha:
+                compared = await client.get(f"/repos/{name}/compare/{merge_sha}...{sha}")
+                if compared.status_code != 200 or compared.json().get("status") not in (
+                    "ahead",
+                    "identical",
+                ):
+                    continue
+            statuses = await client.get(
+                f"/repos/{name}/deployments/{deployment['id']}/statuses", params={"per_page": 1}
+            )
+            latest = statuses.json()[0] if statuses.status_code == 200 and statuses.json() else {}
+            return {
+                "environment": str(deployment.get("environment") or ""),
+                "state": str(latest.get("state") or "pending"),
+                "url": latest.get("environment_url") or latest.get("log_url") or None,
+                "at": latest.get("created_at") or deployment.get("created_at"),
+            }
+        return None
 
 
 async def open_code(connector: object) -> GitHubCode:
@@ -351,4 +516,11 @@ async def open_code(connector: object) -> GitHubCode:
     return GitHubCode(connector)
 
 
-__all__ = ["CodeRefusedError", "FileChange", "GitHubCode", "PullRequest", "open_code"]
+__all__ = [
+    "CodeRefusedError",
+    "FileChange",
+    "GitHubCode",
+    "PullRequest",
+    "checks_of",
+    "open_code",
+]

@@ -33,6 +33,17 @@ export function useRunCodeChanges(runId: string | null, writing = false) {
   });
 }
 
+/** Where its pull request stands, read on GitHub — again every minute
+ * until deployed, closed or quiet (2026-10-20). */
+export function useCodeChangeFollow(id: string, following: boolean) {
+  return useQuery({
+    queryKey: [...codeChangeKeys.all, "follow", id] as const,
+    queryFn: () => codeChanges.follow(id),
+    enabled: following,
+    refetchInterval: (query) => (query.state.data?.follow?.done ? false : 60_000),
+  });
+}
+
 export function useCodeChangeDecision() {
   const client = useQueryClient();
   const refresh = () => client.invalidateQueries({ queryKey: codeChangeKeys.all });

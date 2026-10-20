@@ -52,6 +52,7 @@ from leka.capabilities import (
     AgentRuntime,
     AgentRunUsage,
     CapabilityRunRepository,
+    CodeChange,
     CodeReviewRead,
     DeliverableRead,
     DesignChangeRead,
@@ -589,6 +590,24 @@ async def draw_run_files(
     return run_read(run, principal)
 
 
+async def _moved_change(session: SessionDep, run: AgentRun) -> CodeChange | None:
+    """Its change, when still proposed and refused because its branch moved
+    where it changes."""
+    said = run.detail.get("code_change")
+    try:
+        change = await session.get(CodeChange, uuid.UUID(str(said))) if said else None
+    except ValueError:
+        return None
+    if (
+        change is None
+        or change.workspace_id != run.workspace_id
+        or change.status != "proposed"
+        or change.error != "changed_since"
+    ):
+        return None
+    return change
+
+
 @router.post(
     "/{run_id}/change",
     response_model=AgentRunRead,
@@ -602,7 +621,9 @@ async def rewrite_run_change(
     it read, read again — the run never done again (2026-10-18: its change
     was not written, the analysis alone shown). 202, a worker writes it;
     409 when it is not finished, already has its change, or is being
-    written; 422 when its agent proposes no code change."""
+    written; 422 when its agent proposes no code change. A change refused
+    because its branch moved where it changes (`changed_since`) is written
+    again on the branch as it is now, the old one failed (2026-10-20)."""
     run = await CapabilityRunRepository(session, principal.workspace_id).run(run_id, lock=True)
     if run is None:
         raise _missing()
@@ -618,15 +639,18 @@ async def rewrite_run_change(
         raise ApiError(
             status.HTTP_409_CONFLICT, ErrorCode.CONFLICT, "Its analysis is not delivered yet."
         )
-    if run.detail.get("code_change"):
+    moved = await _moved_change(session, run)
+    if run.detail.get("code_change") and moved is None:
         raise ApiError(status.HTTP_409_CONFLICT, ErrorCode.CONFLICT, "Its change is there.")
     if _drawing(run):
         raise ApiError(status.HTTP_409_CONFLICT, ErrorCode.CONFLICT, "Its change is being written.")
+    if moved is not None:
+        moved.status = "failed"
     run.detail = {
         **{
             k: v
             for k, v in run.detail.items()
-            if k not in ("deliverables_error", "deliverables_said")
+            if k not in ("deliverables_error", "deliverables_said", "code_change")
         },
         "drawing": ["change"],
         "drawing_since": datetime.now(UTC).isoformat(),

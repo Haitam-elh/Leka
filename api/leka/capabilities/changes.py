@@ -17,6 +17,12 @@
             the source's repository — a new branch leka/…, one commit — when
             the source allows it (its `pull_requests`); never a merge. Refused,
             it stays proposed, said why: allow it, give the token write, retry.
+            Each file is read again on the branch first: changed since, its
+            modifications are laid again on what is there now — or refused,
+            never a newer work undone (2026-10-20).
+    then, read only     the pull request followed (`follow`): its checks, a
+                        person's merge, the deployment that took it — until
+                        deployed, closed, or quiet (run_follow_sweep)
 
 An agent proposes, people decide (ADR 004): nothing reaches a repository
 before a person accepted it, and then only as a pull request someone else
@@ -33,12 +39,12 @@ import re
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.capabilities.catalogue import needs_of
@@ -55,6 +61,7 @@ from leka.connectors import (
     SourceStatus,
     open_code,
 )
+from leka.db import session_factory, system_scope, workspace_scope
 
 logger = structlog.get_logger(__name__)
 
@@ -694,6 +701,99 @@ class ChangeRefusedError(Exception):
         self.code = code
 
 
+def on_base(path: str, now: str | None, content: str | None, diff: str) -> tuple[str | None, str]:
+    """A file of a change, as it would be on its branch as it is now, and
+    what it is there: `changes` — as proposed when the file has not changed
+    since, else its modifications laid again on what is there — `same` when
+    the branch already has it, `moved` when they no longer land (2026-10-20:
+    a change accepted a day later must not undo what was merged in
+    between)."""
+    if diff_of(path, now, content)[0] == diff:
+        return content, "changes"
+    if now == content:
+        return content, "same"
+    if now is None or content is None or len(diff) >= MAX_DIFF_CHARS:
+        return None, "moved"
+    found = [each for each in edits_from_diff(diff) if each.path == path and each.edits]
+    if len(found) != 1:
+        return None, "moved"
+    after, _why = apply_edits(now, found[0].edits)
+    if after is None:
+        return None, "moved"
+    return after, "changes" if after != now else "same"
+
+
+async def _on_base(
+    code: GitHubCode, change: CodeChange, sha: str
+) -> tuple[list[FileChange], list[dict[str, object]]]:
+    """Each file of a change read again at `sha` and laid on it — or
+    ChangeRefusedError: changed_since, naming what moved; already_applied,
+    when nothing is left to change."""
+    changes: list[FileChange] = []
+    files: list[dict[str, object]] = []
+    moved: list[str] = []
+    for f in change.files:
+        path = str(f["path"])
+        content = c if isinstance(c := f.get("content"), str) else None
+        now = await code.read(change.repository, path, sha)
+        after, state = on_base(path, now, content, str(f.get("diff") or ""))
+        if state == "moved":
+            moved.append(path)
+        if state != "changes":
+            continue
+        diff, added, removed = diff_of(path, now, after)
+        files.append(
+            {**f, "content": after, "diff": diff, "additions": added, "deletions": removed}
+        )
+        changes.append(FileChange(path, after))
+    if moved:
+        raise ChangeRefusedError(
+            "changed_since",
+            f"{', '.join(moved)} a changé sur {change.base_branch} depuis la proposition, là où "
+            "LEKA le modifie : LEKA n'écrase pas ce travail. Réécrivez le changement.",
+        )
+    if not changes:
+        raise ChangeRefusedError(
+            "already_applied", f"Ce changement est déjà sur {change.base_branch}."
+        )
+    return changes, files
+
+
+# How long a pull request is followed after it was opened, and its merge
+# without any deployment seen; how long its checks may take to appear.
+FOLLOW_FOR = timedelta(days=14)
+QUIET_AFTER_MERGE = timedelta(hours=3)
+CHECKS_APPEAR = timedelta(minutes=10)
+# Where a pull request stands, as LEKA says it — those that end the follow.
+FOLLOW_DONE = frozenset({"deployed", "deploy_failed", "closed"})
+DEPLOYED = {"success": "deployed", "inactive": "deployed", "failure": "deploy_failed"}
+
+
+def stage_of(seen: Mapping[str, Any], *, opened_at: datetime, now: datetime) -> str:
+    """One word for where a pull request stands, from what GitHub said:
+    checks, no_checks, checks_failed, checks_unreadable, conflict, ready —
+    for a person to merge — merged, deploying, deployed, deploy_failed,
+    closed."""
+    if seen["state"] == "closed":
+        return "closed"
+    if seen["state"] == "merged":
+        deployment = seen.get("deployment")
+        if not deployment:
+            return "merged"
+        state = str(deployment.get("state"))
+        return DEPLOYED.get(state, "deploy_failed" if state == "error" else "deploying")
+    checks = str((seen.get("checks") or {}).get("state") or "none")
+    if checks == "failure":
+        return "checks_failed"
+    if seen.get("mergeable") is False:
+        return "conflict"
+    if checks == "none":
+        return "no_checks" if now - opened_at > CHECKS_APPEAR else "checks"
+    return {"pending": "checks", "success": "ready", "unreadable": "checks_unreadable"}.get(
+        checks, "checks"
+    )
+
+
 def body_of(change: CodeChange, *, by: str) -> str:
     files = "\n".join(
         f"- `{f['path']}` ({f['status']}, +{f['additions']} -{f['deletions']})"
@@ -703,7 +803,8 @@ def body_of(change: CodeChange, *, by: str) -> str:
     return (
         f"{change.summary}\n\n### Fichiers\n{files}\n\n---\n"
         f"Proposée par LEKA, acceptée par {by}. "
-        "LEKA ouvre la pull request ; la relire et la fusionner reste votre décision."
+        "LEKA ouvre la pull request ; la relire et la fusionner reste votre décision. "
+        "Fusionnée, LEKA suit son déploiement."
     )
 
 
@@ -762,21 +863,25 @@ class ChangeService:
         code = await open_code(await service.open_connector(source))
         branch = branch_of(change.title, change.id)
         try:
+            # The branch as it is now: each file laid on it, never as it was
+            # read when proposed (2026-10-20).
+            sha = await code.head(change.repository, change.base_branch)
+            changes, files = await _on_base(code, change, sha)
             opened = await code.open_pull_request(
                 change.repository,
                 base=change.base_branch,
                 branch=branch,
                 title=change.title,
                 body=body_of(change, by=by_name),
-                changes=[
-                    FileChange(str(f["path"]), c if isinstance(c := f["content"], str) else None)
-                    for f in change.files
-                ],
+                changes=changes,
+                parent=sha,
             )
-        except CodeRefusedError as refused:
+        except (CodeRefusedError, ChangeRefusedError) as refused:
             change.error, change.error_detail = refused.code, str(refused)[:2000]
             await self._session.commit()
             raise ChangeRefusedError(refused.code, str(refused)) from refused
+        change.files = files
+        change.follow = {"stage": "checks", "done": False, "checked_at": None}
         change.status = "applied"
         change.decided_by, change.decided_at = by, datetime.now(UTC)
         change.note = (note or "").strip()[:2000] or None
@@ -786,6 +891,106 @@ class ChangeService:
         await self._session.commit()
         logger.info("code_change_applied", change=str(change.id), pull_request=opened.number)
         return change
+
+    async def follow(
+        self, change_id: uuid.UUID, *, now: datetime | None = None, unless_within: float = 0
+    ) -> CodeChange:
+        """Its pull request read again on GitHub — read only — and where it
+        stands kept; a read that fails is said, the last word kept. Not
+        again when read less than `unless_within` seconds ago."""
+        moment = now or datetime.now(UTC)
+        change = await self.change(change_id, lock=True)
+        checked = (change.follow or {}).get("checked_at")
+        if (
+            isinstance(checked, str)
+            and unless_within
+            and (moment - datetime.fromisoformat(checked)).total_seconds() < unless_within
+        ):
+            return change
+        await self._observe(change, now=moment)
+        await self._session.commit()
+        return change
+
+    async def _observe(self, change: CodeChange, *, now: datetime) -> None:
+        if change.status != "applied" or change.pull_request_number is None:
+            return
+        last = dict(change.follow or {})
+        source = await self._session.get(Source, change.source_id)
+        try:
+            if source is None or source.status not in CONNECTED:
+                raise CodeRefusedError("no_source", "La source GitHub n'est plus connectée.")
+            service = SourceService(self._session, self._workspace_id, actor_user_id=None)
+            code = await open_code(await service.open_connector(source))
+            seen = await code.follow(change.repository, change.pull_request_number)
+        except CodeRefusedError as refused:
+            change.follow = {**last, "error": str(refused)[:300], "checked_at": now.isoformat()}
+            return
+        except Exception:
+            logger.exception("code_change_not_followed", change=str(change.id))
+            change.follow = {
+                **last,
+                "error": "GitHub n'a pas répondu.",
+                "checked_at": now.isoformat(),
+            }
+            return
+        opened_at = change.decided_at or change.created_at
+        stage = stage_of(seen, opened_at=opened_at, now=now)
+        merged_at = seen.get("merged_at")
+        quiet = (
+            stage == "merged"
+            and isinstance(merged_at, str)
+            and now - datetime.fromisoformat(merged_at.replace("Z", "+00:00")) > QUIET_AFTER_MERGE
+        )
+        change.follow = {
+            "stage": stage,
+            "done": stage in FOLLOW_DONE or quiet or now - opened_at > FOLLOW_FOR,
+            "checks": seen.get("checks") or last.get("checks"),
+            "merged_at": merged_at,
+            "merge_sha": seen.get("merge_sha"),
+            "deployment": seen.get("deployment"),
+            "error": None,
+            "checked_at": now.isoformat(),
+        }
+        if stage != last.get("stage"):
+            logger.info("code_change_followed", change=str(change.id), stage=stage)
+
+
+async def follow_pull_requests(*, now: datetime | None = None) -> dict[str, int]:
+    """Every pull request LEKA opened and still follows, read again."""
+    moment = now or datetime.now(UTC)
+    with system_scope():
+        async with session_factory() as session:
+            due = (
+                (
+                    await session.execute(
+                        select(CodeChange.workspace_id, CodeChange.id).where(
+                            CodeChange.status == "applied",
+                            CodeChange.pull_request_number.is_not(None),
+                            CodeChange.decided_at > moment - FOLLOW_FOR,
+                            or_(
+                                CodeChange.follow.is_(None),
+                                CodeChange.follow["done"].astext.is_distinct_from("true"),
+                            ),
+                        )
+                    )
+                )
+                .tuples()
+                .all()
+            )
+    counts = {"followed": 0}
+    for workspace_id, change_id in due:
+        with workspace_scope(workspace_id):
+            async with session_factory() as session:
+                await ChangeService(session, workspace_id).follow(change_id, now=moment)
+                counts["followed"] += 1
+    if counts["followed"]:
+        logger.info("code_changes_followed", **counts)
+    return counts
+
+
+def run_follow_sweep() -> dict[str, int]:
+    """Entry point for the schedule."""
+    return asyncio.run(follow_pull_requests())
 
 
 def files_read(files: Sequence[Mapping[str, object]]) -> list[dict[str, object]]:
@@ -821,6 +1026,10 @@ __all__ = [
     "diff_of",
     "files_named",
     "files_read",
+    "follow_pull_requests",
+    "on_base",
     "propose_change",
+    "run_follow_sweep",
     "safe_path",
+    "stage_of",
 ]
