@@ -360,12 +360,30 @@ describe("going back from a change in production (2026-10-20)", () => {
 
   it("goes back to the version before, once confirmed", async () => {
     api.list.mockResolvedValue([deployed({ deploys_allowed: true })]);
+    api.follow.mockResolvedValue(
+      deployed({
+        deploys_allowed: true,
+        follow: {
+          stage: "deployed",
+          done: true,
+          merged_at: "2026-10-20T14:10:00Z",
+          merge_sha: "e288cc3e0000000",
+          before_sha: "dbed54f50000000",
+          newer: 2,
+        },
+      }),
+    );
     api.rollback.mockResolvedValue(deployed({ deploys_allowed: true }));
     const user = userEvent.setup();
     show();
     await user.click(await screen.findByRole("button", { name: "Revenir à la version précédente" }));
     const confirm = screen.getByTestId("code-change-rollback-confirm");
     expect(confirm).toHaveTextContent("Redéployer la version dbed54f en production maintenant ?");
+    // What main took since is read again first, and said.
+    await waitFor(() => expect(api.follow).toHaveBeenCalledWith("c1"));
+    expect(await within(confirm).findByTestId("code-change-rollback-newer")).toHaveTextContent(
+      "Attention : 2 commits arrivés sur main depuis ce changement seront aussi retirés de la production.",
+    );
     expect(api.rollback).not.toHaveBeenCalled();
     await user.click(within(confirm).getByRole("button", { name: "Oui, redéployer" }));
     await waitFor(() => expect(api.rollback).toHaveBeenCalledWith("c1"));

@@ -1119,6 +1119,7 @@ class ChangeService:
                         "merged_at": seen.get("merged_at"),
                         "merge_sha": seen.get("merge_sha"),
                         "before_sha": before,
+                        "newer": seen.get("newer"),
                     }
             if not follow.get("merged_at") or not before:
                 raise not_merged
@@ -1207,6 +1208,7 @@ class ChangeService:
             "merged_at": merged_at,
             "merge_sha": seen.get("merge_sha"),
             "before_sha": seen.get("before_sha") or last.get("before_sha"),
+            "newer": seen.get("newer", last.get("newer")),
             "deployment": seen.get("deployment"),
             "error": None,
             "checked_at": now.isoformat(),

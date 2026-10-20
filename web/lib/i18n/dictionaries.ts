@@ -1938,6 +1938,8 @@ const fr = {
       confirmTitle: "Confirmer le retour à la version précédente",
       confirm:
         "Redéployer la version {version} en production maintenant ? Le changement reste sur {branch} : annulez-le aussi pour que ce soit définitif.",
+      newer:
+        "Attention : {count} {count|commit arrivé|commits arrivés} sur {branch} depuis ce changement {count|sera aussi retiré|seront aussi retirés} de la production. Pour ne retirer que celui-ci, utilisez plutôt « Annuler ce changement ».",
       confirmYes: "Oui, redéployer",
       confirmNo: "Annuler",
       stillOnBranch:
@@ -10634,6 +10636,8 @@ const en: Dictionary = {
       confirmTitle: "Confirm going back to the previous version",
       confirm:
         "Deploy version {version} to production again now? The change stays on {branch}: undo it too to make it final.",
+      newer:
+        "Careful: {count} {count|commit|commits} merged on {branch} since this change will also leave production. To take out this one only, use « Undo this change » instead.",
       confirmYes: "Yes, deploy it again",
       confirmNo: "Cancel",
       stillOnBranch:
