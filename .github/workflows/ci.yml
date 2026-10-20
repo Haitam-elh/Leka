@@ -105,7 +105,10 @@ jobs:
     name: api — lint, types, migrations, tests
     # A pull request ready for review: the whole suite. Not a draft, not main.
     if: github.event_name == 'pull_request' && !github.event.pull_request.draft
-    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    # shortcut: MongoDB will not start on Linux 6.19 to 7.0.13 (SERVER-121912),
+    # ubuntu-latest's kernel since ubuntu-26.04 (2026-10-20) — back to latest
+    # once its kernel is 7.0.14 or later.
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-24.04' }}
 
     services:
       postgres:
