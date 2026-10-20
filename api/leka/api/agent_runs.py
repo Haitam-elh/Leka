@@ -55,6 +55,8 @@ from leka.capabilities import (
     CodeReviewRead,
     DeliverableRead,
     DesignChangeRead,
+    DesignCorrection,
+    DesignCorrectionRead,
     DesignMockup,
     DesignMockupRead,
     DesignRead,
@@ -70,6 +72,7 @@ from leka.capabilities import (
     page,
     proposes,
     queue_change,
+    queue_correction,
     queue_files,
     queue_redraw,
     queue_run,
@@ -236,6 +239,31 @@ def _designable(run: AgentRun, definition: Definition | None) -> list[str]:
     return ["design"] if proposes(run.output) else []
 
 
+def _corrections(run: AgentRun) -> list[DesignCorrectionRead]:
+    """The corrections asked of its mock-ups, the latest last."""
+    had = run.detail.get("corrections")
+    return [
+        DesignCorrectionRead.model_validate(h)
+        for h in (had if isinstance(had, list) else [])
+        if isinstance(h, dict)
+    ]
+
+
+def _correcting(run: AgentRun, now: datetime | None = None) -> str | None:
+    """The mock-up a worker is correcting — none once asked so long ago it
+    is lost (a worker gone)."""
+    asked = run.detail.get("correcting")
+    if not isinstance(asked, dict):
+        return None
+    try:
+        since = datetime.fromisoformat(str(asked.get("since")))
+    except ValueError:
+        return None
+    if (now or datetime.now(UTC)) - since > DRAWING_LOST:
+        return None
+    return str(asked.get("target") or "") or None
+
+
 def _drawing(run: AgentRun, now: datetime | None = None) -> list[str]:
     """The files a worker is drawing — none once asked so long ago it is
     lost (a worker gone): asked again."""
@@ -278,6 +306,10 @@ def run_read(run: AgentRun, principal: Principal) -> AgentRunRead:
         drawing=_drawing(run),
         draw_failed=str(failed) if (failed := run.detail.get("deliverables_error")) else None,
         draw_said=str(said)[:300] if (said := run.detail.get("deliverables_said")) else None,
+        correcting=_correcting(run),
+        correction_failed=str(c) if (c := run.detail.get("correction_failed")) else None,
+        correction_said=str(c)[:300] if (c := run.detail.get("correction_said")) else None,
+        corrections=_corrections(run),
         deliverables=[
             DeliverableRead(
                 format=f["format"],
@@ -663,6 +695,57 @@ async def redraw_run_design(
     )
     await session.commit()
     await queue_redraw(principal.workspace_id, run.id, "design_mockups")
+    return run_read(run, principal)
+
+
+@router.post(
+    "/{run_id}/design/corrections",
+    response_model=AgentRunRead,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Correct one of a design review's mock-ups, as asked",
+)
+async def correct_run_design(
+    run_id: uuid.UUID, body: DesignCorrection, session: SessionDep, principal: Runner
+) -> AgentRunRead:
+    """One mock-up — today's or a proposal — drawn again as asked, the rest
+    as it was (2026-10-19, Karim: « lui demander de corriger certaines
+    parties de l'écran depuis la proposition »). 202, a worker draws it; 409
+    when it has no mock-up yet or one is being corrected; 422 when there is
+    no such mock-up."""
+    run = await CapabilityRunRepository(session, principal.workspace_id).run(run_id, lock=True)
+    if run is None:
+        raise _missing()
+    kept = run.detail.get("design")
+    if not isinstance(kept, dict):
+        raise ApiError(status.HTTP_409_CONFLICT, ErrorCode.CONFLICT, "It has no mock-up yet.")
+    proposals = kept.get("proposals")
+    count = len(proposals) if isinstance(proposals, list) else 0
+    if body.target != "before" and int(body.target) >= count:
+        raise ApiError(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ErrorCode.VALIDATION_FAILED,
+            "No such mock-up.",
+            details=[FieldError(field="target", message="not_found")],
+        )
+    if _correcting(run):
+        raise ApiError(status.HTTP_409_CONFLICT, ErrorCode.CONFLICT, "One is being corrected.")
+    note = body.note.strip()
+    run.detail = {
+        **run.detail,
+        "correcting": {"target": body.target, "since": datetime.now(UTC).isoformat()},
+        "correction_failed": None,
+        "correction_said": None,
+    }
+    audit_as(
+        session,
+        principal,
+        "ai",
+        "agent_run.design_correction_asked",
+        target=Target("agent_run", run.id, run.key),
+        detail={"target": body.target},
+    )
+    await session.commit()
+    await queue_correction(principal.workspace_id, run.id, body.target, note)
     return run_read(run, principal)
 
 

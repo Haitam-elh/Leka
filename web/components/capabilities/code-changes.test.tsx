@@ -15,7 +15,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CodeChange } from "@/lib/code-changes";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import { makeQueryClient } from "@/lib/query";
-import { splitRows } from "@/lib/diff";
+import { hunksOf, splitRows } from "@/lib/diff";
 
 const api = vi.hoisted(() => ({ list: vi.fn(), accept: vi.fn(), reject: vi.fn() }));
 vi.mock("@/lib/code-changes", async (original) => ({
@@ -98,6 +98,44 @@ describe("a proposed code change", () => {
     // A new file: nothing on the left; a removed line starting with "--" stays a line.
     const created = splitRows("--- /dev/null\n+++ b/n.sql\n@@ -0,0 +1,1 @@\n+-- a comment\n");
     expect(created[1]).toEqual({ kind: "pair", left: null, right: { number: 1, text: "-- a comment", change: "add" } });
+  });
+
+  it("is read modification by modification — every one numbered, where, and nothing else", async () => {
+    // 2026-10-19, Karim: « il modifie que la ligne 162 et 254 ? rien d'autre ?
+    // on doit voir modif 1, modif 2… et déplier chaque partie avant de valider ».
+    const composer =
+      "--- a/web/composer.tsx\n+++ b/web/composer.tsx\n@@ -251,7 +251,7 @@\n a\n b\n c\n-old\n+new\n d\n e\n f\n";
+    const test =
+      "--- a/web/composer.test.tsx\n+++ b/web/composer.test.tsx\n@@ -1,2 +1,3 @@\n x\n+y\n z\n" +
+      "@@ -159,3 +160,10 @@\n p\n q\n r\n+1\n+2\n+3\n+4\n+5\n+6\n+7\n";
+    expect(hunksOf(composer)).toEqual([expect.objectContaining({ from: 254, to: 254, added: 1, removed: 1 })]);
+    expect(hunksOf(test).map((h) => [h.from, h.to, h.added])).toEqual([[2, 2, 1], [163, 169, 7]]);
+    api.list.mockResolvedValue([
+      change({
+        files: [
+          { path: "web/composer.tsx", status: "modified", additions: 1, deletions: 1, diff: composer, why: "16 px" },
+          { path: "web/composer.test.tsx", status: "modified", additions: 8, deletions: 0, diff: test, why: "" },
+        ],
+      }),
+    ]);
+    const user = userEvent.setup();
+    show();
+    const card = await screen.findByTestId("code-change");
+    expect(within(card).getByTestId("code-change-modifications")).toHaveTextContent(
+      "Ce que LEKA change : 3 modifications dans 2 fichiers (+9 −1) — rien d'autre.",
+    );
+    const modifications = within(card).getAllByTestId("code-change-modification");
+    expect(modifications.map((m) => m.querySelector("summary")?.textContent)).toEqual([
+      expect.stringMatching(/^Modification 1web\/composer\.tsxligne 254\+1−1/),
+      expect.stringMatching(/^Modification 2web\/composer\.test\.tsxligne 2\+1−0/),
+      expect.stringMatching(/^Modification 3web\/composer\.test\.tsxlignes 163–169\+7−0/),
+    ]);
+    // Three or fewer: all open; folded and unfolded on asking.
+    expect(modifications.every((m) => m.hasAttribute("open"))).toBe(true);
+    await user.click(within(card).getByRole("button", { name: "Tout replier" }));
+    expect(within(card).getAllByTestId("code-change-modification").some((m) => m.hasAttribute("open"))).toBe(false);
+    await user.click(within(card).getByRole("button", { name: "Tout déplier" }));
+    expect(within(card).getAllByTestId("code-change-modification").every((m) => m.hasAttribute("open"))).toBe(true);
   });
 
   it("shows its diff, and accepts it as a pull request", async () => {

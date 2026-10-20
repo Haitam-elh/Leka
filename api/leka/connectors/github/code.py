@@ -188,6 +188,29 @@ class GitHubCode:
         except (ValueError, UnicodeDecodeError) as error:
             raise CodeRefusedError("binary", f"{path} n'est pas un fichier texte.") from error
 
+    async def read_bytes(
+        self, repository: str, path: str, ref: str, *, most: int = MAX_FILE_BYTES
+    ) -> bytes | None:
+        """A file's bytes on a branch — an image a mock-up shows as the app
+        does (2026-10-19) — None when it is not there or weighs over `most`."""
+        async with self._client() as client:
+            answer = await client.get(
+                f"/repos/{self._checked(repository)}/contents/{path}", params={"ref": ref}
+            )
+        if answer.status_code == 404:
+            return None
+        if answer.status_code != 200:
+            raise self._refused(answer, path)
+        found = answer.json()
+        if not isinstance(found, dict) or found.get("type") != "file":
+            return None
+        if int(found.get("size") or 0) > most:
+            return None
+        try:
+            return base64.b64decode(str(found.get("content") or ""))
+        except ValueError:
+            return None
+
     # ── its pull requests, read (2026-10-14: the code review's deliverable) ──
 
     async def pulls(self, repository: str, *, limit: int = 10) -> list[dict[str, object]]:

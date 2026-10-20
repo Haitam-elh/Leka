@@ -58,7 +58,9 @@ export function useAgentRun(id: string | null) {
     enabled: Boolean(id),
     refetchInterval: (query) =>
       query.state.data &&
-      (MOVING.has(query.state.data.status) || (query.state.data.drawing ?? []).length > 0)
+      (MOVING.has(query.state.data.status) ||
+        (query.state.data.drawing ?? []).length > 0 ||
+        Boolean(query.state.data.correcting))
         ? FOLLOW_MS
         : false,
   });
@@ -87,6 +89,16 @@ export function useRedrawDesign(id: string) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: () => agentRuns.redrawDesign(id),
+    onSuccess: () => client.invalidateQueries({ queryKey: agentRunKeys.one(id) }),
+  });
+}
+
+/** One mock-up corrected as asked: the run followed until it is, its
+ * design read again then. */
+export function useCorrectDesign(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ target, note }: { target: string; note: string }) => agentRuns.correctDesign(id, target, note),
     onSuccess: () => client.invalidateQueries({ queryKey: agentRunKeys.one(id) }),
   });
 }

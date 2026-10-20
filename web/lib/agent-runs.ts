@@ -51,6 +51,13 @@ export const agentRuns = {
    * delivered: never run again (2026-10-18). */
   redrawDesign: (id: string) =>
     apiFetch<AgentRun>(`/agent-runs/${encodeURIComponent(id)}/design`, { method: "POST" }),
+  /** One of a design review's mock-ups corrected as asked — `before`, or a
+   * proposal's index — the rest as it was (2026-10-19). */
+  correctDesign: (id: string, target: string, note: string) =>
+    apiFetch<AgentRun>(`/agent-runs/${encodeURIComponent(id)}/design/corrections`, {
+      method: "POST",
+      body: JSON.stringify({ target, note }),
+    }),
   /** Waiting for approval (LEKA-406): the runs to decide. */
   awaiting: () => apiFetch<AgentRun[]>("/agent-runs?status=awaiting_approval"),
   decide: (id: string, approve: boolean, note?: string) =>

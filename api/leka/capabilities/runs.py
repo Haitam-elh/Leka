@@ -106,6 +106,8 @@ FILES_JOB = "leka.capabilities.runs.draw_files"
 # a design drawn again from its review.
 CHANGE_JOB = "leka.capabilities.runs.rewrite_change_job"
 DESIGN_JOB = "leka.capabilities.runs.redraw_design_job"
+# One mock-up corrected as a person asked (2026-10-19).
+CORRECT_JOB = "leka.capabilities.runs.correct_design_job"
 # What LEKA draws of a run, written again on asking: the job, and the word
 # its « being drawn » says.
 REDRAWN = {"code_change": (CHANGE_JOB, "change"), "design_mockups": (DESIGN_JOB, "design")}
@@ -918,6 +920,106 @@ async def _redraw_render(
         "proposed": run.detail.get("code_change") or run.detail.get("design"),
         "error": drawn.error,
     }
+
+
+async def queue_correction(
+    workspace_id: uuid.UUID, run_id: uuid.UUID, target: str, note: str
+) -> bool:
+    """One mock-up to correct, for a worker: the model takes minutes."""
+    queued = await enqueue_job(
+        CORRECT_JOB,
+        str(workspace_id),
+        str(run_id),
+        target,
+        note,
+        for_workspace_id=workspace_id,
+        queue=JobQueue.HIGH,
+        concurrency_key=f"agent-run-design:{run_id}",
+    )
+    return queued is not None
+
+
+async def correct_design_run(
+    workspace_id: uuid.UUID, run_id: uuid.UUID, target: str, note: str
+) -> dict[str, object]:
+    """A design review's mock-up corrected as asked — the rest as it was,
+    the run never done again; whatever goes wrong, « being corrected »
+    ends, said why."""
+    with workspace_scope(workspace_id):
+        async with session_factory() as session:
+            try:
+                return await _correct_design(session, workspace_id, run_id, target, note)
+            except Exception:
+                logger.exception("run_design_not_corrected", run=str(run_id))
+                await session.rollback()
+                runs = CapabilityRunRepository(session, workspace_id)
+                run = await runs.run(run_id, lock=True)
+                if run is not None:
+                    Steps(session, run, await runs.last_seq(run_id)).add(
+                        "render_failed", code="error"
+                    )
+                    run.detail = {**run.detail, "correcting": None, "correction_failed": "error"}
+                    await session.commit()
+                return {"corrected": None, "error": "error"}
+
+
+async def _correct_design(
+    session: AsyncSession, workspace_id: uuid.UUID, run_id: uuid.UUID, target: str, note: str
+) -> dict[str, object]:
+    # Here, not at the top: mockups reads the catalogue's needs.
+    from leka.capabilities.changes import files_named
+    from leka.capabilities.mockups import correct_design
+
+    runs = CapabilityRunRepository(session, workspace_id)
+    run = await runs.run(run_id)
+    if run is None or run.status != RunStatus.SUCCEEDED or not run.output:
+        return {"corrected": None, "skipped": "not_finished"}
+    subject = await subject_of(session, workspace_id, run.requested_by)
+    permissions = frozenset(p.value for p in subject.permissions) if subject else frozenset()
+    entry = await CatalogueService(session, workspace_id).entry(run.key, permissions=permissions)
+    if entry is None or entry.definition.renders != "design_mockups":
+        run.detail = {**run.detail, "correcting": None}
+        await session.commit()
+        return {"corrected": None, "skipped": "not_drawn"}
+    read = await _read_again(session, workspace_id, run.detail.get("read_files"))
+    if not read:
+        read = await files_named(session, run, run.output)
+    output = run.output
+    # Nothing held while the model draws: minutes.
+    await session.commit()
+    designed = await correct_design(session, run, entry.definition, output, read, target, note)
+    run = await runs.run(run_id, lock=True)
+    if run is None:
+        return {"corrected": None, "skipped": "gone"}
+    steps = Steps(session, run, await runs.last_seq(run_id))
+    if designed.kept is not None:
+        steps.add("corrected", target=target, **designed.usage)
+        had = run.detail.get("corrections")
+        history = [h for h in (had if isinstance(had, list) else []) if isinstance(h, dict)]
+        history.append({"target": target, "note": note[:300], "at": now_or().isoformat()})
+        run.detail = {
+            **run.detail,
+            **designed.kept,
+            "corrections": history[-20:],
+            "correcting": None,
+            "correction_failed": None,
+            "correction_said": None,
+        }
+    else:
+        steps.add("render_failed", code=designed.error, said=designed.refusal)
+        run.detail = {
+            **run.detail,
+            "correcting": None,
+            "correction_failed": designed.error or "error",
+            "correction_said": designed.refusal,
+        }
+    await session.commit()
+    return {"corrected": designed.kept is not None, "error": designed.error}
+
+
+def correct_design_job(workspace_id: str, run_id: str, target: str, note: str) -> dict[str, object]:
+    """Entry point for the job runner, which is synchronous."""
+    return asyncio.run(correct_design_run(uuid.UUID(workspace_id), uuid.UUID(run_id), target, note))
 
 
 def rewrite_change_job(workspace_id: str, run_id: str) -> dict[str, object]:

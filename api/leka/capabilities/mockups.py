@@ -27,6 +27,7 @@ alone, of one pull request — draws nothing, and is not asked to.
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import re
 from collections.abc import Mapping
@@ -40,14 +41,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from leka.capabilities.catalogue import needs_of
 from leka.capabilities.definition import Definition
 from leka.capabilities.deliverables.design import (
+    MIME,
+    MOST_ASSET_BYTES,
     DesignDirection,
     DesignPlan,
     DesignProposal,
     MockupDrawing,
     assembled,
+    asset_paths,
+    candidates,
     cleaned,
+    corrected,
     design_key,
     summary,
+    with_assets,
+    without_assets,
 )
 from leka.capabilities.gateway import Gateway, Message, NoModelError, Request, Tier
 from leka.capabilities.models import AgentRun
@@ -133,8 +141,18 @@ shapes or inline SVG, fonts are named with a system fallback. What the code \
 takes from data when it runs — a name, a count, a date — is a plausible \
 example shaped like the code's types. Self-contained, laid out for the \
 viewport's width, at most 40 000 characters of body, in the language the \
-screen speaks, as finished as a real product screen.
+screen speaks, as finished as a real product screen. An image the code shows \
+from the repository — its logo above all, an icon file, an illustration — is \
+never redrawn by hand: write <img data-asset="…" alt="…" width="…" \
+height="…"> with its path as the code gives it (src="/brand/leka-wordmark.png" \
+gives data-asset="/brand/leka-wordmark.png"); LEKA puts the real image there.
 Answer with the JSON object only."""
+
+CORRECT = """Correct the mock-up given in `mockup` as asked in `correction` — that \
+and nothing else: everything not asked stays exactly as it is, the same \
+structure, texts, example data and styles. An image from the repository keeps \
+its <img data-asset="…">; asked about one (a logo), use the path the code \
+gives."""
 
 TODAY = """Draw the screen as its code draws it TODAY: its structure from top to \
 bottom, its texts as the code and its dictionaries write them, its colours, \
@@ -359,6 +377,7 @@ async def propose_design(
         first = next((r for r in results if isinstance(r, _NotDrawnError)), _NotDrawnError("error"))
         return Designed(None, first.code, usage, _said("propositions", first.said))
     proposal = cleaned(assembled(plan, today, drawn))
+    proposal = with_assets(proposal, await _assets(session, run, analysis, asset_paths(proposal)))
     key = design_key(run.workspace_id, run.id)
     try:
         await object_store().put(
@@ -378,6 +397,100 @@ async def propose_design(
     if missing:
         kept["missing"] = missing
     return Designed({"design": kept}, usage=usage)
+
+
+async def _assets(
+    session: AsyncSession, run: AgentRun, analysis: str, paths: list[str]
+) -> dict[str, str]:
+    """Each image a mock-up names from the repository, as a data: URI — read
+    on its default branch, where the code names it or under its public
+    folder; one not found, or too heavy, left out."""
+    if not paths:
+        return {}
+    # Here, not at the top: changes.py reads the catalogue, which reads the
+    # registry, which reads the code tools' names.
+    from leka.capabilities.changes import code_of
+    from leka.connectors import CodeRefusedError
+
+    found = await code_of(session, run, analysis)
+    if found is None:
+        return {}
+    code, repository, base = found
+    assets: dict[str, str] = {}
+    for path in paths:
+        mime = MIME.get(path.split("?")[0].rsplit(".", 1)[-1].lower())
+        if mime is None:
+            continue
+        for candidate in candidates(path):
+            try:
+                data = await code.read_bytes(repository, candidate, base, most=MOST_ASSET_BYTES)
+            except CodeRefusedError:
+                data = None
+            if data:
+                assets[path] = f"data:{mime};base64,{base64.b64encode(data).decode()}"
+                break
+    return assets
+
+
+async def correct_design(
+    session: AsyncSession,
+    run: AgentRun,
+    definition: Definition,
+    analysis: str,
+    files: Mapping[str, str],
+    target: str,
+    note: str,
+) -> Designed:
+    """One mock-up — today's (`before`) or a direction (its index) — drawn
+    again as a person asked, the rest as it was (2026-10-19, Karim: « il
+    faudrait qu'on puisse lui demander de corriger certaines parties de
+    l'écran depuis la proposition »)."""
+    kept = await read_design(run)
+    if kept is None:
+        return Designed(None, "not_drawn")
+    if target != "before" and not (target.isdigit() and int(target) < len(kept.after)):
+        return Designed(None, "not_found")
+    mockup = kept.before if target == "before" else kept.after[int(target)]
+    usage: dict[str, Any] = {}
+    material: dict[str, object] = {
+        "inputs": dict(run.inputs or {}),
+        "review": without_mark(analysis),
+        "files": read_files(files),
+        "screen": kept.screen,
+        "viewport": kept.viewport,
+        "mockup": {"name": mockup.name, "css": mockup.css, "body": without_assets(mockup.body)},
+        "correction": note,
+    }
+    if target != "before":
+        material["today"] = {"css": kept.before.css, "body": without_assets(kept.before.body)}
+    try:
+        drawing = await _asked(
+            session,
+            run,
+            definition,
+            "design-correction",
+            f"{DRAW_RULES}\n\n{CORRECT}",
+            material,
+            MockupDrawing,
+            tokens=DRAW_TOKENS,
+            budget=DRAW_BUDGET,
+            usage=usage,
+        )
+    except _NotDrawnError as failed:
+        return Designed(None, failed.code, usage, _said("correction", failed.said))
+    proposal = cleaned(corrected(kept, target, drawing))
+    proposal = with_assets(proposal, await _assets(session, run, analysis, asset_paths(proposal)))
+    key = design_key(run.workspace_id, run.id)
+    try:
+        await object_store().put(
+            key,
+            from_bytes(proposal.model_dump_json().encode()),
+            content_type="application/json",
+        )
+    except ObjectStoreError:
+        logger.exception("design_not_kept", run=str(run.id))
+        return Designed(None, "storage", usage)
+    return Designed({"design": summary(proposal, key)}, usage=usage)
 
 
 def _said(step: str, said: str | None) -> str:
@@ -408,6 +521,7 @@ __all__ = [
     "MARK",
     "PLAN_RULES",
     "Designed",
+    "correct_design",
     "design_messages",
     "propose_design",
     "proposes",

@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
 import type { CodeChange, CodeChangeFile } from "@/lib/code-changes";
 import { codeChangeKeys, useCodeChangeDecision, useCodeChanges, useRunCodeChanges } from "@/lib/code-changes-queries";
-import { type SplitCell, splitRows } from "@/lib/diff";
+import { type Hunk, hunksOf, type SplitCell, splitRows } from "@/lib/diff";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 import { notify } from "@/lib/notify";
@@ -124,24 +124,48 @@ const LINE_CLASS = {
   same: "text-brand-navy",
 } as const;
 
-function FileDiff({ file, open, view }: { file: CodeChangeFile; open: boolean; view: "split" | "unified" }) {
+/** One modification, numbered across the change: where — the file and its
+ * lines —, what it adds and removes, and its lines before and after. */
+function Modification({
+  n,
+  file,
+  hunk,
+  open,
+  view,
+}: {
+  n: number;
+  file: CodeChangeFile;
+  hunk: Hunk;
+  open: boolean;
+  view: "split" | "unified";
+}) {
   const t = useDictionary();
   const w = t.codeChanges;
+  const lines =
+    hunk.from === hunk.to
+      ? fill(w.line, { from: String(hunk.from) })
+      : fill(w.lines, { from: String(hunk.from), to: String(hunk.to) });
   return (
-    <details className="rounded-md border border-shell-line bg-white" data-testid="code-change-file" open={open}>
+    <details
+      className="rounded-md border border-shell-line bg-white"
+      data-testid="code-change-modification"
+      data-path={file.path}
+      open={open}
+    >
       <summary className="flex cursor-pointer flex-wrap items-center gap-2 px-3 py-2 text-[0.8125rem]">
+        <span className="font-semibold text-brand-navy">{fill(w.modification, { n: String(n) })}</span>
         <FileCode2 className="size-3.5 text-shell-muted" aria-hidden="true" />
-        <span className="font-mono text-brand-navy">{file.path}</span>
-        <span className="text-xs text-shell-muted">{w.statuses[file.status]}</span>
-        <span className="text-xs text-[#15803d]">+{file.additions}</span>
-        <span className="text-xs text-[#b91c1c]">−{file.deletions}</span>
+        <span className="min-w-0 font-mono break-all text-brand-navy">{file.path}</span>
+        <span className="text-xs text-shell-muted">{lines}</span>
+        <span className="text-xs text-[#15803d]">+{hunk.added}</span>
+        <span className="text-xs text-[#b91c1c]">−{hunk.removed}</span>
         {file.why ? <span className="w-full text-xs text-shell-muted">{file.why}</span> : null}
       </summary>
       {view === "split" ? (
-        <SplitDiff diff={file.diff} />
+        <SplitDiff diff={hunk.text} />
       ) : (
         <pre className="max-h-[28rem] overflow-auto border-t border-shell-line text-[0.75rem] leading-5" data-testid="code-change-diff">
-          {diffLines(file.diff).map((line, index) => (
+          {diffLines(hunk.text).map((line, index) => (
             <div key={index} className={`px-3 font-mono whitespace-pre ${LINE_CLASS[line.kind]}`} data-kind={line.kind}>
               {line.text || " "}
             </div>
@@ -163,6 +187,13 @@ function ChangeCard({ change }: { change: CodeChange }) {
   const [note, setNote] = useState("");
   const [view, setView] = useState<"split" | "unified">("split");
   const busy = accept.isPending || reject.isPending;
+  // Every modification, numbered across its files — each to unfold and read
+  // before deciding; few, all open.
+  const modifications = change.files.flatMap((file) => hunksOf(file.diff).map((hunk) => ({ file, hunk })));
+  const [unfolded, setUnfolded] = useState<{ open: boolean; round: number }>({
+    open: modifications.length <= 3,
+    round: 0,
+  });
 
   async function decide(approve: boolean) {
     try {
@@ -230,11 +261,37 @@ function ChangeCard({ change }: { change: CodeChange }) {
           </button>
         ))}
       </div>
-      <div className="flex flex-col gap-2">
-        {change.files.map((file) => (
-          <FileDiff key={file.path} file={file} open={change.files.length <= 3} view={view} />
-        ))}
+      <div className="flex flex-wrap items-center gap-2" data-testid="code-change-modifications">
+        <p className="min-w-0 flex-1 text-[0.8125rem] font-medium text-brand-navy">
+          {fill(w.modifications, {
+            count: String(modifications.length),
+            files: String(change.files.length),
+            added: String(added),
+            removed: String(removed),
+          })}
+        </p>
+        <button
+          type="button"
+          className="text-xs font-medium text-shell-nav-active hover:underline"
+          onClick={() => setUnfolded(({ round }) => ({ open: true, round: round + 1 }))}
+        >
+          {w.unfoldAll}
+        </button>
+        <button
+          type="button"
+          className="text-xs font-medium text-shell-nav-active hover:underline"
+          onClick={() => setUnfolded(({ round }) => ({ open: false, round: round + 1 }))}
+        >
+          {w.foldAll}
+        </button>
       </div>
+      <ol className="flex flex-col gap-2">
+        {modifications.map(({ file, hunk }, index) => (
+          <li key={`${unfolded.round}-${file.path}-${index}`}>
+            <Modification n={index + 1} file={file} hunk={hunk} open={unfolded.open} view={view} />
+          </li>
+        ))}
+      </ol>
       {change.error ? (
         <p className="text-xs text-state-danger" role="alert" data-testid="code-change-error">
           {(w.errors as Record<string, string>)[change.error] ?? change.error_detail ?? change.error}
