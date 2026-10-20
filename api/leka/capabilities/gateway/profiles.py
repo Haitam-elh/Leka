@@ -50,6 +50,9 @@ class Profile:
     sends_temperature: bool = True
     # Reads images given to it (LEKA-491) — never confused with making them.
     vision: bool = False
+    # Takes a tool it is made to call. Claude 5.5 refuses it (400): its
+    # structured answer is asked as one, its tools left to it.
+    forces_tools: bool = True
     known: bool = True
 
     def price(self, at: datetime | None = None) -> Price | None:
@@ -160,6 +163,49 @@ PROFILES: tuple[Profile, ...] = (
         prices=(Price(_LONG_AGO, 1.0, 5.0),),
         vision=True,
     ),
+    # Claude 5.5 (platform.claude.com/docs/en/about-claude/pricing, read
+    # 2026-10-20): always thinking, no temperature, no forced tool.
+    Profile(
+        "anthropic",
+        "claude-opus-5-5",
+        "Claude Opus 5.5",
+        context=1_000_000,
+        output=128_000,
+        quality=3,
+        speed=2,
+        prices=(Price(_LONG_AGO, 4.0, 20.0, 0.2),),
+        sends_temperature=False,
+        vision=True,
+        forces_tools=False,
+    ),
+    Profile(
+        "anthropic",
+        "claude-sonnet-5-5",
+        "Claude Sonnet 5.5",
+        context=1_000_000,
+        output=128_000,
+        quality=3,
+        speed=3,
+        prices=(Price(_LONG_AGO, 2.0, 10.0, 0.1),),
+        sends_temperature=False,
+        vision=True,
+        forces_tools=False,
+    ),
+    Profile(
+        "anthropic",
+        "claude-haiku-5-5",
+        "Claude Haiku 5.5",
+        context=1_000_000,
+        output=128_000,
+        quality=2,
+        speed=3,
+        # shortcut: its price up to 100,000 tokens read — five times more
+        # beyond; a price by prompt size when a call of LEKA's reaches it.
+        prices=(Price(_LONG_AGO, 0.1, 0.5, 0.01),),
+        sends_temperature=False,
+        vision=True,
+        forces_tools=False,
+    ),
     # OpenAI, held by LEKA (LEKA-491): text and images in, text out — never
     # image generation. Prices: openai.com/api/pricing, per million tokens.
     Profile(
@@ -182,6 +228,33 @@ PROFILES: tuple[Profile, ...] = (
         quality=2,
         speed=3,
         prices=(Price(_LONG_AGO, 0.4, 1.6, 0.1),),
+        vision=True,
+    ),
+    # GPT-5.6 (developers.openai.com/api/docs/pricing, read 2026-10-20):
+    # reasoning models, at their own temperature. GPT-6 calls no tool in chat
+    # completions — only in the Responses API, which LEKA does not speak yet.
+    Profile(
+        "openai",
+        "gpt-5.6-sol",
+        "GPT-5.6 Sol",
+        context=1_050_000,
+        output=128_000,
+        quality=3,
+        speed=2,
+        prices=(Price(_LONG_AGO, 4.0, 20.0, 0.4),),
+        sends_temperature=False,
+        vision=True,
+    ),
+    Profile(
+        "openai",
+        "gpt-5.6-luna",
+        "GPT-5.6 Luna",
+        context=1_050_000,
+        output=128_000,
+        quality=2,
+        speed=3,
+        prices=(Price(_LONG_AGO, 0.2, 1.2, 0.02),),
+        sends_temperature=False,
         vision=True,
     ),
 )

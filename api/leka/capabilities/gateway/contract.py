@@ -196,6 +196,7 @@ class Call:
     # The model's profile (profiles.py): what it accepts.
     thinking: tuple[str, ...] = ()
     sends_temperature: bool = True
+    forces_tools: bool = True
 
 
 class Provider(Protocol):
