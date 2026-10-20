@@ -24,7 +24,7 @@ from typing import Any
 
 import httpx
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from leka.capabilities.gateway import (
     AZURE_OPENAI,
@@ -110,6 +110,7 @@ def _call(provider: str, model: str, request: Request, **endpoint: Any) -> Call:
         request,
         thinking=found.thinking,
         sends_temperature=found.sends_temperature,
+        forces_tools=found.forces_tools,
     )
 
 
@@ -300,6 +301,90 @@ async def test_anthropic_gives_a_structured_answer_as_the_tool_it_must_call() ->
     assert sent.headers["anthropic-version"] == "2023-06-01"
     assert json.loads(done.text) == {"goal": "a", "confidence": 1}
     assert done.tool_calls == ()
+
+
+class Bounded(BaseModel):
+    score: int = Field(ge=0, le=10)
+    reasons: list[str] = Field(max_length=3)
+    verdict: Verdict
+
+
+async def test_claude_5_5_is_asked_its_answer_as_json_never_made_to_call_a_tool() -> None:
+    # 2026-10-20: Claude 5.5 refuses a forced tool and a temperature (400).
+    request = Request(
+        purpose="test",
+        messages=[Message.user("Classify this.")],
+        output=Output.of(Bounded),
+        temperature=0.2,
+    )
+    answer = {
+        "id": "msg-1",
+        "model": "claude-sonnet-5-5",
+        "content": [
+            {"type": "thinking", "thinking": "", "signature": "s"},
+            {
+                "type": "text",
+                "text": '{"score": 3, "reasons": [], "verdict": {"goal": "a", "confidence": 1}}',
+            },
+        ],
+        "stop_reason": "end_turn",
+        "usage": {"input_tokens": 30, "output_tokens": 9},
+    }
+    done, sent = await _ask(Anthropic(), _call("anthropic", "claude-sonnet-5-5", request), answer)
+    body = json.loads(sent.content)
+    assert "tool_choice" not in body and "tools" not in body and "temperature" not in body
+    schema = body["output_config"]["format"]["schema"]
+    assert body["output_config"]["format"]["type"] == "json_schema"
+    # Every object closed, the bounds it refuses left out.
+    assert schema["additionalProperties"] is False
+    assert schema["properties"]["verdict"]["additionalProperties"] is False
+    assert schema["properties"]["score"] == {"type": "integer"}
+    assert "maxItems" not in schema["properties"]["reasons"]
+    assert json.loads(done.text)["score"] == 3
+
+
+async def test_claude_5_5_s_thinking_goes_back_whole_with_its_tool_calls() -> None:
+    request = Request(
+        purpose="test",
+        messages=[Message.user("Who owns payment-api?")],
+        tools=[LOOKUP],
+        tool_choice=ToolChoice.REQUIRED,
+    )
+    thought = {"type": "thinking", "thinking": "", "signature": "opaque-1"}
+    answer = {
+        "id": "msg-1",
+        "model": "claude-opus-5-5",
+        "content": [
+            thought,
+            {"type": "tool_use", "id": "c1", "name": "lookup", "input": {"name": "payment-api"}},
+        ],
+        "stop_reason": "tool_use",
+        "usage": {"input_tokens": 30, "output_tokens": 9},
+    }
+    done, sent = await _ask(Anthropic(), _call("anthropic", "claude-opus-5-5", request), answer)
+    # Left to it, never made to.
+    assert json.loads(sent.content)["tool_choice"] == {"type": "auto"}
+
+    follow = Request(
+        purpose="test",
+        messages=[
+            Message.user("Who owns payment-api?"),
+            Message(Role.ASSISTANT, "", tool_calls=done.tool_calls),
+            Message(Role.TOOL, '{"owner": "Payments"}', tool_call_id="c1", name="lookup"),
+        ],
+        tools=[LOOKUP],
+    )
+    _, sent = await _ask(Anthropic(), _call("anthropic", "claude-opus-5-5", follow), answer)
+    turn = json.loads(sent.content)["messages"][1]["content"]
+    assert turn[0] == thought and turn[1]["type"] == "tool_use"
+
+    # A call another provider signed brings no thinking of Claude's.
+    gemini = Message(
+        Role.ASSISTANT, "", tool_calls=(ToolCall("c1", "lookup", {}, signature="sig-1"),)
+    )
+    mixed = Request(purpose="test", messages=[follow.messages[0], gemini, follow.messages[2]])
+    _, sent = await _ask(Anthropic(), _call("anthropic", "claude-opus-5-5", mixed), answer)
+    assert json.loads(sent.content)["messages"][1]["content"][0]["type"] == "tool_use"
 
 
 @pytest.mark.parametrize(

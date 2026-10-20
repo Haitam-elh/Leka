@@ -2,15 +2,17 @@
 
 The system prompt apart from the conversation; tool calls are content
 blocks (`tool_use`), their results go back as `tool_result` blocks in a user
-turn. A structured answer is asked the way that holds on every Claude model:
-as the one tool the model must call, the schema its input — what it passes
-is the answer.
+turn. A structured answer is asked as the one tool the model must call, the
+schema its input — what it passes is the answer. Claude 5.5 refuses a tool it
+is made to call (400): it is asked its answer as JSON (`output_config`), and
+what it thought before its tool calls goes back with them, whole.
 """
 
 from __future__ import annotations
 
 import json
 import time
+from dataclasses import replace
 from typing import Any
 
 import httpx
@@ -30,6 +32,46 @@ from leka.capabilities.gateway.contract import (
 )
 
 VERSION = "2023-06-01"
+THOUGHT = frozenset({"thinking", "redacted_thinking"})
+# What a strict JSON schema may not say (structured outputs): a 400 if it does.
+UNSAID = frozenset(
+    {"minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf"}
+    | {"minLength", "maxLength", "maxItems"}
+)
+
+
+def _thoughts(signature: str | None) -> list[dict[str, Any]]:
+    """The thinking blocks kept as a tool call's signature — none from
+    another provider's, which is no JSON of them."""
+    try:
+        blocks = json.loads(signature or "")
+    except ValueError:
+        return []
+    if not isinstance(blocks, list):
+        return []
+    return [b for b in blocks if isinstance(b, dict) and b.get("type") in THOUGHT]
+
+
+def strict(node: Any) -> Any:
+    """A schema as structured outputs takes it: every object closed, the
+    constraints it refuses left out — the answer is validated anyway."""
+    if isinstance(node, list):
+        return [strict(item) for item in node]
+    if not isinstance(node, dict):
+        return node
+    said: dict[str, Any] = {}
+    for key, value in node.items():
+        if key in UNSAID or (key == "minItems" and value > 1):
+            continue
+        # The keys of `properties` are fields' names, never keywords.
+        said[key] = (
+            {name: strict(field) for name, field in value.items()}
+            if key == "properties"
+            else strict(value)
+        )
+    if "properties" in said:
+        said["additionalProperties"] = False
+    return said
 
 
 def _messages(messages: list[Message]) -> list[dict[str, Any]]:
@@ -56,7 +98,7 @@ def _messages(messages: list[Message]) -> list[dict[str, Any]]:
                 said.append({"role": "user", "content": [block]})
             continue
         if message.role is Role.ASSISTANT and message.tool_calls:
-            blocks: list[dict[str, Any]] = []
+            blocks: list[dict[str, Any]] = _thoughts(message.tool_calls[0].signature)
             if message.content:
                 blocks.append({"type": "text", "text": message.content})
             blocks.extend(
@@ -91,7 +133,11 @@ class Anthropic:
             {"name": t.name, "description": t.description, "input_schema": dict(t.parameters)}
             for t in request.tools
         ]
-        if request.output is not None:
+        if request.output is not None and not call.forces_tools:
+            body["output_config"] = {
+                "format": {"type": "json_schema", "schema": strict(dict(request.output.schema))}
+            }
+        elif request.output is not None:
             tools.append(
                 {
                     "name": request.output.name,
@@ -100,10 +146,11 @@ class Anthropic:
                 }
             )
             body["tool_choice"] = {"type": "tool", "name": request.output.name}
-        elif request.tools:
+        if request.tools and "tool_choice" not in body:
             body["tool_choice"] = {
                 ToolChoice.AUTO: {"type": "auto"},
-                ToolChoice.REQUIRED: {"type": "any"},
+                # Claude 5.5 is never made to call one: it is left to it.
+                ToolChoice.REQUIRED: {"type": "any" if call.forces_tools else "auto"},
                 ToolChoice.NONE: {"type": "none"},
             }[request.tool_choice]
         if tools:
@@ -117,10 +164,13 @@ class Anthropic:
         output = call.request.output
         texts: list[str] = []
         calls: list[ToolCall] = []
+        thoughts: list[dict[str, Any]] = []
         for block in content:
             if not isinstance(block, dict):
                 continue
-            if block.get("type") == "text":
+            if block.get("type") in THOUGHT:
+                thoughts.append(block)
+            elif block.get("type") == "text":
                 texts.append(str(block.get("text", "")))
             elif block.get("type") == "tool_use":
                 arguments = arguments_of(block.get("input") or {})
@@ -135,6 +185,9 @@ class Anthropic:
                         arguments=arguments,
                     )
                 )
+        if thoughts and calls:
+            # Opaque to LEKA, sent back whole with the calls (_messages).
+            calls[0] = replace(calls[0], signature=json.dumps(thoughts))
         usage = mapping(said.get("usage"))
         return Completion(
             text="".join(texts),
