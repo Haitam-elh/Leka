@@ -196,6 +196,9 @@ jobs:
 
     env:
       LEKA_DATABASE_URL: postgresql+asyncpg://leka:leka@127.0.0.1:5432/leka_test
+      # pg_dump and pg_restore of the server's own version: ubuntu-26.04's are
+      # 17+, whose dumps a 16 cannot restore (transaction_timeout, 2026-10-20).
+      LEKA_PG_TOOLS: docker run --rm -i --network host pgvector/pgvector:pg16
       LEKA_REDIS_URL: redis://127.0.0.1:6379/0
       LEKA_SECRET_KEY: ci-only-not-a-real-secret
       # A throwaway Fernet key. Without it every job fails at import, which is
