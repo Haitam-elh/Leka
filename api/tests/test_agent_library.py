@@ -38,7 +38,7 @@ VERSIONS = {
     "incident-investigation": "1.3.0",
     "infrastructure-analysis": "1.3.0",
     "release-analysis": "1.3.0",
-    "security-review": "1.4.0",
+    "security-review": "1.4.1",
     "test-analysis": "1.3.0",
 }
 # The code an agent may read, beside the runtime's tools: the code review its
@@ -616,6 +616,9 @@ def test_the_security_review_names_what_it_found_not_how_it_searched() -> None:
     assert "Jamais le nom d'un champ ou d'un outil" in said
     # Its download wrote each name as code: `Leka API`.
     assert "jamais entre accents graves" in said
+    # 2026-10-20, relaunched: whole and plain, but « (owned: false) »,
+    # « (restricted) » — a field's raw value in brackets.
+    assert "jamais sa valeur brute" in said
 
 
 def test_the_code_change_proposes_the_smallest_change_and_says_the_rest() -> None:
