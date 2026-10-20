@@ -4704,7 +4704,9 @@ export interface paths {
          *     it read, read again — the run never done again (2026-10-18: its change
          *     was not written, the analysis alone shown). 202, a worker writes it;
          *     409 when it is not finished, already has its change, or is being
-         *     written; 422 when its agent proposes no code change.
+         *     written; 422 when its agent proposes no code change. A change refused
+         *     because its branch moved where it changes (`changed_since`) is written
+         *     again on the branch as it is now, the old one failed (2026-10-20).
          */
         post: operations["rewrite_run_change_api_v1_agent_runs__run_id__change_post"];
         delete?: never;
@@ -4862,6 +4864,23 @@ export interface paths {
         put?: never;
         /** Reject a code change */
         post: operations["reject_change_api_v1_code_changes__change_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/code-changes/{change_id}/follow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read its pull request again: checks, merge, deployment */
+        post: operations["follow_change_api_v1_code_changes__change_id__follow_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10871,10 +10890,61 @@ export interface components {
             /** Last Seen At */
             last_seen_at: string | null;
         };
+        /**
+         * CodeChangeChecks
+         * @description A pull request's checks: each check's latest run, and the commit
+         *     statuses.
+         */
+        CodeChangeChecks: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "none" | "pending" | "success" | "failure" | "unreadable";
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /**
+             * Passed
+             * @default 0
+             */
+            passed: number;
+            /**
+             * Pending
+             * @default 0
+             */
+            pending: number;
+            /**
+             * Failed
+             * @description The checks that failed.
+             */
+            failed?: string[];
+            /** Failed Url */
+            failed_url?: string | null;
+        };
         /** CodeChangeDecision */
         CodeChangeDecision: {
             /** Note */
             note?: string | null;
+        };
+        /**
+         * CodeChangeDeployment
+         * @description The deployment that took a merged pull request's commit.
+         */
+        CodeChangeDeployment: {
+            /** Environment */
+            environment: string;
+            /**
+             * State
+             * @description GitHub's: queued, pending, in_progress, success, failure…
+             */
+            state: string;
+            /** Url */
+            url?: string | null;
+            /** At */
+            at?: string | null;
         };
         /**
          * CodeChangeFileRead
@@ -10901,10 +10971,39 @@ export interface components {
             why: string;
         };
         /**
+         * CodeChangeFollow
+         * @description Its pull request after it was opened, read on GitHub — LEKA never
+         *     merges: a person does, then the repository's CD deploys.
+         */
+        CodeChangeFollow: {
+            /**
+             * Stage
+             * @description checks (running), ready (green, for a person to merge), merged (no deployment seen yet), deploying, deployed, … — what GitHub said when last read.
+             * @enum {string}
+             */
+            stage: "checks" | "no_checks" | "checks_failed" | "checks_unreadable" | "conflict" | "ready" | "merged" | "deploying" | "deployed" | "deploy_failed" | "closed";
+            /**
+             * Done
+             * @description No longer followed: deployed, closed, or quiet.
+             */
+            done: boolean;
+            checks?: components["schemas"]["CodeChangeChecks"] | null;
+            /** Merged At */
+            merged_at?: string | null;
+            deployment?: components["schemas"]["CodeChangeDeployment"] | null;
+            /**
+             * Error
+             * @description Why the last read failed.
+             */
+            error?: string | null;
+            /** Checked At */
+            checked_at?: string | null;
+        };
+        /**
          * CodeChangeRead
          * @description A code change an agent proposed: its files and their diffs, where it
-         *     stands — proposed, rejected, applied as a pull request — and whether its
-         *     source lets LEKA open that pull request.
+         *     stands — proposed, rejected, applied as a pull request, then followed —
+         *     and whether its source lets LEKA open that pull request.
          */
         CodeChangeRead: {
             /**
@@ -10957,11 +11056,12 @@ export interface components {
             pull_request_url: string | null;
             /**
              * Error
-             * @description Why its pull request could not be opened: pull_requests_off, not_allowed, branch_exists, out_of_scope, not_found, too_large, unavailable, no_source.
+             * @description Why its pull request could not be opened: pull_requests_off, not_allowed, workflow_scope, changed_since, already_applied, branch_exists, out_of_scope, not_found, too_large, unavailable, no_source.
              */
             error: string | null;
             /** Error Detail */
             error_detail: string | null;
+            follow?: components["schemas"]["CodeChangeFollow"] | null;
             /**
              * Created At
              * Format: date-time
@@ -49521,6 +49621,100 @@ export interface operations {
                 "application/json": components["schemas"]["CodeChangeDecision"] | null;
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodeChangeRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    follow_change_api_v1_code_changes__change_id__follow_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

@@ -1,19 +1,44 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, Columns2, ExternalLink, FileCode2, GitPullRequest, Rows3, X } from "lucide-react";
+import {
+  Check,
+  CircleAlert,
+  CircleCheck,
+  CircleDashed,
+  CircleX,
+  Columns2,
+  ExternalLink,
+  FileCode2,
+  GitPullRequest,
+  Loader2,
+  RefreshCw,
+  Rows3,
+  X,
+} from "lucide-react";
 import { useState } from "react";
+
+import { cn } from "cn";
 
 import { Card, type TileTone } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
+import { exactDate } from "@/components/knowledge/time";
 import { usePermissions } from "@/components/shell/shell-provider";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
-import type { CodeChange, CodeChangeFile } from "@/lib/code-changes";
-import { codeChangeKeys, useCodeChangeDecision, useCodeChanges, useRunCodeChanges } from "@/lib/code-changes-queries";
+import { useRewriteChange } from "@/lib/agent-runs-queries";
+import type { CodeChange, CodeChangeFile, CodeChangeFollow } from "@/lib/code-changes";
+import {
+  codeChangeKeys,
+  useCodeChangeDecision,
+  useCodeChangeFollow,
+  useCodeChanges,
+  useRunCodeChanges,
+} from "@/lib/code-changes-queries";
 import { type Hunk, hunksOf, type SplitCell, splitRows } from "@/lib/diff";
 import { fill } from "@/lib/i18n/dictionaries";
-import { useDictionary } from "@/lib/i18n/locale-provider";
+import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
+import { SPINNING } from "@/lib/motion";
 import { notify } from "@/lib/notify";
 import { useAllowWrite } from "@/lib/sources-queries";
 
@@ -176,6 +201,206 @@ function Modification({
   );
 }
 
+type StepState = "done" | "current" | "failed" | "warning" | "todo";
+
+const STEP_ICON: Record<StepState, React.ReactNode> = {
+  done: <CircleCheck className="size-4 text-state-success" aria-hidden="true" />,
+  current: <Loader2 className={cn("size-4 text-brand-violet", SPINNING)} aria-hidden="true" />,
+  failed: <CircleX className="size-4 text-state-danger" aria-hidden="true" />,
+  warning: <CircleAlert className="size-4 text-state-warning" aria-hidden="true" />,
+  todo: <CircleDashed className="size-4 text-shell-muted" aria-hidden="true" />,
+};
+
+const OPEN_STAGES: ReadonlySet<CodeChangeFollow["stage"]> = new Set([
+  "checks",
+  "no_checks",
+  "checks_failed",
+  "checks_unreadable",
+  "conflict",
+  "ready",
+]);
+
+/**
+ * Its pull request, from LEKA to production (2026-10-20): opened, its CI,
+ * a person's merge on GitHub — LEKA never merges — then the deployment
+ * that took it, read on GitHub every minute until it is done.
+ */
+function PullRequestFollow({ change }: { change: CodeChange }) {
+  const t = useDictionary();
+  const w = t.codeChanges.follow;
+  const { format: locale } = useLocale();
+  const live = useCodeChangeFollow(change.id, !change.follow?.done);
+  const follow = live.data?.follow ?? change.follow ?? null;
+  const stage = follow?.stage ?? "checks";
+  const open = OPEN_STAGES.has(stage);
+  const checks = follow?.checks ?? null;
+  const environment = follow?.deployment?.environment || w.production;
+
+  let checksStep: [StepState, string];
+  if (!open || stage === "ready") {
+    checksStep = [
+      "done",
+      checks?.state === "success" ? fill(w.checks.success, { total: String(checks.total) }) : w.checks.passed,
+    ];
+  } else if (stage === "checks_failed") {
+    checksStep = ["failed", fill(w.checks.failure, { names: (checks?.failed ?? []).join(", ") })];
+  } else if (stage === "no_checks") {
+    checksStep = ["warning", w.checks.none];
+  } else if (stage === "checks_unreadable") {
+    checksStep = ["warning", w.checks.unreadable];
+  } else if (checks && checks.total > 0) {
+    checksStep = [
+      stage === "conflict" ? "done" : "current",
+      fill(w.checks.running, { passed: String(checks.passed), total: String(checks.total) }),
+    ];
+  } else {
+    checksStep = ["current", w.checks.waiting];
+  }
+
+  let mergeStep: [StepState, string];
+  if (stage === "conflict") mergeStep = ["failed", fill(w.merge.conflict, { branch: change.base_branch })];
+  else if (stage === "closed") mergeStep = ["failed", w.merge.closed];
+  else if (stage === "checks_failed") mergeStep = ["todo", w.merge.fixFirst];
+  else if (open && stage !== "checks") mergeStep = ["current", w.merge.ready];
+  else if (open) mergeStep = ["todo", w.merge.waiting];
+  else mergeStep = ["done", follow?.merged_at ? fill(w.merge.merged, { date: exactDate(locale, follow.merged_at) }) : w.merge.mergedNoDate];
+
+  let deployStep: [StepState, string];
+  if (stage === "deployed") {
+    deployStep = [
+      "done",
+      fill(w.deploy.deployed, {
+        environment,
+        date: follow?.deployment?.at ? exactDate(locale, follow.deployment.at) : "—",
+      }),
+    ];
+  } else if (stage === "deploy_failed") deployStep = ["failed", fill(w.deploy.failed, { environment })];
+  else if (stage === "deploying") deployStep = ["current", fill(w.deploy.deploying, { environment })];
+  else if (stage === "merged") deployStep = follow?.done ? ["warning", w.deploy.none] : ["current", w.deploy.merged];
+  else deployStep = ["todo", w.deploy.waiting];
+
+  const steps: { key: string; title: string; state: StepState; text: string; href?: string | null; link?: string }[] = [
+    {
+      key: "opened",
+      title: w.steps.opened,
+      state: "done",
+      text: fill(w.opened, { number: String(change.pull_request_number ?? "") }),
+      href: change.pull_request_url,
+      link: w.seeOnGitHub,
+    },
+    {
+      key: "checks",
+      title: w.steps.checks,
+      state: checksStep[0],
+      text: checksStep[1],
+      href: stage === "checks_failed" ? checks?.failed_url : null,
+      link: w.checks.seeFailure,
+    },
+    { key: "merge", title: w.steps.merge, state: mergeStep[0], text: mergeStep[1] },
+    {
+      key: "deploy",
+      title: w.steps.deploy,
+      state: deployStep[0],
+      text: deployStep[1],
+      href: stage === "deployed" || stage === "deploy_failed" ? follow?.deployment?.url : null,
+      link: w.deploy.see,
+    },
+  ];
+
+  return (
+    <section
+      className="flex flex-col gap-2 rounded-lg border border-shell-line bg-shell-canvas/50 p-3"
+      aria-label={w.title}
+      data-testid="code-change-follow"
+      data-stage={stage}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="min-w-0 flex-1 text-[0.8125rem] font-semibold text-brand-navy">{w.title}</p>
+        {follow?.checked_at ? (
+          <span className="text-xs text-shell-muted">{fill(w.checkedAt, { time: exactDate(locale, follow.checked_at) })}</span>
+        ) : null}
+        {!follow?.done ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={live.isFetching}
+            onClick={() => void live.refetch()}
+            data-testid="code-change-follow-refresh"
+          >
+            <RefreshCw className={cn("size-3.5", live.isFetching && SPINNING)} aria-hidden="true" />
+            {w.refresh}
+          </Button>
+        ) : null}
+      </div>
+      <ol className="flex flex-col gap-1.5">
+        {steps.map((step) => (
+          <li key={step.key} className="flex items-start gap-2" data-testid={`code-change-step-${step.key}`} data-state={step.state}>
+            <span className="mt-0.5 shrink-0">{STEP_ICON[step.state]}</span>
+            <p className="min-w-0 flex-1 text-[0.8125rem] text-brand-navy">
+              <span className="font-medium">{step.title}</span>
+              <span className="text-shell-muted"> — </span>
+              {step.text}
+              {step.href ? (
+                <>
+                  {" "}
+                  <a
+                    className="inline-flex items-center gap-0.5 font-medium underline"
+                    href={step.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {step.link}
+                    <ExternalLink className="size-3" aria-hidden="true" />
+                  </a>
+                </>
+              ) : null}
+            </p>
+          </li>
+        ))}
+      </ol>
+      {follow?.error ? (
+        <p className="text-xs text-state-warning" role="status">
+          {fill(w.readFailed, { error: follow.error })}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+/** A change refused because its branch moved where it changes: written
+ * again from its analysis, on the branch as it is now. */
+function RewriteMoved({ runId }: { runId: string }) {
+  const t = useDictionary();
+  const w = t.codeChanges;
+  const again = useRewriteChange(runId);
+  const client = useQueryClient();
+
+  async function rewrite() {
+    try {
+      await again.mutateAsync();
+      await client.invalidateQueries({ queryKey: codeChangeKeys.all });
+      notify.success({ title: w.rewriting });
+    } catch (error) {
+      notify.error({ title: error instanceof ApiError ? error.message : w.failed });
+    }
+  }
+
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      disabled={again.isPending}
+      onClick={() => void rewrite()}
+      data-testid="code-change-rewrite"
+    >
+      <RefreshCw className="size-3.5" aria-hidden="true" />
+      {w.rewrite}
+    </Button>
+  );
+}
+
 function ChangeCard({ change }: { change: CodeChange }) {
   const t = useDictionary();
   const w = t.codeChanges;
@@ -293,9 +518,14 @@ function ChangeCard({ change }: { change: CodeChange }) {
         ))}
       </ol>
       {change.error ? (
-        <p className="text-xs text-state-danger" role="alert" data-testid="code-change-error">
-          {(w.errors as Record<string, string>)[change.error] ?? change.error_detail ?? change.error}
-        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="min-w-0 flex-1 text-xs text-state-danger" role="alert" data-testid="code-change-error">
+            {(w.errors as Record<string, string>)[change.error] ?? change.error_detail ?? change.error}
+          </p>
+          {change.error === "changed_since" && change.status === "proposed" && change.run_id ? (
+            <RewriteMoved runId={change.run_id} />
+          ) : null}
+        </div>
       ) : null}
       {change.status === "proposed" ? (
         <div className="flex flex-col gap-2">
@@ -341,16 +571,19 @@ function ChangeCard({ change }: { change: CodeChange }) {
         </div>
       ) : null}
       {change.status === "applied" && change.pull_request_url ? (
-        <a
-          className="inline-flex items-center gap-1 text-[0.8125rem] font-medium text-brand-navy underline"
-          href={change.pull_request_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          data-testid="code-change-pull-request"
-        >
-          <ExternalLink className="size-3.5" aria-hidden="true" />
-          {fill(w.seePullRequest, { number: String(change.pull_request_number ?? "") })}
-        </a>
+        <>
+          <a
+            className="inline-flex items-center gap-1 text-[0.8125rem] font-medium text-brand-navy underline"
+            href={change.pull_request_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="code-change-pull-request"
+          >
+            <ExternalLink className="size-3.5" aria-hidden="true" />
+            {fill(w.seePullRequest, { number: String(change.pull_request_number ?? "") })}
+          </a>
+          <PullRequestFollow change={change} />
+        </>
       ) : null}
       {change.status === "rejected" && change.note ? (
         <p className="text-xs text-shell-muted">{fill(w.rejectedBecause, { note: change.note })}</p>

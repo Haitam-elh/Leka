@@ -1226,10 +1226,65 @@ class CodeChangeFileRead(BaseModel):
     why: str
 
 
+class CodeChangeChecks(BaseModel):
+    """A pull request's checks: each check's latest run, and the commit
+    statuses."""
+
+    model_config = ConfigDict(frozen=True)
+
+    state: Literal["none", "pending", "success", "failure", "unreadable"]
+    total: int = 0
+    passed: int = 0
+    pending: int = 0
+    failed: list[str] = Field(default_factory=list, description="The checks that failed.")
+    failed_url: str | None = None
+
+
+class CodeChangeDeployment(BaseModel):
+    """The deployment that took a merged pull request's commit."""
+
+    model_config = ConfigDict(frozen=True)
+
+    environment: str
+    state: str = Field(description="GitHub's: queued, pending, in_progress, success, failure…")
+    url: str | None = None
+    at: datetime | None = None
+
+
+class CodeChangeFollow(BaseModel):
+    """Its pull request after it was opened, read on GitHub — LEKA never
+    merges: a person does, then the repository's CD deploys."""
+
+    model_config = ConfigDict(frozen=True)
+
+    stage: Literal[
+        "checks",
+        "no_checks",
+        "checks_failed",
+        "checks_unreadable",
+        "conflict",
+        "ready",
+        "merged",
+        "deploying",
+        "deployed",
+        "deploy_failed",
+        "closed",
+    ] = Field(
+        description="checks (running), ready (green, for a person to merge), merged (no "
+        "deployment seen yet), deploying, deployed, … — what GitHub said when last read."
+    )
+    done: bool = Field(description="No longer followed: deployed, closed, or quiet.")
+    checks: CodeChangeChecks | None = None
+    merged_at: datetime | None = None
+    deployment: CodeChangeDeployment | None = None
+    error: str | None = Field(default=None, description="Why the last read failed.")
+    checked_at: datetime | None = None
+
+
 class CodeChangeRead(BaseModel):
     """A code change an agent proposed: its files and their diffs, where it
-    stands — proposed, rejected, applied as a pull request — and whether its
-    source lets LEKA open that pull request."""
+    stands — proposed, rejected, applied as a pull request, then followed —
+    and whether its source lets LEKA open that pull request."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -1257,9 +1312,11 @@ class CodeChangeRead(BaseModel):
     pull_request_url: str | None
     error: str | None = Field(
         description="Why its pull request could not be opened: pull_requests_off, not_allowed, "
-        "branch_exists, out_of_scope, not_found, too_large, unavailable, no_source."
+        "workflow_scope, changed_since, already_applied, branch_exists, out_of_scope, "
+        "not_found, too_large, unavailable, no_source."
     )
     error_detail: str | None
+    follow: CodeChangeFollow | None = None
     created_at: datetime
 
 

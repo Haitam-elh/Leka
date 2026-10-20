@@ -181,6 +181,11 @@ SCHEDULE: tuple[Scheduled, ...] = (
     Scheduled("credit-watch", "leka.metering.credits.run_credit_watch", cron="3,18,33,48 * * * *"),
     # Files uploaded for an intention never asked: removed after a day.
     Scheduled("attachments-purge", "leka.intentions.attachments.run_purge", cron="40 * * * *"),
+    # The pull requests LEKA opened for a code change, followed read only
+    # (2026-10-20): their checks, a person's merge, the deployment after.
+    Scheduled(
+        "code-changes-follow", "leka.capabilities.changes.run_follow_sweep", cron="*/2 * * * *"
+    ),
     # The notification centre (LEKA-476): what the systems kept, read into
     # notifications — also on each look at the bell.
     Scheduled("notifications-sweep", "leka.notifications.projector.run_sweep", cron="*/5 * * * *"),

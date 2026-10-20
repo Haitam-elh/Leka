@@ -1855,7 +1855,7 @@ const fr = {
     note: "Commentaire (facultatif)",
     accept: "J'accepte d'appliquer ce changement sur GitHub",
     acceptHint:
-      "LEKA ouvre une pull request sur une nouvelle branche : rien n'est fusionné, l'équipe la relit et la fusionne sur GitHub.",
+      "LEKA ouvre une pull request sur une nouvelle branche, à partir de la branche telle qu'elle est maintenant. Rien n'est fusionné : l'équipe la relit et la fusionne sur GitHub, puis LEKA suit la CI et le déploiement ici.",
     view: "Affichage du changement",
     split: "Avant / après",
     unified: "Diff",
@@ -1872,7 +1872,49 @@ const fr = {
     reject: "Refuser",
     opened: "Pull request ouverte",
     openedHint:
-      "LEKA a ouvert la pull request #{number} : relisez-la et fusionnez-la sur GitHub.",
+      "LEKA a ouvert la pull request #{number} : dès que sa CI est verte, fusionnez-la sur GitHub — le CD la déploie, LEKA vous le montre ici.",
+    rewrite: "Réécrire sur la branche actuelle",
+    rewriting: "LEKA réécrit le changement sur la branche telle qu'elle est maintenant.",
+    follow: {
+      title: "De la pull request à la production",
+      refresh: "Actualiser",
+      checkedAt: "Lu sur GitHub le {time}",
+      readFailed: "Dernière lecture impossible : {error}",
+      seeOnGitHub: "Voir sur GitHub",
+      production: "production",
+      steps: { opened: "Pull request", checks: "CI", merge: "Fusion", deploy: "Déploiement" },
+      opened: "#{number} ouverte par LEKA",
+      checks: {
+        waiting: "En attente du démarrage de la CI…",
+        running:
+          "En cours — {passed} sur {total} {total|vérification passée|vérifications passées}",
+        success: "Verte — {total} {total|vérification|vérifications}",
+        passed: "Passée",
+        failure: "Rouge : {names}",
+        seeFailure: "Voir l'échec",
+        none: "Aucune CI n'a tourné sur cette pull request : relisez-la avant de la fusionner.",
+        unreadable:
+          "La clé GitHub ne permet pas de lire la CI : donnez-lui Checks et Commit statuses en lecture.",
+      },
+      merge: {
+        waiting: "Une fois la CI verte, une personne la fusionne sur GitHub.",
+        ready: "Prête : fusionnez-la sur GitHub, le déploiement suivra.",
+        fixFirst: "À corriger avant de fusionner.",
+        conflict: "En conflit avec {branch} : à résoudre sur GitHub avant de fusionner.",
+        merged: "Fusionnée le {date}",
+        mergedNoDate: "Fusionnée",
+        closed: "Fermée sans être fusionnée.",
+      },
+      deploy: {
+        waiting: "Après la fusion, le CD du dépôt la déploie.",
+        merged: "Fusionnée, en attente du déploiement…",
+        deploying: "En cours vers {environment}…",
+        deployed: "En {environment} depuis le {date}",
+        failed: "Le déploiement vers {environment} a échoué.",
+        none: "Aucun déploiement vu depuis la fusion : ce dépôt n'en déclare peut-être pas sur GitHub, ou la clé ne peut pas les lire (Deployments en lecture).",
+        see: "Voir",
+      },
+    },
     rejectedDone: "Modification refusée",
     rejectedBecause: "Refusée : {note}",
     failed: "La décision n'a pas pu être enregistrée.",
@@ -1889,6 +1931,11 @@ const fr = {
       not_allowed:
         "La clé GitHub ne permet pas d'écrire : donnez-lui Contents et Pull requests en écriture.",
       branch_exists: "La branche existe déjà sur GitHub.",
+      workflow_scope:
+        "Ce changement touche .github/workflows : la clé GitHub doit aussi avoir Workflows en écriture.",
+      changed_since:
+        "Le fichier a changé sur la branche depuis la proposition, là où LEKA le modifie : LEKA n'écrase pas ce travail. Réécrivez le changement sur la branche actuelle.",
+      already_applied: "Ce changement est déjà sur la branche : rien à ouvrir.",
       out_of_scope:
         "Ce dépôt n'est plus dans le périmètre de la source GitHub.",
       not_found: "GitHub ne trouve plus la branche ou le fichier.",
@@ -10467,7 +10514,7 @@ const en: Dictionary = {
     note: "Comment (optional)",
     accept: "I accept applying this change on GitHub",
     acceptHint:
-      "LEKA opens a pull request on a new branch: nothing is merged, the team reviews and merges it on GitHub.",
+      "LEKA opens a pull request on a new branch, from the branch as it is now. Nothing is merged: the team reviews and merges it on GitHub, then LEKA follows its CI and its deployment here.",
     view: "How the change is shown",
     split: "Before / after",
     unified: "Diff",
@@ -10484,7 +10531,48 @@ const en: Dictionary = {
     reject: "Reject",
     opened: "Pull request opened",
     openedHint:
-      "LEKA opened pull request #{number}: review and merge it on GitHub.",
+      "LEKA opened pull request #{number}: once its CI is green, merge it on GitHub — the CD deploys it, LEKA shows it here.",
+    rewrite: "Write it again on the current branch",
+    rewriting: "LEKA writes the change again on the branch as it is now.",
+    follow: {
+      title: "From pull request to production",
+      refresh: "Refresh",
+      checkedAt: "Read on GitHub on {time}",
+      readFailed: "Last read failed: {error}",
+      seeOnGitHub: "See on GitHub",
+      production: "production",
+      steps: { opened: "Pull request", checks: "CI", merge: "Merge", deploy: "Deployment" },
+      opened: "#{number} opened by LEKA",
+      checks: {
+        waiting: "Waiting for the CI to start…",
+        running: "Running — {passed} of {total} {total|check|checks} passed",
+        success: "Green — {total} {total|check|checks}",
+        passed: "Passed",
+        failure: "Red: {names}",
+        seeFailure: "See the failure",
+        none: "No CI ran on this pull request: review it before merging.",
+        unreadable:
+          "The GitHub token cannot read the CI: give it Checks and Commit statuses in read.",
+      },
+      merge: {
+        waiting: "Once the CI is green, a person merges it on GitHub.",
+        ready: "Ready: merge it on GitHub, the deployment follows.",
+        fixFirst: "To fix before merging.",
+        conflict: "In conflict with {branch}: to resolve on GitHub before merging.",
+        merged: "Merged on {date}",
+        mergedNoDate: "Merged",
+        closed: "Closed without being merged.",
+      },
+      deploy: {
+        waiting: "After the merge, the repository's CD deploys it.",
+        merged: "Merged, waiting for the deployment…",
+        deploying: "Deploying to {environment}…",
+        deployed: "In {environment} since {date}",
+        failed: "The deployment to {environment} failed.",
+        none: "No deployment seen since the merge: this repository may not declare any on GitHub, or the token cannot read them (Deployments in read).",
+        see: "See",
+      },
+    },
     rejectedDone: "Change rejected",
     rejectedBecause: "Rejected: {note}",
     failed: "The decision could not be saved.",
@@ -10501,6 +10589,11 @@ const en: Dictionary = {
       not_allowed:
         "The GitHub token cannot write: give it Contents and Pull requests in write.",
       branch_exists: "The branch already exists on GitHub.",
+      workflow_scope:
+        "This change touches .github/workflows: the GitHub token also needs Workflows in write.",
+      changed_since:
+        "The file changed on the branch since the proposal, where LEKA changes it: LEKA does not overwrite that work. Write the change again on the current branch.",
+      already_applied: "This change is already on the branch: nothing to open.",
       out_of_scope:
         "This repository is no longer in the GitHub source's scope.",
       not_found: "GitHub no longer finds the branch or the file.",

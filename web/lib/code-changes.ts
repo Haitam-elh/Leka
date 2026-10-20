@@ -8,6 +8,7 @@ import type { components } from "@/lib/api-types";
 
 export type CodeChange = components["schemas"]["CodeChangeRead"];
 export type CodeChangeFile = components["schemas"]["CodeChangeFileRead"];
+export type CodeChangeFollow = components["schemas"]["CodeChangeFollow"];
 
 export const codeChanges = {
   list: (intentionId: string) =>
@@ -19,6 +20,10 @@ export const codeChanges = {
       method: "POST",
       body: JSON.stringify(note ? { note } : {}),
     }),
+  /** Its pull request read again on GitHub, read only: its checks, its
+   * merge, the deployment that took it. */
+  follow: (id: string) =>
+    apiFetch<CodeChange>(`/code-changes/${encodeURIComponent(id)}/follow`, { method: "POST" }),
   reject: (id: string, note?: string) =>
     apiFetch<CodeChange>(`/code-changes/${encodeURIComponent(id)}/reject`, {
       method: "POST",

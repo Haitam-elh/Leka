@@ -7,6 +7,9 @@
                                                it, or GitHub refuses: it stays
                                                proposed, said why
     POST   /code-changes/{id}/reject {note?}   rejected, said why
+    POST   /code-changes/{id}/follow           its pull request read again on
+                                               GitHub, read only: its checks,
+                                               its merge, its deployment
 
 Reading takes `intention:read`; deciding, `intention:approve` — who may
 approve what an intention asks to do. The workspace is the session's.
@@ -29,6 +32,7 @@ from leka.capabilities import (
     CodeChange,
     CodeChangeDecision,
     CodeChangeFileRead,
+    CodeChangeFollow,
     CodeChangeRead,
     files_read,
 )
@@ -68,6 +72,7 @@ async def _read(service: ChangeService, change: CodeChange) -> CodeChangeRead:
         pull_request_url=change.pull_request_url,
         error=change.error,
         error_detail=change.error_detail,
+        follow=CodeChangeFollow.model_validate(change.follow) if change.follow else None,
         created_at=change.created_at,
     )
 
@@ -158,3 +163,19 @@ async def reject_change(
     except ChangeDecidedError as error:
         raise _decided(error) from None
     return await _read(service, change)
+
+
+@router.post(
+    "/{change_id}/follow",
+    response_model=CodeChangeRead,
+    summary="Read its pull request again: checks, merge, deployment",
+)
+async def follow_change(
+    change_id: uuid.UUID, session: SessionDep, principal: Reader
+) -> CodeChangeRead:
+    service = ChangeService(session, principal.workspace_id)
+    try:
+        # A click is enough: not GitHub again within ten seconds.
+        return await _read(service, await service.follow(change_id, unless_within=10))
+    except ChangeNotFoundError:
+        raise _missing() from None

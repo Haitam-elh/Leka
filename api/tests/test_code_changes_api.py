@@ -30,6 +30,7 @@ import base64
 import json
 import uuid
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -45,12 +46,16 @@ from leka.capabilities.changes import (
     branch_of,
     diff_of,
     edits_from_diff,
+    follow_pull_requests,
+    on_base,
     paths_named,
     safe_path,
+    stage_of,
 )
 from leka.capabilities.code_tools import MOST_CHARS, lines_of
 from leka.connectors import SourceKind, SourceService
 from leka.connectors.base import Connector
+from leka.connectors.github.code import checks_of
 from leka.db import session_factory, workspace_scope
 from tests.conftest import FakeIdentity
 from tests.test_agent_runs_api import Script, gemini, leka_gemini, queued  # noqa: F401
@@ -65,6 +70,9 @@ REPO = "acme/payments"
 BEFORE = "def balance(account):\n    return account.total\n"
 AFTER = "def balance(account):\n    return account.total - account.pending\n"
 README = "# Payments\n"
+# A longer file: what moves far from a change, and what moves where it is.
+LEDGER = "".join(f"line {n}\n" for n in range(1, 13))
+LEDGER_AFTER = LEDGER.replace("line 2\n", "line 2 changed\n")
 
 
 # ── pure ────────────────────────────────────────────────────────────────────
@@ -101,6 +109,18 @@ class GitHub:
         self.asked: list[tuple[str, str, dict[str, Any] | None]] = []
         # Files read but never listed — an image a mock-up shows (2026-10-19).
         self.extra: dict[str, str] = {}
+        # The branch as it is now, when it moved since the change was read
+        # (2026-10-20); the pull requests open, the branches that exist.
+        self.moved: dict[str, str] = {}
+        self.open: list[dict[str, Any]] = []
+        self.branches: set[str] = set()
+        # The pull request #7 as GitHub tells it, its checks, the
+        # deployments after its merge.
+        self.pull: dict[str, Any] = {"state": "open", "head": {"sha": "new-commit"}}
+        self.check_runs: list[dict[str, Any]] = []
+        self.statuses: list[dict[str, Any]] = []
+        self.deployments: list[dict[str, Any]] = []
+        self.deployment_states: dict[int, str] = {}
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -116,7 +136,7 @@ class GitHub:
             return httpx.Response(200, json={"tree": tree, "truncated": False})
         if request.method == "GET" and path.startswith(f"{base}/contents/"):
             name = path.removeprefix(f"{base}/contents/")
-            readable = files | self.extra
+            readable = files | self.extra | self.moved
             if name not in readable:
                 return httpx.Response(404, json={"message": "Not Found"})
             content = base64.b64encode(readable[name].encode()).decode()
@@ -132,11 +152,32 @@ class GitHub:
         if request.method == "POST" and path == f"{base}/git/commits":
             return httpx.Response(201, json={"sha": "new-commit"})
         if request.method == "POST" and path == f"{base}/git/refs":
-            return httpx.Response(201, json={"ref": body["ref"] if body else ""})
+            ref = body["ref"] if body else ""
+            if ref.removeprefix("refs/heads/") in self.branches:
+                return httpx.Response(422, json={"message": "Reference already exists"})
+            return httpx.Response(201, json={"ref": ref})
+        if request.method == "GET" and path == f"{base}/pulls":
+            return httpx.Response(200, json=self.open)
         if request.method == "POST" and path == f"{base}/pulls":
             return httpx.Response(
                 201, json={"number": 7, "html_url": f"https://github.com/{REPO}/pull/7"}
             )
+        if request.method == "GET" and path == f"{base}/pulls/7":
+            return httpx.Response(200, json={"number": 7, **self.pull})
+        if request.method == "GET" and path == f"{base}/commits/new-commit/check-runs":
+            return httpx.Response(200, json={"check_runs": self.check_runs})
+        if request.method == "GET" and path == f"{base}/commits/new-commit/status":
+            return httpx.Response(200, json={"statuses": self.statuses})
+        if request.method == "GET" and path == f"{base}/deployments":
+            return httpx.Response(200, json=self.deployments)
+        if request.method == "GET" and path.startswith(f"{base}/deployments/"):
+            number = int(path.split("/")[-2])
+            state = self.deployment_states.get(number)
+            said = [{"state": state, "created_at": "2026-10-20T12:30:00Z"}] if state else []
+            return httpx.Response(200, json=said)
+        if request.method == "GET" and path.startswith(f"{base}/compare/"):
+            # A deployment after the merge holds it — unless it is "old".
+            return httpx.Response(200, json={"status": "behind" if "old" in path else "ahead"})
         return httpx.Response(404, json={"message": f"unexpected {request.method} {path}"})
 
     def writes(self) -> list[tuple[str, dict[str, Any] | None]]:
@@ -504,6 +545,8 @@ async def test_an_edit_not_found_is_said_and_the_change_written_again(
         gemini(json.dumps(wrong)),
         # Written again: the edit copied right.
         gemini(json.dumps(_proposal())),
+        # And again, its branch moved where it changes (2026-10-20).
+        gemini(json.dumps(_proposal())),
     )
     started = await client.post(
         RUNS,
@@ -533,6 +576,22 @@ async def test_an_edit_not_found_is_said_and_the_change_written_again(
     assert (run["drawing"], run["draw_failed"]) == ([], None)
     # Its change there: never written twice.
     assert (await client.post(f"{RUNS}/{run_id}/change")).status_code == 409
+    # Unless refused because its branch moved where it changes: written
+    # again on the branch as it is now, the old one failed (2026-10-20).
+    with workspace_scope(acme["acme"]):
+        async with session_factory() as session:
+            await session.execute(
+                text("UPDATE code_changes SET error = 'changed_since' WHERE id = :c"),
+                {"c": change["id"]},
+            )
+            await session.commit()
+    assert (await client.post(f"{RUNS}/{run_id}/change")).status_code == 202
+    assert (await rewrite_change(acme["acme"], uuid.UUID(run_id)))["error"] is None
+    written = (await client.get(API, params={"run_id": run_id})).json()
+    assert [(c["status"], c["id"] == change["id"]) for c in written] == [
+        ("proposed", False),
+        ("failed", True),
+    ]
     # Only a code change is written again.
     architect = (await client.post(f"{RUNS}/{uuid.uuid4()}/change")).status_code
     assert architect == 404
@@ -645,3 +704,288 @@ async def test_a_run_without_its_files_kept_reads_those_its_analysis_names(
     assert done["error"] is None
     material = json.loads(script.asked[2]["contents"][-1]["parts"][0]["text"])
     assert material["files"] == {f"{REPO}:app/balance.py": BEFORE}
+
+
+# ── accepted later, then followed (2026-10-20) ──────────────────────────────
+
+
+def test_a_change_is_laid_on_its_branch_as_it_is_now_or_refused() -> None:
+    path = "app/ledger.py"
+    diff = diff_of(path, LEDGER, LEDGER_AFTER)[0]
+    # Unchanged since: as proposed.
+    assert on_base(path, LEDGER, LEDGER_AFTER, diff) == (LEDGER_AFTER, "changes")
+    # Changed far from it: laid again, the newer line kept.
+    newer = LEDGER.replace("line 11\n", "line 11 newer\n")
+    after, state = on_base(path, newer, LEDGER_AFTER, diff)
+    assert state == "changes"
+    assert after == newer.replace("line 2\n", "line 2 changed\n")
+    # Changed where it changes: refused, never undone.
+    assert on_base(path, LEDGER.replace("line 3\n", "line 3 newer\n"), LEDGER_AFTER, diff) == (
+        None,
+        "moved",
+    )
+    # Already there; removed since; a file to add that exists now.
+    assert on_base(path, LEDGER_AFTER, LEDGER_AFTER, diff)[1] == "same"
+    assert on_base(path, None, LEDGER_AFTER, diff) == (None, "moved")
+    added = diff_of("new.py", None, "x = 1\n")[0]
+    assert on_base("new.py", None, "x = 1\n", added) == ("x = 1\n", "changes")
+    assert on_base("new.py", "x = 2\n", "x = 1\n", added) == (None, "moved")
+    # A file to remove: removed as it was read, refused when it changed.
+    removed = diff_of(path, LEDGER, None)[0]
+    assert on_base(path, LEDGER, None, removed) == (None, "changes")
+    assert on_base(path, None, None, removed)[1] == "same"
+    assert on_base(path, newer, None, removed) == (None, "moved")
+
+
+def test_checks_say_one_word_from_each_check_s_latest_run() -> None:
+    assert checks_of([], [])["state"] == "none"
+    running = [{"id": 1, "name": "api", "status": "in_progress"}]
+    assert checks_of(running, [])["state"] == "pending"
+    failed = [
+        {"id": 1, "name": "api", "status": "completed", "conclusion": "failure", "html_url": "u"},
+        {"id": 2, "name": "web", "status": "completed", "conclusion": "success"},
+        {"id": 3, "name": "main", "status": "completed", "conclusion": "skipped"},
+    ]
+    said = checks_of(failed, [])
+    assert (said["state"], said["failed"], said["failed_url"], said["passed"]) == (
+        "failure",
+        ["api"],
+        "u",
+        2,
+    )
+    # Run again, green: the latest run is the one.
+    again = [*failed, {"id": 4, "name": "api", "status": "completed", "conclusion": "success"}]
+    assert checks_of(again, [])["state"] == "success"
+    # A commit status counts too.
+    assert checks_of(again, [{"context": "ci/x", "state": "pending"}])["state"] == "pending"
+    assert checks_of(again, [{"context": "ci/x", "state": "error"}])["failed"] == ["ci/x"]
+
+
+def test_a_pull_request_s_stage_is_one_word() -> None:
+    now = datetime(2026, 10, 20, 12, tzinfo=UTC)
+    soon, later = now - timedelta(minutes=2), now - timedelta(hours=1)
+
+    def stage(seen: dict[str, Any], opened: datetime = soon) -> str:
+        return stage_of({"state": "open", **seen}, opened_at=opened, now=now)
+
+    assert stage({"checks": {"state": "none"}}) == "checks"
+    assert stage({"checks": {"state": "none"}}, later) == "no_checks"
+    assert stage({"checks": {"state": "pending"}}) == "checks"
+    assert stage({"checks": {"state": "failure"}, "mergeable": False}) == "checks_failed"
+    assert stage({"checks": {"state": "success"}, "mergeable": False}) == "conflict"
+    assert stage({"checks": {"state": "success"}, "mergeable": True}) == "ready"
+    assert stage({"state": "closed"}) == "closed"
+    assert stage({"state": "merged"}) == "merged"
+    for said, word in (
+        ("queued", "deploying"),
+        ("in_progress", "deploying"),
+        ("success", "deployed"),
+        ("inactive", "deployed"),
+        ("failure", "deploy_failed"),
+        ("error", "deploy_failed"),
+    ):
+        assert stage({"state": "merged", "deployment": {"state": said}}) == word
+
+
+async def _proposed(
+    workspace: uuid.UUID, source: uuid.UUID, path: str, before: str, after: str
+) -> uuid.UUID:
+    """A change proposed from `before` as it was read — `after` its file."""
+    diff, added, removed = diff_of(path, before, after)
+    change_id = uuid.uuid4()
+    with workspace_scope(workspace):
+        async with session_factory() as session:
+            session.add(
+                CodeChange(
+                    workspace_id=workspace,
+                    id=change_id,
+                    source_id=source,
+                    repository=REPO,
+                    base_branch="main",
+                    title="Changer la ligne 2",
+                    summary="La ligne 2 change.",
+                    files=[
+                        {
+                            "path": path,
+                            "status": "modified",
+                            "content": after,
+                            "diff": diff,
+                            "additions": added,
+                            "deletions": removed,
+                            "why": "",
+                        }
+                    ],
+                    status="proposed",
+                )
+            )
+            await session.commit()
+    return change_id
+
+
+async def test_a_change_accepted_later_never_undoes_what_was_merged_since(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    github: GitHub,
+) -> None:
+    source = await _github_source(acme["acme"], pull_requests=True)
+    github.extra["app/ledger.py"] = LEDGER
+    change_id = await _proposed(acme["acme"], source, "app/ledger.py", LEDGER, LEDGER_AFTER)
+    _as(identity, acme, "admin")
+    accept = f"{API}/{change_id}/accept"
+
+    # Changed since where LEKA changes it: refused, said, nothing written.
+    github.moved["app/ledger.py"] = LEDGER.replace("line 3\n", "line 3 newer\n")
+    refused = await client.post(accept, json={})
+    assert refused.status_code == 409
+    assert refused.json()["error"]["details"][0]["message"] == "changed_since"
+    assert "app/ledger.py" in refused.json()["error"]["message"]
+    assert github.writes() == []
+    # Already there: said so, nothing written.
+    github.moved["app/ledger.py"] = LEDGER_AFTER
+    already = await client.post(accept, json={})
+    assert already.json()["error"]["details"][0]["message"] == "already_applied"
+    assert github.writes() == []
+
+    # Changed far from it: the pull request holds the newer line and LEKA's,
+    # from the commit the files were read at; the change says what it did.
+    newer = LEDGER.replace("line 11\n", "line 11 newer\n")
+    github.moved["app/ledger.py"] = newer
+    done = await client.post(accept, json={})
+    assert done.status_code == 200, done.text
+    writes = {path: body or {} for path, body in github.writes()}
+    [entry] = writes[f"/repos/{REPO}/git/trees"]["tree"]
+    assert entry["content"] == newer.replace("line 2\n", "line 2 changed\n")
+    assert writes[f"/repos/{REPO}/git/commits"]["parents"] == ["base-sha"]
+    [file] = done.json()["files"]
+    assert "+line 2 changed" in file["diff"] and (file["additions"], file["deletions"]) == (1, 1)
+    assert (done.json()["status"], done.json()["error"]) == ("applied", None)
+    assert done.json()["follow"]["stage"] == "checks"
+
+
+async def test_a_pull_request_already_open_is_the_one_and_a_branch_never_overwritten(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    github: GitHub,
+) -> None:
+    source = await _github_source(acme["acme"], pull_requests=True)
+    github.extra["app/ledger.py"] = LEDGER
+    _as(identity, acme, "admin")
+
+    # A try whose answer was lost: its pull request is the one, nothing new.
+    first = await _proposed(acme["acme"], source, "app/ledger.py", LEDGER, LEDGER_AFTER)
+    branch = branch_of("Changer la ligne 2", first)
+    github.open = [
+        {
+            "number": 9,
+            "html_url": f"https://github.com/{REPO}/pull/9",
+            "head": {"ref": f"{branch}-2", "sha": "earlier"},
+        }
+    ]
+    adopted = (await client.post(f"{API}/{first}/accept", json={})).json()
+    assert (adopted["pull_request_number"], adopted["branch"]) == (9, f"{branch}-2")
+    assert github.writes() == []
+
+    # A branch left without a pull request: the next name, never a push.
+    second = await _proposed(acme["acme"], source, "app/ledger.py", LEDGER, LEDGER_AFTER)
+    branch = branch_of("Changer la ligne 2", second)
+    github.open, github.branches = [], {branch}
+    opened = (await client.post(f"{API}/{second}/accept", json={})).json()
+    assert (opened["pull_request_number"], opened["branch"]) == (7, f"{branch}-2")
+    refs = [body["ref"] for path, body in github.writes() if path.endswith("/git/refs") and body]
+    assert refs == [f"refs/heads/{branch}", f"refs/heads/{branch}-2"]
+
+
+def _at(moment: datetime) -> str:
+    return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+async def test_a_pull_request_is_followed_to_its_deployment_never_merged_by_leka(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    github: GitHub,
+) -> None:
+    source = await _github_source(acme["acme"], pull_requests=True)
+    github.extra["app/ledger.py"] = LEDGER
+    change_id = await _proposed(acme["acme"], source, "app/ledger.py", LEDGER, LEDGER_AFTER)
+    _as(identity, acme, "member")
+    assert (await client.post(f"{API}/{change_id}/follow")).status_code == 200
+    _as(identity, acme, "admin")
+    assert (await client.post(f"{API}/{change_id}/accept", json={})).status_code == 200
+    now = datetime.now(UTC)
+
+    async def stage_at(minutes: int) -> dict[str, Any]:
+        await follow_pull_requests(now=now + timedelta(minutes=minutes))
+        read = (await client.get(f"{API}/{change_id}")).json()
+        return dict(read["follow"])
+
+    # Its checks running, then one failed, then run again green: for a
+    # person to merge — LEKA never does.
+    github.check_runs = [
+        {"id": 1, "name": "api", "status": "in_progress"},
+        {"id": 2, "name": "web", "status": "completed", "conclusion": "success"},
+    ]
+    _as(identity, acme, "member")
+    clicked = (await client.post(f"{API}/{change_id}/follow")).json()["follow"]
+    assert (clicked["stage"], clicked["checks"]["pending"], clicked["checks"]["passed"]) == (
+        "checks",
+        1,
+        1,
+    )
+    github.check_runs[0] = {
+        "id": 1,
+        "name": "api",
+        "status": "completed",
+        "conclusion": "failure",
+        "html_url": "https://github.com/run/1",
+    }
+    failed = await stage_at(2)
+    assert (failed["stage"], failed["checks"]["failed"]) == ("checks_failed", ["api"])
+    assert failed["checks"]["failed_url"] == "https://github.com/run/1"
+    github.check_runs.append(
+        {"id": 3, "name": "api", "status": "completed", "conclusion": "success"}
+    )
+    github.pull["mergeable"] = True
+    assert (await stage_at(4))["stage"] == "ready"
+
+    # A person merged it: a deployment from before is not its own; the one
+    # after, holding its merge, is followed to its end.
+    merged_at = now + timedelta(minutes=5)
+    github.pull = {
+        "state": "closed",
+        "merged_at": _at(merged_at),
+        "merge_commit_sha": "merge-sha",
+        "head": {"sha": "new-commit"},
+    }
+    github.deployments = [
+        {"id": 5, "sha": "old-sha", "environment": "production", "created_at": _at(now)},
+    ]
+    assert (await stage_at(6))["stage"] == "merged"
+    github.deployments.insert(
+        0,
+        {
+            "id": 6,
+            "sha": "later-sha",
+            "environment": "production",
+            "created_at": _at(merged_at + timedelta(minutes=10)),
+        },
+    )
+    github.deployment_states[6] = "in_progress"
+    assert (await stage_at(16))["stage"] == "deploying"
+    github.deployment_states[6] = "success"
+    deployed = await stage_at(20)
+    assert (deployed["stage"], deployed["done"], deployed["deployment"]["environment"]) == (
+        "deployed",
+        True,
+        "production",
+    )
+    assert deployed["merged_at"] is not None
+
+    # Done: no longer read; and never a merge, never a write after the PR.
+    asked = len(github.asked)
+    await follow_pull_requests(now=now + timedelta(minutes=30))
+    assert len(github.asked) == asked
+    assert not [path for path in (p for p, _ in github.writes()) if path.endswith("/merge")]
+    assert [path for path, _ in github.writes()][-1] == f"/repos/{REPO}/pulls"
