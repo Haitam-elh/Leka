@@ -114,6 +114,19 @@ async def test_an_intention_is_kept_with_what_was_asked_and_its_context(
     assert moved["by"] is None
 
 
+async def test_long_words_are_kept_whole_and_searched_cut_at_a_word(
+    client: AsyncClient, model: dict[str, uuid.UUID], acme: dict[str, uuid.UUID]
+) -> None:
+    """2026-10-20: words of 780 characters, and the context's search of 500
+    at most refused them — a 500 the page called « check your connection »."""
+    words = " ".join([ASKED, *(["Billing API ralentit encore aujourd'hui."] * 40)])[:1990]
+    created = await _ask(client, words)
+    assert created["intention"]["text"] == words
+    query = created["context"]["request"]["query"]
+    assert 0 < len(query) <= 500
+    assert words.startswith(query) and words[len(query)] == " "
+
+
 async def test_nothing_to_start_from_keeps_nothing(
     client: AsyncClient, model: dict[str, uuid.UUID]
 ) -> None:
