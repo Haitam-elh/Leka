@@ -47,12 +47,9 @@ test.describe("the information architecture", () => {
   }) => {
     await signIn(page);
     await expect(page.getByTestId("open-navigation")).toHaveCount(0);
-    for (const id of ["home", "environment", "agents", "bundles", "history"]) {
+    for (const id of ["home", "environment", "agents", "history"]) {
       await expect(page.getByTestId(`nav-${id}`)).toBeVisible();
     }
-
-    await page.getByTestId("nav-bundles").click();
-    await expect(page).toHaveURL("http://localhost:3000/capabilities#bundles");
 
     for (const [id, path] of [
       ["sources", "/sources"],
