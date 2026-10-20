@@ -683,6 +683,14 @@ class DeliverableRead(BaseModel):
     slides: int
 
 
+class DesignCorrectionRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    target: str
+    note: str
+    at: datetime
+
+
 class AgentRunRead(BaseModel):
     """One run of an agent: where it stands, what it delivers, or why not."""
 
@@ -729,6 +737,20 @@ class AgentRunRead(BaseModel):
     draw_said: str | None = Field(
         default=None,
         description="What the model's provider, or LEKA, said when they could not be — or none.",
+    )
+    correcting: str | None = Field(
+        default=None,
+        description="A design review's mock-up being corrected by a worker: before, or a "
+        "proposal's index — or none.",
+    )
+    correction_failed: str | None = Field(
+        default=None, description="Why its last correction could not be drawn — or none."
+    )
+    correction_said: str | None = Field(
+        default=None, description="What the model's provider said then — or none."
+    )
+    corrections: list[DesignCorrectionRead] = Field(
+        default_factory=list, description="The corrections asked of its mock-ups, the latest last."
     )
     error: str | None = Field(
         description="Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, "
@@ -878,6 +900,15 @@ class DesignChangeRead(BaseModel):
     before: str
     after: str
     why: str
+
+
+class DesignCorrection(BaseModel):
+    """One mock-up to correct, and how — the rest drawn as it was."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    target: str = Field(pattern=r"^(before|[0-9])$", description="before, or the proposal's index.")
+    note: str = Field(min_length=3, max_length=1000, description="What to correct.")
 
 
 class DesignRead(BaseModel):

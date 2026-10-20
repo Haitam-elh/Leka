@@ -179,8 +179,10 @@ jobs:
 
       mongodb:
         # A customer's MongoDB, for tests/test_mongodb_connector.py
-        # (LEKA-349). Same image as docker-compose.yml.
-        image: mongo:8.0
+        # (LEKA-349). shortcut: 8.x will not start on Linux 6.19 to 7.0.13
+        # (SERVER-121912), the runners' kernel since 2026-10-20; 7.0 does —
+        # back to docker-compose.yml's mongo:8.0 once they run 7.0.14 or later.
+        image: mongo:7.0
         env:
           MONGO_INITDB_ROOT_USERNAME: root
           MONGO_INITDB_ROOT_PASSWORD: leka
@@ -194,6 +196,9 @@ jobs:
 
     env:
       LEKA_DATABASE_URL: postgresql+asyncpg://leka:leka@127.0.0.1:5432/leka_test
+      # pg_dump and pg_restore of the server's own version: ubuntu-26.04's are
+      # 17+, whose dumps a 16 cannot restore (transaction_timeout, 2026-10-20).
+      LEKA_PG_TOOLS: docker run --rm -i --network host pgvector/pgvector:pg16
       LEKA_REDIS_URL: redis://127.0.0.1:6379/0
       LEKA_SECRET_KEY: ci-only-not-a-real-secret
       # A throwaway Fernet key. Without it every job fails at import, which is

@@ -99,6 +99,8 @@ class GitHub:
 
     def __init__(self) -> None:
         self.asked: list[tuple[str, str, dict[str, Any] | None]] = []
+        # Files read but never listed — an image a mock-up shows (2026-10-19).
+        self.extra: dict[str, str] = {}
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -114,11 +116,12 @@ class GitHub:
             return httpx.Response(200, json={"tree": tree, "truncated": False})
         if request.method == "GET" and path.startswith(f"{base}/contents/"):
             name = path.removeprefix(f"{base}/contents/")
-            if name not in files:
+            readable = files | self.extra
+            if name not in readable:
                 return httpx.Response(404, json={"message": "Not Found"})
-            content = base64.b64encode(files[name].encode()).decode()
+            content = base64.b64encode(readable[name].encode()).decode()
             return httpx.Response(
-                200, json={"type": "file", "size": len(files[name]), "content": content}
+                200, json={"type": "file", "size": len(readable[name]), "content": content}
             )
         if request.method == "GET" and path == f"{base}/git/ref/heads/main":
             return httpx.Response(200, json={"object": {"sha": "base-sha"}})

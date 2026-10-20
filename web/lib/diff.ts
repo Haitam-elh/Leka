@@ -88,3 +88,36 @@ export function splitRows(diff: string): SplitRow[] {
   return rows;
 }
 
+/** One modification of a file: a hunk of its diff, with the lines it
+ * changes — numbered in the new file, or the old one for what is only
+ * removed — and what it adds and removes. */
+export type Hunk = {
+  text: string;
+  from: number;
+  to: number;
+  added: number;
+  removed: number;
+};
+
+/** A file's diff, modification by modification (2026-10-19: « montre-moi
+ * toutes les modifs, modif 1, modif 2, chacune dépliable »). */
+export function hunksOf(diff: string): Hunk[] {
+  const hunks: string[][] = [];
+  for (const line of diff.replace(/\n$/, "").split("\n")) {
+    if (HUNK.test(line)) hunks.push([line]);
+    else if (hunks.length) hunks[hunks.length - 1].push(line);
+  }
+  return hunks.map((lines) => {
+    const rows = diffRows(lines.join("\n"));
+    const changed = rows.filter((row) => row.kind === "add" || row.kind === "remove");
+    const numbers = changed.map((row) => row.new ?? row.old ?? 0).filter((n) => n > 0);
+    return {
+      text: lines.join("\n"),
+      from: numbers.length ? Math.min(...numbers) : 0,
+      to: numbers.length ? Math.max(...numbers) : 0,
+      added: changed.filter((row) => row.kind === "add").length,
+      removed: changed.filter((row) => row.kind === "remove").length,
+    };
+  });
+}
+

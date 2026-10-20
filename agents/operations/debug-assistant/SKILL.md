@@ -2,7 +2,7 @@
 name: debug-assistant
 title: "Aide au débogage"
 description: "Use when a service misbehaves now — errors, slowness, failures — and someone wants the likely causes ranked: what changed, what it depends on, what happened around it."
-version: 1.4.0
+version: 1.4.1
 category: operations
 entity_types: [service, incident, deployment, change, commit, infra_resource, database, application, team, person]
 requires: []
@@ -49,7 +49,8 @@ dis-le et arrête-toi : ne devine pas.
 sources le confirment-elles ? Un déploiement, un changement, un incident
 porte son état (`state` dans `what_happened`) : lis-le. Un nom de produit
 ou de domaine (« leka-core ») désigne ses services et ses dépôts, jamais
-une personne ou une adresse qui porte le même nom.
+une personne ou une adresse qui porte le même nom — et le livrable n'en
+dit rien : il parle de ce qu'il a trouvé, pas de ce qu'il a écarté.
 
 ## Sa méthode
 
@@ -89,8 +90,8 @@ dit l'état : ne cherche pas de cause à une panne que rien ne montre.
 Livre **un document court** :
 
 1. **Le symptôme n'est pas confirmé** — ce que les sources montrent :
-   les derniers déploiements ou changements en cause, chacun daté avec son
-   état, cité.
+   les derniers déploiements ou changements en cause, chacun daté à la
+   minute avec son état, cité.
 2. **Ce qui le confirmerait** — où l'échec se verrait : l'exécution qui a
    échoué, son lien ou son message d'erreur, à demander à la personne.
 3. **Ce qui manque** — la source qui le montrerait et n'est pas connectée.
