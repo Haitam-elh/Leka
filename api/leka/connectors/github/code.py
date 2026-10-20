@@ -9,7 +9,14 @@
                 request. Never a merge, never a push to a branch that exists,
                 never the default branch.
     follow      the pull request after, read only (2026-10-20): its checks,
-                whether a person merged it, the deployment that took it
+                whether a person merged it, the deployment that took it, the
+                version before its merge
+    undo        asked by a person (2026-10-20): its pull request closed when
+                it was not merged; merged, the repository's deployment
+                workflow started for the version before it — on a source
+                that allows it (`deploys`, `deploy_workflow`) — and that run
+                followed. Undoing a merged change in the code is a pull
+                request like any other (changes.py)
 
 Everything goes through the connector's own client: its token, public
 addresses only, pinned against DNS rebinding (connectors/network.py).
@@ -129,6 +136,15 @@ def _pull_brief(found: dict[str, Any]) -> dict[str, object]:
     }
 
 
+def _message(response: httpx.Response) -> str:
+    """What GitHub said, when it said it in JSON."""
+    try:
+        found = response.json()
+    except ValueError:
+        return ""
+    return str(found.get("message") or "")[:300] if isinstance(found, dict) else ""
+
+
 class GitHubCode:
     """One GitHub source's code, read — and, when allowed, proposed back as
     a pull request."""
@@ -154,6 +170,14 @@ class GitHubCode:
     def writes(self) -> bool:
         """Whether its admin allowed LEKA to open pull requests here."""
         return bool(getattr(self._config, "pull_requests", False))
+
+    @property
+    def deploy_workflow(self) -> str | None:
+        """The workflow that deploys a version, when its admin allowed LEKA
+        to start it for the version before a change (`deploys`)."""
+        if not getattr(self._config, "deploys", False):
+            return None
+        return getattr(self._config, "deploy_workflow", None) or None
 
     def _checked(self, repository: str) -> str:
         if not self.in_scope(repository):
@@ -457,7 +481,82 @@ class GitHubCode:
                 seen["deployment"] = await self._deployment(
                     client, name, str(seen["merge_sha"]), str(merged_at)
                 )
+                # The version before it: what going back deploys.
+                merged = await client.get(f"/repos/{name}/commits/{seen['merge_sha']}")
+                if merged.status_code == 200:
+                    parents = merged.json().get("parents") or []
+                    seen["before_sha"] = str(parents[0].get("sha") or "") if parents else None
         return seen
+
+    async def close_pull_request(self, repository: str, number: int) -> None:
+        """A pull request LEKA opened, closed unmerged — a person asked to
+        undo it before it was merged."""
+        if not self.writes:
+            raise CodeRefusedError(
+                "pull_requests_off",
+                "Cette source GitHub n'autorise pas LEKA à toucher aux pull requests.",
+            )
+        async with self._client() as client:
+            answer = await client.patch(
+                f"/repos/{self._checked(repository)}/pulls/{number}", json={"state": "closed"}
+            )
+        if answer.status_code != 200:
+            raise self._refused(answer, f"la pull request #{number}")
+
+    async def redeploy(self, repository: str, *, ref: str, version: str) -> None:
+        """The repository's deployment workflow started for `version` — the
+        version before a change, a person asked to go back to it. Refused
+        when the source does not allow it or names no workflow."""
+        workflow = self.deploy_workflow
+        if workflow is None:
+            raise CodeRefusedError(
+                "deploys_off",
+                "Cette source GitHub n'autorise pas LEKA à relancer un déploiement : son admin "
+                "l'active et nomme le workflow de déploiement.",
+            )
+        field = str(getattr(self._config, "deploy_input", None) or "release")
+        async with self._client() as client:
+            answer = await client.post(
+                f"/repos/{self._checked(repository)}/actions/workflows/{workflow}/dispatches",
+                json={"ref": ref, "inputs": {field: version}},
+            )
+        if answer.status_code == 204:
+            return
+        if answer.status_code == 422:
+            raise CodeRefusedError(
+                "deploy_refused",
+                f"GitHub refuse de lancer {workflow} : {_message(answer)} — il doit accepter "
+                f"l'entrée « {field} » (workflow_dispatch).",
+            )
+        raise self._refused(answer, f"le workflow {workflow}")
+
+    async def redeployed(self, repository: str, since: str) -> dict[str, Any] | None:
+        """The run of the deployment workflow LEKA started at `since`: its
+        state — queued, in_progress, success, failure — and where to read it.
+        None until GitHub lists it."""
+        workflow = self.deploy_workflow
+        if workflow is None:
+            return None
+        async with self._client() as client:
+            answer = await client.get(
+                f"/repos/{self._checked(repository)}/actions/workflows/{workflow}/runs",
+                params={"event": "workflow_dispatch", "per_page": 20},
+            )
+        if answer.status_code != 200:
+            return None
+        runs = [
+            r
+            for r in answer.json().get("workflow_runs") or []
+            if isinstance(r, dict) and str(r.get("created_at") or "") >= since[:19]
+        ]
+        if not runs:
+            return None
+        run = min(runs, key=lambda r: str(r.get("created_at") or ""))
+        if run.get("status") != "completed":
+            state = "in_progress" if run.get("status") == "in_progress" else "queued"
+        else:
+            state = "success" if run.get("conclusion") == "success" else "failure"
+        return {"state": state, "url": run.get("html_url"), "at": run.get("updated_at")}
 
     async def _checks(self, client: httpx.AsyncClient, name: str, sha: str) -> dict[str, Any]:
         runs = await client.get(

@@ -9,6 +9,7 @@ import type { components } from "@/lib/api-types";
 export type CodeChange = components["schemas"]["CodeChangeRead"];
 export type CodeChangeFile = components["schemas"]["CodeChangeFileRead"];
 export type CodeChangeFollow = components["schemas"]["CodeChangeFollow"];
+export type CodeChangeRollback = components["schemas"]["CodeChangeRollback"];
 
 export const codeChanges = {
   list: (intentionId: string) =>
@@ -24,6 +25,14 @@ export const codeChanges = {
    * merge, the deployment that took it. */
   follow: (id: string) =>
     apiFetch<CodeChange>(`/code-changes/${encodeURIComponent(id)}/follow`, { method: "POST" }),
+  /** « Annuler ce changement »: its pull request closed when not merged;
+   * merged, the change that undoes it, proposed (2026-10-20). */
+  undo: (id: string) =>
+    apiFetch<CodeChange>(`/code-changes/${encodeURIComponent(id)}/undo`, { method: "POST" }),
+  /** « Revenir à la version précédente »: its deployment workflow started
+   * for the version before it. */
+  rollback: (id: string) =>
+    apiFetch<CodeChange>(`/code-changes/${encodeURIComponent(id)}/rollback`, { method: "POST" }),
   reject: (id: string, note?: string) =>
     apiFetch<CodeChange>(`/code-changes/${encodeURIComponent(id)}/reject`, {
       method: "POST",

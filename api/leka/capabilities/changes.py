@@ -21,8 +21,17 @@
             modifications are laid again on what is there now — or refused,
             never a newer work undone (2026-10-20).
     then, read only     the pull request followed (`follow`): its checks, a
-                        person's merge, the deployment that took it — until
-                        deployed, closed, or quiet (run_follow_sweep)
+                        person's merge, the deployment that took it, the
+                        version before it — until deployed, closed, or quiet
+                        (run_follow_sweep)
+    undone, on asking   (2026-10-20) not merged: its pull request closed.
+                        Merged: « Annuler ce changement » proposes the change
+                        that undoes it (`reverts`), each file laid back on its
+                        branch as it is now — accepted like any other, its own
+                        pull request, followed to production; and « Revenir à
+                        la version précédente » starts the repository's
+                        deployment workflow for the version before it, where
+                        the source allows it (`rollbacks`, followed too)
 
 An agent proposes, people decide (ADR 004): nothing reaches a repository
 before a person accepted it, and then only as a pull request someone else
@@ -765,7 +774,11 @@ FOLLOW_FOR = timedelta(days=14)
 QUIET_AFTER_MERGE = timedelta(hours=3)
 CHECKS_APPEAR = timedelta(minutes=10)
 # Where a pull request stands, as LEKA says it — those that end the follow.
-FOLLOW_DONE = frozenset({"deployed", "deploy_failed", "closed"})
+FOLLOW_DONE = frozenset({"deployed", "deploy_failed", "closed", "rolled_back", "rollback_failed"})
+# A run of the deployment workflow LEKA started, as said by GitHub, and the
+# stage it gives the change; listed from a minute before it was asked.
+ROLLED = {"success": "rolled_back", "failure": "rollback_failed"}
+RUN_SLACK = timedelta(minutes=1)
 DEPLOYED = {"success": "deployed", "inactive": "deployed", "failure": "deploy_failed"}
 
 
@@ -792,6 +805,63 @@ def stage_of(seen: Mapping[str, Any], *, opened_at: datetime, now: datetime) -> 
     return {"pending": "checks", "success": "ready", "unreadable": "checks_unreadable"}.get(
         checks, "checks"
     )
+
+
+_HUNK = re.compile(r"^@@ -(\S+) \+(\S+) @@(.*)$")
+
+
+def reversed_diff(diff: str) -> str:
+    """A unified diff the other way: what it adds, removed; what it
+    removes, added; a file it made, removed — what undoing it does."""
+
+    def swapped(name: str) -> str:
+        if name.startswith("a/"):
+            return f"b/{name[2:]}"
+        if name.startswith("b/"):
+            return f"a/{name[2:]}"
+        return name
+
+    said: list[str] = []
+    lines = diff.split("\n")
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if line.startswith("--- ") and i + 1 < len(lines) and lines[i + 1].startswith("+++ "):
+            said += [f"--- {swapped(lines[i + 1][4:])}", f"+++ {swapped(line[4:])}"]
+            i += 2
+            continue
+        hunk = _HUNK.match(line)
+        if hunk:
+            said.append(f"@@ -{hunk[2]} +{hunk[1]} @@{hunk[3]}")
+        elif line.startswith("+"):
+            said.append(f"-{line[1:]}")
+        elif line.startswith("-"):
+            said.append(f"+{line[1:]}")
+        else:
+            said.append(line)
+        i += 1
+    return "\n".join(said)
+
+
+def before_of(path: str, after: str | None, diff: str) -> tuple[str | None, bool]:
+    """A file as it was before a change, from what the change made of it and
+    its diff — and whether the diff could say it (one cut cannot)."""
+    if len(diff) >= MAX_DIFF_CHARS:
+        return None, False
+    found = [each for each in edits_from_diff(reversed_diff(diff)) if each.path == path]
+    if not found:
+        return None, False
+    back = found[0]
+    if after is None:
+        # It removed the file: back, the file as it was.
+        return back.content, back.content is not None
+    if back.delete:
+        # It made the file: back, there is none.
+        return None, True
+    if not back.edits:
+        return None, False
+    before, _why = apply_edits(after, back.edits)
+    return before, before is not None
 
 
 def body_of(change: CodeChange, *, by: str) -> str:
@@ -892,6 +962,170 @@ class ChangeService:
         logger.info("code_change_applied", change=str(change.id), pull_request=opened.number)
         return change
 
+    async def _code(self, change: CodeChange, by: uuid.UUID | None) -> GitHubCode:
+        source = await self._session.get(Source, change.source_id)
+        if source is None or source.status not in CONNECTED:
+            raise ChangeRefusedError("no_source", "La source GitHub n'est plus connectée.")
+        service = SourceService(self._session, self._workspace_id, actor_user_id=by)
+        return await open_code(await service.open_connector(source))
+
+    async def deploys(self, change: CodeChange) -> bool:
+        """Whether its source lets LEKA start its deployment workflow."""
+        source = await self._session.get(Source, change.source_id)
+        config = (source.config or {}) if source is not None else {}
+        return bool(config.get("deploys") and config.get("deploy_workflow"))
+
+    async def reverting(self, change: CodeChange) -> CodeChange | None:
+        """The change that undoes it, still proposed or applied."""
+        found = await self._session.scalar(
+            select(CodeChange)
+            .where(
+                CodeChange.workspace_id == self._workspace_id,
+                CodeChange.reverts == change.id,
+                CodeChange.status.in_(("proposed", "applied")),
+            )
+            .order_by(CodeChange.created_at.desc())
+            .limit(1)
+        )
+        return found
+
+    async def undo(self, change_id: uuid.UUID, *, by: uuid.UUID) -> CodeChange:
+        """« Annuler ce changement » (2026-10-20). Its pull request not
+        merged: closed — the change itself. Merged: the change that undoes
+        it, proposed — each file back to what it was before it, laid on its
+        branch as it is now; refused (`changed_since`) where the code moved
+        since, never a newer work undone. Asked twice, the same one."""
+        change = await self.change(change_id, lock=True)
+        if change.status != "applied" or change.pull_request_number is None:
+            raise ChangeRefusedError(
+                "not_applied", "Ce changement n'a pas de pull request : rien à annuler."
+            )
+        already = await self.reverting(change)
+        if already is not None:
+            return already
+        code = await self._code(change, by)
+        number = change.pull_request_number
+        try:
+            seen = await code.follow(change.repository, number)
+            if seen["state"] == "open":
+                await code.close_pull_request(change.repository, number)
+                change.follow = {
+                    **(change.follow or {}),
+                    "stage": "closed",
+                    "done": True,
+                    "checked_at": datetime.now(UTC).isoformat(),
+                }
+                await self._session.commit()
+                logger.info("code_change_withdrawn", change=str(change.id), pull_request=number)
+                return change
+            if seen["state"] != "merged":
+                raise ChangeRefusedError(
+                    "already_closed",
+                    "Sa pull request a été fermée sans être fusionnée : rien à annuler.",
+                )
+            sha = await code.head(change.repository, change.base_branch)
+            files: list[dict[str, object]] = []
+            moved: list[str] = []
+            for f in change.files:
+                path = str(f["path"])
+                after = c if isinstance(c := f.get("content"), str) else None
+                before, known = before_of(path, after, str(f.get("diff") or ""))
+                now = await code.read(change.repository, path, sha)
+                back, state = (
+                    on_base(path, now, before, diff_of(path, after, before)[0])
+                    if known
+                    else (None, "moved")
+                )
+                if state == "moved":
+                    moved.append(path)
+                if state != "changes":
+                    continue
+                diff, added, removed = diff_of(path, now, back)
+                kind = "added" if now is None else "deleted" if back is None else "modified"
+                files.append(
+                    {
+                        "path": path,
+                        "status": kind,
+                        "content": back,
+                        "diff": diff,
+                        "additions": added,
+                        "deletions": removed,
+                        "why": f"revient à ce qu'il était avant la pull request #{number}",
+                    }
+                )
+        except CodeRefusedError as refused:
+            raise ChangeRefusedError(refused.code, str(refused)) from refused
+        if moved:
+            raise ChangeRefusedError(
+                "changed_since",
+                f"{', '.join(moved)} a changé sur {change.base_branch} depuis, là où ce changement "
+                "l'avait modifié : LEKA ne peut pas l'annuler sans écraser ce travail.",
+            )
+        if not files:
+            raise ChangeRefusedError(
+                "already_applied", f"Ce changement n'est déjà plus sur {change.base_branch}."
+            )
+        revert = CodeChange(
+            workspace_id=self._workspace_id,
+            id=uuid.uuid4(),
+            run_id=change.run_id,
+            intention_id=change.intention_id,
+            source_id=change.source_id,
+            repository=change.repository,
+            base_branch=change.base_branch,
+            title=f"Annuler : {change.title}"[:300],
+            summary=(
+                f"Annule la pull request #{number} « {change.title} » : chaque fichier revient à "
+                f"ce qu'il était avant elle, sur {change.base_branch} tel qu'il est maintenant."
+            ),
+            files=files,
+            status="proposed",
+            proposed_by=by,
+            reverts=change.id,
+        )
+        self._session.add(revert)
+        await self._session.commit()
+        logger.info("code_change_undo_proposed", change=str(change.id), revert=str(revert.id))
+        return revert
+
+    async def go_back(self, change_id: uuid.UUID, *, by: uuid.UUID) -> CodeChange:
+        """« Revenir à la version précédente » (2026-10-20): the repository's
+        deployment workflow started for the version before its merge — the
+        change stays on its branch until undone; kept (`rollbacks`) and
+        followed until that run ends."""
+        change = await self.change(change_id, lock=True)
+        follow = dict(change.follow or {})
+        before = follow.get("before_sha")
+        if change.status != "applied" or not follow.get("merged_at") or not before:
+            raise ChangeRefusedError(
+                "not_merged",
+                "Ce changement n'est pas fusionné, ou sa version d'avant n'est pas encore connue : "
+                "rien à redéployer.",
+            )
+        rollbacks = list(change.rollbacks or [])
+        if rollbacks and rollbacks[-1].get("state") in ("queued", "in_progress"):
+            raise ChangeRefusedError("rolling_back", "Un retour en arrière est déjà en cours.")
+        code = await self._code(change, by)
+        try:
+            await code.redeploy(change.repository, ref=change.base_branch, version=str(before))
+        except CodeRefusedError as refused:
+            raise ChangeRefusedError(refused.code, str(refused)) from refused
+        rollbacks.append(
+            {
+                "sha": before,
+                "asked_at": datetime.now(UTC).isoformat(),
+                "by": str(by),
+                "state": "queued",
+                "url": None,
+                "at": None,
+            }
+        )
+        change.rollbacks = rollbacks
+        change.follow = {**follow, "stage": "rolling_back", "done": False}
+        await self._session.commit()
+        logger.info("code_change_rollback_asked", change=str(change.id), version=before)
+        return change
+
     async def follow(
         self, change_id: uuid.UUID, *, now: datetime | None = None, unless_within: float = 0
     ) -> CodeChange:
@@ -922,6 +1156,13 @@ class ChangeService:
             service = SourceService(self._session, self._workspace_id, actor_user_id=None)
             code = await open_code(await service.open_connector(source))
             seen = await code.follow(change.repository, change.pull_request_number)
+            rollbacks = list(change.rollbacks or [])
+            if rollbacks and rollbacks[-1].get("state") in ("queued", "in_progress"):
+                asked = datetime.fromisoformat(str(rollbacks[-1]["asked_at"]))
+                run = await code.redeployed(change.repository, (asked - RUN_SLACK).isoformat())
+                if run is not None:
+                    rollbacks[-1] = {**rollbacks[-1], **run}
+                    change.rollbacks = rollbacks
         except CodeRefusedError as refused:
             change.follow = {**last, "error": str(refused)[:300], "checked_at": now.isoformat()}
             return
@@ -935,6 +1176,9 @@ class ChangeService:
             return
         opened_at = change.decided_at or change.created_at
         stage = stage_of(seen, opened_at=opened_at, now=now)
+        if rollbacks and seen["state"] == "merged":
+            # Gone back to the version before it: that run says where it is.
+            stage = ROLLED.get(str(rollbacks[-1].get("state")), "rolling_back")
         merged_at = seen.get("merged_at")
         quiet = (
             stage == "merged"
@@ -947,6 +1191,7 @@ class ChangeService:
             "checks": seen.get("checks") or last.get("checks"),
             "merged_at": merged_at,
             "merge_sha": seen.get("merge_sha"),
+            "before_sha": seen.get("before_sha") or last.get("before_sha"),
             "deployment": seen.get("deployment"),
             "error": None,
             "checked_at": now.isoformat(),
@@ -1019,6 +1264,7 @@ __all__ = [
     "Proposed",
     "ProposedFile",
     "apply_edits",
+    "before_of",
     "body_of",
     "branch_of",
     "code_for",
@@ -1029,6 +1275,7 @@ __all__ = [
     "follow_pull_requests",
     "on_base",
     "propose_change",
+    "reversed_diff",
     "run_follow_sweep",
     "safe_path",
     "stage_of",

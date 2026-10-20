@@ -1269,6 +1269,9 @@ class CodeChangeFollow(BaseModel):
         "deployed",
         "deploy_failed",
         "closed",
+        "rolling_back",
+        "rolled_back",
+        "rollback_failed",
     ] = Field(
         description="checks (running), ready (green, for a person to merge), merged (no "
         "deployment seen yet), deploying, deployed, … — what GitHub said when last read."
@@ -1276,9 +1279,27 @@ class CodeChangeFollow(BaseModel):
     done: bool = Field(description="No longer followed: deployed, closed, or quiet.")
     checks: CodeChangeChecks | None = None
     merged_at: datetime | None = None
+    merge_sha: str | None = Field(default=None, description="The version with it.")
+    before_sha: str | None = Field(
+        default=None, description="The version before its merge: what going back deploys."
+    )
     deployment: CodeChangeDeployment | None = None
     error: str | None = Field(default=None, description="Why the last read failed.")
     checked_at: datetime | None = None
+
+
+class CodeChangeRollback(BaseModel):
+    """A person went back to the version before a change (2026-10-20): the
+    deployment workflow LEKA started, and how its run went."""
+
+    model_config = ConfigDict(frozen=True)
+
+    sha: str
+    asked_at: datetime
+    by: uuid.UUID | None = None
+    state: Literal["queued", "in_progress", "success", "failure"]
+    url: str | None = None
+    at: datetime | None = None
 
 
 class CodeChangeRead(BaseModel):
@@ -1317,6 +1338,16 @@ class CodeChangeRead(BaseModel):
     )
     error_detail: str | None
     follow: CodeChangeFollow | None = None
+    reverts: uuid.UUID | None = Field(
+        default=None, description="The change this one undoes (« Annuler ce changement »)."
+    )
+    rollbacks: list[CodeChangeRollback] = Field(
+        default_factory=list, description="Each time a person went back to the version before it."
+    )
+    deploys_allowed: bool = Field(
+        default=False,
+        description="Its source lets LEKA start its deployment workflow for the version before.",
+    )
     created_at: datetime
 
 

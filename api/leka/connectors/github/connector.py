@@ -120,6 +120,26 @@ class GitHubConfig(BaseModel):
         "a new branch, one commit, never a merge. The token then needs Contents and Pull "
         "requests in write.",
     )
+    deploys: bool = Field(
+        default=False,
+        description="Allow LEKA to start your deployment workflow for the version before a "
+        "change it opened, when a person asks to go back to it. The token then needs Actions "
+        "in write.",
+    )
+    deploy_workflow: str | None = Field(
+        default=None,
+        max_length=100,
+        pattern=r"^[A-Za-z0-9_.-]+\.ya?ml$",
+        description="The workflow that deploys a given version ('cd.yml'), started by "
+        "workflow_dispatch.",
+    )
+    deploy_input: str = Field(
+        default="release",
+        min_length=1,
+        max_length=50,
+        pattern=r"^[A-Za-z0-9_-]+$",
+        description="Its input that takes the version to deploy — a commit.",
+    )
 
     @model_validator(mode="after")
     def _repositories_are_full_names_in_the_organisation(self) -> GitHubConfig:

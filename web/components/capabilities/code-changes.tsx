@@ -14,6 +14,7 @@ import {
   Loader2,
   RefreshCw,
   Rows3,
+  Undo2,
   X,
 } from "lucide-react";
 import { useState } from "react";
@@ -32,6 +33,7 @@ import {
   codeChangeKeys,
   useCodeChangeDecision,
   useCodeChangeFollow,
+  useCodeChangeUndo,
   useCodeChanges,
   useRunCodeChanges,
 } from "@/lib/code-changes-queries";
@@ -225,7 +227,15 @@ const OPEN_STAGES: ReadonlySet<CodeChangeFollow["stage"]> = new Set([
  * a person's merge on GitHub — LEKA never merges — then the deployment
  * that took it, read on GitHub every minute until it is done.
  */
-function PullRequestFollow({ change }: { change: CodeChange }) {
+function PullRequestFollow({
+  change,
+  reverter,
+  manager,
+}: {
+  change: CodeChange;
+  reverter: CodeChange | null;
+  manager: boolean;
+}) {
   const t = useDictionary();
   const w = t.codeChanges.follow;
   const { format: locale } = useLocale();
@@ -277,6 +287,9 @@ function PullRequestFollow({ change }: { change: CodeChange }) {
   } else if (stage === "deploy_failed") deployStep = ["failed", fill(w.deploy.failed, { environment })];
   else if (stage === "deploying") deployStep = ["current", fill(w.deploy.deploying, { environment })];
   else if (stage === "merged") deployStep = follow?.done ? ["warning", w.deploy.none] : ["current", w.deploy.merged];
+  else if (stage === "rolling_back") deployStep = ["current", w.deploy.rollingBack];
+  else if (stage === "rolled_back") deployStep = ["warning", w.deploy.rolledBack];
+  else if (stage === "rollback_failed") deployStep = ["failed", w.deploy.rollbackFailed];
   else deployStep = ["todo", w.deploy.waiting];
 
   const steps: { key: string; title: string; state: StepState; text: string; href?: string | null; link?: string }[] = [
@@ -364,7 +377,154 @@ function PullRequestFollow({ change }: { change: CodeChange }) {
           {fill(w.readFailed, { error: follow.error })}
         </p>
       ) : null}
+      <GoBack change={live.data ?? change} reverter={reverter} manager={manager} />
     </section>
+  );
+}
+
+const short = (sha: string | null | undefined) => (sha ? sha.slice(0, 7) : "—");
+
+/**
+ * Going back (2026-10-20): the versions kept — before it, with it, each
+ * time a person went back, the change that undoes it — and the two ways
+ * back. « Annuler ce changement »: not merged, its pull request closed;
+ * merged, LEKA proposes the change that undoes it, to accept like any
+ * other. « Revenir à la version précédente »: the repository's deployment
+ * workflow started for the version before it, confirmed first.
+ */
+function GoBack({ change, reverter, manager }: { change: CodeChange; reverter: CodeChange | null; manager: boolean }) {
+  const t = useDictionary();
+  const w = t.codeChanges.goBack;
+  const { format: locale } = useLocale();
+  const { undo, rollback } = useCodeChangeUndo();
+  const [confirming, setConfirming] = useState(false);
+  const follow = change.follow ?? null;
+  const stage = follow?.stage ?? "checks";
+  const merged = Boolean(follow?.merged_at);
+  const commit = (sha: string) => `https://github.com/${change.repository}/commit/${sha}`;
+  const rollbacks = change.rollbacks ?? [];
+  const last = rollbacks.at(-1) ?? null;
+  const running = last?.state === "queued" || last?.state === "in_progress";
+  if (stage === "closed" && !merged) return null;
+
+  async function act(kind: "undo" | "rollback") {
+    try {
+      await (kind === "undo" ? undo : rollback).mutateAsync(change.id);
+      setConfirming(false);
+      notify.success({ title: kind === "undo" ? (merged ? w.undoProposed : w.closed) : w.rollbackStarted });
+    } catch (error) {
+      notify.error({ title: error instanceof ApiError ? error.message : w.failed });
+    }
+  }
+
+  return (
+    <div className="mt-1 flex flex-col gap-2 border-t border-shell-line pt-2" data-testid="code-change-go-back">
+      <p className="text-[0.8125rem] font-semibold text-brand-navy">{w.title}</p>
+      {merged ? (
+        <ul className="flex flex-col gap-1 text-xs text-brand-navy" data-testid="code-change-versions">
+          <li>
+            <span className="text-shell-muted">{w.before} </span>
+            {follow?.before_sha ? (
+              <a className="font-mono underline" href={commit(follow.before_sha)} target="_blank" rel="noopener noreferrer">
+                {short(follow.before_sha)}
+              </a>
+            ) : (
+              "—"
+            )}
+          </li>
+          <li>
+            <span className="text-shell-muted">{w.with} </span>
+            {follow?.merge_sha ? (
+              <a className="font-mono underline" href={commit(follow.merge_sha)} target="_blank" rel="noopener noreferrer">
+                {short(follow.merge_sha)}
+              </a>
+            ) : (
+              "—"
+            )}
+            {follow?.merged_at ? ` · ${fill(w.mergedOn, { date: exactDate(locale, follow.merged_at) })}` : null}
+          </li>
+          {rollbacks.map((each) => (
+            <li key={each.asked_at} data-testid="code-change-rollback">
+              <span className="text-shell-muted">{fill(w.wentBack, { date: exactDate(locale, each.asked_at) })} </span>
+              <span className="font-mono">{short(each.sha)}</span> — {w.runStates[each.state]}
+              {each.url ? (
+                <>
+                  {" "}
+                  <a className="underline" href={each.url} target="_blank" rel="noopener noreferrer">
+                    {w.seeRun}
+                  </a>
+                </>
+              ) : null}
+            </li>
+          ))}
+          {reverter ? (
+            <li data-testid="code-change-reverter">
+              <span className="text-shell-muted">{w.undoneBy} </span>
+              {reverter.pull_request_url ? (
+                <a className="underline" href={reverter.pull_request_url} target="_blank" rel="noopener noreferrer">
+                  {fill(w.pullRequest, { number: String(reverter.pull_request_number ?? "") })}
+                </a>
+              ) : (
+                w.undoToAccept
+              )}
+            </li>
+          ) : null}
+        </ul>
+      ) : null}
+      {stage === "rolled_back" ? <p className="text-xs text-state-warning">{w.stillOnBranch}</p> : null}
+      <div className="flex flex-wrap items-center gap-2">
+        {!reverter ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={undo.isPending}
+            onClick={() => void act("undo")}
+            data-testid="code-change-undo"
+          >
+            <Undo2 className="size-3.5" aria-hidden="true" />
+            {w.undo}
+          </Button>
+        ) : null}
+        {merged && follow?.before_sha && change.deploys_allowed && !confirming ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={running || rollback.isPending}
+            onClick={() => setConfirming(true)}
+            data-testid="code-change-rollback-open"
+          >
+            <RefreshCw className="size-3.5" aria-hidden="true" />
+            {running ? w.rollingBack : w.rollback}
+          </Button>
+        ) : null}
+      </div>
+      <p className="text-xs text-shell-muted">{reverter ? null : merged ? w.undoHint : w.closeHint}</p>
+      {confirming ? (
+        <div
+          className="flex flex-wrap items-center gap-2 rounded-md border border-state-warning/40 bg-state-warning-soft p-2"
+          role="group"
+          aria-label={w.confirmTitle}
+          data-testid="code-change-rollback-confirm"
+        >
+          <p className="min-w-0 flex-1 text-xs text-brand-navy">
+            {fill(w.confirm, { version: short(follow?.before_sha), branch: change.base_branch })}
+          </p>
+          <Button type="button" size="sm" disabled={rollback.isPending} onClick={() => void act("rollback")}>
+            {w.confirmYes}
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => setConfirming(false)}>
+            {w.confirmNo}
+          </Button>
+        </div>
+      ) : null}
+      {merged && !change.deploys_allowed ? (
+        <p className="text-xs text-shell-muted" data-testid="code-change-rollback-off">
+          {manager ? w.rollbackOffAdmin : w.rollbackOff}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -401,7 +561,7 @@ function RewriteMoved({ runId }: { runId: string }) {
   );
 }
 
-function ChangeCard({ change }: { change: CodeChange }) {
+function ChangeCard({ change, reverter, reverted }: { change: CodeChange; reverter: CodeChange | null; reverted: CodeChange | null }) {
   const t = useDictionary();
   const w = t.codeChanges;
   const { accept, reject } = useCodeChangeDecision();
@@ -453,8 +613,17 @@ function ChangeCard({ change }: { change: CodeChange }) {
     <li className="flex flex-col gap-3 rounded-lg border border-shell-line p-3" data-testid="code-change">
       <div className="flex flex-wrap items-center gap-2">
         <Pill tone={TONE[change.status]}>{w.changeStatuses[change.status]}</Pill>
+        {change.reverts ? <Pill tone="neutral">{w.goBack.undoing}</Pill> : null}
         <span className="text-[0.875rem] font-semibold text-brand-navy">{change.title}</span>
       </div>
+      {reverted ? (
+        <p className="text-xs text-shell-muted" data-testid="code-change-undoes">
+          {fill(w.goBack.undoes, {
+            title: reverted.title,
+            number: String(reverted.pull_request_number ?? ""),
+          })}
+        </p>
+      ) : null}
       <p className="text-xs text-shell-muted">
         {fill(w.where, {
           repository: change.repository,
@@ -582,7 +751,7 @@ function ChangeCard({ change }: { change: CodeChange }) {
             <ExternalLink className="size-3.5" aria-hidden="true" />
             {fill(w.seePullRequest, { number: String(change.pull_request_number ?? "") })}
           </a>
-          <PullRequestFollow change={change} />
+          <PullRequestFollow change={change} reverter={reverter} manager={manager} />
         </>
       ) : null}
       {change.status === "rejected" && change.note ? (
@@ -613,7 +782,16 @@ function ChangeList({ changes: data }: { changes: CodeChange[] | undefined }) {
       ) : (
         <ul className="flex flex-col gap-3" data-testid="code-changes">
           {data.map((change) => (
-            <ChangeCard key={change.id} change={change} />
+            <ChangeCard
+              key={change.id}
+              change={change}
+              reverter={
+                data.find(
+                  (other) => other.reverts === change.id && (other.status === "proposed" || other.status === "applied"),
+                ) ?? null
+              }
+              reverted={change.reverts ? (data.find((other) => other.id === change.reverts) ?? null) : null}
+            />
           ))}
         </ul>
       )}

@@ -56,7 +56,9 @@ logger = structlog.get_logger(__name__)
 
 # What a source lets LEKA write — never what it reads: changed alone, they
 # need no new test (GitHub's pull requests, Jira's issues, Confluence's pages).
-WRITE_FLAGS = frozenset({"pull_requests", "issues", "pages"})
+WRITE_FLAGS = frozenset(
+    {"pull_requests", "issues", "pages", "deploys", "deploy_workflow", "deploy_input"}
+)
 
 
 class SourceNotFoundError(LookupError):

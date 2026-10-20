@@ -19,7 +19,14 @@ import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import { makeQueryClient } from "@/lib/query";
 import { hunksOf, splitRows } from "@/lib/diff";
 
-const api = vi.hoisted(() => ({ list: vi.fn(), accept: vi.fn(), reject: vi.fn(), follow: vi.fn() }));
+const api = vi.hoisted(() => ({
+  list: vi.fn(),
+  accept: vi.fn(),
+  reject: vi.fn(),
+  follow: vi.fn(),
+  undo: vi.fn(),
+  rollback: vi.fn(),
+}));
 const runsApi = vi.hoisted(() => ({ rewriteChange: vi.fn() }));
 vi.mock("@/lib/agent-runs", async (original) => ({
   ...(await original<typeof import("@/lib/agent-runs")>()),
@@ -67,6 +74,9 @@ function change(overrides: Partial<CodeChange> = {}): CodeChange {
     pull_request_url: null,
     error: null,
     error_detail: null,
+    reverts: null,
+    rollbacks: [],
+    deploys_allowed: false,
     created_at: "2026-10-10T20:00:00Z",
     ...overrides,
   };
@@ -309,3 +319,84 @@ describe("an applied code change, followed to production", () => {
     await waitFor(() => expect(runsApi.rewriteChange).toHaveBeenCalledWith("r1"));
   });
 });
+
+describe("going back from a change in production (2026-10-20)", () => {
+  const deployed = (overrides: Partial<CodeChange> = {}) =>
+    change({
+      status: "applied",
+      pull_request_number: 7,
+      pull_request_url: "https://github.com/acme/payments/pull/7",
+      follow: {
+        stage: "deployed",
+        done: true,
+        merged_at: "2026-10-20T14:10:00Z",
+        merge_sha: "e288cc3e0000000",
+        before_sha: "dbed54f50000000",
+        deployment: { environment: "production", state: "success", at: "2026-10-20T14:30:00Z" },
+      },
+      ...overrides,
+    });
+
+  it("keeps the versions, and undoes it by a change proposed to accept", async () => {
+    api.list.mockResolvedValue([deployed()]);
+    api.undo.mockResolvedValue(change({ id: "c2", reverts: "c1" }));
+    const user = userEvent.setup();
+    show();
+    const back = await screen.findByTestId("code-change-go-back");
+    const versions = within(back).getByTestId("code-change-versions");
+    expect(within(versions).getByRole("link", { name: "dbed54f" })).toHaveAttribute(
+      "href",
+      "https://github.com/acme/payments/commit/dbed54f50000000",
+    );
+    expect(within(versions).getByRole("link", { name: "e288cc3" })).toBeInTheDocument();
+    // Not allowed by its source: said how.
+    expect(within(back).getByTestId("code-change-rollback-off")).toBeInTheDocument();
+    expect(within(back).queryByTestId("code-change-rollback-open")).not.toBeInTheDocument();
+    await user.click(within(back).getByRole("button", { name: "Annuler ce changement" }));
+    await waitFor(() => expect(api.undo).toHaveBeenCalledWith("c1"));
+  });
+
+  it("goes back to the version before, once confirmed", async () => {
+    api.list.mockResolvedValue([deployed({ deploys_allowed: true })]);
+    api.rollback.mockResolvedValue(deployed({ deploys_allowed: true }));
+    const user = userEvent.setup();
+    show();
+    await user.click(await screen.findByRole("button", { name: "Revenir à la version précédente" }));
+    const confirm = screen.getByTestId("code-change-rollback-confirm");
+    expect(confirm).toHaveTextContent("Redéployer la version dbed54f en production maintenant ?");
+    expect(api.rollback).not.toHaveBeenCalled();
+    await user.click(within(confirm).getByRole("button", { name: "Oui, redéployer" }));
+    await waitFor(() => expect(api.rollback).toHaveBeenCalledWith("c1"));
+  });
+
+  it("ties the change that undoes it to it, and says what is left", async () => {
+    const rolledBack = deployed({
+      follow: {
+        stage: "rolled_back",
+        done: true,
+        merged_at: "2026-10-20T14:10:00Z",
+        merge_sha: "e288cc3e0000000",
+        before_sha: "dbed54f50000000",
+      },
+      rollbacks: [
+        {
+          sha: "dbed54f50000000",
+          asked_at: "2026-10-20T15:00:00Z",
+          state: "success",
+          url: "https://github.com/acme/payments/actions/runs/9",
+        },
+      ],
+    });
+    const revert = change({ id: "c2", reverts: "c1", title: "Annuler : Déduire les paiements" });
+    api.list.mockResolvedValue([revert, rolledBack]);
+    show();
+    const undoes = await screen.findByTestId("code-change-undoes");
+    expect(undoes).toHaveTextContent("Annule « Déduire les paiements en attente du solde » (pull request #7).");
+    const back = screen.getByTestId("code-change-go-back");
+    expect(within(back).getByTestId("code-change-rollback")).toHaveTextContent("terminé");
+    expect(within(back).getByTestId("code-change-reverter")).toHaveTextContent("une annulation à accepter");
+    expect(within(back).queryByRole("button", { name: "Annuler ce changement" })).not.toBeInTheDocument();
+    expect(back).toHaveTextContent("la prochaine mise en production le remettra");
+  });
+});
+

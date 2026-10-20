@@ -583,6 +583,14 @@ class CodeChange(Base, WorkspaceScopedMixin):
     # (changes.stage_of), its checks, its merge, the deployment that took
     # it, when read, whether it is done.
     follow: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    # Undone (2026-10-20): the change this one undoes; each time a person
+    # went back to the version before it — the run started, how it went.
+    reverts: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("code_changes.id", ondelete="SET NULL"), nullable=True
+    )
+    rollbacks: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
 
 
 class Publication(Base, WorkspaceScopedMixin):
