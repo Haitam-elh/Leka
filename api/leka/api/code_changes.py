@@ -10,6 +10,14 @@
     POST   /code-changes/{id}/follow           its pull request read again on
                                                GitHub, read only: its checks,
                                                its merge, its deployment
+    POST   /code-changes/{id}/undo             « Annuler ce changement »: not
+                                               merged, its pull request closed;
+                                               merged, the change that undoes
+                                               it, proposed (2026-10-20)
+    POST   /code-changes/{id}/rollback         « Revenir à la version
+                                               précédente »: the deployment
+                                               workflow started for the version
+                                               before it, where allowed
 
 Reading takes `intention:read`; deciding, `intention:approve` — who may
 approve what an intention asks to do. The workspace is the session's.
@@ -34,10 +42,11 @@ from leka.capabilities import (
     CodeChangeFileRead,
     CodeChangeFollow,
     CodeChangeRead,
+    CodeChangeRollback,
     files_read,
 )
 from leka.core.errors import ErrorCode, FieldError
-from leka.governance import Permission, Principal, require_permission
+from leka.governance import Permission, Principal, Target, audit_as, require_permission
 from leka.identity import User
 
 router = APIRouter(prefix="/code-changes", tags=["capabilities"])
@@ -73,6 +82,9 @@ async def _read(service: ChangeService, change: CodeChange) -> CodeChangeRead:
         error=change.error,
         error_detail=change.error_detail,
         follow=CodeChangeFollow.model_validate(change.follow) if change.follow else None,
+        reverts=change.reverts,
+        rollbacks=[CodeChangeRollback.model_validate(r) for r in change.rollbacks or []],
+        deploys_allowed=await service.deploys(change),
         created_at=change.created_at,
     )
 
@@ -179,3 +191,62 @@ async def follow_change(
         return await _read(service, await service.follow(change_id, unless_within=10))
     except ChangeNotFoundError:
         raise _missing() from None
+
+
+def _refused(refused: ChangeRefusedError) -> ApiError:
+    return ApiError(
+        status.HTTP_409_CONFLICT,
+        ErrorCode.CONFLICT,
+        str(refused),
+        details=[FieldError(field="pull_request", message=refused.code)],
+    )
+
+
+@router.post(
+    "/{change_id}/undo",
+    response_model=CodeChangeRead,
+    summary="Undo a code change: its pull request closed, or the change that undoes it proposed",
+)
+async def undo_change(
+    change_id: uuid.UUID, session: SessionDep, principal: Approver
+) -> CodeChangeRead:
+    service = ChangeService(session, principal.workspace_id)
+    audit_as(
+        session,
+        principal,
+        "action",
+        "code_change.undo_asked",
+        target=Target("code_change", change_id, None),
+        detail={},
+    )
+    try:
+        return await _read(service, await service.undo(change_id, by=principal.user_id))
+    except ChangeNotFoundError:
+        raise _missing() from None
+    except ChangeRefusedError as refused:
+        raise _refused(refused) from None
+
+
+@router.post(
+    "/{change_id}/rollback",
+    response_model=CodeChangeRead,
+    summary="Go back to the version before a code change: its deployment workflow started",
+)
+async def rollback_change(
+    change_id: uuid.UUID, session: SessionDep, principal: Approver
+) -> CodeChangeRead:
+    service = ChangeService(session, principal.workspace_id)
+    audit_as(
+        session,
+        principal,
+        "action",
+        "code_change.rollback_asked",
+        target=Target("code_change", change_id, None),
+        detail={},
+    )
+    try:
+        return await _read(service, await service.go_back(change_id, by=principal.user_id))
+    except ChangeNotFoundError:
+        raise _missing() from None
+    except ChangeRefusedError as refused:
+        raise _refused(refused) from None

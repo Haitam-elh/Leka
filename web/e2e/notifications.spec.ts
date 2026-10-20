@@ -9,9 +9,9 @@ import { signIn } from "./sign-in";
  * What these protect:
  * - An intention asked is told to its asker: the bell counts it; opened,
  *   the panel says it in words and leads to it — opened, it is read.
- * - The centre: by category, the unread only, all read at once — the bell
- *   then says nothing unread (once what other specs tell has landed too); a category hidden is neither shown nor
- *   counted, and shown again.
+ * - The centre: by category, the unread only, all read at once — what was
+ *   unread is read, this spec's own among it; a category hidden is neither
+ *   shown nor counted, and shown again.
  * - On a phone: the bell in the header, its panel inside the screen, the
  *   centre never wider than it.
  */
@@ -51,7 +51,8 @@ test.describe("The notification centre", () => {
 
   test("by category, the unread only, all read at once, a category hidden then shown", async ({ page }) => {
     await signIn(page);
-    await ask(page, `Qui est responsable de payment-api ? (${Date.now()})`);
+    const words = `Qui est responsable de payment-api ? (${Date.now()})`;
+    await ask(page, words);
     await page.goto("/notifications");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Notifications");
 
@@ -62,19 +63,20 @@ test.describe("The notification centre", () => {
     for (const kind of await rows.evaluateAll((all) => all.map((r) => r.getAttribute("data-kind") ?? ""))) {
       expect(kind).toMatch(/^intention\./);
     }
-    // The unread only, then all read at once: nothing unread is left.
+    // The unread only, then all read at once: this spec's own is read. The
+    // other specs, run alongside as the same person, ask too — what they
+    // tell keeps landing, so nothing here waits for the bell to be empty
+    // (2026-10-21: it was not, within 30 s, on a busy run).
     await page.getByRole("switch", { name: "Non lues" }).click();
     await expect(rows.first()).toHaveAttribute("data-read", "false");
     await page.getByRole("button", { name: "Toutes", exact: true }).click();
-    // The other specs, run alongside, ask too: what they tell may land
-    // between the click and the bell's next count — read all again then.
-    const readAll = page.getByTestId("notifications-read-all");
-    await expect(async () => {
-      if (await readAll.isEnabled()) await readAll.click();
-      await expect(page.getByTestId("notifications-empty")).toContainText("Tout est lu.", { timeout: 2_000 });
-      await expect(page.getByTestId("notifications-count")).toHaveCount(0, { timeout: 2_000 });
-      await expect(page.getByTestId("notifications-bell")).toHaveAccessibleName("Notifications", { timeout: 1_000 });
-    }).toPass({ timeout: 30_000 });
+    const mine = rows.filter({ hasText: "Intention créée" }).filter({ hasText: words });
+    await expect(mine).toHaveCount(1);
+    await page.getByTestId("notifications-read-all").click();
+    await expect(mine).toHaveCount(0);
+    await page.getByRole("switch", { name: "Non lues" }).click();
+    await expect(mine).toHaveAttribute("data-read", "true");
+    await page.getByRole("switch", { name: "Non lues" }).click();
 
     // A category hidden: neither shown nor counted — then shown again.
     await page.getByRole("switch", { name: "Non lues" }).click();

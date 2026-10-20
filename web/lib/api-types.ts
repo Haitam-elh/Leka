@@ -4887,6 +4887,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/code-changes/{change_id}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo a code change: its pull request closed, or the change that undoes it proposed */
+        post: operations["undo_change_api_v1_code_changes__change_id__undo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/code-changes/{change_id}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Go back to the version before a code change: its deployment workflow started */
+        post: operations["rollback_change_api_v1_code_changes__change_id__rollback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agent-runs/{run_id}/publications": {
         parameters: {
             query?: never;
@@ -10981,7 +11015,7 @@ export interface components {
              * @description checks (running), ready (green, for a person to merge), merged (no deployment seen yet), deploying, deployed, … — what GitHub said when last read.
              * @enum {string}
              */
-            stage: "checks" | "no_checks" | "checks_failed" | "checks_unreadable" | "conflict" | "ready" | "merged" | "deploying" | "deployed" | "deploy_failed" | "closed";
+            stage: "checks" | "no_checks" | "checks_failed" | "checks_unreadable" | "conflict" | "ready" | "merged" | "deploying" | "deployed" | "deploy_failed" | "closed" | "rolling_back" | "rolled_back" | "rollback_failed";
             /**
              * Done
              * @description No longer followed: deployed, closed, or quiet.
@@ -10990,6 +11024,16 @@ export interface components {
             checks?: components["schemas"]["CodeChangeChecks"] | null;
             /** Merged At */
             merged_at?: string | null;
+            /**
+             * Merge Sha
+             * @description The version with it.
+             */
+            merge_sha?: string | null;
+            /**
+             * Before Sha
+             * @description The version before its merge: what going back deploys.
+             */
+            before_sha?: string | null;
             deployment?: components["schemas"]["CodeChangeDeployment"] | null;
             /**
              * Error
@@ -11063,10 +11107,51 @@ export interface components {
             error_detail: string | null;
             follow?: components["schemas"]["CodeChangeFollow"] | null;
             /**
+             * Reverts
+             * @description The change this one undoes (« Annuler ce changement »).
+             */
+            reverts?: string | null;
+            /**
+             * Rollbacks
+             * @description Each time a person went back to the version before it.
+             */
+            rollbacks?: components["schemas"]["CodeChangeRollback"][];
+            /**
+             * Deploys Allowed
+             * @description Its source lets LEKA start its deployment workflow for the version before.
+             * @default false
+             */
+            deploys_allowed: boolean;
+            /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * CodeChangeRollback
+         * @description A person went back to the version before a change (2026-10-20): the
+         *     deployment workflow LEKA started, and how its run went.
+         */
+        CodeChangeRollback: {
+            /** Sha */
+            sha: string;
+            /**
+             * Asked At
+             * Format: date-time
+             */
+            asked_at: string;
+            /** By */
+            by?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "queued" | "in_progress" | "success" | "failure";
+            /** Url */
+            url?: string | null;
+            /** At */
+            at?: string | null;
         };
         /**
          * CodeReviewRead
@@ -49706,6 +49791,194 @@ export interface operations {
         };
     };
     follow_change_api_v1_code_changes__change_id__follow_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodeChangeRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    undo_change_api_v1_code_changes__change_id__undo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodeChangeRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    rollback_change_api_v1_code_changes__change_id__rollback_post: {
         parameters: {
             query?: never;
             header?: never;

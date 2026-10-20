@@ -44,6 +44,17 @@ export function useCodeChangeFollow(id: string, following: boolean) {
   });
 }
 
+/** Undoing it, or going back to the version before it (2026-10-20): every
+ * change read again after — the one that undoes it appears. */
+export function useCodeChangeUndo() {
+  const client = useQueryClient();
+  const refresh = () => client.invalidateQueries({ queryKey: codeChangeKeys.all });
+  return {
+    undo: useMutation({ mutationFn: (id: string) => codeChanges.undo(id), onSettled: refresh }),
+    rollback: useMutation({ mutationFn: (id: string) => codeChanges.rollback(id), onSettled: refresh }),
+  };
+}
+
 export function useCodeChangeDecision() {
   const client = useQueryClient();
   const refresh = () => client.invalidateQueries({ queryKey: codeChangeKeys.all });

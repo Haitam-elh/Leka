@@ -43,12 +43,14 @@ from leka.capabilities import CodeChange, execute_run, rewrite_change, sync_cata
 from leka.capabilities.changes import (
     Edit,
     apply_edits,
+    before_of,
     branch_of,
     diff_of,
     edits_from_diff,
     follow_pull_requests,
     on_base,
     paths_named,
+    reversed_diff,
     safe_path,
     stage_of,
 )
@@ -121,6 +123,8 @@ class GitHub:
         self.statuses: list[dict[str, Any]] = []
         self.deployments: list[dict[str, Any]] = []
         self.deployment_states: dict[int, str] = {}
+        # Its deployment workflow's runs, started by LEKA (2026-10-20).
+        self.runs: list[dict[str, Any]] = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -175,6 +179,17 @@ class GitHub:
             state = self.deployment_states.get(number)
             said = [{"state": state, "created_at": "2026-10-20T12:30:00Z"}] if state else []
             return httpx.Response(200, json=said)
+        if request.method == "PATCH" and path == f"{base}/pulls/7":
+            self.pull = {**self.pull, "state": "closed"}
+            return httpx.Response(200, json={"number": 7, **self.pull})
+        if request.method == "GET" and path == f"{base}/commits/merge-sha":
+            return httpx.Response(
+                200, json={"sha": "merge-sha", "parents": [{"sha": "before-sha"}]}
+            )
+        if request.method == "POST" and path == f"{base}/actions/workflows/cd.yml/dispatches":
+            return httpx.Response(204)
+        if request.method == "GET" and path == f"{base}/actions/workflows/cd.yml/runs":
+            return httpx.Response(200, json={"workflow_runs": self.runs})
         if request.method == "GET" and path.startswith(f"{base}/compare/"):
             # A deployment after the merge holds it — unless it is "old".
             return httpx.Response(200, json={"status": "behind" if "old" in path else "ahead"})
@@ -989,3 +1004,175 @@ async def test_a_pull_request_is_followed_to_its_deployment_never_merged_by_leka
     assert len(github.asked) == asked
     assert not [path for path in (p for p, _ in github.writes()) if path.endswith("/merge")]
     assert [path for path, _ in github.writes()][-1] == f"/repos/{REPO}/pulls"
+
+
+# ── undone, on asking (2026-10-20) ──────────────────────────────────────────
+
+
+def test_a_diff_the_other_way_gives_the_file_back_as_it_was() -> None:
+    path = "app/ledger.py"
+    diff = diff_of(path, LEDGER, LEDGER_AFTER)[0]
+    back = reversed_diff(diff)
+    assert "-line 2 changed" in back and "+line 2" in back
+    assert reversed_diff(back) == diff
+    assert before_of(path, LEDGER_AFTER, diff) == (LEDGER, True)
+    # A file it made: before, none; one it removed: before, the file.
+    assert before_of("new.py", "x = 1\n", diff_of("new.py", None, "x = 1\n")[0]) == (None, True)
+    assert before_of(path, None, diff_of(path, LEDGER, None)[0]) == (LEDGER, True)
+    # A diff cut: it cannot say.
+    assert before_of(path, LEDGER_AFTER, "x" * 200_000) == (None, False)
+
+
+async def _config(workspace: uuid.UUID, source: uuid.UUID, **values: object) -> None:
+    with workspace_scope(workspace):
+        async with session_factory() as session:
+            await session.execute(
+                text("UPDATE sources SET config = config || CAST(:v AS jsonb) WHERE id = :s"),
+                {"v": json.dumps(values), "s": source},
+            )
+            await session.commit()
+
+
+async def _merged(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID], github: GitHub
+) -> tuple[uuid.UUID, str, datetime]:
+    """A change accepted, its pull request merged by a person, deployed."""
+    source = await _github_source(acme["acme"], pull_requests=True)
+    github.extra["app/ledger.py"] = LEDGER
+    change_id = await _proposed(acme["acme"], source, "app/ledger.py", LEDGER, LEDGER_AFTER)
+    _as(identity, acme, "admin")
+    assert (await client.post(f"{API}/{change_id}/accept", json={})).status_code == 200
+    now = datetime.now(UTC)
+    github.pull = {
+        "state": "closed",
+        "merged_at": _at(now),
+        "merge_commit_sha": "merge-sha",
+        "head": {"sha": "new-commit"},
+    }
+    github.deployments = [
+        {"id": 6, "sha": "merge-sha", "environment": "production", "created_at": _at(now)}
+    ]
+    github.deployment_states[6] = "success"
+    await follow_pull_requests(now=now + timedelta(minutes=1))
+    # Merged: main holds it — and a newer line, far from it.
+    github.moved["app/ledger.py"] = LEDGER_AFTER.replace("line 11\n", "line 11 newer\n")
+    return source, str(change_id), now
+
+
+async def test_a_merged_change_is_undone_by_a_change_proposed_on_the_branch_as_it_is(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    github: GitHub,
+) -> None:
+    _source, change_id, _now = await _merged(client, identity, acme, github)
+    read = (await client.get(f"{API}/{change_id}")).json()
+    assert (read["follow"]["stage"], read["follow"]["before_sha"]) == ("deployed", "before-sha")
+
+    # A member may not; an approver asks: the change that undoes it.
+    _as(identity, acme, "member")
+    assert (await client.post(f"{API}/{change_id}/undo")).status_code == 403
+    _as(identity, acme, "admin")
+    undone = await client.post(f"{API}/{change_id}/undo")
+    assert undone.status_code == 200, undone.text
+    revert = undone.json()
+    assert (revert["status"], revert["reverts"]) == ("proposed", change_id)
+    assert revert["title"].startswith("Annuler : ")
+    [file] = revert["files"]
+    assert "-line 2 changed" in file["diff"] and "+line 2" in file["diff"]
+    # Asked again: the same one.
+    assert (await client.post(f"{API}/{change_id}/undo")).json()["id"] == revert["id"]
+
+    # Accepted like any other: its own pull request, the newer line kept.
+    writes = len(github.writes())
+    github.pull = {"state": "open", "head": {"sha": "new-commit"}}
+    assert (await client.post(f"{API}/{revert['id']}/accept", json={})).status_code == 200
+    trees = [b for p, b in github.writes()[writes:] if p.endswith("/git/trees") and b]
+    assert trees[0]["tree"][0]["content"] == LEDGER.replace("line 11\n", "line 11 newer\n")
+
+
+async def test_a_change_moved_where_it_was_cannot_be_undone_without_overwriting(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    github: GitHub,
+) -> None:
+    _source, change_id, _now = await _merged(client, identity, acme, github)
+    github.moved["app/ledger.py"] = LEDGER_AFTER.replace("line 3\n", "line 3 newer\n")
+    refused = await client.post(f"{API}/{change_id}/undo")
+    assert refused.status_code == 409
+    assert refused.json()["error"]["details"][0]["message"] == "changed_since"
+    # Already gone from main: said so.
+    github.moved["app/ledger.py"] = LEDGER
+    gone = await client.post(f"{API}/{change_id}/undo")
+    assert gone.json()["error"]["details"][0]["message"] == "already_applied"
+
+
+async def test_a_pull_request_not_merged_is_closed_when_undone(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    github: GitHub,
+) -> None:
+    source = await _github_source(acme["acme"], pull_requests=True)
+    github.extra["app/ledger.py"] = LEDGER
+    change_id = await _proposed(acme["acme"], source, "app/ledger.py", LEDGER, LEDGER_AFTER)
+    _as(identity, acme, "admin")
+    assert (await client.post(f"{API}/{change_id}/accept", json={})).status_code == 200
+    closed = await client.post(f"{API}/{change_id}/undo")
+    assert closed.status_code == 200, closed.text
+    assert (closed.json()["id"], closed.json()["follow"]["stage"]) == (str(change_id), "closed")
+    assert (f"/repos/{REPO}/pulls/7", {"state": "closed"}) in github.writes()
+    # Closed unmerged: nothing more to undo.
+    again = await client.post(f"{API}/{change_id}/undo")
+    assert again.json()["error"]["details"][0]["message"] == "already_closed"
+
+
+async def test_going_back_starts_the_deployment_of_the_version_before_where_allowed(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    github: GitHub,
+) -> None:
+    source, change_id, now = await _merged(client, identity, acme, github)
+    # Not allowed by its source: refused, nothing started.
+    refused = await client.post(f"{API}/{change_id}/rollback")
+    assert refused.status_code == 409
+    assert refused.json()["error"]["details"][0]["message"] == "deploys_off"
+    assert not [p for p, _ in github.writes() if p.endswith("/dispatches")]
+
+    await _config(acme["acme"], source, deploys=True, deploy_workflow="cd.yml")
+    assert (await client.get(f"{API}/{change_id}")).json()["deploys_allowed"] is True
+    _as(identity, acme, "member")
+    assert (await client.post(f"{API}/{change_id}/rollback")).status_code == 403
+    _as(identity, acme, "admin")
+    asked = await client.post(f"{API}/{change_id}/rollback")
+    assert asked.status_code == 200, asked.text
+    done = asked.json()
+    assert done["follow"]["stage"] == "rolling_back"
+    [rollback] = done["rollbacks"]
+    assert (rollback["sha"], rollback["state"]) == ("before-sha", "queued")
+    dispatched = [
+        b for p, b in github.writes() if p.endswith("/actions/workflows/cd.yml/dispatches")
+    ]
+    assert dispatched == [{"ref": "main", "inputs": {"release": "before-sha"}}]
+    # Once at a time.
+    again = await client.post(f"{API}/{change_id}/rollback")
+    assert again.json()["error"]["details"][0]["message"] == "rolling_back"
+
+    # Its run followed: running, then green — the version before is back.
+    started = _at(datetime.now(UTC))
+    github.runs = [
+        {"status": "in_progress", "created_at": started, "html_url": "https://github.com/r/9"}
+    ]
+    await follow_pull_requests(now=now + timedelta(minutes=5))
+    read = (await client.get(f"{API}/{change_id}")).json()
+    assert (read["follow"]["stage"], read["rollbacks"][0]["state"]) == (
+        "rolling_back",
+        "in_progress",
+    )
+    github.runs[0] = {**github.runs[0], "status": "completed", "conclusion": "success"}
+    await follow_pull_requests(now=now + timedelta(minutes=9))
+    read = (await client.get(f"{API}/{change_id}")).json()
+    assert (read["follow"]["stage"], read["follow"]["done"]) == ("rolled_back", True)
+    assert read["rollbacks"][0]["url"] == "https://github.com/r/9"
