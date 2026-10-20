@@ -2,7 +2,7 @@
 each time a person went back to the version before it.
 
 Revision ID: 8b4d2f6a1c93
-Revises: 5e1f9a3c7b20
+Revises: 5c5784f08f2c
 Created: 2026-10-20
 """
 
@@ -16,7 +16,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "8b4d2f6a1c93"
-down_revision: str | None = "5e1f9a3c7b20"
+down_revision: str | None = "5c5784f08f2c"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
