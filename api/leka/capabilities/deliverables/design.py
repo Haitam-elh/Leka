@@ -21,7 +21,22 @@ from pydantic import BaseModel, ConfigDict, Field
 
 # What one mock-up may weigh, as the model writes it.
 MOST_CSS = 40_000
-MOST_BODY = 80_000
+# Its body, kept — its images from the repository included (data: URIs).
+MOST_BODY = 600_000
+# The images LEKA puts in, from the repository: at most, each and how many.
+MOST_ASSET_BYTES = 300_000
+MOST_ASSETS = 12
+_ASSET = re.compile(r"<img\b([^>]*?)\bdata-asset\s*=\s*([\"'])([^\"']+)\2([^>]*)>", re.IGNORECASE)
+_IMG_SRC = re.compile(r"\ssrc\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s>]+)", re.IGNORECASE)
+MIME = {
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "gif": "image/gif",
+    "webp": "image/webp",
+    "svg": "image/svg+xml",
+    "ico": "image/x-icon",
+}
 MOST_PROPOSALS = 3
 
 # The page's own rules: inline styles and data: images only — nothing
@@ -220,6 +235,73 @@ def cleaned(proposal: DesignProposal) -> DesignProposal:
     )
 
 
+def _rest(match: re.Match[str]) -> str:
+    """An image tag's other attributes, its source aside, spaced once — the
+    same however many times it is given its bytes."""
+    rest = " ".join(_IMG_SRC.sub("", match.group(1) + match.group(4)).split())
+    return f" {rest}" if rest else ""
+
+
+def asset_paths(proposal: DesignProposal) -> list[str]:
+    """The images its mock-ups show from the repository, as the code names
+    them (<img data-asset="/brand/logo.png">) — a logo is never redrawn by
+    hand (2026-10-19: « il fait des erreurs, comme le logo »)."""
+    found: list[str] = []
+    for mockup in (proposal.before, *proposal.after):
+        found += [m.group(3).strip() for m in _ASSET.finditer(mockup.body)]
+    return list(dict.fromkeys(p for p in found if p))[:MOST_ASSETS]
+
+
+def candidates(path: str) -> list[str]:
+    """Where an image the code names may sit in the repository: as named,
+    or under the app's public folder."""
+    said = path.split("?")[0].split("#")[0].lstrip("/")
+    return list(
+        dict.fromkeys([said, f"public/{said}", f"web/public/{said}", f"apps/web/public/{said}"])
+    )
+
+
+def with_assets(proposal: DesignProposal, assets: dict[str, str]) -> DesignProposal:
+    """Its mock-ups, each image from the repository given its own bytes
+    (`assets`: the path as named → a data: URI); one not found keeps its
+    alt text."""
+
+    def one(mockup: DesignMockup) -> DesignMockup:
+        def put(match: re.Match[str]) -> str:
+            path = match.group(3).strip()
+            uri = assets.get(path)
+            named = f' data-asset="{html.escape(path, quote=True)}"{_rest(match)}'
+            return f'<img src="{uri}"{named}>' if uri else f"<img{named}>"
+
+        return mockup.model_copy(update={"body": _ASSET.sub(put, mockup.body)})
+
+    return proposal.model_copy(
+        update={"before": one(proposal.before), "after": [one(m) for m in proposal.after]}
+    )
+
+
+def without_assets(body: str) -> str:
+    """A body as the model wrote it: each image from the repository its
+    path again, its bytes left out — what a correction is given."""
+
+    def bare(match: re.Match[str]) -> str:
+        return f'<img data-asset="{match.group(3)}"{_rest(match)}>'
+
+    return _ASSET.sub(bare, body)
+
+
+def corrected(proposal: DesignProposal, target: str, drawing: MockupDrawing) -> DesignProposal:
+    """The proposal with one mock-up — today's (`before`) or a direction (its
+    index) — drawn again."""
+    if target == "before":
+        mockup = proposal.before.model_copy(update={"css": drawing.css, "body": drawing.body})
+        return proposal.model_copy(update={"before": mockup})
+    index = int(target)
+    after = list(proposal.after)
+    after[index] = after[index].model_copy(update={"css": drawing.css, "body": drawing.body})
+    return proposal.model_copy(update={"after": after})
+
+
 def page(mockup: DesignMockup, *, language: str = "fr") -> str:
     """One mock-up as the page LEKA shows: its policy first, then its style,
     then its body — cleaned again, whatever was kept."""
@@ -259,10 +341,15 @@ __all__ = [
     "DesignProposal",
     "MockupDrawing",
     "assembled",
+    "asset_paths",
+    "candidates",
     "clean_body",
     "clean_css",
     "cleaned",
+    "corrected",
     "design_key",
     "page",
     "summary",
+    "with_assets",
+    "without_assets",
 ]

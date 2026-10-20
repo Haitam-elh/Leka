@@ -4713,6 +4713,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agent-runs/{run_id}/design/corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Correct one of a design review's mock-ups, as asked
+         * @description One mock-up — today's or a proposal — drawn again as asked, the rest
+         *     as it was (2026-10-19, Karim: « lui demander de corriger certaines
+         *     parties de l'écran depuis la proposition »). 202, a worker draws it; 409
+         *     when it has no mock-up yet or one is being corrected; 422 when there is
+         *     no such mock-up.
+         */
+        post: operations["correct_run_design_api_v1_agent_runs__run_id__design_corrections_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agent-runs/{run_id}/cancel": {
         parameters: {
             query?: never;
@@ -7526,6 +7550,26 @@ export interface components {
              */
             draw_said?: string | null;
             /**
+             * Correcting
+             * @description A design review's mock-up being corrected by a worker: before, or a proposal's index — or none.
+             */
+            correcting?: string | null;
+            /**
+             * Correction Failed
+             * @description Why its last correction could not be drawn — or none.
+             */
+            correction_failed?: string | null;
+            /**
+             * Correction Said
+             * @description What the model's provider said then — or none.
+             */
+            correction_said?: string | null;
+            /**
+             * Corrections
+             * @description The corrections asked of its mock-ups, the latest last.
+             */
+            corrections?: components["schemas"]["DesignCorrectionRead"][];
+            /**
              * Error
              * @description Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, invalid_output, abandoned, error.
              */
@@ -7684,6 +7728,26 @@ export interface components {
              * @description What the model's provider, or LEKA, said when they could not be — or none.
              */
             draw_said?: string | null;
+            /**
+             * Correcting
+             * @description A design review's mock-up being corrected by a worker: before, or a proposal's index — or none.
+             */
+            correcting?: string | null;
+            /**
+             * Correction Failed
+             * @description Why its last correction could not be drawn — or none.
+             */
+            correction_failed?: string | null;
+            /**
+             * Correction Said
+             * @description What the model's provider said then — or none.
+             */
+            correction_said?: string | null;
+            /**
+             * Corrections
+             * @description The corrections asked of its mock-ups, the latest last.
+             */
+            corrections?: components["schemas"]["DesignCorrectionRead"][];
             /**
              * Error
              * @description Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, invalid_output, abandoned, error.
@@ -13266,6 +13330,34 @@ export interface components {
             after: string;
             /** Why */
             why: string;
+        };
+        /**
+         * DesignCorrection
+         * @description One mock-up to correct, and how — the rest drawn as it was.
+         */
+        DesignCorrection: {
+            /**
+             * Target
+             * @description before, or the proposal's index.
+             */
+            target: string;
+            /**
+             * Note
+             * @description What to correct.
+             */
+            note: string;
+        };
+        /** DesignCorrectionRead */
+        DesignCorrectionRead: {
+            /** Target */
+            target: string;
+            /** Note */
+            note: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
         };
         /**
          * DesignMockupRead
@@ -48656,6 +48748,104 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    correct_run_design_api_v1_agent_runs__run_id__design_corrections_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesignCorrection"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             202: {

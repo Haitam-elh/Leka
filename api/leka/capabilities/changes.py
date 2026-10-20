@@ -463,6 +463,21 @@ async def _repository_of(
     return None
 
 
+async def code_of(
+    session: AsyncSession, run: AgentRun, analysis: str
+) -> tuple[GitHubCode, str, str] | None:
+    """The code a run's report is about — its reader, its repository, its
+    default branch — or None when no connected GitHub source reads it."""
+    found = await _repository_of(session, run, analysis)
+    if found is None:
+        return None
+    _, code, repository = found
+    try:
+        return code, repository, await code.default_branch(repository)
+    except CodeRefusedError:
+        return None
+
+
 async def files_named(session: AsyncSession, run: AgentRun, analysis: str) -> dict[str, str]:
     """The code files an analysis names, read on its repository's default
     branch (« owner/repo:path » → text) — for a run that did not keep the
@@ -802,6 +817,7 @@ __all__ = [
     "body_of",
     "branch_of",
     "code_for",
+    "code_of",
     "diff_of",
     "files_named",
     "files_read",

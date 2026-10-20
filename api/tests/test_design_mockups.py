@@ -9,6 +9,13 @@ What these protect:
 - A proposal holds one to three proposals; the one recommended is one of
   them.
 - A review that proposes no design draws nothing, and no model is asked.
+- An image the code shows from the repository — its logo — is never
+  redrawn by hand: the mock-up names it (<img data-asset>), LEKA puts its
+  real bytes there, read from the repository (2026-10-19: « il fait des
+  erreurs comme le logo »).
+- One mock-up is corrected as a person asks, the rest as it was — the
+  correction kept in the run's history (2026-10-19: « lui demander de
+  corriger certaines parties de l'écran depuis la proposition »).
 - A design not drawn is said: which step, and what its model said — and is
   drawn again on asking, from the review it delivered, never the run done
   again; once drawn, not again.
@@ -37,15 +44,21 @@ from httpx import AsyncClient
 from pydantic import ValidationError
 
 from leka.api import agent_runs as agent_runs_api
-from leka.capabilities import execute_run, redraw_design, sync_catalogue
+from leka.capabilities import correct_design_run, execute_run, redraw_design, sync_catalogue
 from leka.capabilities.deliverables.design import (
     POLICY,
     DesignMockup,
     DesignProposal,
+    MockupDrawing,
+    asset_paths,
+    candidates,
     clean_body,
     clean_css,
     cleaned,
+    corrected,
     page,
+    with_assets,
+    without_assets,
 )
 from leka.capabilities.mockups import MARK, proposes, read_files, without_mark
 from leka.platform import LocalObjectStore
@@ -175,6 +188,27 @@ def test_only_a_review_with_the_mark_is_drawn_and_the_mark_is_not_read() -> None
     assert MARK not in without_mark(review) and "La proposition" in without_mark(review)
 
 
+def test_an_image_from_the_repository_is_its_own_bytes_never_redrawn() -> None:
+    body = '<header><img alt="LEKA" data-asset="/brand/logo.svg" src="x.png"> Menu</header>'
+    proposal = DesignProposal.model_validate(
+        _proposal(before=_mockup("Aujourd'hui", body=body), after=[_mockup("Calme", body=body)])
+    )
+    assert asset_paths(proposal) == ["/brand/logo.svg"]
+    assert candidates("/brand/logo.svg?v=2")[:2] == ["brand/logo.svg", "public/brand/logo.svg"]
+    uri = "data:image/svg+xml;base64,PHN2Zy8+"
+    put = with_assets(proposal, {"/brand/logo.svg": uri})
+    assert f'src="{uri}"' in put.after[0].body and "x.png" not in put.after[0].body
+    assert 'data-asset="/brand/logo.svg"' in put.before.body
+    # Shown as its page: the image kept, policy allowing data: only.
+    assert f'src="{uri}"' in page(put.after[0])
+    # Given back to the model, its bytes left out, its path kept.
+    bare = without_assets(put.before.body)
+    assert 'data-asset="/brand/logo.svg"' in bare and "data:image" not in bare
+    # One mock-up drawn again, the others as they were.
+    again = corrected(put, "0", MockupDrawing(css="", body="<main>Corrigé</main>"))
+    assert again.after[0].body == "<main>Corrigé</main>" and again.before == put.before
+
+
 def test_the_writer_is_given_the_files_read_within_its_budget() -> None:
     given = read_files({"a.css": "a" * 50_000, "b.tsx": "b" * 200_000, "c.tsx": "c"})
     assert len(given["a.css"]) == 40_000
@@ -201,7 +235,11 @@ def _plan(*names: str) -> dict[str, Any]:
     }
 
 
-TODAY_DRAWN = {"css": "h1 { font-size: 20px; }", "body": "<main><h1>Accueil</h1></main>"}
+TODAY_DRAWN = {
+    "css": "h1 { font-size: 20px; }",
+    "body": '<main><img data-asset="/brand/logo.svg" alt="LEKA"><h1>Accueil</h1></main>',
+}
+LOGO = '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h10v10z"/></svg>'
 # Drawn for each direction, whichever answers first: scripts and handlers
 # in it are cleaned away.
 DRAWN = {
@@ -230,6 +268,8 @@ async def test_the_designer_draws_the_screen_before_and_after(
     _as(identity, acme, "member")
     await _github_source(acme["acme"])
     await sync_catalogue()
+    # The logo the code shows, in the app's public folder.
+    github.extra["public/brand/logo.svg"] = LOGO
     script = leka_gemini(
         gemini(call={"name": "read_file", "args": {"repository": REPO, "path": "README.md"}}),
         gemini(REVIEW),
@@ -283,6 +323,8 @@ async def test_the_designer_draws_the_screen_before_and_after(
     for gone in ("<script", "onclick", "evil.example", "@import"):
         assert gone not in calm, gone
     assert design["before"]["page"].count("<h1>Accueil</h1>") == 1
+    # Its real logo, from the repository — never redrawn by hand.
+    assert 'src="data:image/svg+xml;base64,' in design["before"]["page"]
     assert design["changes"][0]["where"] == "web/app/page.tsx:12"
 
     # Another workspace sees nothing.
@@ -397,3 +439,75 @@ async def test_a_design_not_drawn_is_drawn_again_on_asking(
     assert (await client.get(f"{RUNS}/{run_id}/design")).status_code == 200
     # Drawn: never again.
     assert (await client.post(f"{RUNS}/{run_id}/design")).status_code == 409
+
+
+@pytest.mark.integration
+async def test_one_mock_up_is_corrected_as_asked_the_rest_as_it_was(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    leka_gemini: Callable[..., Script],
+    github: GitHub,
+    store: LocalObjectStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _as(identity, acme, "member")
+    await _github_source(acme["acme"])
+    await sync_catalogue()
+    github.extra["public/brand/logo.svg"] = LOGO
+    asked: list[tuple[str, str]] = []
+
+    async def queue(workspace_id: uuid.UUID, run_id: uuid.UUID, target: str, note: str) -> bool:
+        asked.append((target, note))
+        return True
+
+    monkeypatch.setattr(agent_runs_api, "queue_correction", queue)
+    script = leka_gemini(
+        gemini(REVIEW),
+        gemini(json.dumps(_plan("Calme"))),
+        gemini(json.dumps(TODAY_DRAWN)),
+        gemini(json.dumps(DRAWN)),
+        # Corrected: its logo, as asked.
+        gemini(
+            json.dumps(
+                {
+                    "css": "",
+                    "body": '<main><img data-asset="/brand/logo.svg" alt="LEKA">Corrigé</main>',
+                }
+            )
+        ),
+    )
+    started = await client.post(
+        RUNS,
+        json={"key": "design-review", "inputs": {"depot": REPO, "demande": "propose un design"}},
+    )
+    run_id = started.json()["id"]
+    assert await execute_run(acme["acme"], uuid.UUID(run_id)) == {"status": "succeeded"}
+    first = (await client.get(f"{RUNS}/{run_id}/design")).json()
+
+    url = f"{RUNS}/{run_id}/design/corrections"
+    assert (await client.post(url, json={"target": "4", "note": "le logo"})).status_code == 422
+    sent = await client.post(
+        url, json={"target": "0", "note": "Le logo est faux : utilise le vrai."}
+    )
+    assert sent.status_code == 202, sent.text
+    assert sent.json()["correcting"] == "0"
+    assert asked == [("0", "Le logo est faux : utilise le vrai.")]
+    assert (await client.post(url, json={"target": "before", "note": "encore"})).status_code == 409
+    done = await correct_design_run(acme["acme"], uuid.UUID(run_id), "0", asked[0][1])
+    assert done == {"corrected": True, "error": None}
+
+    # The mock-up given back to the model: the correction, without its bytes.
+    material = json.loads(script.asked[-1]["contents"][-1]["parts"][0]["text"])
+    assert material["correction"] == "Le logo est faux : utilise le vrai."
+    assert "data:image" not in material["mockup"]["body"] and "today" in material
+    design = (await client.get(f"{RUNS}/{run_id}/design")).json()
+    assert "Corrigé" in design["after"][0]["page"]
+    assert 'src="data:image/svg+xml;base64,' in design["after"][0]["page"]
+    assert design["before"]["page"] == first["before"]["page"]
+    run = (await client.get(f"{RUNS}/{run_id}")).json()
+    assert (run["correcting"], run["correction_failed"]) == (None, None)
+    assert [(c["target"], c["note"]) for c in run["corrections"]] == [
+        ("0", "Le logo est faux : utilise le vrai.")
+    ]

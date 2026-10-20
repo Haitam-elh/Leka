@@ -1,15 +1,19 @@
 "use client";
 
-import { Camera, Columns2, Download, Monitor, Smartphone, Square, Tablet } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Camera, Columns2, Download, Loader2, Monitor, Pencil, Smartphone, Square, Tablet } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { cn } from "cn";
 
 import { Button } from "@/components/ui/button";
 import type { Design, DesignMockup } from "@/lib/agent-runs";
-import { useAgentRunDesign } from "@/lib/agent-runs-queries";
+import { ApiError } from "@/lib/api";
+import { agentRunKeys, useAgentRun, useAgentRunDesign, useCorrectDesign } from "@/lib/agent-runs-queries";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
+import { SPINNING } from "@/lib/motion";
+import { notify } from "@/lib/notify";
 
 /**
  * The designer's simulator: the screen as its code draws it today, beside
@@ -305,6 +309,8 @@ export function DesignSimulator({ runId }: { runId: string }) {
         </figure>
       )}
 
+      <Correction runId={runId} design={design} shown={showing === "before" && !compare ? "before" : String(index)} />
+
       <dl className="grid gap-3 text-[0.8125rem] md:grid-cols-3" data-testid="design-proposal-detail">
         {(
           [
@@ -355,3 +361,113 @@ export function DesignSimulator({ runId }: { runId: string }) {
     </section>
   );
 }
+
+/** A part of a mock-up to correct, asked in words — the logo, a menu, a
+ * label —, LEKA drawing that mock-up again, the rest as it was (2026-10-19,
+ * Karim: « lui demander de corriger certaines parties de l'écran depuis la
+ * proposition »). */
+function Correction({ runId, design, shown }: { runId: string; design: Design; shown: string }) {
+  const t = useDictionary();
+  const w = t.agentRuns.design;
+  const client = useQueryClient();
+  const run = useAgentRun(runId).data;
+  const correct = useCorrectDesign(runId);
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState("");
+  const [target, setTarget] = useState<string | null>(null);
+  const correcting = run?.correcting ?? null;
+  const was = useRef(correcting);
+  // Corrected: the mock-ups read again, as they now are.
+  useEffect(() => {
+    if (was.current && !correcting) void client.invalidateQueries({ queryKey: agentRunKeys.design(runId) });
+    was.current = correcting;
+  }, [correcting, client, runId]);
+  const named = (each: string) => (each === "before" ? w.before : (design.after[Number(each)]?.name ?? each));
+  const chosen = target ?? shown;
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (note.trim().length < 3) return;
+    try {
+      await correct.mutateAsync({ target: chosen, note: note.trim() });
+      setNote("");
+      setOpen(false);
+    } catch (error) {
+      notify.error({ title: error instanceof ApiError ? error.message : w.correctionFailed });
+    }
+  }
+
+  const failed = run?.correction_failed ?? null;
+  const errors = t.intentions.deliverable.changeErrors as Record<string, string>;
+  return (
+    <div className="flex flex-col gap-2" data-testid="design-correction">
+      {correcting ? (
+        <p className="flex items-center gap-2 text-[0.8125rem] text-shell-muted" role="status" data-testid="design-correcting">
+          <Loader2 className={cn("size-4", SPINNING)} aria-hidden="true" />
+          {fill(w.correcting, { name: named(correcting) })}
+        </p>
+      ) : open ? (
+        <form className="flex flex-col gap-2 rounded-lg border border-shell-line bg-shell-canvas/50 p-3" onSubmit={(e) => void submit(e)}>
+          <label className="flex flex-col gap-1 text-xs text-shell-muted">
+            {w.correctionWhat}
+            <textarea
+              className="min-h-16 rounded-md border border-shell-line bg-white px-2 py-1.5 text-base text-brand-navy md:text-[0.8125rem]"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder={w.correctionPlaceholder}
+              maxLength={1000}
+              required
+            />
+          </label>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="flex flex-col gap-1 text-xs text-shell-muted">
+              {w.correctionOn}
+              <select
+                className="h-8 rounded-md border border-shell-line bg-white px-2 text-[0.8125rem] text-brand-navy"
+                value={chosen}
+                onChange={(e) => setTarget(e.target.value)}
+              >
+                <option value="before">{w.before}</option>
+                {design.after.map((mockup, i) => (
+                  <option key={i} value={String(i)}>
+                    {mockup.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Button type="submit" size="sm" disabled={correct.isPending || note.trim().length < 3} data-testid="design-correct">
+              {correct.isPending ? <Loader2 className={cn("size-3.5", SPINNING)} aria-hidden="true" /> : null}
+              {w.correct}
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
+              {w.correctionCancel}
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <div>
+          <Button type="button" size="sm" variant="outline" onClick={() => setOpen(true)} data-testid="design-correction-open">
+            <Pencil className="size-3.5" aria-hidden="true" />
+            {w.correctionOpen}
+          </Button>
+        </div>
+      )}
+      {failed && !correcting ? (
+        <p className="text-xs text-state-danger" role="alert" data-testid="design-correction-failed">
+          {fill(w.correctionFailedWhy, { why: errors[failed] ?? failed })}
+          {run?.correction_said ? <span className="block font-mono text-shell-muted">{run.correction_said}</span> : null}
+        </p>
+      ) : null}
+      {run?.corrections?.length ? (
+        <ul className="flex flex-col gap-0.5 text-xs text-shell-muted" data-testid="design-corrections">
+          {run.corrections.map((each, i) => (
+            <li key={i}>
+              {fill(w.corrected, { name: named(each.target), note: each.note })}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
