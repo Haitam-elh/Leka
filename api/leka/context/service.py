@@ -117,6 +117,7 @@ from leka.context.repository import ContextRepository
 from leka.context.schemas import (
     CONTRACT_HEADER,
     CONTRACT_VERSION,
+    MAX_QUERY,
     MAX_ROOTS,
     MAX_WINDOW_DAYS,
     MIN_RELEVANCE,
@@ -1029,7 +1030,7 @@ class ContextService:
         days = math.ceil((period.until - period.since) / timedelta(days=1))
         request = ContextRequest(
             roots=[s.entity_id for s in subjects][:MAX_ROOTS],
-            query=ask.text,
+            query=searched(ask.text),
             depth=profile.depth,
             relationships=list(profile.relationships),
             environment=applied,
@@ -1409,6 +1410,18 @@ class ContextService:
                 )
             )
         return profiles
+
+
+def searched(text: str) -> str:
+    """What a context searches for, from an intention's words: whole when
+    they fit, else cut at the last word under MAX_QUERY — its purpose keeps
+    them all (2026-10-20: words of 780 characters, and the intention was
+    refused by a 500 the page called « check your connection »)."""
+    if len(text) <= MAX_QUERY:
+        return text
+    cut = text[:MAX_QUERY]
+    kept = cut.rsplit(None, 1)[0] if len(cut.split()) > 1 else cut
+    return kept.rstrip()
 
 
 def _settled(body: ContextCreate) -> ContextRequest:

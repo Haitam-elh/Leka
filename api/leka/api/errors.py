@@ -38,6 +38,7 @@ from fastapi.responses import JSONResponse
 from starlette import status
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from leka.core.config import settings
 from leka.core.errors import (
     INTERNAL_ERROR_MESSAGE,
     ErrorCode,
@@ -195,14 +196,37 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
         method=request.method,
         exception_type=type(exc).__name__,
     )
-    return JSONResponse(
+    request_id = _request_id_of(request)
+    response = JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content=error_envelope(
             ErrorCode.INTERNAL_ERROR,
             INTERNAL_ERROR_MESSAGE,
-            request_id=_request_id_of(request),
+            request_id=request_id,
         ),
     )
+    _readable_by_the_page(request, response, request_id)
+    return response
+
+
+def _readable_by_the_page(request: Request, response: JSONResponse, request_id: str | None) -> None:
+    """The headers CORS and the request id would have put on it. Starlette
+    answers an unhandled exception from its outermost middleware, outside
+    both: without them the browser hides the 500 from the page, which then
+    says « check your connection » for every bug (2026-10-20). The same
+    origins as CORSMiddleware's, never another."""
+    # Here, not at the top: request_id.py reaches identity, which reaches
+    # what answers its errors through this module.
+    from leka.api.request_id import REQUEST_ID_HEADER
+
+    if request_id:
+        response.headers[REQUEST_ID_HEADER] = request_id
+    origin = request.headers.get("origin")
+    if origin and origin in settings.cors_origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Expose-Headers"] = REQUEST_ID_HEADER
+        response.headers.add_vary_header("Origin")
 
 
 def register_error_handlers(app: FastAPI) -> None:

@@ -76,6 +76,9 @@ DEFAULT_BUDGET = 100
 MAX_BUDGET = 500
 MAX_DEPTH = 3
 MAX_ROOTS = 10
+# What a context searches for, at most: an intention's words past it are
+# cut at a word, its purpose keeps them whole (2026-10-20).
+MAX_QUERY = 500
 # How far back the timeline reads (LEKA-371), in days, ending now or `until`.
 DEFAULT_WINDOW_DAYS = 14
 MAX_WINDOW_DAYS = 365
@@ -131,7 +134,9 @@ class ContextCreate(BaseModel):
         description="The entities it starts from. None: what its words find (hybrid).",
     )
     query: str | None = Field(
-        default=None, max_length=500, description="What to search for; the purpose when none."
+        default=None,
+        max_length=MAX_QUERY,
+        description="What to search for; the purpose when none.",
     )
     depth: int = Field(default=1, ge=1, le=MAX_DEPTH, description="How many steps away.")
     relationships: list[RelationshipType] = Field(

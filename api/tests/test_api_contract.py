@@ -424,6 +424,45 @@ def test_an_unhandled_exception_in_production_leaks_nothing() -> None:
     assert parsed["error"]["request_id"], "a 500 with no request id is unreportable"
 
 
+def test_a_500_is_readable_by_the_page_that_asked() -> None:
+    """Starlette answers an unhandled exception outside CORS: the browser
+    hid the 500 and the page said « check your connection » (2026-10-20).
+    Its own origin reads it, with its request id; another origin, not."""
+    output = _in_production(
+        "import asyncio, json\n"
+        "from fastapi import APIRouter\n"
+        "from httpx import AsyncClient, ASGITransport\n"
+        "from leka.core.config import settings\n"
+        "from leka.main import app\n"
+        "scratch = APIRouter()\n"
+        "@scratch.post('/boom')\n"
+        "async def boom():\n"
+        "    raise RuntimeError('a bug')\n"
+        "app.include_router(scratch, prefix='/api/v1')\n"
+        "origin = settings.cors_origins[0]\n"
+        "async def main():\n"
+        "    transport = ASGITransport(app=app, raise_app_exceptions=False)\n"
+        "    async with AsyncClient(transport=transport, base_url='https://t') as c:\n"
+        "        said = {}\n"
+        "        for who in (origin, 'https://evil.example'):\n"
+        "            r = await c.post('/api/v1/boom', headers={'Origin': who})\n"
+        "            said[who] = {'status': r.status_code, 'headers': dict(r.headers),\n"
+        "                         'body': r.json()}\n"
+        "        print(json.dumps({'origin': origin, 'said': said}))\n"
+        "asyncio.run(main())\n"
+    )
+    result = json.loads(output.strip().splitlines()[-1])
+    ours = result["said"][result["origin"]]
+    assert ours["status"] == 500
+    assert ours["headers"]["access-control-allow-origin"] == result["origin"]
+    assert ours["headers"]["access-control-allow-credentials"] == "true"
+    assert ours["headers"]["x-request-id"] == ours["body"]["error"]["request_id"]
+    assert "Origin" in ours["headers"]["vary"]
+    theirs = result["said"]["https://evil.example"]
+    assert theirs["status"] == 500
+    assert "access-control-allow-origin" not in theirs["headers"]
+
+
 # ── The documentation must agree with the code ───────────────────────────────
 
 
