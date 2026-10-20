@@ -288,6 +288,8 @@ describe("an applied code change, followed to production", () => {
         done: true,
         checks: { state: "success", total: 3, passed: 3, pending: 0, failed: [] },
         merged_at: "2026-10-20T14:10:00Z",
+        merge_sha: "e288cc3e0000000",
+        before_sha: "dbed54f50000000",
         deployment: {
           environment: "production",
           state: "success",
@@ -397,6 +399,23 @@ describe("going back from a change in production (2026-10-20)", () => {
     expect(within(back).getByTestId("code-change-reverter")).toHaveTextContent("une annulation à accepter");
     expect(within(back).queryByRole("button", { name: "Annuler ce changement" })).not.toBeInTheDocument();
     expect(back).toHaveTextContent("la prochaine mise en production le remettra");
+  });
+});
+
+describe("a change followed before its version before was kept (2026-10-21)", () => {
+  it("is read once more, and says the version before", async () => {
+    const old = change({
+      status: "applied",
+      pull_request_number: 381,
+      pull_request_url: "https://github.com/acme/payments/pull/381",
+      follow: { stage: "deployed", done: true, merged_at: "2026-10-20T19:50:00Z", merge_sha: "e288cc3e0000000" },
+    });
+    api.list.mockResolvedValue([old]);
+    api.follow.mockResolvedValue({ ...old, follow: { ...old.follow!, before_sha: "dbed54f50000000" } });
+    show();
+    await waitFor(() => expect(api.follow).toHaveBeenCalledWith("c1"));
+    const versions = await screen.findByTestId("code-change-versions");
+    expect(await within(versions).findByRole("link", { name: "dbed54f" })).toBeInTheDocument();
   });
 });
 

@@ -1176,3 +1176,28 @@ async def test_going_back_starts_the_deployment_of_the_version_before_where_allo
     read = (await client.get(f"{API}/{change_id}")).json()
     assert (read["follow"]["stage"], read["follow"]["done"]) == ("rolled_back", True)
     assert read["rollbacks"][0]["url"] == "https://github.com/r/9"
+
+
+async def test_a_change_followed_before_its_version_before_was_kept_still_goes_back(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    github: GitHub,
+) -> None:
+    """2026-10-21: the first change LEKA shipped was followed to the end
+    before the version before a merge was kept — going back reads it."""
+    source, change_id, _now = await _merged(client, identity, acme, github)
+    with workspace_scope(acme["acme"]):
+        async with session_factory() as session:
+            await session.execute(
+                text("UPDATE code_changes SET follow = follow - 'before_sha' WHERE id = :c"),
+                {"c": change_id},
+            )
+            await session.commit()
+    assert (await client.get(f"{API}/{change_id}")).json()["follow"]["before_sha"] is None
+    await _config(acme["acme"], source, deploys=True, deploy_workflow="cd.yml")
+    asked = await client.post(f"{API}/{change_id}/rollback")
+    assert asked.status_code == 200, asked.text
+    assert asked.json()["follow"]["before_sha"] == "before-sha"
+    dispatched = [b for p, b in github.writes() if p.endswith("/workflows/cd.yml/dispatches")]
+    assert dispatched == [{"ref": "main", "inputs": {"release": "before-sha"}}]

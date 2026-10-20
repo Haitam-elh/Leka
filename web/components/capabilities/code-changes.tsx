@@ -239,7 +239,10 @@ function PullRequestFollow({
   const t = useDictionary();
   const w = t.codeChanges.follow;
   const { format: locale } = useLocale();
-  const live = useCodeChangeFollow(change.id, !change.follow?.done);
+  // Followed to the end before the version before it was kept (2026-10-21):
+  // read once more, for « Revenir en arrière ».
+  const unknownBefore = Boolean(change.follow?.merged_at) && !change.follow?.before_sha;
+  const live = useCodeChangeFollow(change.id, !change.follow?.done || unknownBefore);
   const follow = live.data?.follow ?? change.follow ?? null;
   const stage = follow?.stage ?? "checks";
   const open = OPEN_STAGES.has(stage);
