@@ -139,5 +139,5 @@ agents:
 
   - path: security/security-review/SKILL.md
     name: security-review
-    version: 1.4.0
+    version: 1.4.1
     status: active
