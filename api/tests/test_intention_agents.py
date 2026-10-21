@@ -671,3 +671,4 @@ async def test_a_request_answered_with_no_agent_at_all_gets_the_catalogue_s(
     proposal = (await _get(client, f"/{intention['id']}/analysis"))["result"]["proposal"]
     assert (proposal["by"], bool(proposal["agents"])) == ("rules", True)
     assert proposal["informative"] is False
+    assert len(proposal["agents"]) <= 3

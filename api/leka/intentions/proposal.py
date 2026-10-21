@@ -520,7 +520,10 @@ async def propose(
         ),
         {e.definition.key: e.availability for e in entries},
     )
-    picked = [m.definition.key for m in found if m.score >= 3][:1]
+    # Those that answer it best, together — three at most: « un meilleur
+    # design » is the code change and the design review alike (2026-10-21).
+    best = found[0].score if found else 0
+    picked = [m.definition.key for m in found if m.score >= 3 and m.score == best][:MOST_AGENTS]
     if asked is not None:
         picked = [asked, *(key for key in picked if key != asked)]
     costs = await run_costs(session, picked, now=moment)
