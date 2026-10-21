@@ -199,6 +199,8 @@ add_ons:
     # Engineering (LEKA-461): each its reference agent.
     codebase-explorer: { tier: standard, reference: codebase-explorer }
     test-generation: { tier: standard, reference: test-generator }
+    # Acceptance (2026-10-21): a pull request held to its criteria.
+    qa-acceptance: { tier: specialized, reference: qa-analyst }
     regression-analysis: { tier: specialized, reference: regression-analyst }
     change-impact-analysis: { tier: specialized, reference: change-impact-analyst }
     # No equivalent in the reference: LEKA's tier, to validate.
@@ -216,7 +218,8 @@ add_ons:
     # too (LEKA-461) — built after Karim's matrix, options below until he says.
     enterprise:
       [ui-quality-review, accessibility-audit, design-review, motion-review,
-       codebase-explorer, test-generation, regression-analysis, change-impact-analysis]
+       codebase-explorer, test-generation, regression-analysis, change-impact-analysis,
+       qa-acceptance]
   reference:
     # product
     product-strategist: { name: "Product Strategist", category: product, tier: standard }

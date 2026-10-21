@@ -728,6 +728,122 @@ export const BUILD: Record<string, AgentProduct> = {
     ],
   },
 
+  "qa-acceptance": {
+    promise: w(
+      "Sachez si une pull request est prête : chaque critère attendu, vérifié avec sa preuve — le code, le test, la CI.",
+      "Know whether a pull request is ready: each expected criterion, checked with its proof — the code, the test, the CI.",
+    ),
+    problem: w(
+      "« C'est testé, c'est prêt » se dit souvent sans preuve : ce qui manque se découvre en production.",
+      "« It's tested, it's ready » is often said without proof: what is missing shows up in production.",
+    ),
+    benefits: [
+      {
+        icon: "check",
+        title: w("Critère par critère", "Criterion by criterion"),
+        body: w(
+          "Les critères du ticket, chacun avec son statut et sa preuve.",
+          "The ticket's criteria, each with its status and its proof.",
+        ),
+      },
+      {
+        icon: "eye",
+        title: w("Ce qui n'est pas prouvé, dit", "What is not proven, said"),
+        body: w(
+          "Le code sans test, le test qui n'affirme rien, la CI absente ou rouge.",
+          "Code without a test, a test that asserts nothing, a CI missing or red.",
+        ),
+      },
+      {
+        icon: "flask",
+        title: w("La recette à la main, guidée", "Manual testing, guided"),
+        body: w(
+          "Ce qu'une personne doit vérifier dans l'application, et quoi observer.",
+          "What a person must check in the application, and what to observe.",
+        ),
+      },
+    ],
+    does: w(
+      "Il lit le ticket et ses critères d'acceptation, puis la pull request : le code changé, ses tests et sa CI. Il rend un verdict — Prêt, À reprendre ou Bloqué — avec la preuve de chaque critère et les problèmes reproductibles.",
+      "It reads the ticket and its acceptance criteria, then the pull request: the changed code, its tests and its CI. It gives a verdict — Ready, Needs work or Blocked — with the proof of each criterion and the reproducible issues.",
+    ),
+    features: [
+      w("Les critères cités, d'où ils viennent", "The criteria quoted, and where they come from"),
+      w("Un statut et une preuve pour chaque critère", "A status and a proof for each criterion"),
+      w("Les tests qui ne prouvent rien, signalés", "Tests that prove nothing, flagged"),
+      w("Les problèmes reproductibles, par gravité", "Reproducible issues, by severity"),
+      w("La liste à cocher de la recette à la main", "The checklist for manual testing"),
+      w("Ce qui n'a pas pu être vérifié, et pourquoi", "What could not be checked, and why"),
+    ],
+    useCases: [
+      {
+        icon: "rocket",
+        title: w("Avant de fusionner", "Before merging"),
+        body: w("Savoir si la pull request fait ce qui était demandé.", "Know whether the pull request does what was asked."),
+        ask: w("Peut-on fusionner la PR #42 de acme/web ?", "Can we merge PR #42 of acme/web?"),
+      },
+      {
+        icon: "check",
+        title: w("Contre le ticket", "Against the ticket"),
+        body: w("Chaque critère d'acceptation, vérifié.", "Each acceptance criterion, checked."),
+        ask: w(
+          "La PR #42 de acme/web respecte-t-elle les critères du ticket PAY-142 ?",
+          "Does PR #42 of acme/web meet the criteria of ticket PAY-142?",
+        ),
+      },
+      {
+        icon: "eye",
+        title: w("Ce qui n'est pas testé", "What is not tested"),
+        body: w("Le code changé qu'aucun test n'exerce.", "Changed code that no test exercises."),
+        ask: w(
+          "Qu'est-ce qui n'est pas testé dans la dernière PR de acme/web ?",
+          "What is not tested in acme/web's latest PR?",
+        ),
+      },
+      {
+        icon: "flask",
+        title: w("Préparer la recette", "Prepare acceptance testing"),
+        body: w("Ce qu'il faut vérifier à la main, et comment.", "What to check by hand, and how."),
+        ask: w("Fais la recette de la PR #42 de acme/web", "Run the acceptance check of PR #42 of acme/web"),
+      },
+    ],
+    outline: [
+      w("Verdict", "Verdict"),
+      w("Ce qui était attendu", "What was expected"),
+      w("Critère par critère", "Criterion by criterion"),
+      w("Problèmes trouvés", "Issues found"),
+      w("À vérifier à la main", "To check by hand"),
+      w("Avant de dire « Prêt »", "Before saying « Ready »"),
+    ],
+    examples: [
+      {
+        kind: "levels",
+        title: w("Critère par critère", "Criterion by criterion"),
+        items: [
+          { level: "low", text: w("Export CSV avec la date — vérifié", "CSV export with the date — checked") },
+          { level: "medium", text: w("Tri par montant — fait, sans test", "Sort by amount — done, no test") },
+          { level: "high", text: w("Filtre par client — absent", "Filter by customer — missing") },
+          { level: "critical", text: w("Total recalculé — test en échec", "Recomputed total — test failing") },
+        ],
+      },
+      {
+        kind: "list",
+        title: w("À vérifier à la main", "To check by hand"),
+        items: [
+          w("L'export s'ouvre dans un tableur", "The export opens in a spreadsheet"),
+          w("Les accents restent lisibles", "Accents stay readable"),
+          w("Un client sans facture : fichier vide, pas d'erreur", "A customer with no invoice: empty file, no error"),
+        ],
+      },
+    ],
+    limits: [
+      w(
+        "Il ne lance ni l'application ni les tests : il lit le code, les tests et le résultat de la CI, et dit ce qu'une personne doit vérifier à la main.",
+        "It runs neither the application nor the tests: it reads the code, the tests and the CI's result, and says what a person must check by hand.",
+      ),
+    ],
+  },
+
   "test-analysis": {
     promise: w(
       "Sachez quoi tester avant ou après un changement : ce qu'il touche, ce qui en dépend et ce qui a cassé récemment.",
