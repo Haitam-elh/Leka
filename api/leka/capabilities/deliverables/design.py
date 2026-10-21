@@ -290,6 +290,48 @@ def without_assets(body: str) -> str:
     return _ASSET.sub(bare, body)
 
 
+_CLASSES = re.compile(r"""class\s*=\s*["']([^"']*)["']""", re.IGNORECASE)
+_INLINE_STYLE = re.compile(r"""\sstyle\s*=\s*["'][^"']+["']""", re.IGNORECASE)
+
+
+def unstyled(drawing: MockupDrawing) -> list[str]:
+    """What leaves a mock-up unstyled — said to the model that drew it, to
+    draw it again (2026-10-21: a model wrote its classes and no rule for
+    them, and the screen showed as bare HTML). Nothing is loaded but its own
+    css: no framework, no class it does not write."""
+    css = drawing.css or ""
+    body = drawing.body or ""
+    if len(body) < 500:
+        return []
+    if len(css.strip()) < 200 and len(_INLINE_STYLE.findall(body)) < 5:
+        return [
+            "The mock-up has no style: css is empty. Nothing else is loaded — no framework, "
+            "no style sheet of the application — so write its complete style sheet in css: "
+            "fonts, colours, spacing, layout, every class the body uses."
+        ]
+    classes = {c for found in _CLASSES.findall(body) for c in found.split()}
+    missing = sorted(c for c in classes if not re.search(r"\." + re.escape(c) + r"(?![\w-])", css))
+    if classes and len(missing) > max(3, len(classes) // 3):
+        return [
+            f"{len(missing)} of the {len(classes)} classes the body uses have no rule in css "
+            f"({', '.join(missing[:8])}…): no framework is loaded — Tailwind, Bootstrap or the "
+            "application's own style sheet are not there. Write a rule in css for every class, "
+            "or name the classes after the rules you write."
+        ]
+    return []
+
+
+# Before a mock-up's own style: what every page has, so that one drawn bare
+# still reads as a screen, never as a browser's default (2026-10-21).
+BASE = (
+    "*,*::before,*::after{box-sizing:border-box}"
+    "body{margin:0;font-family:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',"
+    "Arial,sans-serif;font-size:14px;line-height:1.5;color:#1f2433;background:#fff;"
+    "-webkit-font-smoothing:antialiased}"
+    "img,svg{max-width:100%}button,input,select,textarea{font:inherit}"
+)
+
+
 def corrected(proposal: DesignProposal, target: str, drawing: MockupDrawing) -> DesignProposal:
     """The proposal with one mock-up — today's (`before`) or a direction (its
     index) — drawn again."""
@@ -311,7 +353,7 @@ def page(mockup: DesignMockup, *, language: str = "fr") -> str:
         f'<meta http-equiv="Content-Security-Policy" content="{POLICY}">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
         f"<title>{html.escape(mockup.name)}</title>"
-        f"<style>{clean_css(mockup.css)}</style></head>"
+        f"<style>{BASE}</style><style>{clean_css(mockup.css)}</style></head>"
         f"<body>{clean_body(mockup.body)}</body></html>"
     )
 
@@ -332,6 +374,7 @@ def summary(proposal: DesignProposal, key: str) -> dict[str, object]:
 
 
 __all__ = [
+    "BASE",
     "MOST_PROPOSALS",
     "POLICY",
     "DesignChange",
@@ -350,6 +393,7 @@ __all__ = [
     "design_key",
     "page",
     "summary",
+    "unstyled",
     "with_assets",
     "without_assets",
 ]

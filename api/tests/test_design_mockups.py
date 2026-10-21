@@ -46,6 +46,7 @@ from pydantic import ValidationError
 from leka.api import agent_runs as agent_runs_api
 from leka.capabilities import correct_design_run, execute_run, redraw_design, sync_catalogue
 from leka.capabilities.deliverables.design import (
+    BASE,
     POLICY,
     DesignMockup,
     DesignProposal,
@@ -57,6 +58,7 @@ from leka.capabilities.deliverables.design import (
     cleaned,
     corrected,
     page,
+    unstyled,
     with_assets,
     without_assets,
 )
@@ -511,3 +513,30 @@ async def test_one_mock_up_is_corrected_as_asked_the_rest_as_it_was(
     assert [(c["target"], c["note"]) for c in run["corrections"]] == [
         ("0", "Le logo est faux : utilise le vrai.")
     ]
+
+
+def test_a_mock_up_drawn_bare_is_said_so_and_every_page_has_a_base() -> None:
+    """2026-10-21: a model wrote its classes — Tailwind's — and no rule for
+    them; the screen showed as bare HTML. Told why, it draws again; and every
+    page has a base style first, never a browser's default."""
+    rows = "".join(
+        f'<div class="flex gap-2 rounded-lg p-4"><span class="text-sm">Ligne {n}</span></div>'
+        for n in range(20)
+    )
+    [bare] = unstyled(MockupDrawing(css="", body=f"<main>{rows}</main>"))
+    assert "css is empty" in bare
+    [classes] = unstyled(
+        MockupDrawing(css="main { padding: 24px; }" * 10, body=f"<main>{rows}</main>")
+    )
+    assert "have no rule in css" in classes and "flex" in classes
+    styled = ".row{display:flex;gap:8px;border-radius:8px;padding:16px}.label{font-size:13px}" * 3
+    drawn = rows.replace('class="flex gap-2 rounded-lg p-4"', 'class="row"').replace(
+        'class="text-sm"', 'class="label"'
+    )
+    assert unstyled(MockupDrawing(css=styled, body=f"<main>{drawn}</main>")) == []
+    # A short screen, or one styled inline, is never refused.
+    assert unstyled(MockupDrawing(css="", body="<main><h1>Accueil</h1></main>")) == []
+    inline = "".join(f'<p style="margin:{n}px">x</p>' for n in range(60))
+    assert unstyled(MockupDrawing(css="", body=inline)) == []
+    shown = page(DesignMockup(name="Calme", css="", body="<main>x</main>"))
+    assert shown.index(BASE) < shown.index("<body>")
