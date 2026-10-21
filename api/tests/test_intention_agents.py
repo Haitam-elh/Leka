@@ -582,3 +582,67 @@ async def test_one_launch_one_set_of_runs_a_double_click_or_a_slow_network_alike
     # Read again — a refresh, another tab: still at work, its run there.
     read = await _get(client, f"/{intention['id']}")
     assert (read["status"], read["journey"]["state"]) == ("executing", "action_running")
+
+
+async def test_an_agent_named_another_way_by_the_model_is_the_catalogue_s_own(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[tuple[uuid.UUID, str]],
+    gemini: Callable[..., Gemini],
+    started: list[uuid.UUID],
+) -> None:
+    """2026-10-21: Mistral named the agents its own way — by title, with
+    underscores — and every one was dropped: nothing was proposed."""
+    await _ready(acme)
+    gemini(
+        {
+            **PROPOSED,
+            "agents": [
+                {
+                    "key": "Architecte applicatif",
+                    "inputs": {
+                        "parcours": "De l'intention à l'action",
+                        "perimetre": "Plateforme LEKA",
+                    },
+                    "formats": ["pdf"],
+                }
+            ],
+            "steps": [
+                {
+                    "title": "Dessiner l'architecture",
+                    "detail": "",
+                    "agent": "application_architecture",
+                }
+            ],
+        }
+    )
+    _as(identity, acme, "member")
+    intention = await _proposed(client, acme)
+    proposal = (await _get(client, f"/{intention['id']}/analysis"))["result"]["proposal"]
+    [agent] = proposal["agents"]
+    assert agent["key"] == ARCHITECT
+    assert proposal["steps"][0]["agent"] == ARCHITECT
+    assert proposal["by"] == "model"
+
+
+async def test_work_to_do_and_no_agent_leka_knows_the_catalogue_proposes_one(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[tuple[uuid.UUID, str]],
+    gemini: Callable[..., Gemini],
+    started: list[uuid.UUID],
+) -> None:
+    """Agents LEKA does not have, for work to do: never nothing proposed —
+    the catalogue's own discovery, a plan by goal."""
+    await _ready(acme)
+    gemini({"agents": [{"key": "architecture-bot"}], "steps": [], "informative": False})
+    _as(identity, acme, "member")
+    intention = await _proposed(client, acme)
+    proposal = (await _get(client, f"/{intention['id']}/analysis"))["result"]["proposal"]
+    assert proposal["by"] == "rules"
+    assert proposal["agents"], proposal
+    assert started == []
