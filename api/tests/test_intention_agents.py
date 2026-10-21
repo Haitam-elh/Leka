@@ -102,8 +102,11 @@ def _gemini(said: dict[str, Any]) -> httpx.Response:
 class Gemini:
     """Reads the request, proposes what it was told to, writes."""
 
-    def __init__(self, proposing: dict[str, Any]) -> None:
+    def __init__(self, proposing: dict[str, Any], corrected: dict[str, Any] | None = None) -> None:
         self.proposing = proposing
+        # What it answers once told why its first answer is not used.
+        self.corrected = corrected
+        self.told: list[str] = []
         self.asked: list[str] = []
         self.offered: list[str] = []
         self.written: list[dict[str, Any]] = []
@@ -125,6 +128,10 @@ class Gemini:
         if "steps" in schema["properties"]:
             self.asked.append("proposing")
             self.offered = [a["key"] for a in json.loads(said["task"])["agents"]]
+            if len(body["contents"]) > 1:
+                self.told.append(body["contents"][-1]["parts"][0]["text"])
+                if self.corrected is not None:
+                    return _gemini(self.corrected)
             return _gemini(self.proposing)
         self.asked.append("writing")
         task = said["task"]
@@ -153,8 +160,10 @@ def gemini(monkeypatch: pytest.MonkeyPatch) -> Callable[..., Gemini]:
     )
     monkeypatch.setattr(service, "settings", configured)
 
-    def install(proposing: dict[str, Any] = PROPOSED) -> Gemini:
-        scripted = Gemini(proposing)
+    def install(
+        proposing: dict[str, Any] = PROPOSED, corrected: dict[str, Any] | None = None
+    ) -> Gemini:
+        scripted = Gemini(proposing, corrected)
         monkeypatch.setattr(
             Gateway,
             "_client",
@@ -689,7 +698,7 @@ def test_the_words_plainly_name_the_design_review_not_the_alphabet() -> None:
     assert scores["documentation-assistant"] == 0
 
 
-async def test_a_model_s_choice_far_from_what_the_words_name_is_corrected(
+async def test_a_model_told_why_its_choice_does_not_fit_chooses_again_itself(
     client: AsyncClient,
     identity: FakeIdentity,
     model: dict[str, uuid.UUID],
@@ -698,24 +707,66 @@ async def test_a_model_s_choice_far_from_what_the_words_name_is_corrected(
     gemini: Callable[..., Gemini],
     started: list[uuid.UUID],
 ) -> None:
-    """2026-10-21: asked a better design, Mistral chose the documentation
-    assistant alone — the design review is proposed first, the
-    documentation assistant no more."""
+    """2026-10-21: asked a better design, a model chose the documentation
+    assistant alone. Told why that does not fit — what the request asks,
+    what the design review delivers — it chooses again, itself: the model's
+    choice, never a replacement LEKA makes."""
     await _ready(acme)
     scripted = gemini(
         {
             "agents": [{"key": "documentation-assistant", "why": "Documenter la page."}],
             "steps": [{"title": "Documenter", "agent": "documentation-assistant"}],
             "informative": False,
-        }
+        },
+        corrected={
+            "agents": [
+                {"key": "design-review", "why": "La page redessinée, avant et après."},
+                {"key": "code-change", "why": "Le changement de code qui la met en œuvre."},
+            ],
+            "steps": [
+                {"title": "Redessiner la page", "detail": "", "agent": "design-review"},
+                {"title": "Écrire le changement", "detail": "", "agent": "code-change"},
+            ],
+            "informative": False,
+        },
     )
     _as(identity, acme, "member")
     intention = await _ask(client, DESIGN)
     await _analysed(acme, intention)
     # Shown to the model the most relevant first.
     assert scripted.offered[0] == "design-review"
+    [told] = scripted.told
+    assert "do not do what the request asks" in told and "design-review" in told
+    proposal = (await _get(client, f"/{intention['id']}/analysis"))["result"]["proposal"]
+    assert [a["key"] for a in proposal["agents"]] == ["design-review", "code-change"]
+    assert proposal["steps"][0]["agent"] == "design-review"
+    # The model's choice, said whose.
+    assert (proposal["by"], proposal["model"]) == ("model", "gemini-3.8-flash")
+
+
+async def test_a_model_that_never_chooses_what_the_work_needs_leaves_it_to_the_catalogue(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[tuple[uuid.UUID, str]],
+    gemini: Callable[..., Gemini],
+    started: list[uuid.UUID],
+) -> None:
+    """Told, and still wrong, and no other model to ask: the catalogue's
+    own, the design review first — never the documentation assistant."""
+    await _ready(acme)
+    gemini(
+        {
+            "agents": [{"key": "documentation-assistant"}],
+            "steps": [],
+            "informative": False,
+        }
+    )
+    _as(identity, acme, "member")
+    intention = await _ask(client, DESIGN)
+    await _analysed(acme, intention)
     proposal = (await _get(client, f"/{intention['id']}/analysis"))["result"]["proposal"]
     keys = [a["key"] for a in proposal["agents"]]
-    assert keys[0] == "design-review"
+    assert (proposal["by"], keys[0]) == ("rules", "design-review")
     assert "documentation-assistant" not in keys
-    assert all(s["agent"] in (*keys, None) for s in proposal["steps"])

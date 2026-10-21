@@ -318,6 +318,13 @@ async def test_a_structured_answer_is_checked_and_asked_again(workspace: uuid.UU
     assert "confidence" in (calls[0].error or "")
     body = json.loads(script.asked[0].content)
     assert body["generationConfig"]["responseJsonSchema"]["required"] == ["goal", "confidence"]
+    # Asked again with what was wrong: its own answer, and why — never the
+    # same words again (2026-10-21).
+    again = json.loads(script.asked[1].content)["contents"]
+    assert len(again) == len(body["contents"]) + 2
+    assert again[-2]["role"] == "model" and "explain_cause" in again[-2]["parts"][0]["text"]
+    assert "confidence" in again[-1]["parts"][0]["text"]
+    assert "Answer again" in again[-1]["parts"][0]["text"]
 
 
 async def test_each_model_is_held_to_what_it_gives_and_a_cut_answer_is_said_cut(

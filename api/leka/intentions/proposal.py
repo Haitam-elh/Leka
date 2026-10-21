@@ -444,6 +444,33 @@ async def propose(
     plain, relevant = plainly_asked(by_key, words)
     # Shown the most relevant first: a model reads the top of a list best.
     entries = sorted(entries, key=lambda e: -relevant.get(e.definition.key, 0))
+    # Work to do, as the request was understood — whatever a model says.
+    asks_work = acting(understood) or (understood is not None and understood.mode == "request")
+
+    def judged(value: Any, _context: Any) -> list[str]:
+        """What is wrong with a model's choice, before it is used — a
+        choice that fails is asked again, then of the next model: the
+        quality of the best model answering, whichever answers first
+        (2026-10-21)."""
+        if not isinstance(value, Proposed) or asked is not None:
+            return []
+        got = [k for k in (known_key(c.key, by_key) for c in value.agents) if k]
+        best = relevant.get(plain[0], 0) if plain else 0
+        if plain and max((relevant.get(k, 0) for k in got), default=0) * 2 < best:
+            fits = by_key[plain[0]].definition
+            return [
+                f"The agents chosen ({', '.join(got) or 'none'}) do not do what the request "
+                f"asks. Read the request again: « {fits.title} » ({plain[0]}) delivers "
+                f"« {fits.summary} ». Choose the agents whose work it needs, by their keys."
+            ]
+        if asks_work and not got and not value.informative:
+            return [
+                "The request asks for work to be done and no agent was chosen: choose the "
+                "agents whose work it needs, by their keys."
+            ]
+        return []
+
+    chosen_by: str | None = None
     if entries:
         runtime = LLMRuntime(session, workspace_id)
         if await runtime.ready(NEEDS):
@@ -461,6 +488,7 @@ async def propose(
                         ensure_ascii=False,
                     ),
                     output=Proposed,
+                    check=judged,
                     needs=NEEDS,
                     tier=Tier.FAST,
                     max_tokens=4000,
@@ -470,6 +498,7 @@ async def propose(
             )
             if done.ok and done.value is not None:
                 said = done.value
+                chosen_by = done.model
     if said is not None:
         # Each agent it named, the catalogue's own — however it wrote it.
         known: list[Chosen] = []
@@ -481,28 +510,7 @@ async def propose(
         # asks to know, a request — « Propose-moi un meilleur design » acts
         # on nothing itself, yet asks for work (2026-10-21: Mistral named no
         # agent for it, and nothing was proposed).
-        work = (
-            bool(said.agents)
-            or not said.informative
-            or acting(understood)
-            or (understood is not None and understood.mode == "request")
-        )
-        # What it chose, far less relevant than what the words plainly name
-        # — « un meilleur design » and the documentation assistant
-        # (2026-10-21, Mistral): what they name first, its own after when
-        # they are relevant at all; the plan by goal for them.
-        chose = max((relevant.get(k.key, 0) for k in known), default=0)
-        best = relevant.get(plain[0], 0) if plain else 0
-        if known and plain and asked is None and chose * 2 < best:
-            logger.warning(
-                "intention_proposal_corrected",
-                intention=str(intention.id),
-                said=[k.key for k in known],
-                plain=plain,
-            )
-            kept = [k for k in known if relevant.get(k.key, 0) > 0 and k.key not in plain]
-            known = [*(Chosen(key=k) for k in plain), *kept][:MOST_AGENTS]
-            said = said.model_copy(update={"agents": known, "steps": []})
+        work = bool(said.agents) or not said.informative or asks_work
         if not known and asked is None and work:
             # No agent it named is LEKA's: the catalogue's own discovery
             # rather than nothing proposed.
@@ -570,6 +578,7 @@ async def propose(
             steps=steps,
             informative=said.informative and asked is None,
             by="model",
+            model=chosen_by,
         )
     # No model, or nothing usable from it: the catalogue's own discovery.
     found = discover(
