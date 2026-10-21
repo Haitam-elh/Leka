@@ -13,6 +13,11 @@ What these protect:
 - Tested: it answered, said, and marked so; removed: LEKA's answers again.
 - What was asked of models: counted, priced, LEKA's and the workspace's
   own apart, by day, by model, by purpose — this workspace's only.
+- Which of LEKA's models answers first here (2026-10-21): an admin
+  chooses, in one click, among those LEKA holds a key for — Mistral
+  rather than Gemini — and Gemini answers when it does not; one LEKA holds
+  no key for, or does not know, is refused; LEKA's default again on asking.
+  A member changes nothing.
 """
 
 # ruff: noqa: F811 — the fixtures of test_sources_api are imported to be requested by name.
@@ -332,3 +337,71 @@ async def test_the_work_models_did_is_said_by_how_it_ended(
         12,
         "it cites nothing the analysis holds",
     )
+
+
+@pytest.fixture
+def leka_holds_gemini_and_mistral(monkeypatch: pytest.MonkeyPatch) -> None:
+    configured = settings.model_copy(
+        update={
+            "google_api_key": SecretStr("g-key"),
+            "mistral_api_key": SecretStr("m-key"),
+            "anthropic_api_key": None,
+            "openai_api_key": None,
+            "llm_fallbacks": "",
+        }
+    )
+    monkeypatch.setattr(service, "settings", configured)
+    monkeypatch.setattr(workspace, "settings", configured)
+
+
+async def test_an_admin_chooses_which_of_leka_s_models_answers_first_here(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    leka_holds_gemini_and_mistral: None,
+) -> None:
+    _as(identity, acme, "member")
+    seen = (await client.get(API)).json()
+    assert seen["chosen"] is None
+    choosable = {(m["provider"], m["model"]) for m in seen["choosable"]}
+    assert ("google", "gemini-3.8-flash") in choosable
+    assert ("mistral", "mistral-large-latest") in choosable
+    assert not {p for p, _ in choosable} - {"google", "mistral"}
+    assert (seen["answering"][0]["provider"], seen["answering"][0]["why"]) == ("google", "default")
+    mistral = {"provider": "mistral", "model": "mistral-large-latest"}
+    assert (await client.put(f"{API}/default", json=mistral)).status_code == 403
+
+    # One click: Mistral answers first here, Gemini when it does not.
+    _as(identity, acme, "admin")
+    chosen = await client.put(f"{API}/default", json=mistral)
+    assert chosen.status_code == 200, chosen.text
+    seen = chosen.json()
+    assert (seen["chosen"]["provider"], seen["chosen"]["model"]) == (
+        "mistral",
+        "mistral-large-latest",
+    )
+    first, then = seen["answering"][0], seen["answering"][1]
+    assert (first["model"], first["why"], first["owner"]) == (
+        "mistral-large-latest",
+        "default",
+        "leka",
+    )
+    assert (then["model"], then["why"]) == ("gemini-3.8-flash", "fallback")
+    assert [f["model"] for f in seen["fallbacks"]] == ["gemini-3.8-flash"]
+
+    # One LEKA holds no key for, or does not know: refused, the choice kept.
+    claude = {"provider": "anthropic", "model": "claude-sonnet-5"}
+    refused = await client.put(f"{API}/default", json=claude)
+    assert refused.status_code == 422
+    unknown = await client.put(f"{API}/default", json={"provider": "mistral", "model": "nope"})
+    assert unknown.status_code == 422
+    assert (await client.get(API)).json()["chosen"]["model"] == "mistral-large-latest"
+
+    # LEKA's default again.
+    back = await client.delete(f"{API}/default")
+    assert back.status_code == 200
+    assert back.json()["chosen"] is None
+    assert back.json()["answering"][0]["provider"] == "google"
+    # Another workspace never saw it.
+    _as(identity, acme, "other_admin")
+    assert (await client.get(API)).json()["chosen"] is None

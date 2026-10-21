@@ -4,6 +4,9 @@ Modèle de langage.
     GET    /models                 what answers here: LEKA's default, its
                                    fallbacks, the providers one may bring,
                                    the workspace's own model, the order
+    PUT    /models/default         which of LEKA's models answers first here
+                                   — Gemini or Mistral, one click
+                                   (2026-10-21) · DELETE: LEKA's default
     PUT    /models/settings        bring its own model (key kept encrypted,
                                    never sent back) · DELETE: back to LEKA's
     POST   /models/settings/test   asked a few words: did it answer
@@ -31,6 +34,7 @@ from leka.capabilities import (
     ModelBreakdownRead,
     ModelCallRead,
     ModelDayRead,
+    ModelDefaultUpdate,
     ModelGatewayRead,
     ModelPriceRead,
     ModelProfileRead,
@@ -134,12 +138,42 @@ async def _overview(service: ModelSettings) -> ModelGatewayRead:
             for r in seen.routing.routes
         ],
         ready=bool(seen.routing.routes),
+        chosen=profile_read(seen.chosen, now) if seen.chosen is not None else None,
+        choosable=[profile_read(p, now) for p in seen.choosable],
     )
 
 
 @router.get("", response_model=ModelGatewayRead)
 async def gateway(principal: Reader, session: SessionDep) -> ModelGatewayRead:
     return await _overview(ModelSettings(session, principal.workspace_id))
+
+
+@router.put("/default", response_model=ModelGatewayRead)
+async def choose_default(
+    payload: ModelDefaultUpdate, principal: Admin, session: SessionDep
+) -> ModelGatewayRead:
+    service = ModelSettings(session, principal.workspace_id)
+    try:
+        await service.choose(
+            payload.provider, payload.model.strip(), by=principal.user_id, now=datetime.now(UTC)
+        )
+    except ModelSettingError as refused:
+        raise ApiError(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ErrorCode.VALIDATION_FAILED,
+            str(refused),
+            details=[FieldError(field=refused.field, message=str(refused))],
+        ) from refused
+    await session.commit()
+    return await _overview(service)
+
+
+@router.delete("/default", response_model=ModelGatewayRead)
+async def leka_default_again(principal: Admin, session: SessionDep) -> ModelGatewayRead:
+    service = ModelSettings(session, principal.workspace_id)
+    await service.unchoose()
+    await session.commit()
+    return await _overview(service)
 
 
 @router.put("/settings", response_model=ModelGatewayRead)

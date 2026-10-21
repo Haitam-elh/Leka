@@ -36,6 +36,7 @@ from leka.capabilities import (
     Tier,
     Tool,
     WorkspaceModel,
+    WorkspaceModelDefault,
 )
 from leka.db import session_factory, system_scope, workspace_scope
 from leka.platform import Workspace, secret_box
@@ -443,3 +444,36 @@ async def test_testing_the_workspace_model_says_whether_it_answered(workspace: u
             row = await session.scalar(select(WorkspaceModel))
             assert row is not None
             assert row.status == "ok"
+
+
+async def test_the_model_its_admin_chose_answers_first_and_leka_s_default_after(
+    workspace: uuid.UUID,
+) -> None:
+    """2026-10-21: Mistral chosen in one click — it answers; refused, Gemini
+    does; chosen without a key LEKA holds, LEKA's default answers."""
+    with workspace_scope(workspace):
+        async with session_factory() as session:
+            session.add(
+                WorkspaceModelDefault(
+                    workspace_id=workspace,
+                    id=uuid.uuid4(),
+                    provider="mistral",
+                    model="mistral-large-latest",
+                    changed_at=datetime.now(UTC),
+                )
+            )
+            await session.commit()
+    script = Script({MISTRAL: [chat("Mistral, chosen.", "mistral-large-2602")]})
+    done = await _ask(workspace, script, lambda g: g.complete(ask()))
+    assert (done.provider, done.text) == ("mistral", "Mistral, chosen.")
+    assert script.asked[0].headers["authorization"] == "Bearer m-key"
+
+    refused = httpx.Response(401, json={"message": "Unauthorized"})
+    script = Script({MISTRAL: [refused], GOOGLE: [gemini("Gemini, after.")]})
+    done = await _ask(workspace, script, lambda g: g.complete(ask()))
+    assert done.provider == "google"
+
+    no_mistral = {**KEYS, "mistral": None}
+    script = Script({GOOGLE: [gemini("Gemini, LEKA's default.")]})
+    done = await _ask(workspace, script, lambda g: g.complete(ask()), keys=no_mistral)
+    assert done.text == "Gemini, LEKA's default."

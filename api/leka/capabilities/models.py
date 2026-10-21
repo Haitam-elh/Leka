@@ -168,6 +168,25 @@ class WorkspaceModel(Base, WorkspaceScopedMixin):
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class WorkspaceModelDefault(Base, WorkspaceScopedMixin):
+    """Which of LEKA's models answers first in a workspace (2026-10-21):
+    chosen by its admin among those LEKA holds a key for — Gemini, Mistral
+    — in one click. LEKA's account and LEKA's credits, never the
+    workspace's own model (WorkspaceModel). None: LEKA's default."""
+
+    __tablename__ = "workspace_model_defaults"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", name="uq_workspace_model_defaults_workspace"),
+    )
+
+    provider: Mapped[str] = mapped_column(String(20), nullable=False)
+    model: Mapped[str] = mapped_column(String(120), nullable=False)
+    changed_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class ModelRate(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """What a model costs LEKA from a day on (LEKA-430), per million tokens,
     in US dollars — LEKA's and no customer's. A new price is a new row from

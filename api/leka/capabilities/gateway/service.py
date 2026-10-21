@@ -74,7 +74,7 @@ from leka.capabilities.gateway.routing import (
     task_routes_of,
 )
 from leka.capabilities.gateway.routing import route as route_of
-from leka.capabilities.models import ModelCall, WorkspaceModel
+from leka.capabilities.models import ModelCall, WorkspaceModel, WorkspaceModelDefault
 from leka.connectors import BlockedAddressError, PublicTransport
 from leka.core import breaker
 from leka.core.config import settings
@@ -271,14 +271,36 @@ class Gateway:
         )
         return found
 
+    async def chosen(self) -> WorkspaceModelDefault | None:
+        """Which of LEKA's models its admin chose to answer first here."""
+        found: WorkspaceModelDefault | None = await self._session.scalar(
+            select(WorkspaceModelDefault).where(
+                WorkspaceModelDefault.workspace_id == self._workspace_id
+            )
+        )
+        return found
+
+    async def defaults(self) -> tuple[tuple[str, str], list[tuple[str, str]]]:
+        """LEKA's model that answers first here, and those after it: the one
+        its admin chose — when LEKA holds its key — then LEKA's own default,
+        then its fallbacks; LEKA's default otherwise (2026-10-21)."""
+        chosen = await self.chosen()
+        if chosen is None or not self._keys.get(chosen.provider):
+            return self._default, self._fallbacks
+        first = (chosen.provider, chosen.model)
+        if first == self._default:
+            return self._default, self._fallbacks
+        return first, [self._default, *(f for f in self._fallbacks if f != first)]
+
     async def routing(self, needs: Needs = Needs()) -> Routing:
         row = await self.setting()
+        default, fallbacks = await self.defaults()
         return route_of(
             needs,
             own=own_of(row) if row is not None else None,
             keys=self._keys,
-            default=self._default,
-            fallbacks=self._fallbacks,
+            default=default,
+            fallbacks=fallbacks,
             urls=self._urls,
             tasks=self._tasks,
         )

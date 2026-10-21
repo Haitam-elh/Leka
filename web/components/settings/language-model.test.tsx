@@ -7,7 +7,8 @@
  * company's Azure OpenAI — what it takes asked, the key sent once, never
  * shown again — tests it, removes it only once asked. What was asked of
  * models over 30 days: counted, priced, by model and by use. A member
- * reads, changes nothing.
+ * reads, changes nothing. Which of LEKA's models answers first here:
+ * chosen in one click — Mistral rather than Gemini — and back (2026-10-21).
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -27,6 +28,8 @@ const api = vi.hoisted(() => ({
   remove: vi.fn(),
   test: vi.fn(),
   usage: vi.fn(),
+  choose: vi.fn(),
+  unchoose: vi.fn(),
 }));
 const notices = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }));
 
@@ -277,3 +280,47 @@ describe("the language model", () => {
     expect(screen.getByText("Seuls les admins branchent un modèle.")).toBeInTheDocument();
   });
 });
+
+describe("the model used by default here (2026-10-21)", () => {
+  const choosing = { choosable: [FLASH, LARGE] };
+
+  it("is chosen in one click among LEKA's models, and back to LEKA's", async () => {
+    // The server keeps what was chosen: read again, it says so.
+    const unchosen = gateway(choosing);
+    const chosen = gateway({ ...choosing, chosen: LARGE });
+    api.get.mockResolvedValue(unchosen);
+    api.usage.mockResolvedValue(usage());
+    api.choose.mockImplementation(async () => {
+      api.get.mockResolvedValue(chosen);
+      return chosen;
+    });
+    api.unchoose.mockImplementation(async () => {
+      api.get.mockResolvedValue(unchosen);
+      return unchosen;
+    });
+    const user = userEvent.setup();
+    show();
+    const box = await screen.findByTestId("model-choose");
+    const [flash, large] = within(box).getAllByRole("radio");
+    expect(flash).toBeChecked();
+    expect(within(box).getByText("Le modèle par défaut de LEKA")).toBeInTheDocument();
+    await user.click(large!);
+    await waitFor(() => expect(api.choose).toHaveBeenCalledWith("mistral", "mistral-large-latest"));
+    await waitFor(() => expect(within(screen.getByTestId("model-choose")).getAllByRole("radio")[1]).toBeChecked());
+    await user.click(within(screen.getByTestId("model-choose")).getAllByRole("radio")[0]!);
+    await waitFor(() => expect(api.unchoose).toHaveBeenCalled());
+  });
+
+  it("is read, never changed, by a member", async () => {
+    permissions.value = ["workspace:read"];
+    api.get.mockResolvedValue(gateway({ ...choosing, chosen: LARGE }));
+    api.usage.mockResolvedValue(usage());
+    show();
+    const box = await screen.findByTestId("model-choose");
+    expect(box).toBeDisabled();
+    expect(within(box).getAllByRole("radio")[1]).toBeChecked();
+    expect(box).toHaveTextContent("Seuls les admins de l'espace");
+    permissions.value = ["workspace:read", "workspace:update"];
+  });
+});
+

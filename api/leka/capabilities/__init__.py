@@ -110,6 +110,7 @@ from leka.capabilities.models import (
     WorkflowRunStep,
     WorkspaceCapability,
     WorkspaceModel,
+    WorkspaceModelDefault,
 )
 from leka.capabilities.publications import (
     PublicationDecidedError,
@@ -206,6 +207,7 @@ from leka.capabilities.schemas import (
     ModelBreakdownRead,
     ModelCallRead,
     ModelDayRead,
+    ModelDefaultUpdate,
     ModelGatewayRead,
     ModelPriceRead,
     ModelProfileRead,
@@ -380,6 +382,7 @@ __all__ = [
     "ModelCall",
     "ModelCallRead",
     "ModelDayRead",
+    "ModelDefaultUpdate",
     "ModelGatewayRead",
     "ModelNeed",
     "ModelPriceRead",
@@ -460,6 +463,7 @@ __all__ = [
     "WorkflowStepRead",
     "WorkspaceCapability",
     "WorkspaceModel",
+    "WorkspaceModelDefault",
     "WorkspaceModelRead",
     "WorkspaceModelUpdate",
     "agent_definition",

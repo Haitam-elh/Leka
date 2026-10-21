@@ -2798,6 +2798,14 @@ const fr = {
     readOnly: "Seuls les admins autorisent un système.",
   },
   languageModel: {
+    choose: {
+      title: "Modèle utilisé par défaut ici",
+      body: "Choisissez en un clic lequel des modèles de LEKA répond en premier dans cet espace. Si celui-ci ne répond pas, l'autre prend le relais.",
+      readOnly: "Seuls les admins de l'espace changent le modèle utilisé par défaut.",
+      lekaDefault: "Le modèle par défaut de LEKA",
+      done: "{model} répond maintenant en premier ici.",
+      failed: "Le modèle n'a pas pu être changé.",
+    },
     title: "Modèle de langage",
     body: "Le modèle qui lit vos demandes et rédige les réponses de LEKA. Par défaut celui de LEKA ; vous pouvez brancher celui de votre entreprise : votre compte, votre contrat, vos données chez votre fournisseur.",
     defaultTitle: "Modèle par défaut de LEKA",
@@ -11458,6 +11466,14 @@ const en: Dictionary = {
     readOnly: "Only admins authorize a system.",
   },
   languageModel: {
+    choose: {
+      title: "Model used by default here",
+      body: "Choose in one click which of LEKA's models answers first in this workspace. If it does not answer, the other takes over.",
+      readOnly: "Only the workspace's admins change the model used by default.",
+      lekaDefault: "LEKA's default model",
+      done: "{model} now answers first here.",
+      failed: "The model could not be changed.",
+    },
     title: "Language model",
     body: "The model that reads your requests and writes LEKA's answers. LEKA's by default; you can plug in your company's own: your account, your contract, your data with your provider.",
     defaultTitle: "LEKA's default model",
