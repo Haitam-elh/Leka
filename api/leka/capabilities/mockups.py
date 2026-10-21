@@ -54,6 +54,7 @@ from leka.capabilities.deliverables.design import (
     corrected,
     design_key,
     summary,
+    unstyled,
     with_assets,
     without_assets,
 )
@@ -271,7 +272,15 @@ async def _asked[T: BaseModel](
 
     async def ask(own: AsyncSession) -> T:
         answered = await asyncio.wait_for(
-            Gateway(own, run.workspace_id).structured(request, model, needs), timeout=budget
+            Gateway(own, run.workspace_id).structured(
+                request,
+                model,
+                needs,
+                # A screen drawn bare is drawn again, told why — then by the
+                # next model (2026-10-21).
+                verify=unstyled if model is MockupDrawing else None,  # type: ignore[arg-type]
+            ),
+            timeout=budget,
         )
         done = answered.completion
         usage["provider"], usage["model"] = done.provider, done.model
