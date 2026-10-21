@@ -22,6 +22,11 @@ export const models = {
   save: (body: WorkspaceModelUpdate) =>
     apiFetch<ModelGateway>("/models/settings", { method: "PUT", body: JSON.stringify(body) }),
   remove: () => apiFetch<void>("/models/settings", { method: "DELETE" }),
+  /** Which of LEKA's models answers first here (2026-10-21). */
+  choose: (provider: string, model: string) =>
+    apiFetch<ModelGateway>("/models/default", { method: "PUT", body: JSON.stringify({ provider, model }) }),
+  /** LEKA's default again. */
+  unchoose: () => apiFetch<ModelGateway>("/models/default", { method: "DELETE" }),
   test: () => apiFetch<ModelTest>("/models/settings/test", { method: "POST" }),
   usage: (days = 30) => apiFetch<ModelUsage>(`/models/usage?days=${days}`),
 };

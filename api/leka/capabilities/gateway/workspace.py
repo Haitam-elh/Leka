@@ -7,6 +7,9 @@ and its own model if it brings one — Paramètres > Modèle de langage.
                 key (encrypted; never shown again — its last four
                 characters are), on or off, "ours only" or not
     remove()    back to LEKA's
+    choose()    which of LEKA's models answers first here — among those
+                LEKA holds a key for, Gemini or Mistral — in one click
+                (2026-10-21); unchoose(): LEKA's default again
     test()      asked a few words: whether it answered, how fast
 
 A key is required to bring a model, and again when the provider changes —
@@ -31,7 +34,7 @@ from leka.capabilities.gateway.service import (
     leka_default,
     leka_keys,
 )
-from leka.capabilities.models import WorkspaceModel
+from leka.capabilities.models import WorkspaceModel, WorkspaceModelDefault
 from leka.core.config import settings
 from leka.platform import secret_box
 
@@ -64,6 +67,10 @@ class Overview:
     offered: tuple[Offered, ...]
     own: WorkspaceModel | None
     routing: Routing
+    # Which of LEKA's models its admin chose to answer first here, and
+    # those it may choose: every model of a provider LEKA holds a key for.
+    chosen: Profile | None = None
+    choosable: tuple[Profile, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -86,11 +93,17 @@ class ModelSettings:
     async def overview(self) -> Overview:
         keys = leka_keys()
         default = profile(*leka_default())
-        fallbacks = fallbacks_of(settings.llm_fallbacks) or [
-            (name, DEFAULTS[name])
-            for name, key in keys.items()
-            if key is not None and name != default.provider and name in DEFAULTS
-        ]
+        chosen = await self._gateway.chosen()
+        first, after = await self._gateway.defaults()
+        fallbacks = (
+            (after if chosen is not None else None)
+            or fallbacks_of(settings.llm_fallbacks)
+            or [
+                (name, DEFAULTS[name])
+                for name, key in keys.items()
+                if key is not None and name != first[0] and name in DEFAULTS
+            ]
+        )
         offered = tuple(
             Offered(
                 name=vendor.name,
@@ -109,7 +122,41 @@ class ModelSettings:
             offered=offered,
             own=await self._gateway.setting(),
             routing=await self._gateway.routing(Needs()),
+            chosen=profile(*first) if chosen is not None and first != leka_default() else None,
+            choosable=tuple(
+                found
+                for name, key in keys.items()
+                if key is not None
+                for found in of_provider(name)
+            ),
         )
+
+    async def choose(
+        self, provider_name: str, model: str, *, by: uuid.UUID, now: datetime
+    ) -> WorkspaceModelDefault:
+        """Which of LEKA's models answers first here: one of a provider LEKA
+        holds a key for, and that LEKA knows."""
+        if not leka_keys().get(provider_name):
+            raise ModelSettingError("provider", "LEKA holds no key for this provider here.")
+        if model not in {found.model for found in of_provider(provider_name)}:
+            raise ModelSettingError("model", "LEKA does not know this model.")
+        row = await self._gateway.chosen()
+        if row is None:
+            row = WorkspaceModelDefault(workspace_id=self._workspace_id, id=uuid.uuid4())
+            self._session.add(row)
+        row.provider, row.model = provider_name, model
+        row.changed_by, row.changed_at = by, now
+        await self._session.flush()
+        return row
+
+    async def unchoose(self) -> bool:
+        """LEKA's default again — False when none was chosen."""
+        row = await self._gateway.chosen()
+        if row is None:
+            return False
+        await self._session.delete(row)
+        await self._session.flush()
+        return True
 
     async def save(self, change: Change, *, by: uuid.UUID, now: datetime) -> WorkspaceModel:
         vendor = provider(change.provider)

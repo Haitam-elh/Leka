@@ -488,6 +488,24 @@ class ModelGatewayRead(BaseModel):
     own: WorkspaceModelRead | None
     answering: list[ModelRouteRead] = Field(description="Who would answer now, in order.")
     ready: bool = Field(description="A model can answer here.")
+    chosen: ModelProfileRead | None = Field(
+        default=None,
+        description="Which of LEKA's models its admin chose to answer first here; none: "
+        "LEKA's default.",
+    )
+    choosable: list[ModelProfileRead] = Field(
+        default_factory=list,
+        description="LEKA's models one may choose here: those of a provider LEKA holds a key for.",
+    )
+
+
+class ModelDefaultUpdate(BaseModel):
+    """Which of LEKA's models answers first in this workspace."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    provider: Literal["google", "mistral", "openai", "anthropic"]
+    model: str = Field(min_length=1, max_length=120)
 
 
 class WorkspaceModelUpdate(BaseModel):

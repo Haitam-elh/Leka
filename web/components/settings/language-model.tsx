@@ -21,7 +21,7 @@ import {
   type ModelUsage,
   type WorkspaceModelUpdate,
 } from "@/lib/models";
-import { useModelChange, useModelGateway, useModelUsage } from "@/lib/models-queries";
+import { useModelChange, useModelDefault, useModelGateway, useModelUsage } from "@/lib/models-queries";
 import { notify } from "@/lib/notify";
 
 /**
@@ -97,6 +97,79 @@ function DefaultModel({ gateway }: { gateway: ModelGateway }) {
           : w.noFallback}
       </p>
     </div>
+  );
+}
+
+/**
+ * Which of LEKA's models answers first here (2026-10-21): one click among
+ * those LEKA holds a key for — Gemini, Mistral — LEKA's own default when
+ * none is chosen. LEKA's account, not the company's: that is « Le modèle de
+ * votre entreprise » below. Admins choose; anyone reads it.
+ */
+function ChooseDefault({ gateway, admin }: { gateway: ModelGateway; admin: boolean }) {
+  const t = useDictionary();
+  const w = t.languageModel.choose;
+  const { format: locale } = useLocale();
+  const { choose, unchoose } = useModelDefault();
+  const choosable = gateway.choosable ?? [];
+  if (choosable.length < 2) return null;
+  const current = gateway.chosen ?? gateway.default;
+  const busy = choose.isPending || unchoose.isPending;
+  const isLeka = (m: ModelProfile) => m.provider === gateway.default.provider && m.model === gateway.default.model;
+
+  async function pick(m: ModelProfile) {
+    try {
+      if (isLeka(m)) await unchoose.mutateAsync();
+      else await choose.mutateAsync({ provider: m.provider, model: m.model });
+      notify.success({ title: fill(w.done, { model: m.title }) });
+    } catch (error) {
+      notify.error({ title: error instanceof ApiError ? error.message : w.failed });
+    }
+  }
+
+  return (
+    <fieldset className="flex flex-col gap-2" data-testid="model-choose" disabled={!admin || busy}>
+      <legend className="text-sm font-semibold text-brand-navy">{w.title}</legend>
+      <p className="text-xs text-shell-muted">{admin ? w.body : w.readOnly}</p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {choosable.map((m) => {
+          const on = m.provider === current.provider && m.model === current.model;
+          const vendor = gateway.providers.find((p) => p.name === m.provider);
+          return (
+            <label
+              key={`${m.provider}:${m.model}`}
+              className={`flex cursor-pointer items-start gap-2 rounded-lg border p-2.5 text-[0.8125rem] ${
+                on ? "border-brand-violet bg-brand-violet-soft" : "border-shell-line bg-white"
+              }`}
+              data-testid="model-choice"
+              data-model={m.model}
+            >
+              <input
+                type="radio"
+                name="leka-default-model"
+                className="mt-1"
+                checked={on}
+                onChange={() => void pick(m)}
+              />
+              <span className="flex min-w-0 flex-col">
+                <span className="font-semibold text-brand-navy">
+                  {m.title}
+                  <span className="font-normal text-shell-muted"> · {vendor?.title ?? m.provider}</span>
+                </span>
+                {isLeka(m) ? <span className="text-xs text-shell-muted">{w.lekaDefault}</span> : null}
+                {priceSaid(t, m, locale)
+                  .slice(0, 1)
+                  .map((line) => (
+                    <span key={line} className="text-xs text-shell-muted">
+                      {line}
+                    </span>
+                  ))}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
   );
 }
 
@@ -509,6 +582,7 @@ export function LanguageModel() {
         ) : gateway.data ? (
           <>
             <DefaultModel gateway={gateway.data} />
+            <ChooseDefault gateway={gateway.data} admin={admin} />
             <Answering gateway={gateway.data} />
             <OwnModel gateway={gateway.data} admin={admin} />
             {usage.data ? <Usage usage={usage.data} /> : null}
