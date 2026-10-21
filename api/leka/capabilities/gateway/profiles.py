@@ -241,7 +241,8 @@ PROFILES: tuple[Profile, ...] = (
         vision=True,
     ),
     # GPT-5.6 (developers.openai.com/api/docs/pricing, read 2026-10-20):
-    # reasoning models, at their own temperature.
+    # reasoning models, at their own temperature — whose tools chat
+    # completions refuses (400, scripts/live_models.py, 2026-10-22).
     Profile(
         "openai",
         "gpt-5.6-sol",
@@ -253,6 +254,7 @@ PROFILES: tuple[Profile, ...] = (
         prices=(Price(_LONG_AGO, 4.0, 20.0, 0.4),),
         sends_temperature=False,
         vision=True,
+        responses=True,
     ),
     Profile(
         "openai",
@@ -265,6 +267,7 @@ PROFILES: tuple[Profile, ...] = (
         prices=(Price(_LONG_AGO, 0.2, 1.2, 0.02),),
         sends_temperature=False,
         vision=True,
+        responses=True,
     ),
     # GPT-6 (same page, read 2026-10-21): its tools only in the Responses
     # API (developers.openai.com/api/docs/models/gpt-6.1-sol).

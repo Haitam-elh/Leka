@@ -694,8 +694,11 @@ async def test_gpt_6_s_reasoning_goes_back_whole_with_its_tool_calls() -> None:
         "output": '{"owner": "Payments"}',
     }
 
-    # GPT-5.6 stays in chat completions.
+    # GPT-5.6 too: chat completions refuses its tools (400, checked live).
+    _, sent = await _ask(OPENAI, _call("openai", "gpt-5.6-sol", request), answer)
+    assert str(sent.url) == "https://api.openai.com/v1/responses"
+    # GPT-4.1 stays in chat completions.
     _, sent = await _ask(
-        OPENAI, _call("openai", "gpt-5.6-sol", request), {"choices": [{"message": {}}]}
+        OPENAI, _call("openai", "gpt-4.1", request), {"choices": [{"message": {}}]}
     )
     assert str(sent.url) == "https://api.openai.com/v1/chat/completions"
