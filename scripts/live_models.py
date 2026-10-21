@@ -5,8 +5,9 @@ customer's run fails on it.
     api/.venv/bin/python scripts/live_models.py [--only anthropic,openai]
 
 Per model whose provider LEKA holds a key for (LEKA_ANTHROPIC_API_KEY, … in
-.env or the environment): one call made to use a tool, one asked a
-structured answer — a few cents in all. The tests stand in for the
+.env or the environment): one call made to use a tool and the turn after
+it — its result sent back, as an agent does — and one asked a structured
+answer — a few cents in all. The tests stand in for the
 providers (tests/test_model_providers.py); this is the only check against
 the real ones. Run by hand, never in CI: it costs, and needs the keys.
 
@@ -19,6 +20,7 @@ import argparse
 import asyncio
 import json
 import sys
+from dataclasses import replace
 
 import httpx
 from pydantic import BaseModel
@@ -29,6 +31,7 @@ from leka.capabilities.gateway import (
     Output,
     ProviderError,
     Request,
+    Role,
     Tool,
     ToolChoice,
     leka_keys,
@@ -76,24 +79,35 @@ async def _check(call: Call, client: httpx.AsyncClient) -> tuple[str | None, str
         ),
     )
     for asked in asks:
+        each = replace(call, request=asked)
         try:
-            done = await vendor.complete(
-                Call(
-                    call.endpoint,
-                    call.model,
-                    asked,
-                    thinking=call.thinking,
-                    sends_temperature=call.sends_temperature,
-                    forces_tools=call.forces_tools,
-                    responses=call.responses,
-                ),
-                client,
-            )
+            done = await vendor.complete(each, client)
         except ProviderError as error:
             return str(error)[:300], version
         version = done.version
         if asked.tools and not any(c.name == "lookup" for c in done.tool_calls):
             return f"no tool call (finish: {done.finish})", version
+        if asked.tools:
+            # The turn an agent takes next: its calls — and what it thought
+            # before them — sent back with what the tool returned.
+            follow = replace(
+                asked,
+                messages=[
+                    *asked.messages,
+                    Message(Role.ASSISTANT, done.text, tool_calls=done.tool_calls),
+                    *(
+                        Message(Role.TOOL, '{"owner": "Payments"}', tool_call_id=c.id, name=c.name)
+                        for c in done.tool_calls
+                    ),
+                ],
+                tool_choice=ToolChoice.AUTO,
+            )
+            try:
+                answered = await vendor.complete(replace(each, request=follow), client)
+            except ProviderError as error:
+                return f"tool loop: {str(error)[:300]}", version
+            if "payments" not in answered.text.lower():
+                return f"tool loop: not answered from the tool ({answered.finish})", version
         if asked.output is not None:
             try:
                 Verdict.model_validate(json.loads(done.text))

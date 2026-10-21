@@ -527,7 +527,7 @@ def test_beyond_the_fallbacks_the_task_says_what_it_prefers() -> None:
 def test_fallbacks_are_read_as_configured() -> None:
     assert fallbacks_of(" mistral:mistral-small-latest , anthropic ,, ") == [
         ("mistral", "mistral-small-latest"),
-        ("anthropic", "claude-sonnet-5"),
+        ("anthropic", "claude-sonnet-5-5"),
     ]
     assert fallbacks_of("") == []
 
