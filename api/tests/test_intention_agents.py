@@ -40,14 +40,16 @@ from pydantic import SecretStr
 from sqlalchemy import select, text
 
 from leka.capabilities import AgentRun, Gateway
+from leka.capabilities.definition import Kind
 from leka.capabilities.gateway import service
+from leka.capabilities.registry import agents as agent_definitions
 from leka.capabilities.runs import outside_sources
 from leka.core.config import settings
 from leka.db import session_factory, workspace_scope
 from leka.intentions import agents as agents_module
 from leka.intentions import feasibility as feasibility_module
 from leka.intentions.processing import analyse_pending
-from leka.intentions.proposal import named, plan_by_rules
+from leka.intentions.proposal import asked_words, named, plainly_asked, plan_by_rules
 from tests.conftest import FakeIdentity
 from tests.test_agent_runs_api import _ready
 from tests.test_context_engine import model
@@ -672,3 +674,48 @@ async def test_a_request_answered_with_no_agent_at_all_gets_the_catalogue_s(
     assert (proposal["by"], bool(proposal["agents"])) == ("rules", True)
     assert proposal["informative"] is False
     assert len(proposal["agents"]) <= 3
+
+
+DESIGN = "Propose-moi un meilleur design pour la page mon environnement de Haitam-elh/Leka"
+
+
+def test_the_words_plainly_name_the_design_review_not_the_alphabet() -> None:
+    """2026-10-21: words capped at three made most agents tie, and the
+    alphabet chose; a word of an agent's name now counts most."""
+    found = {d.key: d for d in agent_definitions(settings.agents_dir) if d.kind is Kind.AGENT}
+    entries = {key: SimpleNamespace(definition=d) for key, d in found.items()}
+    plain, scores = plainly_asked(entries, asked_words(DESIGN))
+    assert plain[0] == "design-review"
+    assert scores["documentation-assistant"] == 0
+
+
+async def test_a_model_s_choice_far_from_what_the_words_name_is_corrected(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[tuple[uuid.UUID, str]],
+    gemini: Callable[..., Gemini],
+    started: list[uuid.UUID],
+) -> None:
+    """2026-10-21: asked a better design, Mistral chose the documentation
+    assistant alone — the design review is proposed first, the
+    documentation assistant no more."""
+    await _ready(acme)
+    scripted = gemini(
+        {
+            "agents": [{"key": "documentation-assistant", "why": "Documenter la page."}],
+            "steps": [{"title": "Documenter", "agent": "documentation-assistant"}],
+            "informative": False,
+        }
+    )
+    _as(identity, acme, "member")
+    intention = await _ask(client, DESIGN)
+    await _analysed(acme, intention)
+    # Shown to the model the most relevant first.
+    assert scripted.offered[0] == "design-review"
+    proposal = (await _get(client, f"/{intention['id']}/analysis"))["result"]["proposal"]
+    keys = [a["key"] for a in proposal["agents"]]
+    assert keys[0] == "design-review"
+    assert "documentation-assistant" not in keys
+    assert all(s["agent"] in (*keys, None) for s in proposal["steps"])
