@@ -480,10 +480,14 @@ async def test_kept_to_some_sources_it_sees_nothing_that_came_from_no_other(
         async with session_factory() as session:
             entity, source = (
                 await session.execute(
+                    # This workspace's: raw SQL is not scoped, and another
+                    # test's entity made it fail one run in two (2026-10-21).
                     text(
                         "SELECT id, provenance -> 'sources' -> 0 ->> 'source_id' FROM entities "
-                        "WHERE jsonb_array_length(provenance -> 'sources') > 0 LIMIT 1"
-                    )
+                        "WHERE workspace_id = :w "
+                        "AND jsonb_array_length(provenance -> 'sources') > 0 ORDER BY id LIMIT 1"
+                    ),
+                    {"w": acme["acme"]},
                 )
             ).one()
             kept = await outside_sources(session, acme["acme"], [source])
@@ -646,3 +650,24 @@ async def test_work_to_do_and_no_agent_leka_knows_the_catalogue_proposes_one(
     assert proposal["by"] == "rules"
     assert proposal["agents"], proposal
     assert started == []
+
+
+async def test_a_request_answered_with_no_agent_at_all_gets_the_catalogue_s(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[tuple[uuid.UUID, str]],
+    gemini: Callable[..., Gemini],
+    started: list[uuid.UUID],
+) -> None:
+    """2026-10-21: « Propose-moi un meilleur design … » — a request that
+    changes nothing itself — answered by Mistral with no agent at all: the
+    catalogue's own are proposed, never « aucun agent ne fait ce travail »."""
+    await _ready(acme)
+    gemini({"agents": [], "steps": [], "informative": False})
+    _as(identity, acme, "member")
+    intention = await _proposed(client, acme)
+    proposal = (await _get(client, f"/{intention['id']}/analysis"))["result"]["proposal"]
+    assert (proposal["by"], bool(proposal["agents"])) == ("rules", True)
+    assert proposal["informative"] is False
