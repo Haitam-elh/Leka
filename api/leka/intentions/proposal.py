@@ -16,7 +16,13 @@ hand (agents.py).
     said        each with what it delivers, what a run of it has cost here,
                 whether it can run here and why not
     no model    the catalogue's own discovery (goal, kind, words) and a
-                plan by goal
+                plan by goal — and so when a model's answer names no agent
+                LEKA knows for work to do (2026-10-21: Mistral named them
+                its own way, every one was dropped, nothing proposed)
+
+An agent a model names another way — « design_review », « Revue de design »
+— is the catalogue's own: matched without case, accents or punctuation, by
+key or by title.
 
 An agent that cannot run here is proposed all the same when it is the one
 the work needs: what it takes is said, never hidden.
@@ -72,7 +78,8 @@ You are given the request and LEKA's agents: what each delivers, the \
 inputs it takes, whether it can run here.
 
 - agents: the agents whose work the request needs, the most useful first, \
-three at most. None when no agent's work fits: a plain question is \
+three at most, each by its `key` exactly as given (« design-review »), never \
+its title. None when no agent's work fits: a plain question is \
 answered by LEKA's own analysis. A request to build, develop, change, test, \
 review, document, investigate, secure or draw needs the agent that does it \
 — developing a feature needs the code change, its tests and its review. \
@@ -103,7 +110,9 @@ Answer with the JSON object only."""
 class Chosen(BaseModel):
     """An agent, as the model proposes it."""
 
-    key: str
+    key: str = Field(
+        description="The agent's key exactly as given — « design-review » — never its title."
+    )
     inputs: dict[str, str | bool] = Field(default_factory=dict)
     missing: list[str] = Field(default_factory=list, max_length=10)
     why: str = Field(default="", max_length=400)
@@ -128,6 +137,20 @@ def deliverables_of(definition: Any) -> list[str]:
     """What a run of it delivers: its report, then what LEKA draws of it."""
     drawn = DRAWN.get(definition.renders or "", ())
     return ["report", *drawn]
+
+
+def known_key(said: str | None, entries: Mapping[str, Any]) -> str | None:
+    """The catalogue's key a model meant: as given, else written another
+    way — « design_review », « Revue de design » — else none."""
+    if not said:
+        return None
+    if said in entries:
+        return said
+    wanted = _plain(said)
+    for key, entry in entries.items():
+        if wanted in (_plain(key), _plain(entry.definition.title)):
+            return str(key)
+    return None
 
 
 def offered(entry: Any) -> dict[str, Any]:
@@ -402,6 +425,32 @@ async def propose(
             )
             if done.ok and done.value is not None:
                 said = done.value
+    if said is not None:
+        # Each agent it named, the catalogue's own — however it wrote it.
+        known: list[Chosen] = []
+        for c in said.agents:
+            key = known_key(c.key, by_key)
+            if key is not None and key not in {k.key for k in known}:
+                known.append(c.model_copy(update={"key": key}))
+        if not known and asked is None and (said.agents or acting(understood)):
+            # Work to do, and no agent it named is LEKA's: the catalogue's
+            # own discovery rather than nothing proposed.
+            logger.warning(
+                "intention_proposal_unknown_agents",
+                intention=str(intention.id),
+                said=[c.key for c in said.agents][:5],
+            )
+            said = None
+        else:
+            said = said.model_copy(
+                update={
+                    "agents": known,
+                    "steps": [
+                        s.model_copy(update={"agent": known_key(s.agent, by_key)})
+                        for s in said.steps
+                    ],
+                }
+            )
     if said is not None:
         chosen = [c for c in said.agents if c.key in by_key]
         # The one the person named comes first: as the model read it when it
