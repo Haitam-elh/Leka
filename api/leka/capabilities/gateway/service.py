@@ -228,6 +228,21 @@ def own_of(row: WorkspaceModel) -> Own | None:
 CUT = frozenset({"MAX_TOKENS", "LENGTH"})
 
 
+def corrected(request: Request, done: Completion, invalid: str) -> Request:
+    """The request again, with the answer given and why it is not used."""
+    return replace(
+        request,
+        messages=[
+            *request.messages,
+            Message(Role.ASSISTANT, done.text),
+            Message.user(
+                f"{invalid} Answer again, as asked: the whole answer, corrected — "
+                "and only the answer."
+            ),
+        ],
+    )
+
+
 def json_of(text: str) -> str:
     """The JSON in an answer — some models fence it all the same."""
     fenced = re.fullmatch(r"\s*```(?:json)?\s*(.*?)\s*```\s*", text, re.DOTALL)
@@ -449,6 +464,11 @@ class Gateway:
                     )
                     attempts.append(self._attempt(route, attempt, str(invalid)))
                     if attempt <= self._retries:
+                        # Asked again with what was wrong — its own answer,
+                        # and why it is not used — never the same words
+                        # again: a model told corrects itself (2026-10-21:
+                        # asked the same, it answered the same).
+                        call = replace(call, request=corrected(call.request, done, str(invalid)))
                         continue
                     return None
             self._record(request, route, attempt, done=done, status="ok")

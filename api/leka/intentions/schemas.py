@@ -1105,6 +1105,9 @@ class AgentProposalRead(BaseModel):
     steps: list[PlanStepRead]
     informative: bool = Field(description="It only asks to know: nothing to produce or change.")
     by: Literal["model", "rules"]
+    model: str | None = Field(
+        default=None, description="The model that chose the agents, when one did (2026-10-21)."
+    )
 
 
 class AgentLaunch(BaseModel):

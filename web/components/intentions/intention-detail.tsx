@@ -59,6 +59,7 @@ import type {
 } from "@/lib/intentions/api";
 import { attachmentAddress } from "@/lib/intentions/attachments";
 import { intentionKeys, useDecide, useIntentionAnalysis, useIntentionOffer } from "@/lib/intentions/queries";
+import { modelTitle } from "@/lib/models";
 import { notify } from "@/lib/notify";
 import { workspace as workspaceApi } from "@/lib/workspace";
 import { useSources } from "@/lib/sources-queries";
@@ -358,6 +359,16 @@ function UnderstandingCard({
   // What LEKA understood was asked — never what its analysis concluded.
   const objective = intention.understanding?.restated || intention.title || intention.text;
   const agents = offer?.agents ?? [];
+  // Who chose them (2026-10-21): the model that read the request, or LEKA's
+  // catalogue when no model gave a choice that fits.
+  const { proposal } = useProposal(intention);
+  const chosenBy = proposal
+    ? proposal.by === "model" && proposal.model
+      ? fill(w.agentsChosenBy, { model: modelTitle(proposal.model) })
+      : proposal.by === "rules"
+        ? w.agentsByCatalogue
+        : null
+    : null;
   const toggle = (key: string) => {
     const now = chosen ?? agents.filter((a) => a.chosen).map((a) => a.key);
     onChoose(now.includes(key) ? now.filter((k) => k !== key) : [...now, key]);
@@ -399,6 +410,11 @@ function UnderstandingCard({
             <span className="rounded-md bg-shell-canvas px-2 py-0.5 text-xs text-shell-muted">
               ({fill(w.agentsCount, { count: agents.length })})
             </span>
+            {chosenBy ? (
+              <span className="text-xs text-shell-muted" data-testid="detail-agents-chosen-by">
+                {chosenBy}
+              </span>
+            ) : null}
             {offer?.plan_now === "free" ? (
               <span className="flex items-center gap-1.5 rounded-md bg-brand-violet-soft px-2 py-0.5 text-xs text-brand-violet">
                 <Lock className="size-3.5" aria-hidden="true" />

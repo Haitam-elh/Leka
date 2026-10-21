@@ -7498,6 +7498,11 @@ export interface components {
              * @enum {string}
              */
             by: "model" | "rules";
+            /**
+             * Model
+             * @description The model that chose the agents, when one did (2026-10-21).
+             */
+            model?: string | null;
         };
         /**
          * AgentRunCreate
