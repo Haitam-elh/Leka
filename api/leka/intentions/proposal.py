@@ -432,9 +432,19 @@ async def propose(
             key = known_key(c.key, by_key)
             if key is not None and key not in {k.key for k in known}:
                 known.append(c.model_copy(update={"key": key}))
-        if not known and asked is None and (said.agents or acting(understood)):
-            # Work to do, and no agent it named is LEKA's: the catalogue's
-            # own discovery rather than nothing proposed.
+        # Work to do: agents it named, an answer that does not say it only
+        # asks to know, a request — « Propose-moi un meilleur design » acts
+        # on nothing itself, yet asks for work (2026-10-21: Mistral named no
+        # agent for it, and nothing was proposed).
+        work = (
+            bool(said.agents)
+            or not said.informative
+            or acting(understood)
+            or (understood is not None and understood.mode == "request")
+        )
+        if not known and asked is None and work:
+            # No agent it named is LEKA's: the catalogue's own discovery
+            # rather than nothing proposed.
             logger.warning(
                 "intention_proposal_unknown_agents",
                 intention=str(intention.id),
@@ -510,7 +520,10 @@ async def propose(
         ),
         {e.definition.key: e.availability for e in entries},
     )
-    picked = [m.definition.key for m in found if m.score >= 3][:1]
+    # Those that answer it best, together — three at most: « un meilleur
+    # design » is the code change and the design review alike (2026-10-21).
+    best = found[0].score if found else 0
+    picked = [m.definition.key for m in found if m.score >= 3 and m.score == best][:MOST_AGENTS]
     if asked is not None:
         picked = [asked, *(key for key in picked if key != asked)]
     costs = await run_costs(session, picked, now=moment)
