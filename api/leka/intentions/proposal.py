@@ -51,7 +51,7 @@ from leka.capabilities import (
     Tier,
     permitted,
 )
-from leka.capabilities.definition import Query, discover
+from leka.capabilities.definition import Query, _words, discover
 from leka.capabilities.runtime import DRAWN
 from leka.intentions.grounding import acting
 from leka.intentions.models import Intention
@@ -137,6 +137,47 @@ def deliverables_of(definition: Any) -> list[str]:
     """What a run of it delivers: its report, then what LEKA draws of it."""
     drawn = DRAWN.get(definition.renders or "", ())
     return ["report", *drawn]
+
+
+# Words that say nothing of the work asked: the product's name, the small
+# words of a sentence.
+_FILLER = frozenset(
+    {
+        "leka", "pour", "moi", "mon", "mes", "les", "des", "une", "dans", "sur", "avec",
+        "que", "qui", "est", "par", "pas", "plus", "son", "ses", "the", "and", "for",
+        "with", "from", "this", "that", "your", "our",
+    }
+)  # fmt: skip
+
+
+def asked_words(text: str) -> frozenset[str]:
+    """A request's words that may say what work it asks."""
+    return frozenset(_words(text) - _FILLER)
+
+
+def relevance(definition: Any, asked: frozenset[str]) -> int:
+    """How plainly a request asks for an agent's work: each of its words in
+    the agent's name — « design », « Revue de design » — three; in what it
+    delivers or is asked as, one (2026-10-21: words capped at three made
+    most agents tie, and the alphabet chose)."""
+    named = _words(f"{definition.title} {definition.key.replace('-', ' ')}") - _FILLER
+    told = _words(" ".join((definition.summary, *definition.examples))) - _FILLER - named
+    return 3 * len(asked & named) + len(asked & told)
+
+
+def plainly_asked(
+    entries: Mapping[str, Any], asked: frozenset[str]
+) -> tuple[list[str], dict[str, int]]:
+    """The agents a request plainly names — a word of their name, at least
+    half as relevant as the best — most relevant first; and each one's
+    relevance."""
+    scores = {key: relevance(e.definition, asked) for key, e in entries.items()}
+    best = max(scores.values(), default=0)
+    plain = sorted(
+        (k for k, v in scores.items() if v >= 3 and v * 2 >= best),
+        key=lambda k: (-scores[k], k),
+    )
+    return plain[:MOST_AGENTS], scores
 
 
 def known_key(said: str | None, entries: Mapping[str, Any]) -> str | None:
@@ -399,6 +440,37 @@ async def propose(
         ]
         by_key = {e.definition.key: e for e in entries}
     said: Proposed | None = None
+    words = asked_words(intention.text)
+    plain, relevant = plainly_asked(by_key, words)
+    # Shown the most relevant first: a model reads the top of a list best.
+    entries = sorted(entries, key=lambda e: -relevant.get(e.definition.key, 0))
+    # Work to do, as the request was understood — whatever a model says.
+    asks_work = acting(understood) or (understood is not None and understood.mode == "request")
+
+    def judged(value: Any, _context: Any) -> list[str]:
+        """What is wrong with a model's choice, before it is used — a
+        choice that fails is asked again, then of the next model: the
+        quality of the best model answering, whichever answers first
+        (2026-10-21)."""
+        if not isinstance(value, Proposed) or asked is not None:
+            return []
+        got = [k for k in (known_key(c.key, by_key) for c in value.agents) if k]
+        best = relevant.get(plain[0], 0) if plain else 0
+        if plain and max((relevant.get(k, 0) for k in got), default=0) * 2 < best:
+            fits = by_key[plain[0]].definition
+            return [
+                f"The agents chosen ({', '.join(got) or 'none'}) do not do what the request "
+                f"asks. Read the request again: « {fits.title} » ({plain[0]}) delivers "
+                f"« {fits.summary} ». Choose the agents whose work it needs, by their keys."
+            ]
+        if asks_work and not got and not value.informative:
+            return [
+                "The request asks for work to be done and no agent was chosen: choose the "
+                "agents whose work it needs, by their keys."
+            ]
+        return []
+
+    chosen_by: str | None = None
     if entries:
         runtime = LLMRuntime(session, workspace_id)
         if await runtime.ready(NEEDS):
@@ -416,6 +488,7 @@ async def propose(
                         ensure_ascii=False,
                     ),
                     output=Proposed,
+                    check=judged,
                     needs=NEEDS,
                     tier=Tier.FAST,
                     max_tokens=4000,
@@ -425,6 +498,7 @@ async def propose(
             )
             if done.ok and done.value is not None:
                 said = done.value
+                chosen_by = done.model
     if said is not None:
         # Each agent it named, the catalogue's own — however it wrote it.
         known: list[Chosen] = []
@@ -432,9 +506,14 @@ async def propose(
             key = known_key(c.key, by_key)
             if key is not None and key not in {k.key for k in known}:
                 known.append(c.model_copy(update={"key": key}))
-        if not known and asked is None and (said.agents or acting(understood)):
-            # Work to do, and no agent it named is LEKA's: the catalogue's
-            # own discovery rather than nothing proposed.
+        # Work to do: agents it named, an answer that does not say it only
+        # asks to know, a request — « Propose-moi un meilleur design » acts
+        # on nothing itself, yet asks for work (2026-10-21: Mistral named no
+        # agent for it, and nothing was proposed).
+        work = bool(said.agents) or not said.informative or asks_work
+        if not known and asked is None and work:
+            # No agent it named is LEKA's: the catalogue's own discovery
+            # rather than nothing proposed.
             logger.warning(
                 "intention_proposal_unknown_agents",
                 intention=str(intention.id),
@@ -499,6 +578,7 @@ async def propose(
             steps=steps,
             informative=said.informative and asked is None,
             by="model",
+            model=chosen_by,
         )
     # No model, or nothing usable from it: the catalogue's own discovery.
     found = discover(
@@ -510,7 +590,12 @@ async def propose(
         ),
         {e.definition.key: e.availability for e in entries},
     )
-    picked = [m.definition.key for m in found if m.score >= 3][:1]
+    # What the words plainly name first — « un meilleur design », the design
+    # review — else those the catalogue finds best, together, three at most.
+    top = found[0].score if found else 0
+    picked = (
+        plain or [m.definition.key for m in found if m.score >= 3 and m.score == top][:MOST_AGENTS]
+    )
     if asked is not None:
         picked = [asked, *(key for key in picked if key != asked)]
     costs = await run_costs(session, picked, now=moment)
