@@ -313,7 +313,8 @@ PROFILES: tuple[Profile, ...] = (
 DEFAULTS: dict[str, str] = {
     "google": "gemini-3.8-flash",
     "mistral": "mistral-large-latest",
-    "anthropic": "claude-sonnet-5",
+    # Sonnet 5.5: Sonnet 5's price, checked live (scripts/live_models.py, 2026-10-22).
+    "anthropic": "claude-sonnet-5-5",
     "openai": "gpt-4.1",
 }
 
