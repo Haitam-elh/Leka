@@ -19,8 +19,9 @@ def test_the_committed_inventory_is_what_the_sources_say() -> None:
 def test_every_agent_on_sale_is_built_and_every_reference_one_unbuilt_is_never_sold() -> None:
     found = rows()
     on_sale = [r for r in found if r.status == "on_sale"]
-    # Thirteen, and Frontend Craft's and Engineering's four each (LEKA-461).
-    assert len(on_sale) == 21
+    # Thirteen, Frontend Craft's and Engineering's four each (LEKA-461), and
+    # the acceptance (2026-10-21).
+    assert len(on_sale) == 22
     assert all(r.agent is not None and r.lifecycle == "active" for r in on_sale)
     # The reference's price is the catalogue's, where the reference names one.
     assert all(r.price is not None for r in on_sale)

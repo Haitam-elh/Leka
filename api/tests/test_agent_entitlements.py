@@ -465,6 +465,8 @@ async def test_each_plan_runs_the_agents_it_includes_and_those_of_the_plans_belo
         "test-generation",
         "regression-analysis",
         "change-impact-analysis",
+        # Acceptance (2026-10-21), the same until he says.
+        "qa-acceptance",
     }
     assert all(a["included"] for a in sold["agents"] if a["key"] not in frontend)
     assert not any(a["included"] for a in sold["agents"] if a["key"] in frontend)

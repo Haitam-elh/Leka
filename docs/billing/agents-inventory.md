@@ -19,7 +19,7 @@ LEKA's own capabilities — understanding, the analysis, its answer (LEKA Assist
 | Refactoring Specialist | architecture | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
 | Test Strategist | testing | `test-analysis` | active | standard | 9 € | Option payante, incluse dès le plan indiqué | starter + | engineering, ship-safe |
 | Test Generator | testing | `test-generation` | active | standard | 9 € | Option payante, incluse dès le plan indiqué | enterprise + | engineering |
-| QA Analyst | testing | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
+| QA Analyst | testing | `qa-acceptance` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | enterprise + | — |
 | Regression Analyst | testing | `regression-analysis` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | enterprise + | engineering, ship-safe |
 | E2E Testing Specialist | testing | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
 | Bug Investigator | incident | `debug-assistant` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | growth + | incident-response |

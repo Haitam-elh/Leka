@@ -62,6 +62,11 @@ agents:
     version: 1.4.0
     status: active
 
+  - path: development/qa-acceptance/SKILL.md
+    name: qa-acceptance
+    version: 1.0.0
+    status: active
+
   - path: development/regression-analysis/SKILL.md
     name: regression-analysis
     version: 1.1.0

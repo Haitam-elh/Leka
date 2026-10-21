@@ -210,6 +210,14 @@ ASKED = [
         ),
         "infrastructure-analysis",
     ),
+    (
+        RouteQuery(
+            text="La PR #42 de acme/web est-elle prête à partir en production ?",
+            goal="check_compliance",
+            kind="change",
+        ),
+        "qa-acceptance",
+    ),
 ]
 
 
@@ -639,3 +647,43 @@ def test_the_code_change_proposes_the_smallest_change_and_says_the_rest() -> Non
         assert step in said, step
     assert "**Ce qui n'est pas fait ici**" in said
     assert credited("code-change", "msitarzewski/agency-agents")
+
+
+def test_the_acceptance_holds_a_change_to_its_criteria_with_proof() -> None:
+    """2026-10-21: « Recette (QA) » — each criterion with its proof, ready
+    only on evidence, never run; its method credited, never told it."""
+    d = {d.key: d for d in catalogue()}["qa-acceptance"]
+    assert (d.kind, d.lifecycle, d.version, d.mode) == (
+        Kind.AGENT,
+        Lifecycle.ACTIVE,
+        "1.0.0",
+        "read_only",
+    )
+    assert set(d.tools) == {
+        "search_entities",
+        "read_entity",
+        "list_pull_requests",
+        "read_pull_request",
+        "list_files",
+        "read_file",
+    }
+    assert all(not i.required for i in d.contract.inputs)
+    assert {i.name for i in d.contract.inputs} == {"changement", "ticket", "criteres", "depot"}
+    assert "issue" in d.entity_types
+    said = d.instructions or ""
+    for section in (
+        "Ce qu'il regarde",
+        "Sa méthode",
+        "Ce qu'il produit",
+        "Ce qu'il ne doit jamais faire",
+    ):
+        assert section in said, section
+    # Ready only on proof; never run; nothing invented, nothing added.
+    for rule in (
+        "« À reprendre »",
+        "tu ne lances rien",
+        "Rien d'inventé",
+        "N'ajoute aucune exigence",
+    ):
+        assert rule.lower() in said.lower(), rule
+    assert credited("qa-acceptance", "msitarzewski/agency-agents")

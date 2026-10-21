@@ -2501,6 +2501,7 @@ const fr = {
       "release-analysis": "Analyse de release",
       "test-analysis": "Analyse des tests",
       "test-generation": "Génération de tests",
+      "qa-acceptance": "Recette (QA)",
       "documentation-assistant": "Assistant de documentation",
       "accessibility-audit": "Audit d'accessibilité",
       "design-review": "Revue de design",
@@ -2584,6 +2585,8 @@ const fr = {
         "Se repérer dans le code d'un dépôt : son organisation, où vit une fonctionnalité, comment le construire, le lancer, le tester.",
       "test-generation":
         "Les tests qui manquent, écrits par LEKA : un diff relu par une personne, puis la pull request.",
+      "qa-acceptance":
+        "Une pull request recettée : chaque critère attendu, son statut et sa preuve — le code, le test, la CI.",
       "regression-analysis":
         "Ce qu'un changement peut casser qui marchait : les comportements touchés, ce qui en dépend, les tests qui les gardent.",
       "change-impact-analysis":
@@ -11185,6 +11188,7 @@ const en: Dictionary = {
       "release-analysis": "Release analysis",
       "test-analysis": "Test analysis",
       "test-generation": "Test generation",
+      "qa-acceptance": "Acceptance (QA)",
       "documentation-assistant": "Documentation assistant",
       "accessibility-audit": "Accessibility audit",
       "design-review": "Design review",
@@ -11265,6 +11269,8 @@ const en: Dictionary = {
         "Finding your way in a repository's code: how it is organised, where a feature lives, how to build, run and test it.",
       "test-generation":
         "The missing tests, written by LEKA: a diff a person reviews, then the pull request.",
+      "qa-acceptance":
+        "A pull request accepted or not: each expected criterion, its status and its proof — the code, the test, the CI.",
       "regression-analysis":
         "What a change could break that used to work: the behaviours it alters, what depends on them, the tests guarding them.",
       "change-impact-analysis":

@@ -328,9 +328,14 @@ class GitHubCode:
             listed = await client.get(
                 f"/repos/{name}/pulls/{number}/files", params={"per_page": MAX_PULL_FILES}
             )
+            meta = head.json()
+            # Its CI, as its head stands (2026-10-21): what a review or an
+            # acceptance reads beside the diff — never taken for a proof of
+            # behaviour.
+            sha = str((meta.get("head") or {}).get("sha") or "")
+            checks = await self._checks(client, name, sha) if sha else None
         if listed.status_code != 200:
             raise self._refused(listed, f"les fichiers de la pull request #{number}")
-        meta = head.json()
         files: list[dict[str, object]] = []
         room = MAX_PULL_CHARS
         for each in listed.json():
@@ -358,6 +363,7 @@ class GitHubCode:
             "deletions": int(meta.get("deletions") or 0),
             "changed_files": int(meta.get("changed_files") or len(files)),
             "files": files,
+            "checks": checks,
         }
 
     # ── the one write: a pull request ────────────────────────────────────────

@@ -87,6 +87,8 @@ def test_the_catalogue_lekas_ships_is_whole() -> None:
         "test-generation",
         "regression-analysis",
         "change-impact-analysis",
+        # Acceptance (2026-10-21): an option below Enterprise until Karim says.
+        "qa-acceptance",
     }
     assert sold_.included_in("business") == set(sold_.agents) - later
     # Each agent, the least plan that includes it.
