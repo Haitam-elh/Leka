@@ -442,7 +442,16 @@ def test_gemini_costs_what_google_lists_and_its_price_doubles_in_2027() -> None:
     assert flash.cost(1_000_000, 1_000_000, datetime(2027, 1, 2, tzinfo=UTC)) == 9.0
     # A model without a published price is not guessed.
     assert profile("azure_openai", "gpt-prod").cost(10, 10) is None
-    assert profile("mistral", "mistral-medium-latest").cost(10, 10) is None
+    assert profile("mistral", "codestral-latest").cost(10, 10) is None
+
+
+def test_mistral_costs_what_it_lists_from_the_day_it_was_read() -> None:
+    # 2026-10-21: Medium and Small had no price, Large's cache none either.
+    day = datetime(2026, 10, 22, tzinfo=UTC)
+    assert profile("mistral", "mistral-small-latest").cost(1_000_000, 1_000_000, day) == 0.75
+    assert profile("mistral", "mistral-medium-latest").cost(1_000_000, 1_000_000, day) == 9.0
+    large = profile("mistral", "mistral-large-latest").price(day)
+    assert large is not None and large.per_million_cached == 0.05
 
 
 # ── routing ──────────────────────────────────────────────────────────────────

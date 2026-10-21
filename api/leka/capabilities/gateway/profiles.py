@@ -92,6 +92,8 @@ def cost_at(price: Price, tokens_in: int, tokens_out: int, *, cached: int = 0) -
 
 
 _LONG_AGO = date(2025, 1, 1)
+# Mistral's prices, read from its own page (2026-10-21).
+_PRICED = date(2026, 10, 21)
 
 PROFILES: tuple[Profile, ...] = (
     # LEKA's default for the MVP.
@@ -113,6 +115,10 @@ PROFILES: tuple[Profile, ...] = (
         sends_temperature=False,
         vision=True,
     ),
+    # docs.mistral.ai/inference/pricing, read 2026-10-21. shortcut: Mistral
+    # does not say where its -latest names point — Large 3, Medium 3.5 and
+    # Small 4 by its retirements (scripts/live_models.py prints the version
+    # that answered); a new dated price when it moves.
     Profile(
         "mistral",
         "mistral-large-latest",
@@ -121,25 +127,27 @@ PROFILES: tuple[Profile, ...] = (
         output=32_000,
         quality=3,
         speed=2,
-        prices=(Price(_LONG_AGO, 0.5, 1.5),),
+        prices=(Price(_LONG_AGO, 0.5, 1.5), Price(_PRICED, 0.5, 1.5, 0.05)),
     ),
     Profile(
         "mistral",
         "mistral-medium-latest",
         "Mistral Medium",
-        context=128_000,
+        context=256_000,
         output=32_000,
         quality=2,
         speed=3,
+        prices=(Price(_PRICED, 1.5, 7.5, 0.15),),
     ),
     Profile(
         "mistral",
         "mistral-small-latest",
         "Mistral Small",
-        context=128_000,
+        context=256_000,
         output=32_000,
         quality=1,
         speed=3,
+        prices=(Price(_PRICED, 0.15, 0.6, 0.015),),
     ),
     Profile(
         "anthropic",

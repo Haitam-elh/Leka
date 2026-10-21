@@ -53,11 +53,13 @@ class Verdict(BaseModel):
 TOKENS = 4_000
 
 
-async def _check(call: Call, client: httpx.AsyncClient) -> str | None:
-    """What went wrong with this model, or None."""
+async def _check(call: Call, client: httpx.AsyncClient) -> tuple[str | None, str]:
+    """What went wrong with this model, or None — and the version that
+    answered: where a -latest name points today."""
     vendor = provider(call.endpoint.provider)
     if vendor is None:
-        return "no provider"
+        return "no provider", ""
+    version = ""
     asks = (
         Request(
             purpose="live-check",
@@ -87,15 +89,16 @@ async def _check(call: Call, client: httpx.AsyncClient) -> str | None:
                 client,
             )
         except ProviderError as error:
-            return str(error)[:300]
+            return str(error)[:300], version
+        version = done.version
         if asked.tools and not any(c.name == "lookup" for c in done.tool_calls):
-            return f"no tool call (finish: {done.finish})"
+            return f"no tool call (finish: {done.finish})", version
         if asked.output is not None:
             try:
                 Verdict.model_validate(json.loads(done.text))
             except ValueError:
-                return f"not the shape asked: {done.text[:120]!r}"
-    return None
+                return f"not the shape asked: {done.text[:120]!r}", version
+    return None, version
 
 
 async def main(only: set[str]) -> int:
@@ -113,9 +116,13 @@ async def main(only: set[str]) -> int:
                 sends_temperature=found.sends_temperature,
                 forces_tools=found.forces_tools,
             )
-            wrong = await _check(call, client)
+            wrong, version = await _check(call, client)
             failed += wrong is not None
-            print(f"{'FAIL' if wrong else 'ok  '}  {found.provider}:{found.model}  {wrong or ''}")
+            answered = f" ({version})" if version and version != found.model else ""
+            print(
+                f"{'FAIL' if wrong else 'ok  '}  {found.provider}:{found.model}{answered}  "
+                f"{wrong or ''}"
+            )
     return 1 if failed else 0
 
 
