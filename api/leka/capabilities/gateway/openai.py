@@ -10,12 +10,18 @@ it (a self-hosted model, a proxy).
 
 A structured answer is asked as a JSON schema (`response_format`), tools as
 functions; a tool call's arguments come back as a JSON string.
+
+GPT-6 calls tools only in OpenAI's Responses API: a model whose profile says
+so is asked there instead (`responses`) — the same key, other words. Asked
+statelessly (`store: false`): what it reasoned before its tool calls comes
+back encrypted and goes back with them, whole.
 """
 
 from __future__ import annotations
 
 import json
 import time
+from dataclasses import replace
 from typing import Any
 
 import httpx
@@ -54,6 +60,144 @@ def _message(message: Message) -> dict[str, Any]:
             ],
         }
     return {"role": message.role.value, "content": message.content}
+
+
+def _thoughts(signature: str | None) -> list[dict[str, Any]]:
+    """The reasoning items kept as a tool call's signature — none from
+    another provider's."""
+    try:
+        items = json.loads(signature or "")
+    except ValueError:
+        return []
+    if not isinstance(items, list):
+        return []
+    return [i for i in items if isinstance(i, dict) and i.get("type") == "reasoning"]
+
+
+def _items(messages: list[Message]) -> list[dict[str, Any]]:
+    said: list[dict[str, Any]] = []
+    for message in messages:
+        if message.role is Role.SYSTEM:
+            continue
+        if message.role is Role.TOOL:
+            said.append(
+                {
+                    "type": "function_call_output",
+                    "call_id": message.tool_call_id,
+                    "output": message.content,
+                }
+            )
+            continue
+        if message.role is Role.ASSISTANT and message.tool_calls:
+            said.extend(_thoughts(message.tool_calls[0].signature))
+            if message.content:
+                said.append({"role": "assistant", "content": message.content})
+            said.extend(
+                {
+                    "type": "function_call",
+                    "call_id": call.id,
+                    "name": call.name,
+                    "arguments": json.dumps(call.arguments),
+                }
+                for call in message.tool_calls
+            )
+            continue
+        said.append({"role": message.role.value, "content": message.content})
+    return said
+
+
+def responses_body(call: Call) -> dict[str, Any]:
+    """What the Responses API is asked."""
+    request = call.request
+    body: dict[str, Any] = {
+        "model": call.model,
+        "input": _items(list(request.messages)),
+        "max_output_tokens": request.max_tokens,
+        # Nothing kept at OpenAI; its reasoning comes back encrypted.
+        "store": False,
+        "include": ["reasoning.encrypted_content"],
+    }
+    system = "\n\n".join(m.content for m in request.messages if m.role is Role.SYSTEM)
+    if system:
+        body["instructions"] = system
+    if request.temperature is not None and call.sends_temperature:
+        body["temperature"] = request.temperature
+    if request.output is not None:
+        body["text"] = {
+            "format": {
+                "type": "json_schema",
+                "name": request.output.name,
+                "schema": dict(request.output.schema),
+                "strict": False,
+            }
+        }
+    if request.tools:
+        body["tools"] = [
+            {
+                "type": "function",
+                "name": tool.name,
+                "description": tool.description,
+                "parameters": dict(tool.parameters),
+                "strict": False,
+            }
+            for tool in request.tools
+        ]
+        body["tool_choice"] = request.tool_choice.value
+    return body
+
+
+def read_response(said: dict[str, Any], call: Call, latency_ms: int) -> Completion:
+    """A Responses API answer, as the gateway reads any."""
+    output = said.get("output")
+    if not isinstance(output, list):
+        raise ProviderError("No answer in the response.", retryable=True)
+    texts: list[str] = []
+    calls: list[ToolCall] = []
+    thoughts: list[dict[str, Any]] = []
+    for item in output:
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") == "reasoning":
+            thoughts.append(item)
+        elif item.get("type") == "function_call":
+            calls.append(
+                ToolCall(
+                    id=str(item.get("call_id") or item.get("id") or f"call_{len(calls)}"),
+                    name=str(item.get("name") or ""),
+                    arguments=arguments_of(item.get("arguments")),
+                )
+            )
+        elif item.get("type") == "message":
+            texts.extend(
+                str(part.get("text") or "")
+                for part in item.get("content") or []
+                if isinstance(part, dict) and part.get("type") == "output_text"
+            )
+    if thoughts and calls:
+        # Opaque to LEKA, sent back whole with the calls (_items).
+        calls[0] = replace(calls[0], signature=json.dumps(thoughts))
+    usage = mapping(said.get("usage"))
+    details = mapping(usage.get("output_tokens_details"))
+    cached = mapping(usage.get("input_tokens_details"))
+    incomplete = mapping(said.get("incomplete_details"))
+    return Completion(
+        text="".join(texts),
+        tool_calls=tuple(calls),
+        provider=call.endpoint.provider,
+        model=call.model,
+        version=str(said.get("model") or call.model),
+        usage=Usage(
+            tokens_in=int(usage.get("input_tokens") or 0),
+            tokens_out=int(usage.get("output_tokens") or 0),
+            tokens_thinking=int(details.get("reasoning_tokens") or 0),
+            tokens_cached=int(cached.get("cached_tokens") or 0),
+            reported=bool(usage),
+        ),
+        latency_ms=latency_ms,
+        # Cut at max_output_tokens: « length », as chat completions says it.
+        finish="length" if incomplete.get("reason") == "max_output_tokens" else said.get("status"),
+        request_id=said.get("id"),
+    )
 
 
 class ChatCompletions:
@@ -174,6 +318,15 @@ class ChatCompletions:
         if not url.startswith("http"):
             raise ProviderError("No address for this provider.", retryable=False)
         started = time.monotonic()
+        if call.responses:
+            url = url.removesuffix("/chat/completions") + "/responses"
+            response = await client.post(url, json=responses_body(call), headers=headers)
+            if response.status_code >= 400:
+                raise failure(response)
+            answered = response.json()
+            if not isinstance(answered, dict):
+                raise ProviderError("The answer is not an object.", retryable=True)
+            return read_response(answered, call, int((time.monotonic() - started) * 1000))
         response = await client.post(url, json=self.body_of(call), headers=headers)
         if response.status_code >= 400:
             raise failure(response)
