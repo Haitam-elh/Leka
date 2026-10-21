@@ -423,6 +423,7 @@ class Gateway:
             thinking=route.profile.thinking,
             sends_temperature=route.profile.sends_temperature,
             forces_tools=route.profile.forces_tools,
+            responses=route.profile.responses,
         )
         for attempt in range(1, self._retries + 2):
             try:

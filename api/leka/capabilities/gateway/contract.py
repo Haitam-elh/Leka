@@ -197,6 +197,7 @@ class Call:
     thinking: tuple[str, ...] = ()
     sends_temperature: bool = True
     forces_tools: bool = True
+    responses: bool = False
 
 
 class Provider(Protocol):

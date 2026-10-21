@@ -85,6 +85,7 @@ async def _check(call: Call, client: httpx.AsyncClient) -> tuple[str | None, str
                     thinking=call.thinking,
                     sends_temperature=call.sends_temperature,
                     forces_tools=call.forces_tools,
+                    responses=call.responses,
                 ),
                 client,
             )
@@ -115,6 +116,7 @@ async def main(only: set[str]) -> int:
                 thinking=found.thinking,
                 sends_temperature=found.sends_temperature,
                 forces_tools=found.forces_tools,
+                responses=found.responses,
             )
             wrong, version = await _check(call, client)
             failed += wrong is not None

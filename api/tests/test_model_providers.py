@@ -111,6 +111,7 @@ def _call(provider: str, model: str, request: Request, **endpoint: Any) -> Call:
         thinking=found.thinking,
         sends_temperature=found.sends_temperature,
         forces_tools=found.forces_tools,
+        responses=found.responses,
     )
 
 
@@ -595,3 +596,106 @@ async def test_openai_is_asked_in_chat_completions_with_leka_s_key() -> None:
     assert str(sent.url) == "https://api.openai.com/v1/chat/completions"
     assert sent.headers["authorization"] == "Bearer key-1"
     assert json.loads(sent.content)["model"] == "gpt-4.1"
+
+
+# ── GPT-6, in the Responses API ──────────────────────────────────────────────
+
+
+def _response(*items: dict[str, Any], status: str = "completed", **extra: Any) -> dict[str, Any]:
+    return {
+        "id": "resp-1",
+        "model": "gpt-6.1-sol-2026-09-30",
+        "status": status,
+        "output": list(items),
+        "usage": {
+            "input_tokens": 100,
+            "input_tokens_details": {"cached_tokens": 40},
+            "output_tokens": 30,
+            "output_tokens_details": {"reasoning_tokens": 20},
+        },
+        **extra,
+    }
+
+
+async def test_gpt_6_is_asked_in_the_responses_api_its_answer_as_json() -> None:
+    # 2026-10-21: GPT-6 calls no tool in chat completions, only here.
+    request = Request(
+        purpose="test",
+        messages=[Message.system("Be brief."), Message.user("Classify this.")],
+        output=Output.of(Verdict),
+        temperature=0.2,
+    )
+    answer = _response(
+        {"type": "reasoning", "id": "rs_1", "encrypted_content": "e", "summary": []},
+        {
+            "type": "message",
+            "role": "assistant",
+            "content": [{"type": "output_text", "text": '{"goal": "a", "confidence": 1}'}],
+        },
+    )
+    done, sent = await _ask(OPENAI, _call("openai", "gpt-6.1-sol", request), answer)
+    assert str(sent.url) == "https://api.openai.com/v1/responses"
+    body = json.loads(sent.content)
+    assert body["instructions"] == "Be brief."
+    assert body["input"] == [{"role": "user", "content": "Classify this."}]
+    assert body["store"] is False and "temperature" not in body
+    assert body["text"]["format"]["type"] == "json_schema"
+    assert json.loads(done.text) == {"goal": "a", "confidence": 1}
+    assert (done.usage.tokens_in, done.usage.tokens_cached) == (100, 40)
+    assert (done.usage.tokens_out, done.usage.tokens_thinking) == (30, 20)
+    assert done.version == "gpt-6.1-sol-2026-09-30"
+
+    # Cut at its limit: said as chat completions says it.
+    cut = _response(status="incomplete", incomplete_details={"reason": "max_output_tokens"})
+    done, _ = await _ask(OPENAI, _call("openai", "gpt-6.1-sol", request), cut)
+    assert done.finish == "length"
+
+
+async def test_gpt_6_s_reasoning_goes_back_whole_with_its_tool_calls() -> None:
+    request = Request(
+        purpose="test",
+        messages=[Message.user("Who owns payment-api?")],
+        tools=[LOOKUP],
+        tool_choice=ToolChoice.REQUIRED,
+    )
+    thought = {"type": "reasoning", "id": "rs_1", "encrypted_content": "opaque", "summary": []}
+    answer = _response(
+        thought,
+        {
+            "type": "function_call",
+            "id": "fc_1",
+            "call_id": "call_1",
+            "name": "lookup",
+            "arguments": '{"name": "payment-api"}',
+        },
+    )
+    done, sent = await _ask(OPENAI, _call("openai", "gpt-6-luna", request), answer)
+    body = json.loads(sent.content)
+    assert body["tools"][0]["name"] == "lookup" and body["tool_choice"] == "required"
+    assert done.tool_calls[0].id == "call_1"
+    assert done.tool_calls[0].arguments == {"name": "payment-api"}
+
+    follow = Request(
+        purpose="test",
+        messages=[
+            Message.user("Who owns payment-api?"),
+            Message(Role.ASSISTANT, "", tool_calls=done.tool_calls),
+            Message(Role.TOOL, '{"owner": "Payments"}', tool_call_id="call_1", name="lookup"),
+        ],
+        tools=[LOOKUP],
+    )
+    _, sent = await _ask(OPENAI, _call("openai", "gpt-6-luna", follow), answer)
+    items = json.loads(sent.content)["input"]
+    assert items[1] == thought
+    assert items[2]["type"] == "function_call" and items[2]["call_id"] == "call_1"
+    assert items[3] == {
+        "type": "function_call_output",
+        "call_id": "call_1",
+        "output": '{"owner": "Payments"}',
+    }
+
+    # GPT-5.6 stays in chat completions.
+    _, sent = await _ask(
+        OPENAI, _call("openai", "gpt-5.6-sol", request), {"choices": [{"message": {}}]}
+    )
+    assert str(sent.url) == "https://api.openai.com/v1/chat/completions"
