@@ -1094,19 +1094,35 @@ class ChangeService:
         change stays on its branch until undone; kept (`rollbacks`) and
         followed until that run ends."""
         change = await self.change(change_id, lock=True)
-        follow = dict(change.follow or {})
-        before = follow.get("before_sha")
-        if change.status != "applied" or not follow.get("merged_at") or not before:
-            raise ChangeRefusedError(
-                "not_merged",
-                "Ce changement n'est pas fusionné, ou sa version d'avant n'est pas encore connue : "
-                "rien à redéployer.",
-            )
+        not_merged = ChangeRefusedError(
+            "not_merged",
+            "Ce changement n'est pas fusionné, ou sa version d'avant n'est pas connue : "
+            "rien à redéployer.",
+        )
+        if change.status != "applied" or change.pull_request_number is None:
+            raise not_merged
         rollbacks = list(change.rollbacks or [])
         if rollbacks and rollbacks[-1].get("state") in ("queued", "in_progress"):
             raise ChangeRefusedError("rolling_back", "Un retour en arrière est déjà en cours.")
         code = await self._code(change, by)
+        follow = dict(change.follow or {})
+        before = follow.get("before_sha")
         try:
+            if not before:
+                # Followed to the end before the version before was kept
+                # (2026-10-21: the first change LEKA shipped): read now.
+                seen = await code.follow(change.repository, change.pull_request_number)
+                if seen["state"] == "merged":
+                    before = seen.get("before_sha")
+                    follow = {
+                        **follow,
+                        "merged_at": seen.get("merged_at"),
+                        "merge_sha": seen.get("merge_sha"),
+                        "before_sha": before,
+                        "newer": seen.get("newer"),
+                    }
+            if not follow.get("merged_at") or not before:
+                raise not_merged
             await code.redeploy(change.repository, ref=change.base_branch, version=str(before))
         except CodeRefusedError as refused:
             raise ChangeRefusedError(refused.code, str(refused)) from refused
@@ -1192,6 +1208,7 @@ class ChangeService:
             "merged_at": merged_at,
             "merge_sha": seen.get("merge_sha"),
             "before_sha": seen.get("before_sha") or last.get("before_sha"),
+            "newer": seen.get("newer", last.get("newer")),
             "deployment": seen.get("deployment"),
             "error": None,
             "checked_at": now.isoformat(),

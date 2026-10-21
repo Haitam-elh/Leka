@@ -239,7 +239,10 @@ function PullRequestFollow({
   const t = useDictionary();
   const w = t.codeChanges.follow;
   const { format: locale } = useLocale();
-  const live = useCodeChangeFollow(change.id, !change.follow?.done);
+  // Followed to the end before the version before it was kept (2026-10-21):
+  // read once more, for « Revenir en arrière ».
+  const unknownBefore = Boolean(change.follow?.merged_at) && !change.follow?.before_sha;
+  const live = useCodeChangeFollow(change.id, !change.follow?.done || unknownBefore);
   const follow = live.data?.follow ?? change.follow ?? null;
   const stage = follow?.stage ?? "checks";
   const open = OPEN_STAGES.has(stage);
@@ -377,7 +380,12 @@ function PullRequestFollow({
           {fill(w.readFailed, { error: follow.error })}
         </p>
       ) : null}
-      <GoBack change={live.data ?? change} reverter={reverter} manager={manager} />
+      <GoBack
+        change={live.data ?? change}
+        reverter={reverter}
+        manager={manager}
+        refresh={() => void live.refetch()}
+      />
     </section>
   );
 }
@@ -392,7 +400,17 @@ const short = (sha: string | null | undefined) => (sha ? sha.slice(0, 7) : "—"
  * other. « Revenir à la version précédente »: the repository's deployment
  * workflow started for the version before it, confirmed first.
  */
-function GoBack({ change, reverter, manager }: { change: CodeChange; reverter: CodeChange | null; manager: boolean }) {
+function GoBack({
+  change,
+  reverter,
+  manager,
+  refresh,
+}: {
+  change: CodeChange;
+  reverter: CodeChange | null;
+  manager: boolean;
+  refresh: () => void;
+}) {
   const t = useDictionary();
   const w = t.codeChanges.goBack;
   const { format: locale } = useLocale();
@@ -492,7 +510,11 @@ function GoBack({ change, reverter, manager }: { change: CodeChange; reverter: C
             size="sm"
             variant="outline"
             disabled={running || rollback.isPending}
-            onClick={() => setConfirming(true)}
+            onClick={() => {
+              // What its branch took since, read now: said before confirming.
+              refresh();
+              setConfirming(true);
+            }}
             data-testid="code-change-rollback-open"
           >
             <RefreshCw className="size-3.5" aria-hidden="true" />
@@ -508,9 +530,14 @@ function GoBack({ change, reverter, manager }: { change: CodeChange; reverter: C
           aria-label={w.confirmTitle}
           data-testid="code-change-rollback-confirm"
         >
-          <p className="min-w-0 flex-1 text-xs text-brand-navy">
-            {fill(w.confirm, { version: short(follow?.before_sha), branch: change.base_branch })}
-          </p>
+          <div className="min-w-0 flex-1 text-xs text-brand-navy">
+            <p>{fill(w.confirm, { version: short(follow?.before_sha), branch: change.base_branch })}</p>
+            {follow?.newer ? (
+              <p className="mt-1 font-semibold text-state-danger" data-testid="code-change-rollback-newer">
+                {fill(w.newer, { count: String(follow.newer), branch: change.base_branch })}
+              </p>
+            ) : null}
+          </div>
           <Button type="button" size="sm" disabled={rollback.isPending} onClick={() => void act("rollback")}>
             {w.confirmYes}
           </Button>

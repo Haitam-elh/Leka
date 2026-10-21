@@ -1301,6 +1301,10 @@ class CodeChangeFollow(BaseModel):
     before_sha: str | None = Field(
         default=None, description="The version before its merge: what going back deploys."
     )
+    newer: int | None = Field(
+        default=None,
+        description="Commits its branch took since its merge: what going back takes out too.",
+    )
     deployment: CodeChangeDeployment | None = None
     error: str | None = Field(default=None, description="Why the last read failed.")
     checked_at: datetime | None = None

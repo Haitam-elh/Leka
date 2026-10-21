@@ -123,8 +123,10 @@ class GitHub:
         self.statuses: list[dict[str, Any]] = []
         self.deployments: list[dict[str, Any]] = []
         self.deployment_states: dict[int, str] = {}
-        # Its deployment workflow's runs, started by LEKA (2026-10-20).
+        # Its deployment workflow's runs, started by LEKA (2026-10-20); the
+        # commits main took since the merge.
         self.runs: list[dict[str, Any]] = []
+        self.newer = 0
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -167,7 +169,7 @@ class GitHub:
                 201, json={"number": 7, "html_url": f"https://github.com/{REPO}/pull/7"}
             )
         if request.method == "GET" and path == f"{base}/pulls/7":
-            return httpx.Response(200, json={"number": 7, **self.pull})
+            return httpx.Response(200, json={"number": 7, "base": {"ref": "main"}, **self.pull})
         if request.method == "GET" and path == f"{base}/commits/new-commit/check-runs":
             return httpx.Response(200, json={"check_runs": self.check_runs})
         if request.method == "GET" and path == f"{base}/commits/new-commit/status":
@@ -192,7 +194,8 @@ class GitHub:
             return httpx.Response(200, json={"workflow_runs": self.runs})
         if request.method == "GET" and path.startswith(f"{base}/compare/"):
             # A deployment after the merge holds it — unless it is "old".
-            return httpx.Response(200, json={"status": "behind" if "old" in path else "ahead"})
+            status = "behind" if "old" in path else "ahead"
+            return httpx.Response(200, json={"status": status, "ahead_by": self.newer})
         return httpx.Response(404, json={"message": f"unexpected {request.method} {path}"})
 
     def writes(self) -> list[tuple[str, dict[str, Any] | None]]:
@@ -1068,6 +1071,7 @@ async def test_a_merged_change_is_undone_by_a_change_proposed_on_the_branch_as_i
     _source, change_id, _now = await _merged(client, identity, acme, github)
     read = (await client.get(f"{API}/{change_id}")).json()
     assert (read["follow"]["stage"], read["follow"]["before_sha"]) == ("deployed", "before-sha")
+    assert read["follow"]["newer"] == 0
 
     # A member may not; an approver asks: the change that undoes it.
     _as(identity, acme, "member")
@@ -1176,3 +1180,33 @@ async def test_going_back_starts_the_deployment_of_the_version_before_where_allo
     read = (await client.get(f"{API}/{change_id}")).json()
     assert (read["follow"]["stage"], read["follow"]["done"]) == ("rolled_back", True)
     assert read["rollbacks"][0]["url"] == "https://github.com/r/9"
+
+
+async def test_a_change_followed_before_its_version_before_was_kept_still_goes_back(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    github: GitHub,
+) -> None:
+    """2026-10-21: the first change LEKA shipped was followed to the end
+    before the version before a merge was kept — going back reads it."""
+    source, change_id, _now = await _merged(client, identity, acme, github)
+    with workspace_scope(acme["acme"]):
+        async with session_factory() as session:
+            await session.execute(
+                text("UPDATE code_changes SET follow = follow - 'before_sha' WHERE id = :c"),
+                {"c": change_id},
+            )
+            await session.commit()
+    assert (await client.get(f"{API}/{change_id}")).json()["follow"]["before_sha"] is None
+    await _config(acme["acme"], source, deploys=True, deploy_workflow="cd.yml")
+    github.newer = 3
+    asked = await client.post(f"{API}/{change_id}/rollback")
+    assert asked.status_code == 200, asked.text
+    # And what main took since, said: going back takes it out too.
+    assert (asked.json()["follow"]["before_sha"], asked.json()["follow"]["newer"]) == (
+        "before-sha",
+        3,
+    )
+    dispatched = [b for p, b in github.writes() if p.endswith("/workflows/cd.yml/dispatches")]
+    assert dispatched == [{"ref": "main", "inputs": {"release": "before-sha"}}]

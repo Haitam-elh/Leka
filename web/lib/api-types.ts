@@ -11052,6 +11052,11 @@ export interface components {
              * @description The version before its merge: what going back deploys.
              */
             before_sha?: string | null;
+            /**
+             * Newer
+             * @description Commits its branch took since its merge: what going back takes out too.
+             */
+            newer?: number | null;
             deployment?: components["schemas"]["CodeChangeDeployment"] | null;
             /**
              * Error

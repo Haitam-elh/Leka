@@ -486,6 +486,12 @@ class GitHubCode:
                 if merged.status_code == 200:
                     parents = merged.json().get("parents") or []
                     seen["before_sha"] = str(parents[0].get("sha") or "") if parents else None
+                # What its branch took since: what going back takes out too.
+                base = str((meta.get("base") or {}).get("ref") or "")
+                if base:
+                    since = await client.get(f"/repos/{name}/compare/{seen['merge_sha']}...{base}")
+                    if since.status_code == 200:
+                        seen["newer"] = int(since.json().get("ahead_by") or 0)
         return seen
 
     async def close_pull_request(self, repository: str, number: int) -> None:
