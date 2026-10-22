@@ -218,6 +218,14 @@ ASKED = [
         ),
         "qa-acceptance",
     ),
+    (
+        RouteQuery(
+            text="La PR #42 de acme/api casse-t-elle les clients de l'API ?",
+            goal="assess_impact",
+            kind="change",
+        ),
+        "api-design-review",
+    ),
 ]
 
 
@@ -687,3 +695,44 @@ def test_the_acceptance_holds_a_change_to_its_criteria_with_proof() -> None:
     ):
         assert rule.lower() in said.lower(), rule
     assert credited("qa-acceptance", "msitarzewski/agency-agents")
+
+
+def test_the_api_review_judges_a_contract_by_its_own_conventions() -> None:
+    """2026-10-22: « Revue d'API » — what a change breaks for those calling
+    the API, and the API's consistency, by its own conventions; read, never
+    called; its method credited, never told it."""
+    d = {d.key: d for d in catalogue()}["api-design-review"]
+    assert (d.kind, d.lifecycle, d.version, d.mode) == (
+        Kind.AGENT,
+        Lifecycle.ACTIVE,
+        "1.0.0",
+        "read_only",
+    )
+    assert set(d.tools) == {
+        "search_entities",
+        "read_entity",
+        "list_files",
+        "read_file",
+        "list_pull_requests",
+        "read_pull_request",
+    }
+    assert all(not i.required for i in d.contract.inputs)
+    assert {i.name for i in d.contract.inputs} == {
+        "depot",
+        "changement",
+        "perimetre",
+        "consommateurs",
+    }
+    said = d.instructions or ""
+    for section in (
+        "Ce qu'il regarde",
+        "Sa méthode",
+        "Ce qu'il produit",
+        "Ce qu'il ne doit jamais faire",
+    ):
+        assert section in said, section
+    for rule in ("ses propres conventions", "Rupture", "Rien d'inventé", "tu n'appelles pas l'API"):
+        assert rule.lower() in said.lower(), rule
+    assert credited(
+        "api-design-review", "msitarzewski/agency-agents", "garrytan/gstack", "affaan-m/ECC"
+    )

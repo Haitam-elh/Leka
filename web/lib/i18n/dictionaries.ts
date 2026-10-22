@@ -2502,6 +2502,7 @@ const fr = {
       "test-analysis": "Analyse des tests",
       "test-generation": "Génération de tests",
       "qa-acceptance": "Recette (QA)",
+      "api-design-review": "Revue d'API",
       "documentation-assistant": "Assistant de documentation",
       "accessibility-audit": "Audit d'accessibilité",
       "design-review": "Revue de design",
@@ -2587,6 +2588,8 @@ const fr = {
         "Les tests qui manquent, écrits par LEKA : un diff relu par une personne, puis la pull request.",
       "qa-acceptance":
         "Une pull request recettée : chaque critère attendu, son statut et sa preuve — le code, le test, la CI.",
+      "api-design-review":
+        "Une API relue : ce qu'un changement casse pour ceux qui l'appellent, et sa cohérence — erreurs, pagination, ce qu'elle expose.",
       "regression-analysis":
         "Ce qu'un changement peut casser qui marchait : les comportements touchés, ce qui en dépend, les tests qui les gardent.",
       "change-impact-analysis":
@@ -11189,6 +11192,7 @@ const en: Dictionary = {
       "test-analysis": "Test analysis",
       "test-generation": "Test generation",
       "qa-acceptance": "Acceptance (QA)",
+      "api-design-review": "API review",
       "documentation-assistant": "Documentation assistant",
       "accessibility-audit": "Accessibility audit",
       "design-review": "Design review",
@@ -11271,6 +11275,8 @@ const en: Dictionary = {
         "The missing tests, written by LEKA: a diff a person reviews, then the pull request.",
       "qa-acceptance":
         "A pull request accepted or not: each expected criterion, its status and its proof — the code, the test, the CI.",
+      "api-design-review":
+        "An API reviewed: what a change breaks for those calling it, and its consistency — errors, pagination, what it exposes.",
       "regression-analysis":
         "What a change could break that used to work: the behaviours it alters, what depends on them, the tests guarding them.",
       "change-impact-analysis":
