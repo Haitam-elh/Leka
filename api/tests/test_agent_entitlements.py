@@ -469,6 +469,8 @@ async def test_each_plan_runs_the_agents_it_includes_and_those_of_the_plans_belo
         "qa-acceptance",
         # API review (2026-10-22), the same.
         "api-design-review",
+        # Reliability (2026-10-22): Incident Response's and Security & Reliability's.
+        "reliability-analysis",
     }
     assert all(a["included"] for a in sold["agents"] if a["key"] not in frontend)
     assert not any(a["included"] for a in sold["agents"] if a["key"] in frontend)

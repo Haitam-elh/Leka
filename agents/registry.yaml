@@ -137,6 +137,11 @@ agents:
     version: 1.3.0
     status: active
 
+  - path: incident/reliability-analysis/SKILL.md
+    name: reliability-analysis
+    version: 1.0.0
+    status: active
+
   - path: infrastructure/infrastructure-analysis/SKILL.md
     name: infrastructure-analysis
     version: 1.3.0

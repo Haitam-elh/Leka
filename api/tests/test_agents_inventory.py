@@ -20,13 +20,13 @@ def test_every_agent_on_sale_is_built_and_every_reference_one_unbuilt_is_never_s
     found = rows()
     on_sale = [r for r in found if r.status == "on_sale"]
     # Thirteen, Frontend Craft's and Engineering's four each (LEKA-461), the
-    # acceptance (2026-10-21) and the API review (2026-10-22).
-    assert len(on_sale) == 23
+    # acceptance (2026-10-21), the API review and the reliability analysis
+    # (2026-10-22).
+    assert len(on_sale) == 24
     assert all(r.agent is not None and r.lifecycle == "active" for r in on_sale)
     # The reference's price is the catalogue's, where the reference names one.
     assert all(r.price is not None for r in on_sale)
     assert all(r.agent is None for r in found if r.status in ("not_built", "unpriced"))
-    assert {r.reference for r in found if r.status == "unpriced"} == {
-        "Migration Planner",
-        "Reliability Analyst",
-    }
+    # Named by a bundle, priced nowhere, and not built: the reliability
+    # analyst, built (2026-10-22), is priced at its agent's tier.
+    assert {r.reference for r in found if r.status == "unpriced"} == {"Migration Planner"}
