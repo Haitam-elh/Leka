@@ -2,7 +2,7 @@
 name: api-design-review
 title: "Revue d'API"
 description: "Use when someone asks whether an API is well designed or whether a change to it is safe — a pull request that could break the applications calling it, or the API as it stands: its contract, its consistency, its errors, its pagination, what it exposes — read from a connected GitHub repository's code and specification, as an API platform engineer would."
-version: 1.0.0
+version: 1.1.0
 category: development
 entity_types: [repository, pull_request, commit, service, application, release, document]
 requires: ["github"]
@@ -87,8 +87,10 @@ se valent, les mélanger est le défaut.
 1. **Le contrat d'abord.** Relève les conventions que l'API suit déjà : le
    nommage des ressources et des champs, le format des dates et des
    identifiants, la forme des erreurs, la pagination, l'authentification,
-   le versionnement. Chaque exception à la convention majoritaire est un
-   constat, avec `fichier:ligne`.
+   le versionnement. Les chemins et les champs se relèvent à part : des
+   chemins en `kebab-case` (`/code-changes`) et des champs en `snake_case`
+   sont deux conventions, pas une incohérence. Chaque exception à la
+   convention majoritaire est un constat, avec `fichier:ligne`.
 2. **Ce qu'un changement casse — deux colonnes.** Sans risque : ajouter une
    route, un champ facultatif dans une réponse, un paramètre facultatif,
    assouplir une validation. **Rupture** : retirer ou renommer un champ ou une
@@ -109,8 +111,14 @@ se valent, les mélanger est le défaut.
    création, `404` sans révéler ce qui existe ailleurs. Une erreur ne laisse
    jamais passer une trace, une requête SQL ou un chemin interne.
 5. **Les listes et les écritures.** Une liste sans pagination ni limite
-   finit par tomber ; une pagination qui change de nature (offset → curseur)
-   est une rupture. Une écriture qu'un client peut rejouer — une création, un
+   finit par tomber ; une liste **coupée en silence** — une limite fixe, ni
+   page suivante ni total — laisse le client croire qu'il a tout : c'est un
+   constat, pas « sans objet ». Une pagination qui change de nature (offset →
+   curseur) est une rupture. Une même route qui renvoie deux sortes de
+   ressources selon l'état (la ressource demandée, ou une autre créée à sa
+   place) laisse le client deviner ce qu'il reçoit : dis-le. Une route qui
+   modifie un état (`POST`, `PUT`, `DELETE`) sous une permission de lecture
+   est un constat. Une écriture qu'un client peut rejouer — une création, un
    paiement, un envoi — doit être idempotente (une clé d'idempotence) ; une
    entrée d'écriture est validée côté serveur.
 6. **Ce que le contrat expose.** Un modèle de réponse qui renvoie un mot de
@@ -121,8 +129,18 @@ se valent, les mélanger est le défaut.
    spécification ignore, un exemple qui ne correspond plus, une route
    dépréciée sans date de fin : l'écart entre le contrat écrit et le contrat
    réel est un constat.
-8. **Seulement ce qui se prouve.** Chaque constat cite `fichier:ligne` et ce
-   que tu y as lu. Une limite de débit, une règle de passerelle ou un client
+8. **Avant de dire qu'il manque quelque chose** — une limite de débit, une
+   authentification, une validation, une reprise, une conservation —
+   cherche-le là où il vit d'ordinaire : la construction de l'application
+   (`main.py`, la fabrique de l'app), ses middlewares, ses dépendances, sa
+   configuration, ses tâches de fond et son modèle de données. Dis où tu as
+   cherché. Trouvé ailleurs, ce n'est pas un constat.
+9. **Une protection n'est pas un défaut.** Un refus quand le code a changé,
+   une confirmation, une permission : ne recommande jamais de l'affaiblir
+   (« forcer », « ignorer le conflit »). Au plus, une question.
+10. **Seulement ce qui se prouve.** Chaque constat cite `fichier:ligne` et ce
+   que tu y as lu — une ligne que tu as lue, jamais une plage estimée : sans
+   la ligne exacte, cite le fichier seul. Une limite de débit, une règle de passerelle ou un client
    que le dépôt ne montre pas n'est pas un défaut : c'est une question, posée
    comme telle. Aucun constat est une réponse juste, avec ce que tu as relu.
 
@@ -149,6 +167,9 @@ Un document markdown, dans la langue de la demande :
 
 - Lecture seule : tu ne modifies rien, tu n'appelles pas l'API, tu ne lances
   rien — et tu ne dis jamais l'avoir fait.
+- Hors du contrat, hors du constat : la documentation des utilisateurs, la
+  passerelle, le ton d'un message destiné à une personne ne sont pas le
+  contrat de l'API — une question au plus.
 - Rien d'inventé : une route, un champ, un client, un code de statut que les
   outils ne t'ont pas donné n'est pas écrit — il est signalé comme manquant.
 - Jamais un goût présenté comme une règle : un constat se fonde sur les
