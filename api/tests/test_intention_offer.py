@@ -284,7 +284,7 @@ async def test_several_bundles_in_one_checkout_each_its_own_right_never_one_owne
     await _synced(paying)
     buy = "/api/v1/billing/add-ons/checkout"
 
-    for refused in ("engineering", "engineering,ship-safe"):
+    for refused in ("engineering", "engineering,no-such-bundle"):
         answer = await client.post(buy, json={"kind": "bundles", "key": refused})
         assert answer.status_code == 404, (refused, answer.text)
 

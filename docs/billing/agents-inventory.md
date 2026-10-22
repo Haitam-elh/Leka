@@ -67,7 +67,7 @@ LEKA's own capabilities — understanding, the analysis, its answer (LEKA Assist
 | Agent Evaluator | orchestration | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
 | Harness Optimizer | orchestration | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
 | Learning Specialist | orchestration | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
-| Migration Planner | devops | — | — | — | — | Nommé par un bundle, absent de la liste — à arbitrer | — | ship-safe |
+| Migration Planner | devops | `migration-planning` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | enterprise + | ship-safe |
 | Reliability Analyst | incident | `reliability-analysis` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | enterprise + | incident-response, security-reliability |
 | — | architecture | `architecture-analysis` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | growth + | — |
 | — | development | `code-change` | active | expert | 25 € | Option payante, incluse dès le plan indiqué | business + | — |
@@ -80,7 +80,7 @@ LEKA's own capabilities — understanding, the analysis, its answer (LEKA Assist
 | Bundle | Price HT / month | Members alone | Saving | Sold | Members not built |
 |---|---|---|---|---|---|
 | Engineering | 59 € | 91 € | 35 % | yes | — |
-| Ship Safe | 79 € | — | not shown | no | Migration Planner |
+| Ship Safe | 79 € | — | not shown | yes | — |
 | Incident Response | 89 € | — | not shown | yes | — |
 | Security & Reliability | 69 € | — | not shown | yes | — |
 | Frontend Craft | 29 € | 48 € | 40 % | yes | — |

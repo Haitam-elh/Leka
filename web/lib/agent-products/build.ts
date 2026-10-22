@@ -1324,6 +1324,131 @@ export const BUILD: Record<string, AgentProduct> = {
     ],
   },
 
+  "migration-planning": {
+    promise: w(
+      "Migrez sans casser : ce qui est touché, qui en dépend, et des étapes qu'on peut chacune défaire, dans le bon ordre.",
+      "Migrate without breaking: what is touched, who depends on it, and steps each of which can be undone, in the right order.",
+    ),
+    problem: w(
+      "Une montée de version ou un changement de base se joue souvent en un soir : un consommateur oublié, une colonne retirée trop tôt, et pas de retour possible.",
+      "A version upgrade or a database change is often played out in one night: a forgotten consumer, a column dropped too early, and no way back.",
+    ),
+    benefits: [
+      {
+        icon: "map",
+        title: w("L'inventaire complet", "The full inventory"),
+        body: w(
+          "Ce qui est touché dans le code, et chaque service ou application qui en dépend.",
+          "What is touched in the code, and each service or application that depends on it.",
+        ),
+      },
+      {
+        icon: "route",
+        title: w("Des étapes réversibles", "Reversible steps"),
+        body: w(
+          "Chaque étape avec sa vérification et son retour arrière, dans un ordre sûr.",
+          "Each step with its check and its way back, in a safe order.",
+        ),
+      },
+      {
+        icon: "check",
+        title: w("Un passage décidé", "A decided switch"),
+        body: w(
+          "La liste « on y va / on n'y va pas », et qui décide.",
+          "The go / no-go list, and who decides.",
+        ),
+      },
+    ],
+    does: w(
+      "Il dresse l'inventaire de ce qui bouge et de ce qui en dépend — le code, les services, les données et leur volume, les équipes —, choisit la stratégie qui convient à ce qui migre, puis écrit les étapes dans l'ordre, chacune avec sa vérification et son retour arrière, le passage, ceux à prévenir et ce qui sera retiré en dernier.",
+      "It takes stock of what moves and what depends on it — the code, the services, the data and its volume, the teams —, chooses the strategy that fits what migrates, then writes the steps in order, each with its check and its way back, the switch, who to tell and what will be retired last.",
+    ),
+    features: [
+      w("L'inventaire de ce qui est touché", "The inventory of what is touched"),
+      w("Les consommateurs à prévenir", "The consumers to tell"),
+      w("Une stratégie choisie pour ce qui migre", "A strategy chosen for what migrates"),
+      w("Des étapes réversibles, avec leur vérification", "Reversible steps, with their check"),
+      w("L'ordre entre le code et les données", "The order between code and data"),
+      w("La liste du passage, et son retour arrière", "The switch's checklist, and its way back"),
+      w("Ce qui est retiré en dernier", "What is retired last"),
+    ],
+    useCases: [
+      {
+        icon: "layers",
+        title: w("Une version majeure", "A major version"),
+        body: w("Monter un framework sans tout casser.", "Upgrade a framework without breaking everything."),
+        ask: w(
+          "Prépare le plan de migration de Django 3.2 vers 5.1 pour acme/api",
+          "Prepare the migration plan from Django 3.2 to 5.1 for acme/api",
+        ),
+      },
+      {
+        icon: "database",
+        title: w("Changer de base", "Changing database"),
+        body: w("Déplacer les données sans coupure.", "Move the data without downtime."),
+        ask: w(
+          "Comment migrer la base orders de MySQL vers PostgreSQL sans coupure ?",
+          "How do we migrate the orders database from MySQL to PostgreSQL without downtime?",
+        ),
+      },
+      {
+        icon: "code",
+        title: w("Sortir un service", "Extracting a service"),
+        body: w("Le découper route par route.", "Split it route by route."),
+        ask: w(
+          "Planifie la sortie de la facturation du monolithe",
+          "Plan extracting billing from the monolith",
+        ),
+      },
+      {
+        icon: "cloud",
+        title: w("Changer de cloud", "Changing cloud"),
+        body: w("Déplacer le trafic par parts.", "Move the traffic in parts."),
+        ask: w(
+          "Comment migrer billing-api vers un autre cloud ?",
+          "How do we migrate billing-api to another cloud?",
+        ),
+      },
+    ],
+    outline: [
+      w("Verdict", "Verdict"),
+      w("Inventaire", "Inventory"),
+      w("Stratégie", "Strategy"),
+      w("Étapes", "Steps"),
+      w("Le passage", "The switch"),
+      w("Risques", "Risks"),
+      w("Le retrait", "The retirement"),
+    ],
+    examples: [
+      {
+        kind: "list",
+        title: w("Étapes", "Steps"),
+        items: [
+          w("Écrire dans l'ancienne et la nouvelle base", "Write to the old and the new database"),
+          w("Remplir la nouvelle par lots, puis réconcilier", "Fill the new one in batches, then reconcile"),
+          w("Lire la nouvelle derrière un drapeau, puis basculer", "Read the new one behind a flag, then switch"),
+          w("Retirer l'ancienne quand plus rien ne la lit", "Retire the old one when nothing reads it any more"),
+        ],
+      },
+      {
+        kind: "levels",
+        title: w("Risques", "Risks"),
+        items: [
+          { level: "critical", text: w("Suppression de colonne avant la bascule du code", "Column dropped before the code switches") },
+          { level: "high", text: w("Un consommateur que personne ne connaît", "A consumer no one knows about") },
+          { level: "medium", text: w("Remplissage d'une grosse table d'un coup", "A big table filled in one go") },
+          { level: "low", text: w("Guide de migration à écrire pour les partenaires", "Migration guide to write for partners") },
+        ],
+      },
+    ],
+    limits: [
+      w(
+        "Il prépare le plan sans rien exécuter : un consommateur ou un script que les sources ne montrent pas est posé en question, et chaque étape est dimensionnée, jamais datée.",
+        "It prepares the plan without running anything: a consumer or a script the sources do not show is asked as a question, and each step is sized, never dated.",
+      ),
+    ],
+  },
+
   "qa-acceptance": {
     promise: w(
       "Sachez si une pull request est prête : chaque critère attendu, vérifié avec sa preuve — le code, le test, la CI.",

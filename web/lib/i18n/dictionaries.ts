@@ -2507,6 +2507,7 @@ const fr = {
       "dependency-analysis": "Analyse de dépendances",
       "database-review": "Revue de base de données",
       "performance-analysis": "Analyse de performance",
+      "migration-planning": "Plan de migration",
       "documentation-assistant": "Assistant de documentation",
       "accessibility-audit": "Audit d'accessibilité",
       "design-review": "Revue de design",
@@ -2602,6 +2603,8 @@ const fr = {
         "Une base relue : l'intégrité de son schéma, les index que ses requêtes demandent, les migrations qui verrouilleraient ou perdraient des données.",
       "performance-analysis":
         "Où passe le temps d'une requête lente, ce qui ne tiendra pas quand les données grandiront, et ce qu'il faut mesurer pour le prouver.",
+      "migration-planning":
+        "Le plan pour migrer sans casser : ce qui est touché et qui en dépend, des étapes réversibles dans le bon ordre, le passage et le retrait.",
       "regression-analysis":
         "Ce qu'un changement peut casser qui marchait : les comportements touchés, ce qui en dépend, les tests qui les gardent.",
       "change-impact-analysis":
@@ -11210,6 +11213,7 @@ const en: Dictionary = {
       "dependency-analysis": "Dependency analysis",
       "database-review": "Database review",
       "performance-analysis": "Performance analysis",
+      "migration-planning": "Migration planning",
       "documentation-assistant": "Documentation assistant",
       "accessibility-audit": "Accessibility audit",
       "design-review": "Design review",
@@ -11302,6 +11306,8 @@ const en: Dictionary = {
         "A database reviewed: its schema's integrity, the indexes its queries need, the migrations that would lock or lose data.",
       "performance-analysis":
         "Where a slow request's time goes, what will not hold as the data grows, and what to measure to prove it.",
+      "migration-planning":
+        "The plan to migrate without breaking: what is touched and who depends on it, reversible steps in the right order, the switch and the retirement.",
       "regression-analysis":
         "What a change could break that used to work: the behaviours it alters, what depends on them, the tests guarding them.",
       "change-impact-analysis":

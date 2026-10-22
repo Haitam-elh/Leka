@@ -259,6 +259,14 @@ ASKED = [
         ),
         "performance-analysis",
     ),
+    (
+        RouteQuery(
+            text="Comment migrer la base orders de MySQL vers PostgreSQL sans coupure ?",
+            goal="assess_impact",
+            kind="change",
+        ),
+        "migration-planning",
+    ),
 ]
 
 
@@ -979,3 +987,50 @@ def test_the_performance_analysis_follows_the_slow_path_and_measures_nothing_it_
     assert {"performance-analysis", "dependency-analysis", "reliability-analysis"} <= set(
         bundle.agents
     )
+
+
+def test_the_migration_plan_moves_in_reversible_steps_and_retires_last() -> None:
+    """2026-10-22: « Plan de migration » — Ship Safe's migration planner:
+    the inventory of what is touched and who depends on it, a strategy
+    chosen for what moves, reversible steps in a safe order with their
+    check and their way back, the go/no-go, the dependents told, what is
+    retired last; nothing run; its method credited, never told it."""
+    d = {d.key: d for d in catalogue()}["migration-planning"]
+    assert (d.kind, d.lifecycle, d.version, d.mode) == (
+        Kind.AGENT,
+        Lifecycle.ACTIVE,
+        "1.0.0",
+        "read_only",
+    )
+    assert {"audit_dependencies", "dependencies", "read_file"} <= set(d.tools)
+    assert {i.name for i in d.contract.inputs} == {"migration", "cible", "contraintes"}
+    assert all(not i.required for i in d.contract.inputs)
+    given, withheld = agent_skill_tools(d)
+    assert ({t.name for t in given}, withheld) == (
+        {"blast-radius", "test-scope", "schema-health"},
+        [],
+    )
+    said = " ".join((d.instructions or "").split())
+    for section in (
+        "Ce qu'il regarde",
+        "Sa méthode",
+        "Ce qu'il produit",
+        "Ce qu'il ne doit jamais faire",
+    ):
+        assert section in said, section
+    for rule in (
+        "L'inventaire d'abord",
+        "comment la défaire",
+        "jamais une durée inventée",
+        "on y va / on n'y va pas",
+        "Le retrait",
+        "Dis où tu as cherché",
+        "ni migration",
+    ):
+        assert rule.lower() in said.lower(), rule
+    assert credited(
+        "migration-planning", "garrytan/gstack", "affaan-m/ECC", "msitarzewski/agency-agents"
+    )
+    # Its last member built, Ship Safe is sold — every bundle now is.
+    sold = commercial().add_ons
+    assert all(b.sellable and not b.missing for b in sold.bundles)

@@ -21,12 +21,14 @@ def test_every_agent_on_sale_is_built_and_every_reference_one_unbuilt_is_never_s
     on_sale = [r for r in found if r.status == "on_sale"]
     # Thirteen, Frontend Craft's and Engineering's four each (LEKA-461), the
     # acceptance (2026-10-21), the API review, the reliability, dependency
-    # and performance analyses, the database review (2026-10-22).
-    assert len(on_sale) == 27
+    # and performance analyses, the database review and the migration plan
+    # (2026-10-22).
+    assert len(on_sale) == 28
     assert all(r.agent is not None and r.lifecycle == "active" for r in on_sale)
     # The reference's price is the catalogue's, where the reference names one.
     assert all(r.price is not None for r in on_sale)
     assert all(r.agent is None for r in found if r.status in ("not_built", "unpriced"))
-    # Named by a bundle, priced nowhere, and not built: the reliability
-    # analyst, built (2026-10-22), is priced at its agent's tier.
-    assert {r.reference for r in found if r.status == "unpriced"} == {"Migration Planner"}
+    # Named by a bundle, priced nowhere, and not built: none any more — the
+    # reliability analyst and the migration planner, built (2026-10-22), are
+    # priced at their agent's tier.
+    assert {r.reference for r in found if r.status == "unpriced"} == set()
