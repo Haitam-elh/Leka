@@ -728,6 +728,127 @@ export const BUILD: Record<string, AgentProduct> = {
     ],
   },
 
+  "api-design-review": {
+    promise: w(
+      "Sachez si un changement d'API casse ceux qui l'appellent, et si votre API tient ses propres règles — erreurs, pagination, ce qu'elle expose.",
+      "Know whether an API change breaks those who call it, and whether your API keeps its own rules — errors, pagination, what it exposes.",
+    ),
+    problem: w(
+      "Un champ renommé, un paramètre devenu obligatoire, une erreur qui change de forme : la rupture se découvre chez les clients, après la livraison.",
+      "A renamed field, a parameter made required, an error changing shape: the break is found by the clients, after the release.",
+    ),
+    benefits: [
+      {
+        icon: "shield",
+        title: w("Les ruptures avant la livraison", "Breaks before the release"),
+        body: w(
+          "Ce qu'une pull request casse, pour qui, et comment la livrer sans casser.",
+          "What a pull request breaks, for whom, and how to ship it without breaking.",
+        ),
+      },
+      {
+        icon: "check",
+        title: w("Une API cohérente", "A consistent API"),
+        body: w(
+          "Les écarts à ses propres conventions : noms, dates, erreurs, pagination.",
+          "Departures from its own conventions: names, dates, errors, pagination.",
+        ),
+      },
+      {
+        icon: "eye",
+        title: w("Ce que le contrat expose", "What the contract exposes"),
+        body: w(
+          "Un champ interne renvoyé, une écriture sans contrôle d'accès, une erreur trop bavarde.",
+          "An internal field returned, a write without access control, an error that says too much.",
+        ),
+      },
+    ],
+    does: w(
+      "Il lit le contrat de l'API — sa spécification, sinon ses routes et ses modèles dans le code — et, pour une pull request, ce qu'elle change. Il sépare ce qui est sans risque de ce qui rompt, dit qui serait cassé et comment livrer, puis relève les écarts à ses propres conventions avec la correction exacte.",
+      "It reads the API's contract — its specification, else its routes and models in the code — and, for a pull request, what it changes. It separates what is safe from what breaks, says who would be broken and how to ship, then lists the departures from its own conventions with the exact fix.",
+    ),
+    features: [
+      w("Le contrat lu, et d'où il vient", "The contract read, and where from"),
+      w("Ce qui est sans risque, ce qui rompt", "What is safe, what breaks"),
+      w("Pour chaque rupture : qui elle casse, comment la livrer", "For each break: who it breaks, how to ship it"),
+      w("Les erreurs, les statuts et la pagination, cohérents", "Errors, statuses and pagination, consistent"),
+      w("Les champs internes et les écritures exposés", "Internal fields and writes exposed"),
+      w("L'écart entre la documentation et le code", "The gap between documentation and code"),
+    ],
+    useCases: [
+      {
+        icon: "rocket",
+        title: w("Avant de livrer", "Before shipping"),
+        body: w("Savoir si une pull request casse les clients.", "Know whether a pull request breaks the clients."),
+        ask: w(
+          "La PR #42 de acme/api casse-t-elle les clients de l'API ?",
+          "Does PR #42 of acme/api break the API's clients?",
+        ),
+      },
+      {
+        icon: "check",
+        title: w("Revue complète", "Full review"),
+        body: w("La cohérence de toute l'API.", "The consistency of the whole API."),
+        ask: w("Fais une revue de l'API de acme/api", "Review acme/api's API"),
+      },
+      {
+        icon: "users",
+        title: w("Pour vos partenaires", "For your partners"),
+        body: w(
+          "Ce qu'un changement ferait aux applications qui l'appellent.",
+          "What a change would do to the applications calling it.",
+        ),
+        ask: w(
+          "Peut-on livrer ce changement d'API sans casser l'application mobile ?",
+          "Can we ship this API change without breaking the mobile app?",
+        ),
+      },
+      {
+        icon: "shield",
+        title: w("Ce qui est exposé", "What is exposed"),
+        body: w("Les champs et les routes qui en disent trop.", "Fields and routes that say too much."),
+        ask: w(
+          "Notre API expose-t-elle des champs internes ?",
+          "Does our API expose internal fields?",
+        ),
+      },
+    ],
+    outline: [
+      w("Verdict", "Verdict"),
+      w("Le contrat lu", "The contract read"),
+      w("Ruptures", "Breaks"),
+      w("Constats", "Findings"),
+      w("Questions", "Questions"),
+    ],
+    examples: [
+      {
+        kind: "levels",
+        title: w("Constats", "Findings"),
+        items: [
+          { level: "critical", text: w("Champ « status » retiré de /v1/orders", "« status » field removed from /v1/orders") },
+          { level: "high", text: w("Erreur de validation renvoyée en 500", "Validation error returned as a 500") },
+          { level: "medium", text: w("Liste /v1/invoices sans pagination", "/v1/invoices list without pagination") },
+          { level: "low", text: w("« createdAt » parmi des champs en snake_case", "« createdAt » among snake_case fields") },
+        ],
+      },
+      {
+        kind: "list",
+        title: w("Livrer sans casser", "Ship without breaking"),
+        items: [
+          w("Garder l'ancien champ pendant la migration", "Keep the old field during the migration"),
+          w("Annoncer la dépréciation, avec une date de fin", "Announce the deprecation, with an end date"),
+          w("Le nouveau comportement sous /v2", "The new behaviour under /v2"),
+        ],
+      },
+    ],
+    limits: [
+      w(
+        "Il lit le code et la spécification sans appeler l'API : une limite de débit ou une règle de passerelle que le dépôt ne montre pas est posée en question.",
+        "It reads the code and the specification without calling the API: a rate limit or a gateway rule the repository does not show is asked as a question.",
+      ),
+    ],
+  },
+
   "qa-acceptance": {
     promise: w(
       "Sachez si une pull request est prête : chaque critère attendu, vérifié avec sa preuve — le code, le test, la CI.",

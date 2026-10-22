@@ -47,6 +47,11 @@ agents:
     version: 1.3.0
     status: active
 
+  - path: development/api-design-review/SKILL.md
+    name: api-design-review
+    version: 1.0.0
+    status: active
+
   - path: development/build-fixer/SKILL.md
     name: build-fixer
     version: 1.2.0
