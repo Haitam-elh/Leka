@@ -28,7 +28,7 @@ LEKA's own capabilities — understanding, the analysis, its answer (LEKA Assist
 | Build Error Resolver | incident | `build-fixer` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | growth + | — |
 | Silent Failure Hunter | incident | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
 | Security Reviewer | security | `security-review` | active | expert | 25 € | Option payante, incluse dès le plan indiqué | business + | ship-safe, security-reliability |
-| Dependency Analyst | security | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | incident-response, security-reliability |
+| Dependency Analyst | security | `dependency-analysis` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | enterprise + | incident-response, security-reliability |
 | Vulnerability Scanner | security | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
 | Compliance Auditor | security | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
 | Security Advisor | security | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
@@ -81,8 +81,8 @@ LEKA's own capabilities — understanding, the analysis, its answer (LEKA Assist
 |---|---|---|---|---|---|
 | Engineering | 59 € | 91 € | 35 % | yes | — |
 | Ship Safe | 79 € | — | not shown | no | Migration Planner |
-| Incident Response | 89 € | — | not shown | no | Dependency Analyst, Performance Analyst |
-| Security & Reliability | 69 € | — | not shown | no | Dependency Analyst, Database Specialist |
+| Incident Response | 89 € | — | not shown | no | Performance Analyst |
+| Security & Reliability | 69 € | — | not shown | no | Database Specialist |
 | Frontend Craft | 29 € | 48 € | 40 % | yes | — |
 
 A bundle is sold once every member is an agent of the registry on sale; its saving is computed from its members' prices, and shown only when every member has one.

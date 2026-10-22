@@ -42,6 +42,11 @@ class RuntimeSettings:
     # Where the agent markdown files live. Content, not code — see
     # agents/README.md.
     agents_dir: Path = REPO_ROOT / "agents"
+    # Where the agents look third-party packages' known vulnerabilities up:
+    # the public OSV database, free, no key — only public packages' names
+    # and versions are sent (capabilities/advisories.py). Empty: never looked
+    # up, said not checked.
+    advisories_url: str = "https://api.osv.dev"
 
 
 __all__ = ["RuntimeSettings"]

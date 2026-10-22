@@ -973,6 +973,125 @@ export const BUILD: Record<string, AgentProduct> = {
     ],
   },
 
+  "dependency-analysis": {
+    promise: w(
+      "Sachez quels paquets tiers exposent votre code, lesquels traiter d'abord, et la version qui corrige.",
+      "Know which third-party packages expose your code, which to deal with first, and the version that fixes them.",
+    ),
+    problem: w(
+      "Des centaines de paquets tirés par quelques-uns : une faille annoncée, et personne ne sait si elle vous touche, ni par où elle arrive.",
+      "Hundreds of packages pulled in by a few: a flaw is announced, and no one knows whether it touches you, nor how it gets in.",
+    ),
+    benefits: [
+      {
+        icon: "shield",
+        title: w("Les vulnérabilités connues", "Known vulnerabilities"),
+        body: w(
+          "Chaque paquet de vos fichiers de verrouillage, cherché dans une base publique de vulnérabilités.",
+          "Every package of your lock files, looked up in a public vulnerability database.",
+        ),
+      },
+      {
+        icon: "target",
+        title: w("Ce qui compte vraiment", "What really matters"),
+        body: w(
+          "Directe ou transitive, production ou développement, appelée ou non : la priorité, pas seulement la note.",
+          "Direct or transitive, production or development, called or not: the priority, not only the score.",
+        ),
+      },
+      {
+        icon: "check",
+        title: w("La correction exacte", "The exact fix"),
+        body: w(
+          "La version qui corrige, le paquet à monter, ce qu'il faut tester après.",
+          "The version that fixes it, the package to upgrade, what to test afterwards.",
+        ),
+      },
+    ],
+    does: w(
+      "Il trouve les fichiers de dépendances du dépôt, les fait lire par LEKA sans rien installer et cherche chaque paquet public dans une base publique de vulnérabilités. Il trie chaque faille selon ce qu'elle expose ici, donne la version qui corrige, relève ce qui s'exécute à l'installation, et relie un changement de versions à un incident qu'il précède.",
+      "It finds the repository's dependency files, has LEKA read them without installing anything and looks each public package up in a public vulnerability database. It ranks each flaw by what it exposes here, gives the version that fixes it, points out what runs at install time, and ties a change of versions to an incident it preceded.",
+    ),
+    features: [
+      w("Chaque fichier de verrouillage lu en entier", "Every lock file read whole"),
+      w("Les vulnérabilités connues, avec leurs identifiants", "Known vulnerabilities, with their identifiers"),
+      w("Directes ou transitives, production ou développement", "Direct or transitive, production or development"),
+      w("La version qui corrige, et le paquet à monter", "The fixing version, and the package to upgrade"),
+      w("Les scripts d'installation et les sources hors registre", "Install scripts and sources outside the registry"),
+      w("Les versions avant et après d'une montée", "Versions before and after an upgrade"),
+      w("Le changement de dépendance avant un incident", "The dependency change before an incident"),
+    ],
+    useCases: [
+      {
+        icon: "shield",
+        title: w("Un état des lieux", "A review"),
+        body: w("Les vulnérabilités connues de tout un dépôt.", "The known vulnerabilities of a whole repository."),
+        ask: w(
+          "Nos dépendances ont-elles des vulnérabilités connues dans acme/web ?",
+          "Do our dependencies have known vulnerabilities in acme/web?",
+        ),
+      },
+      {
+        icon: "alert",
+        title: w("Une faille annoncée", "A flaw announced"),
+        body: w("Savoir si elle vous touche, et où.", "Know whether it touches you, and where."),
+        ask: w("Sommes-nous touchés par la faille de log4j ?", "Are we affected by the log4j flaw?"),
+      },
+      {
+        icon: "git",
+        title: w("Une montée de versions", "An upgrade"),
+        body: w("Ce qu'elle corrige, ce qu'elle apporte.", "What it fixes, what it brings."),
+        ask: w(
+          "La montée de versions de la PR #42 de acme/web est-elle sûre ?",
+          "Is the upgrade in PR #42 of acme/web safe?",
+        ),
+      },
+      {
+        icon: "clock",
+        title: w("Après un incident", "After an incident"),
+        body: w("Une dépendance a-t-elle changé juste avant ?", "Did a dependency change just before?"),
+        ask: w(
+          "Une dépendance a-t-elle changé avant la panne de checkout ?",
+          "Did a dependency change before the checkout outage?",
+        ),
+      },
+    ],
+    outline: [
+      w("Verdict", "Verdict"),
+      w("Ce qui a été lu", "What was read"),
+      w("Vulnérabilités", "Vulnerabilities"),
+      w("Ce qui s'exécute à l'installation", "What runs at install time"),
+      w("Actions", "Actions"),
+    ],
+    examples: [
+      {
+        kind: "levels",
+        title: w("Vulnérabilités", "Vulnerabilities"),
+        items: [
+          { level: "critical", text: w("log4j-core 2.14.1, en production — corrigé en 2.17.1", "log4j-core 2.14.1, in production — fixed in 2.17.1") },
+          { level: "high", text: w("qs 6.5.0, transitive par express — monter express", "qs 6.5.0, transitive through express — upgrade express") },
+          { level: "medium", text: w("Script postinstall d'un paquet tiré d'un dépôt git", "Postinstall script of a package pulled from a git repository") },
+          { level: "low", text: w("lodash en trois versions", "lodash in three versions") },
+        ],
+      },
+      {
+        kind: "list",
+        title: w("Actions", "Actions"),
+        items: [
+          w("Monter log4j-core en 2.17.1, puis rejouer les tests d'intégration", "Upgrade log4j-core to 2.17.1, then rerun the integration tests"),
+          w("Monter express pour corriger qs", "Upgrade express to fix qs"),
+          w("Installer avec le fichier de verrouillage dans la CI", "Install from the lock file in the CI"),
+        ],
+      },
+    ],
+    limits: [
+      w(
+        "Il lit les fichiers sans rien installer ni exécuter ; seuls les noms et versions des paquets publics sont envoyés à la base de vulnérabilités — une faille que la base ne connaît pas encore n'est pas vue.",
+        "It reads the files without installing or running anything; only public packages' names and versions are sent to the vulnerability database — a flaw the database does not know yet is not seen.",
+      ),
+    ],
+  },
+
   "qa-acceptance": {
     promise: w(
       "Sachez si une pull request est prête : chaque critère attendu, vérifié avec sa preuve — le code, le test, la CI.",

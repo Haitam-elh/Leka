@@ -2504,6 +2504,7 @@ const fr = {
       "qa-acceptance": "Recette (QA)",
       "api-design-review": "Revue d'API",
       "reliability-analysis": "Analyse de fiabilité",
+      "dependency-analysis": "Analyse de dépendances",
       "documentation-assistant": "Assistant de documentation",
       "accessibility-audit": "Audit d'accessibilité",
       "design-review": "Revue de design",
@@ -2593,6 +2594,8 @@ const fr = {
         "Une API relue : ce qu'un changement casse pour ceux qui l'appellent, et sa cohérence — erreurs, pagination, ce qu'elle expose.",
       "reliability-analysis":
         "Ce qui rend un service fragile : ses points de défaillance, ce qui se passe quand une dépendance tombe, les pannes qui se cachent, les incidents qui reviennent.",
+      "dependency-analysis":
+        "Les paquets tiers de votre code : leurs vulnérabilités connues, lesquelles comptent, la version qui corrige, ce qui s'exécute à l'installation.",
       "regression-analysis":
         "Ce qu'un changement peut casser qui marchait : les comportements touchés, ce qui en dépend, les tests qui les gardent.",
       "change-impact-analysis":
@@ -11197,6 +11200,7 @@ const en: Dictionary = {
       "qa-acceptance": "Acceptance (QA)",
       "api-design-review": "API review",
       "reliability-analysis": "Reliability analysis",
+      "dependency-analysis": "Dependency analysis",
       "documentation-assistant": "Documentation assistant",
       "accessibility-audit": "Accessibility audit",
       "design-review": "Design review",
@@ -11283,6 +11287,8 @@ const en: Dictionary = {
         "An API reviewed: what a change breaks for those calling it, and its consistency — errors, pagination, what it exposes.",
       "reliability-analysis":
         "What makes a service fragile: its points of failure, what happens when a dependency falls, the failures that hide, the incidents that recur.",
+      "dependency-analysis":
+        "Your code's third-party packages: their known vulnerabilities, which matter, the version that fixes them, what runs at install time.",
       "regression-analysis":
         "What a change could break that used to work: the behaviours it alters, what depends on them, the tests guarding them.",
       "change-impact-analysis":

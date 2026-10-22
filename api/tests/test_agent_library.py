@@ -234,6 +234,14 @@ ASKED = [
         ),
         "reliability-analysis",
     ),
+    (
+        RouteQuery(
+            text="Nos dépendances ont-elles des vulnérabilités connues dans acme/web ?",
+            goal="check_compliance",
+            kind="compliance",
+        ),
+        "dependency-analysis",
+    ),
 ]
 
 
@@ -800,4 +808,46 @@ def test_the_reliability_analysis_measures_and_hunts_hidden_failures() -> None:
         assert rule.lower() in said.lower(), rule
     assert credited(
         "reliability-analysis", "msitarzewski/agency-agents", "garrytan/gstack", "affaan-m/ECC"
+    )
+
+
+def test_the_dependency_analysis_reads_lock_files_and_never_recalls_a_vulnerability() -> None:
+    """2026-10-22: « Analyse de dépendances » — Incident Response's and
+    Security & Reliability's dependency analyst: the lock files parsed by the
+    server, each public package looked up in OSV, every vulnerability
+    triaged — direct or transitive, production or development, reachable,
+    fixed in — never one from memory, never « none » unchecked; its method
+    credited, never told it."""
+    d = {d.key: d for d in catalogue()}["dependency-analysis"]
+    assert (d.kind, d.lifecycle, d.version, d.mode) == (
+        Kind.AGENT,
+        Lifecycle.ACTIVE,
+        "1.0.0",
+        "read_only",
+    )
+    assert "audit_dependencies" in d.tools
+    assert {"list_files", "read_file", "read_pull_request", "what_happened"} <= set(d.tools)
+    assert all(not i.required for i in d.contract.inputs)
+    assert {i.name for i in d.contract.inputs} == {"depot", "paquet", "incident", "changement"}
+    given, withheld = agent_skill_tools(d)
+    assert ({t.name for t in given}, withheld) == ({"blast-radius", "change-review"}, [])
+    said = " ".join((d.instructions or "").split())
+    for section in (
+        "Ce qu'il regarde",
+        "Sa méthode",
+        "Ce qu'il produit",
+        "Ce qu'il ne doit jamais faire",
+    ):
+        assert section in said, section
+    for rule in (
+        "jamais de ta mémoire",
+        "pas été vérifiées",
+        "atteignabilité inconnue",
+        "jamais « a causé »",
+        "Dis où tu as cherché",
+        "tu n'installes rien",
+    ):
+        assert rule.lower() in said.lower(), rule
+    assert credited(
+        "dependency-analysis", "garrytan/gstack", "msitarzewski/agency-agents", "affaan-m/ECC"
     )

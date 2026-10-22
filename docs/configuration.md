@@ -43,6 +43,7 @@ Production once started with a bucket named `""` because that was not true.
 | `LEKA_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR` |
 | `LEKA_LOG_FORMAT` | `console` | `console` for a terminal, `json` for a log collector |
 | `LEKA_AGENTS_DIR` | `<repo>/agents` | Where the agent markdown files live |
+| `LEKA_ADVISORIES_URL` | `https://api.osv.dev` | Where the dependency analysis looks third-party packages' known vulnerabilities up — the public OSV database, free, no key; only public packages' names and versions are sent. Empty: never looked up, the deliverable says they were not checked |
 
 ## Database and queue
 
