@@ -12,6 +12,7 @@ else. What a mock-up shows, it holds.
 
 from __future__ import annotations
 
+import difflib
 import html
 import re
 import uuid
@@ -321,6 +322,31 @@ def unstyled(drawing: MockupDrawing) -> list[str]:
     return []
 
 
+_PIECES = re.compile(r"<[^>]+>|[^<]+")
+
+
+def unchanged(today: MockupDrawing, drawn: MockupDrawing, direction: DesignDirection) -> list[str]:
+    """A direction drawn as today's screen, said to the model that drew it
+    (2026-10-22: asked a new design, a proposal came back the screen as it
+    is) — its tags and texts, and its style, nearly all the same."""
+    before = _PIECES.findall(f"{today.css}{today.body}")
+    after = _PIECES.findall(f"{drawn.css}{drawn.body}")
+    if not before or not after:
+        return []
+    same = difflib.SequenceMatcher(None, before, after, autojunk=False).ratio()
+    if same < SAME_AS_TODAY:
+        return []
+    changes = (direction.changes or direction.axis)[:600]
+    return [
+        f"This proposal is drawn the same as today's screen ({same:.0%} identical). "
+        f"Draw what the direction « {direction.name} » changes, visibly: {changes}"[:900]
+    ]
+
+
+# Nearly all its pieces the same as today's: a proposal not drawn.
+SAME_AS_TODAY = 0.97
+
+
 # Before a mock-up's own style: what every page has, so that one drawn bare
 # still reads as a screen, never as a browser's default (2026-10-21).
 BASE = (
@@ -393,6 +419,7 @@ __all__ = [
     "design_key",
     "page",
     "summary",
+    "unchanged",
     "unstyled",
     "with_assets",
     "without_assets",

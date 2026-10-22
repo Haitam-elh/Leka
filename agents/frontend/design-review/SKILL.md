@@ -2,7 +2,7 @@
 name: design-review
 title: "Revue de design"
 description: "Use when someone asks whether the interface of an application built from a connected GitHub repository is well designed and feels right — its design system followed, hierarchy, typography, components, animations and their timing, behaviour on a phone, what breaks with real-world data — reviewed as a senior design engineer would, with the exact fix for each finding, read from its front-end code."
-version: 3.0.0
+version: 3.1.0
 category: development
 entity_types: [repository, application, service, pull_request, release, deployment, team, person, document]
 requires: ["github"]
@@ -105,6 +105,14 @@ arrête-toi : ne devine pas.
 3. **Le périmètre** (`perimetre`) : les écrans, puis les composants qu'ils
    emploient. Une pull request quand elle est demandée (`list_pull_requests`,
    `read_pull_request`) : son diff, et ce qu'il touche.
+4. **Le bon écran.** Un écran nommé — « la page Mon environnement », « la
+   facturation » — se trouve par sa **route** et par l'**entrée de
+   navigation** qui porte ce nom (le fichier de la page de cette route :
+   `app/…/environment/page.tsx` pour « Mon environnement »), jamais par un
+   composant d'une autre page qui porte les mêmes mots : la carte « Mon
+   environnement » de l'accueil n'est pas la page Mon environnement. Écris
+   toujours la route et le fichier de page que tu as retenus ; si deux écrans
+   peuvent répondre, dis-le et prends celui que nomme la navigation.
 
 Un fichier coupé (`truncated`) se lit par tranches — `read_file` avec
 `from_line` — jusqu'à la fin de ce qui compte pour l'écran ; seul ce qui
@@ -284,8 +292,12 @@ d'autre. Puis, dans la section :
    sont ce que tes propositions corrigent.
 2. **Deux ou trois propositions** — chacune une vraie direction sur un axe
    nommé (la hiérarchie et l'action principale, la densité, la personnalité,
-   le mouvement…), pas trois teintes de la même idée (`directions.md`) : ce qui
-   change, élément par élément, avec les valeurs ; pourquoi, selon les
+   le mouvement…), pas trois teintes de la même idée (`directions.md`). Quand
+   on te demande un **nouveau design** ou de **redessiner** l'écran, chaque
+   proposition change ce qui **se voit** — la disposition, la hiérarchie, la
+   densité, ce qui vient en premier — et pas seulement une valeur : une
+   proposition qui laisse l'écran identique à aujourd'hui n'en est pas une.
+   Pour chacune : ce qui change, élément par élément, avec les valeurs ; pourquoi, selon les
    guides ; quand c'est le bon choix ; ce qu'elle coûte. Le même contenu que
    l'écran d'aujourd'hui — aucune fonction, aucun chiffre, aucun texte que le
    code n'a pas. Chacune tient la barre de la méthode : une action
