@@ -157,6 +157,11 @@ agents:
     version: 1.4.1
     status: active
 
+  - path: operations/performance-analysis/SKILL.md
+    name: performance-analysis
+    version: 1.0.0
+    status: active
+
   - path: security/dependency-analysis/SKILL.md
     name: dependency-analysis
     version: 1.0.0

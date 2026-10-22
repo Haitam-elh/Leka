@@ -209,6 +209,8 @@ add_ons:
     dependency-analysis: { tier: specialized, reference: dependency-analyst }
     # Databases (2026-10-22): Security & Reliability's.
     database-review: { tier: specialized, reference: database-specialist }
+    # Performance (2026-10-22): Incident Response's, expert as the reference.
+    performance-analysis: { tier: expert, reference: performance-analyst }
     regression-analysis: { tier: specialized, reference: regression-analyst }
     change-impact-analysis: { tier: specialized, reference: change-impact-analyst }
     # No equivalent in the reference: LEKA's tier, to validate.
@@ -228,7 +230,7 @@ add_ons:
       [ui-quality-review, accessibility-audit, design-review, motion-review,
        codebase-explorer, test-generation, regression-analysis, change-impact-analysis,
        qa-acceptance, api-design-review, reliability-analysis, dependency-analysis,
-       database-review]
+       database-review, performance-analysis]
   reference:
     # product
     product-strategist: { name: "Product Strategist", category: product, tier: standard }

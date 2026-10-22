@@ -97,6 +97,8 @@ def test_the_catalogue_lekas_ships_is_whole() -> None:
         "dependency-analysis",
         # Databases (2026-10-22): Security & Reliability's.
         "database-review",
+        # Performance (2026-10-22): Incident Response's, expert as the reference.
+        "performance-analysis",
     }
     assert sold_.included_in("business") == set(sold_.agents) - later
     # Each agent, the least plan that includes it.
@@ -130,8 +132,9 @@ def test_the_catalogue_lekas_ships_is_whole() -> None:
     assert sold.prices["code-review"] == 900
     # The reference's bundles, at its prices (LEKA-454), sold once every
     # agent they name is built: Engineering and Frontend Craft (LEKA-461),
-    # Security & Reliability (2026-10-22). Their saving computed, shown only
-    # when it can be: the reliability analyst has no reference price.
+    # Security & Reliability and Incident Response (2026-10-22). Their
+    # saving computed, shown only when it can be: the reliability analyst
+    # has no reference price.
     assert {b.key: b.monthly_price for b in sold.bundles} == {
         "engineering": 5900,
         "ship-safe": 7900,
@@ -141,6 +144,7 @@ def test_the_catalogue_lekas_ships_is_whole() -> None:
     }
     assert [b.key for b in sold.bundles if b.sellable] == [
         "engineering",
+        "incident-response",
         "security-reliability",
         "frontend-craft",
     ]

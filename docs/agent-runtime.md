@@ -88,7 +88,7 @@ model with its id, its type and its line of text, **as data**.
 | Tool | Reads | Permission |
 | --- | --- | --- |
 | `search_entities` | things of the company model, by words — only of its types | `workspace:read` |
-| `read_entity` | one thing by its id, and what it is tied to — only of its types | `workspace:read` |
+| `read_entity` | one thing by its id: its attributes as the model holds them — a table's columns' types, keys and indexes, a database instance's replicas, a service's tier; the empty left out, lists and texts cut, the whole bounded at 8,000 characters, what did not fit named (`attributes_of`, 2026-10-22) — and what it is tied to — only of its types | `workspace:read` |
 | `dependencies` | what one thing depends on (`depends_on`) or what depends on it (`used_by`), 1 to 3 steps — only of its types, the rest counted (LEKA-400) | `workspace:read` |
 | `what_happened` | incidents, deployments, changes, releases, merges around one thing, 1 to 30 days back — only of its types (LEKA-400) | `workspace:read` |
 | `read_content` | what one thing's records say — a page's text, a ticket's description, a README — its 4 latest, each cut at 6,000 characters; only of its types (2026-10-14) | `workspace:read` |
