@@ -116,7 +116,19 @@ test.describe("An agent's product page", () => {
   });
 
   test("every agent on sale has its page, the same for each", async ({ page }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(360_000);
+    // A dozen API calls a page, against the API's backstop of 300 a minute
+    // per session (api/leka/api/ratelimit.py): past twenty-odd agents the
+    // walk was refused (429) and a page said it could not show. As a client
+    // should, it reads what is left of the window and waits for its reset.
+    let left = Number.POSITIVE_INFINITY;
+    let reset = 0;
+    page.on("response", (response) => {
+      const said = response.headers()["ratelimit-remaining"];
+      if (said === undefined) return;
+      left = Number(said);
+      reset = Number(response.headers()["ratelimit-reset"] ?? "0");
+    });
     await signIn(page);
     // What the server sells — its own list, never the screen's.
     const keys = await page.evaluate(async (api) => {
@@ -126,6 +138,10 @@ test.describe("An agent's product page", () => {
     }, process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000");
     expect(keys.length).toBeGreaterThan(20);
     for (const key of keys) {
+      if (left < 40) {
+        await page.waitForTimeout((reset + 1) * 1000);
+        left = Number.POSITIVE_INFINITY;
+      }
       await page.goto(`/capabilities/${key}`);
       await expect(page.getByTestId("capability"), key).toHaveAttribute("data-page", "product");
       // Its product, never the registry's English first.
