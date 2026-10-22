@@ -93,6 +93,8 @@ def test_the_catalogue_lekas_ships_is_whole() -> None:
         "api-design-review",
         # Reliability (2026-10-22): Incident Response's and Security & Reliability's.
         "reliability-analysis",
+        # Dependencies (2026-10-22): Incident Response's and Security & Reliability's.
+        "dependency-analysis",
     }
     assert sold_.included_in("business") == set(sold_.agents) - later
     # Each agent, the least plan that includes it.

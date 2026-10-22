@@ -205,6 +205,8 @@ add_ons:
     api-design-review: { tier: specialized, reference: api-design-reviewer }
     # Reliability (2026-10-22): Incident Response's and Security & Reliability's.
     reliability-analysis: { tier: specialized, reference: reliability-analyst }
+    # Dependencies (2026-10-22): Incident Response's and Security & Reliability's.
+    dependency-analysis: { tier: specialized, reference: dependency-analyst }
     regression-analysis: { tier: specialized, reference: regression-analyst }
     change-impact-analysis: { tier: specialized, reference: change-impact-analyst }
     # No equivalent in the reference: LEKA's tier, to validate.
@@ -223,7 +225,7 @@ add_ons:
     enterprise:
       [ui-quality-review, accessibility-audit, design-review, motion-review,
        codebase-explorer, test-generation, regression-analysis, change-impact-analysis,
-       qa-acceptance, api-design-review, reliability-analysis]
+       qa-acceptance, api-design-review, reliability-analysis, dependency-analysis]
   reference:
     # product
     product-strategist: { name: "Product Strategist", category: product, tier: standard }

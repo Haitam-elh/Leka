@@ -36,6 +36,9 @@ from leka.connectors.github.connector import API_VERSION, FULL_NAME, GitHubConne
 
 # A file LEKA reads, or writes, at most.
 MAX_FILE_BYTES = 200_000
+# A lock file LEKA reads whole, at most: read by the server, never given to
+# a model as it is (2026-10-22: the dependency analysis).
+MAX_LOCK_BYTES = 20_000_000
 # The paths a tree gives back, at most.
 MAX_PATHS = 2_000
 
@@ -296,6 +299,35 @@ class GitHubCode:
             return base64.b64decode(str(found.get("content") or ""))
         except ValueError:
             return None
+
+    async def read_whole(
+        self, repository: str, path: str, ref: str, *, most: int = MAX_LOCK_BYTES
+    ) -> str | None:
+        """A file's text however long, up to `most` bytes — a lock file the
+        server parses itself (2026-10-22) — None when it is not there."""
+        async with (
+            self._client() as client,
+            client.stream(
+                "GET",
+                f"/repos/{self._checked(repository)}/contents/{path}",
+                params={"ref": ref},
+                headers={"Accept": "application/vnd.github.raw"},
+            ) as answer,
+        ):
+            if answer.status_code == 404:
+                return None
+            if answer.status_code != 200:
+                await answer.aread()
+                raise self._refused(answer, path)
+            body = bytearray()
+            async for chunk in answer.aiter_bytes():
+                body += chunk
+                if len(body) > most:
+                    raise CodeRefusedError("too_large", f"{path} est trop gros pour être lu ici.")
+        try:
+            return body.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise CodeRefusedError("binary", f"{path} n'est pas un fichier texte.") from error
 
     # ── its pull requests, read (2026-10-14: the code review's deliverable) ──
 

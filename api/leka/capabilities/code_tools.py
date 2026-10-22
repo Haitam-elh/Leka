@@ -10,6 +10,10 @@ that names them (`tools:`), never by default.
     read_pull_request    one, each file it changes with its diff — kept
                          with the run, as the agent read it: what its
                          deliverable shows its comments on (review.py)
+    audit_dependencies   a lock file's or manifest's packages, parsed by the
+                         server (lockfiles.py), each with its known
+                         vulnerabilities (advisories.py) — the dependency
+                         analysis's (2026-10-22)
 """
 
 from __future__ import annotations
@@ -21,13 +25,20 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from leka.capabilities.advisories import RANK, AdvisoriesUnavailableError, lookup
+from leka.capabilities.lockfiles import KNOWN, UnreadableError, parse, parser_for
 from leka.capabilities.runtime import AgentTool
 from leka.capabilities.tools import Answer, Handler
 from leka.connectors import CodeRefusedError, GitHubCode
+from leka.core.config import settings
 
 # What a file gives the model, at most.
 MOST_CHARS = 60_000
 MOST_PATHS = 400
+# What an audit gives the model, at most: the vulnerable packages, the
+# ranges asked without an exact version.
+MOST_VULNERABLE = 60
+MOST_RANGES = 60
 
 LIST_FILES = AgentTool(
     name="list_files",
@@ -102,7 +113,37 @@ READ_PULL_REQUEST = AgentTool(
     permission="workspace:read",
 )
 
-CODE_TOOLS: tuple[AgentTool, ...] = (LIST_FILES, READ_FILE, LIST_PULL_REQUESTS, READ_PULL_REQUEST)
+AUDIT_DEPENDENCIES = AgentTool(
+    name="audit_dependencies",
+    description=(
+        "The third-party packages one lock file or manifest of a connected GitHub repository "
+        "names — read by the server, exact: how many, which the project asks for itself "
+        "(direct), which serve development only — and, for each package from a public "
+        "registry, its known vulnerabilities from the public OSV database: id, aliases (CVE), "
+        "severity, the versions that fix it. Files: package-lock.json, yarn.lock, "
+        "pnpm-lock.yaml, package.json, poetry.lock, uv.lock, pdm.lock, Pipfile.lock, "
+        "requirements*.txt, pyproject.toml, go.mod, Cargo.lock, Gemfile.lock, composer.lock, "
+        "pom.xml, packages.lock.json."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "repository": {"type": "string", "description": "Its full name: owner/repo."},
+            "path": {"type": "string", "description": "The lock file's or manifest's path."},
+            "branch": {"type": "string", "description": "The branch; its default when empty."},
+        },
+        "required": ["repository", "path"],
+    },
+    permission="workspace:read",
+)
+
+CODE_TOOLS: tuple[AgentTool, ...] = (
+    LIST_FILES,
+    READ_FILE,
+    LIST_PULL_REQUESTS,
+    READ_PULL_REQUEST,
+    AUDIT_DEPENDENCIES,
+)
 CODE_NAMES = frozenset(t.name for t in CODE_TOOLS)
 
 
@@ -265,20 +306,108 @@ def code_handlers(
         }
         return Answer(_said({"repository": repository, **pull}), "ok")
 
+    async def audit_dependencies(arguments: Mapping[str, Any]) -> Answer:
+        repository = str(arguments.get("repository") or "").strip()
+        path = str(arguments.get("path") or "").strip()
+        if parser_for(path) is None:
+            return Answer(
+                _said({"error": "unknown_format", "known": list(KNOWN)}),
+                "refused",
+                "invalid_input",
+            )
+        found = await code(repository)
+        if found is None:
+            return Answer(_said({"error": "no_repository"}), "refused", "out_of_scope")
+        try:
+            branch = await branch_of(found, repository, arguments.get("branch"))
+            text = await found.read_whole(repository, path, branch)
+        except CodeRefusedError as refused:
+            return Answer(_said({"error": refused.code}), "refused", refused.code)
+        if text is None:
+            return Answer(_said({"error": "not_found"}), "refused", "not_found")
+        said = await audited(text, path)
+        seen.setdefault("audits", {})[f"{repository}:{path}"] = said
+        return Answer(_said({"repository": repository, "branch": branch, **said}), "ok")
+
     return {
         "list_files": list_files,
         "read_file": read_file,
         "list_pull_requests": list_pull_requests,
         "read_pull_request": read_pull_request,
+        "audit_dependencies": audit_dependencies,
+    }
+
+
+async def audited(text: str, path: str, *, url: str | None = None) -> dict[str, object]:
+    """One file's packages and their known vulnerabilities, as the model is
+    given them: the counts, the vulnerable packages (the worst first), the
+    ranges asked — and whether the vulnerabilities were checked, and why
+    not."""
+    try:
+        parsed = parse(path, text)
+    except UnreadableError as error:
+        return {"path": path, "error": "unreadable", "why": str(error)[:300]}
+    if parsed is None:
+        return {"path": path, "error": "unknown_format", "known": list(KNOWN)}
+    packages = parsed.packages
+    public = [p for p in packages if p.public]
+    looked = settings.advisories_url if url is None else url
+    said: dict[str, object] = {
+        "path": path,
+        "ecosystem": parsed.ecosystem,
+        "kind": parsed.kind,
+        "packages": len(packages),
+        "direct": sum(1 for p in packages if p.direct)
+        if any(p.direct is not None for p in packages)
+        else None,
+        "dev_only": sum(1 for p in packages if p.dev),
+        "not_public": sum(1 for p in packages if not p.public),
+        "ranges": parsed.ranges[:MOST_RANGES],
+        "ranges_total": len(parsed.ranges),
+    }
+    if not looked:
+        return {**said, "checked": False, "why": "not_configured", "vulnerable": []}
+    try:
+        found = await lookup(((parsed.ecosystem, p.name, p.version) for p in public), url=looked)
+    except AdvisoriesUnavailableError:
+        return {**said, "checked": False, "why": "unavailable", "vulnerable": []}
+    hit = [p for p in public if (parsed.ecosystem, p.name, p.version) in found]
+    # The worst first, then those the project asks for itself.
+    hit.sort(
+        key=lambda p: (
+            min(RANK[a.severity] for a in found[(parsed.ecosystem, p.name, p.version)]),
+            not p.direct,
+            p.name,
+        )
+    )
+    vulnerable = [
+        {
+            "name": p.name,
+            "version": p.version,
+            "direct": p.direct,
+            "dev_only": p.dev,
+            "advisories": [a.said() for a in found[(parsed.ecosystem, p.name, p.version)]],
+        }
+        for p in hit
+    ]
+    return {
+        **said,
+        "checked": True,
+        "source": "OSV (osv.dev)",
+        "checked_packages": len(public),
+        "vulnerable_total": len(vulnerable),
+        "vulnerable": vulnerable[:MOST_VULNERABLE],
     }
 
 
 __all__ = [
+    "AUDIT_DEPENDENCIES",
     "CODE_NAMES",
     "CODE_TOOLS",
     "LIST_FILES",
     "LIST_PULL_REQUESTS",
     "READ_FILE",
     "READ_PULL_REQUEST",
+    "audited",
     "code_handlers",
 ]
