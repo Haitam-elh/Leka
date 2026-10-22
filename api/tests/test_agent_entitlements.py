@@ -163,9 +163,9 @@ async def test_what_is_sold_its_prices_and_what_is_owned(
     assert (engineering["sellable"], engineering["monthly_price"]) == (True, 5900)
     assert (engineering["alone_price"], engineering["discount_percent"]) == (9100, 35)
     ship_safe = next(b for b in sold["bundles"] if b["key"] == "ship-safe")
-    # Some of its agents not built — Migration Planner, with no price: not
-    # sold, no saving shown.
-    assert ship_safe["sellable"] is False
+    # Every agent built (2026-10-22): sold — its saving not shown, the
+    # migration planner having no reference price.
+    assert ship_safe["sellable"] is True
     assert (ship_safe["alone_price"], ship_safe["discount_percent"]) == (None, None)
     # Acme: every agent, granted by LEKA.
     assert (sold["every"], sold["runs_agents"]) == (True, True)
@@ -326,7 +326,18 @@ async def test_a_bundle_whose_agents_are_not_all_built_is_never_sold(
     identity: FakeIdentity,
     acme: dict[str, uuid.UUID],
     selling: FakeStripe,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
 ) -> None:
+    # Every bundle LEKA ships is whole since 2026-10-22: Ship Safe made to
+    # name an agent of the reference no agent stands for.
+    _offer(
+        monkeypatch,
+        tmp_path,
+        lambda a: next(b for b in a["bundles"] if b["key"] == "ship-safe")["members"].append(
+            "benchmark-analyst"
+        ),
+    )
     await sync_catalogue()
     await _on(acme["globex"], "growth")
     _as(identity, acme, "other_admin")
@@ -477,6 +488,8 @@ async def test_each_plan_runs_the_agents_it_includes_and_those_of_the_plans_belo
         "database-review",
         # Performance (2026-10-22): Incident Response's, expert as the reference.
         "performance-analysis",
+        # Migrations (2026-10-22): Ship Safe's last member; LEKA's tier, the reference names none.
+        "migration-planning",
     }
     assert all(a["included"] for a in sold["agents"] if a["key"] not in frontend)
     assert not any(a["included"] for a in sold["agents"] if a["key"] in frontend)
