@@ -32,7 +32,7 @@ LEKA's own capabilities — understanding, the analysis, its answer (LEKA Assist
 | Vulnerability Scanner | security | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
 | Compliance Auditor | security | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
 | Security Advisor | security | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
-| Performance Analyst | performance | — | — | expert | 25 € | Référence seulement — non construit, jamais vendu | — | incident-response |
+| Performance Analyst | performance | `performance-analysis` | active | expert | 25 € | Option payante, incluse dès le plan indiqué | enterprise + | incident-response |
 | Database Specialist | performance | `database-review` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | enterprise + | security-reliability |
 | API Design Reviewer | performance | `api-design-review` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | enterprise + | ship-safe, security-reliability |
 | Data Analyst | performance | `data-analysis` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | growth + | — |
@@ -81,7 +81,7 @@ LEKA's own capabilities — understanding, the analysis, its answer (LEKA Assist
 |---|---|---|---|---|---|
 | Engineering | 59 € | 91 € | 35 % | yes | — |
 | Ship Safe | 79 € | — | not shown | no | Migration Planner |
-| Incident Response | 89 € | — | not shown | no | Performance Analyst |
+| Incident Response | 89 € | — | not shown | yes | — |
 | Security & Reliability | 69 € | — | not shown | yes | — |
 | Frontend Craft | 29 € | 48 € | 40 % | yes | — |
 

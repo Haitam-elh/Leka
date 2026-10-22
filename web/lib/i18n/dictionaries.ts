@@ -2506,6 +2506,7 @@ const fr = {
       "reliability-analysis": "Analyse de fiabilité",
       "dependency-analysis": "Analyse de dépendances",
       "database-review": "Revue de base de données",
+      "performance-analysis": "Analyse de performance",
       "documentation-assistant": "Assistant de documentation",
       "accessibility-audit": "Audit d'accessibilité",
       "design-review": "Revue de design",
@@ -2599,6 +2600,8 @@ const fr = {
         "Les paquets tiers de votre code : leurs vulnérabilités connues, lesquelles comptent, la version qui corrige, ce qui s'exécute à l'installation.",
       "database-review":
         "Une base relue : l'intégrité de son schéma, les index que ses requêtes demandent, les migrations qui verrouilleraient ou perdraient des données.",
+      "performance-analysis":
+        "Où passe le temps d'une requête lente, ce qui ne tiendra pas quand les données grandiront, et ce qu'il faut mesurer pour le prouver.",
       "regression-analysis":
         "Ce qu'un changement peut casser qui marchait : les comportements touchés, ce qui en dépend, les tests qui les gardent.",
       "change-impact-analysis":
@@ -11206,6 +11209,7 @@ const en: Dictionary = {
       "reliability-analysis": "Reliability analysis",
       "dependency-analysis": "Dependency analysis",
       "database-review": "Database review",
+      "performance-analysis": "Performance analysis",
       "documentation-assistant": "Documentation assistant",
       "accessibility-audit": "Accessibility audit",
       "design-review": "Design review",
@@ -11296,6 +11300,8 @@ const en: Dictionary = {
         "Your code's third-party packages: their known vulnerabilities, which matter, the version that fixes them, what runs at install time.",
       "database-review":
         "A database reviewed: its schema's integrity, the indexes its queries need, the migrations that would lock or lose data.",
+      "performance-analysis":
+        "Where a slow request's time goes, what will not hold as the data grows, and what to measure to prove it.",
       "regression-analysis":
         "What a change could break that used to work: the behaviours it alters, what depends on them, the tests guarding them.",
       "change-impact-analysis":

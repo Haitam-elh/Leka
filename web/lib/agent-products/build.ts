@@ -1210,6 +1210,120 @@ export const BUILD: Record<string, AgentProduct> = {
     ],
   },
 
+  "performance-analysis": {
+    promise: w(
+      "Sachez où passe le temps d'une page lente, ce qui ne tiendra pas quand les données grandiront, et quoi corriger d'abord.",
+      "Know where a slow page's time goes, what will not hold as the data grows, and what to fix first.",
+    ),
+    problem: w(
+      "Une page ralentit, on ajoute des serveurs ou un cache au hasard : la vraie cause — une requête par ligne, des appels en série — reste là et grandit avec les données.",
+      "A page slows down, servers or a cache get added at random: the real cause — one query per row, calls in sequence — stays and grows with the data.",
+    ),
+    benefits: [
+      {
+        icon: "route",
+        title: w("Le chemin de la lenteur", "The path of the slowness"),
+        body: w(
+          "De la page à la base, étape par étape, où le temps peut passer.",
+          "From the page to the database, step by step, where the time can go.",
+        ),
+      },
+      {
+        icon: "layers",
+        title: w("Ce qui grandit avec les données", "What grows with the data"),
+        body: w(
+          "Les requêtes par ligne, les listes sans limite, les boucles dans des boucles.",
+          "Queries per row, lists without a limit, loops within loops.",
+        ),
+      },
+      {
+        icon: "target",
+        title: w("Des corrections à prouver", "Fixes to prove"),
+        body: w(
+          "Chaque correction avec la mesure avant et après qui la prouvera.",
+          "Each fix with the before-and-after measure that will prove it.",
+        ),
+      },
+    ],
+    does: w(
+      "Il part de ce qui est mesuré — une durée, un incident, une alerte — et suit la requête lente de la page jusqu'à la base, dans le code et dans ce dont le service dépend. Il dit où le temps peut passer, ce qui ne tiendra pas quand les données grandiront, ce qu'une pull request ajoute sur le chemin, puis les corrections et le plan de mesure qui les prouvera.",
+      "It starts from what is measured — a duration, an incident, an alert — and follows the slow request from the page to the database, in the code and in what the service depends on. It says where the time can go, what will not hold as the data grows, what a pull request adds on the path, then the fixes and the measurement plan that will prove them.",
+    ),
+    features: [
+      w("Le chemin d'une requête lente, étape par étape", "A slow request's path, step by step"),
+      w("Les requêtes N+1 et les appels en série", "N+1 queries and calls in sequence"),
+      w("Le travail qui grandit avec les données", "Work that grows with the data"),
+      w("Ce qui bloque : entrées-sorties, verrous, pools", "What blocks: I/O, locks, pools"),
+      w("Le poids du front : dépendances, découpage, images", "The front end's weight: dependencies, splitting, images"),
+      w("Ce qu'une pull request ajoute sur le chemin", "What a pull request adds on the path"),
+      w("Le plan de mesure qui prouvera chaque gain", "The measurement plan that will prove each gain"),
+    ],
+    useCases: [
+      {
+        icon: "clock",
+        title: w("Une page lente", "A slow page"),
+        body: w("Où passe son temps, et pourquoi.", "Where its time goes, and why."),
+        ask: w("Pourquoi la page des commandes est-elle lente ?", "Why is the orders page slow?"),
+      },
+      {
+        icon: "rocket",
+        title: w("Avant la croissance", "Before growth"),
+        body: w("Ce qui lâchera quand le trafic doublera.", "What will give way when traffic doubles."),
+        ask: w("orders-api tiendra-t-il si le trafic double ?", "Will orders-api hold if traffic doubles?"),
+      },
+      {
+        icon: "git",
+        title: w("Avant de fusionner", "Before merging"),
+        body: w("Ce qu'une pull request coûte en temps.", "What a pull request costs in time."),
+        ask: w(
+          "La PR #42 de acme/shop ralentit-elle l'application ?",
+          "Does PR #42 of acme/shop slow the application down?",
+        ),
+      },
+      {
+        icon: "zap",
+        title: w("Un front lourd", "A heavy front end"),
+        body: w("Ce que l'utilisateur attend, et pourquoi.", "What the user waits for, and why."),
+        ask: w("Qu'est-ce qui rend le front de acme/web lourd ?", "What makes acme/web's front end heavy?"),
+      },
+    ],
+    outline: [
+      w("Verdict", "Verdict"),
+      w("Ce qui est mesuré", "What is measured"),
+      w("Le chemin", "The path"),
+      w("Constats", "Findings"),
+      w("Actions", "Actions"),
+      w("À mesurer", "To measure"),
+    ],
+    examples: [
+      {
+        kind: "levels",
+        title: w("Constats", "Findings"),
+        items: [
+          { level: "critical", text: w("Une requête par commande dans la liste (N+1)", "One query per order in the list (N+1)") },
+          { level: "high", text: w("Trois appels en série au service de stock", "Three calls in sequence to the stock service") },
+          { level: "medium", text: w("Bibliothèque de dates importée entière", "Date library imported whole") },
+          { level: "low", text: w("Animation sur la hauteur du panneau", "Animation on the panel's height") },
+        ],
+      },
+      {
+        kind: "list",
+        title: w("À mesurer", "To measure"),
+        items: [
+          w("Le profil de la route /orders, avant et après", "The /orders route's profile, before and after"),
+          w("EXPLAIN ANALYZE de la requête des commandes", "EXPLAIN ANALYZE of the orders query"),
+          w("Un test de charge sur le tunnel de commande", "A load test on the checkout journey"),
+        ],
+      },
+    ],
+    limits: [
+      w(
+        "Il lit le code et l'histoire sans rien exécuter : aucun profil, aucun test de charge — chaque gain est un ordre de grandeur, à confirmer par la mesure qu'il indique.",
+        "It reads the code and the history without running anything: no profile, no load test — each gain is an order of magnitude, to confirm with the measure it gives.",
+      ),
+    ],
+  },
+
   "qa-acceptance": {
     promise: w(
       "Sachez si une pull request est prête : chaque critère attendu, vérifié avec sa preuve — le code, le test, la CI.",

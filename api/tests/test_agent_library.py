@@ -251,6 +251,14 @@ ASKED = [
         ),
         "database-review",
     ),
+    (
+        RouteQuery(
+            text="Pourquoi la page des commandes est-elle lente ?",
+            goal="explain_cause",
+            kind="diagnose",
+        ),
+        "performance-analysis",
+    ),
 ]
 
 
@@ -915,3 +923,59 @@ def test_the_database_review_starts_from_the_catalogue_and_runs_nothing() -> Non
         "reliability-analysis",
     } == set(bundle.agents)
     assert bundle.savings_percent is None
+
+
+def test_the_performance_analysis_follows_the_slow_path_and_measures_nothing_it_claims() -> None:
+    """2026-10-22: « Analyse de performance » — Incident Response's
+    performance analyst: from a measure, the slow request's path step by
+    step, what grows with the data, the front end's weight, a change's cost;
+    every gain an order of magnitude to measure, never a number made up;
+    its method credited, never told it."""
+    d = {d.key: d for d in catalogue()}["performance-analysis"]
+    assert (d.kind, d.lifecycle, d.version, d.mode) == (
+        Kind.AGENT,
+        Lifecycle.ACTIVE,
+        "1.0.0",
+        "read_only",
+    )
+    assert {"list_files", "read_file", "read_pull_request", "dependencies"} <= set(d.tools)
+    assert {i.name for i in d.contract.inputs} == {"symptome", "cible", "depot", "changement"}
+    assert all(not i.required for i in d.contract.inputs)
+    given, withheld = agent_skill_tools(d)
+    assert ({t.name for t in given}, withheld) == (
+        {"incident-history", "change-review", "schema-health"},
+        [],
+    )
+    said = " ".join((d.instructions or "").split())
+    for section in (
+        "Ce qu'il regarde",
+        "Sa méthode",
+        "Ce qu'il produit",
+        "Ce qu'il ne doit jamais faire",
+    ):
+        assert section in said, section
+    for rule in (
+        "Partir d'une mesure",
+        "en série",
+        "grandit avec les données",
+        "`transform` et `opacity`",
+        "jamais « causée par »",
+        "Dis où tu as cherché",
+        "ni test de charge",
+    ):
+        assert rule.lower() in said.lower(), rule
+    assert credited(
+        "performance-analysis",
+        "garrytan/gstack",
+        "affaan-m/ECC",
+        "msitarzewski/agency-agents",
+        "emilkowalski/skills",
+    )
+    # Its last member built, Incident Response is sold — its saving not
+    # shown: the reliability analyst has no reference price.
+    bundle = commercial().add_ons.bundle("incident-response")
+    assert bundle is not None
+    assert (bundle.sellable, bundle.missing, bundle.savings_percent) == (True, (), None)
+    assert {"performance-analysis", "dependency-analysis", "reliability-analysis"} <= set(
+        bundle.agents
+    )
