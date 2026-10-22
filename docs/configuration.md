@@ -127,6 +127,7 @@ says so, the rules answer in its place.
 | `LEKA_MISTRAL_API_KEY` | — | |
 | `LEKA_ANTHROPIC_API_KEY` | — | |
 | `LEKA_OPENAI_API_KEY` | — | OpenAI API key, held by LEKA (LEKA-491) — server-side only |
+| `LEKA_AGENT_CORRECTIONS` | `2` | How many times an agent's deliverable that lacks a section its agent gives is said back to the model, to be written again; then delivered, said incomplete. `0`: not checked |
 | `LEKA_LLM_TASK_ROUTES` | — | The models each kind of work tries first: `code=anthropic:claude-sonnet-5; vision=openai:gpt-4.1` ([model-gateway.md](model-gateway.md) § 3) |
 
 ## Object storage and retention
