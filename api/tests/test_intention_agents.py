@@ -696,6 +696,17 @@ def test_the_words_plainly_name_the_design_review_not_the_alphabet() -> None:
     plain, scores = plainly_asked(entries, asked_words(DESIGN))
     assert plain[0] == "design-review"
     assert scores["documentation-assistant"] == 0
+    # A name is what a request is about, never the work it asks: « payment-api »
+    # asks nothing of the API review; « l'API » does (2026-10-22).
+    for about in (
+        "Pourquoi payment-api est lente depuis hier ?",
+        "Billing API, c'est à qui de voir ça ?",
+        "Redémarre Billing API",
+    ):
+        plain_here, _ = plainly_asked(entries, asked_words(about))
+        assert "api-design-review" not in plain_here, about
+    asked, _ = plainly_asked(entries, asked_words("Fais une revue de l'API de acme/api"))
+    assert asked[0] == "api-design-review"
 
 
 async def test_a_model_told_why_its_choice_does_not_fit_chooses_again_itself(

@@ -150,9 +150,20 @@ _FILLER = frozenset(
 )  # fmt: skip
 
 
+# A name in a request — payment-api, acme/web, main-nav.tsx — says what the
+# request is about, never the work it asks (2026-10-22: « payment-api » made
+# every question about it ask for the API review).
+_IDENTIFIER = re.compile(r"\w+(?:[-/_.]\w+)+")
+
+
+# How relevant an agent must be to be plainly asked for: a word of its name
+# (three) and two of what it does.
+PLAINLY = 5
+
+
 def asked_words(text: str) -> frozenset[str]:
-    """A request's words that may say what work it asks."""
-    return frozenset(_words(text) - _FILLER)
+    """A request's words that may say what work it asks — its names aside."""
+    return frozenset(_words(_IDENTIFIER.sub(" ", text)) - _FILLER)
 
 
 def relevance(definition: Any, asked: frozenset[str]) -> int:
@@ -168,13 +179,14 @@ def relevance(definition: Any, asked: frozenset[str]) -> int:
 def plainly_asked(
     entries: Mapping[str, Any], asked: frozenset[str]
 ) -> tuple[list[str], dict[str, int]]:
-    """The agents a request plainly names — a word of their name, at least
-    half as relevant as the best — most relevant first; and each one's
-    relevance."""
+    """The agents a request plainly names — a word of their name AND of what
+    they do, at least half as relevant as the best — most relevant first;
+    and each one's relevance. A word of a name alone is not enough: « Billing
+    API, c'est à qui ? » asks nothing of the API review (2026-10-22)."""
     scores = {key: relevance(e.definition, asked) for key, e in entries.items()}
     best = max(scores.values(), default=0)
     plain = sorted(
-        (k for k, v in scores.items() if v >= 3 and v * 2 >= best),
+        (k for k, v in scores.items() if v >= PLAINLY and v * 2 >= best),
         key=lambda k: (-scores[k], k),
     )
     return plain[:MOST_AGENTS], scores
@@ -456,7 +468,13 @@ async def propose(
             return []
         got = [k for k in (known_key(c.key, by_key) for c in value.agents) if k]
         best = relevant.get(plain[0], 0) if plain else 0
-        if plain and max((relevant.get(k, 0) for k in got), default=0) * 2 < best:
+        # A question answered without agents is not refused: only work to do,
+        # or agents chosen, are held to what the words name.
+        if (
+            plain
+            and (asks_work or got)
+            and max((relevant.get(k, 0) for k in got), default=0) * 2 < best
+        ):
             fits = by_key[plain[0]].definition
             return [
                 f"The agents chosen ({', '.join(got) or 'none'}) do not do what the request "
