@@ -1092,6 +1092,124 @@ export const BUILD: Record<string, AgentProduct> = {
     ],
   },
 
+  "database-review": {
+    promise: w(
+      "Sachez si votre base tiendra : son schéma, les index que ses requêtes demandent, et les migrations à livrer sans rien bloquer.",
+      "Know whether your database will hold: its schema, the indexes its queries need, and the migrations to ship without blocking anything.",
+    ),
+    problem: w(
+      "Une clé étrangère sans index sur une table qui grossit, une migration qui verrouille la table des commandes, une colonne retirée que le code lit encore : on le découvre en production.",
+      "A foreign key without an index on a growing table, a migration that locks the orders table, a column dropped that the code still reads: you find out in production.",
+    ),
+    benefits: [
+      {
+        icon: "database",
+        title: w("Le schéma tel qu'il est", "The schema as it is"),
+        body: w(
+          "Lu dans le catalogue de la base : clés, index, types, volumes — jamais une ligne de données.",
+          "Read from the database's catalogue: keys, indexes, types, volumes — never a row of data.",
+        ),
+      },
+      {
+        icon: "search",
+        title: w("Des index pour de vraies requêtes", "Indexes for real queries"),
+        body: w(
+          "Chaque index proposé part d'une requête du code, avec ce qu'il coûte.",
+          "Each index proposed starts from a query in the code, with what it costs.",
+        ),
+      },
+      {
+        icon: "shield",
+        title: w("Des migrations sans casse", "Migrations without breakage"),
+        body: w(
+          "Le verrou qu'elles prennent, les données qu'elles risquent, et l'ordre sûr pour livrer.",
+          "The lock they take, the data they risk, and the safe order to ship.",
+        ),
+      },
+    ],
+    does: w(
+      "Il lit la structure de la base dans son catalogue — chaque table, ses clés, ses index, son volume — et calcule ce qui manque : clé primaire, index de clé étrangère, types exacts. Il relit dans le code les requêtes et les migrations, dit lesquelles ne tiendront pas quand la base grossira et comment les corriger, puis ce qu'il faut mesurer sur la base.",
+      "It reads the database's structure from its catalogue — each table, its keys, its indexes, its volume — and works out what is missing: primary keys, foreign key indexes, exact types. It reviews the queries and migrations in the code, says which will not hold as the database grows and how to fix them, then what to measure on the database.",
+    ),
+    features: [
+      w("Les tables sans clé primaire", "Tables without a primary key"),
+      w("Les clés étrangères qu'aucun index ne sert", "Foreign keys no index serves"),
+      w("Les index en double", "Duplicate indexes"),
+      w("Les requêtes N+1, sans limite, par décalage", "N+1, unbounded and offset queries"),
+      w("Les migrations qui verrouillent ou perdent des données", "Migrations that lock or lose data"),
+      w("L'argent en type flottant, les dates sans fuseau", "Money in a floating type, dates without a time zone"),
+      w("Les droits et les données sensibles", "Access rights and sensitive data"),
+    ],
+    useCases: [
+      {
+        icon: "database",
+        title: w("Une revue complète", "A full review"),
+        body: w("Le schéma, ses index, ses risques.", "The schema, its indexes, its risks."),
+        ask: w("Fais une revue de la base de données ledger", "Review the ledger database"),
+      },
+      {
+        icon: "git",
+        title: w("Avant une migration", "Before a migration"),
+        body: w("Le verrou qu'elle prend, l'ordre pour livrer.", "The lock it takes, the order to ship."),
+        ask: w(
+          "La migration de la PR #42 de acme/api est-elle sûre en production ?",
+          "Is the migration in PR #42 of acme/api safe in production?",
+        ),
+      },
+      {
+        icon: "clock",
+        title: w("Une page lente", "A slow page"),
+        body: w("La requête en cause, et l'index qui lui manque.", "The query at fault, and the index it lacks."),
+        ask: w("Pourquoi la liste des factures est-elle lente ?", "Why is the invoice list slow?"),
+      },
+      {
+        icon: "shield",
+        title: w("Les données protégées", "Data protected"),
+        body: w("Qui peut lire quoi, ce qui est sensible.", "Who may read what, what is sensitive."),
+        ask: w(
+          "Notre schéma de facturation protège-t-il ses données ?",
+          "Does our billing schema protect its data?",
+        ),
+      },
+    ],
+    outline: [
+      w("Verdict", "Verdict"),
+      w("Ce qui a été lu", "What was read"),
+      w("Intégrité du schéma", "Schema integrity"),
+      w("Index et requêtes", "Indexes and queries"),
+      w("Migrations", "Migrations"),
+      w("Actions", "Actions"),
+      w("À mesurer", "To measure"),
+    ],
+    examples: [
+      {
+        kind: "levels",
+        title: w("Constats", "Findings"),
+        items: [
+          { level: "critical", text: w("invoices.customer_id sans index — 12 millions de lignes", "invoices.customer_id without an index — 12 million rows") },
+          { level: "high", text: w("Index créé sans CONCURRENTLY sur orders", "Index created without CONCURRENTLY on orders") },
+          { level: "medium", text: w("Montant en double precision", "Amount in double precision") },
+          { level: "low", text: w("Deux index sur lines (sku)", "Two indexes on lines (sku)") },
+        ],
+      },
+      {
+        kind: "list",
+        title: w("Actions", "Actions"),
+        items: [
+          w("CREATE INDEX CONCURRENTLY sur invoices (customer_id)", "CREATE INDEX CONCURRENTLY on invoices (customer_id)"),
+          w("Ajouter la colonne, remplir par lots, puis NOT NULL", "Add the column, fill it in batches, then NOT NULL"),
+          w("Mesurer la requête des factures avec EXPLAIN ANALYZE", "Measure the invoice query with EXPLAIN ANALYZE"),
+        ],
+      },
+    ],
+    limits: [
+      w(
+        "Il lit le catalogue et le code sans lancer aucune requête : la durée réelle d'une requête et l'usage réel d'un index se mesurent sur la base, il dit comment.",
+        "It reads the catalogue and the code without running any query: a query's real duration and an index's real use are measured on the database, it says how.",
+      ),
+    ],
+  },
+
   "qa-acceptance": {
     promise: w(
       "Sachez si une pull request est prête : chaque critère attendu, vérifié avec sa preuve — le code, le test, la CI.",

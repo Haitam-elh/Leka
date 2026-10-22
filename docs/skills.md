@@ -238,6 +238,7 @@ tested without a database).
 | Incident investigation | `incident-history` | a thing (none: everywhere); days (90) | how many incidents, by severity, how many open, the median time to resolve, the longest, the causes that recur, the latest | — |
 | Infrastructure | `infrastructure-inventory` | an account or resource group, a service, an environment | resources by provider, kind, region and state; how many public and unowned; the notable ones | a cloud |
 | Data analysis | `data-landscape` | a database (none: all) | each database's engine, schemas and objects, classification, data categories, owners, services; the tables, views and collections holding personal data or secrets | a database |
+| Database review | `schema-health` | a database | its tables and how many LEKA read the structure of; the largest; those without a primary key; the foreign keys no index starts with; indexes on the same columns; money in a floating type; dates without their time zone (PostgreSQL) — from the catalogue's columns' types, keys and indexes, never a row (2026-10-22) | a database |
 | Release and deployment | `delivery-metrics` | a service or repository (none: all); an environment (production); days (30) | DORA's metrics: deployments and per week, failed, followed by an incident, change failure rate, median time to recover, the last deployment; each tier | — |
 
 A code host: GitHub, GitLab or Bitbucket. A documentation tool: Confluence,
@@ -306,6 +307,13 @@ or when its source ties an incident to it.
 | | `data.personal` | info | personal data held |
 | | `data.shared` | info | used by three services or more |
 | | `data.none` | info | no database |
+| `schema-health` | `schema.unindexed_foreign_key` | warning, critical on a table of a million rows or more | a foreign key no index starts with |
+| | `schema.no_primary_key` | warning | tables without a primary key |
+| | `schema.floating_money` | warning | an amount, price, total… in a floating type |
+| | `schema.duplicate_index` | info | two indexes on the same columns |
+| | `schema.timestamp_without_zone` | info | PostgreSQL dates without their time zone |
+| | `schema.not_read` | info | no table's structure read yet: the source must sync again |
+| | `schema.empty` | info | no table |
 | `delivery-metrics` | `delivery.high_failure_rate` | warning, critical past 30 % | change failure rate above 15 % |
 | | `delivery.failed_deployments` | warning | deployments failed |
 | | `delivery.slow_recovery` | warning | recovering takes more than a day |
@@ -345,6 +353,9 @@ version 1.1.0:
 | `infrastructure-analysis` | `infrastructure-inventory` |
 | `data-analysis` | `data-landscape` |
 | `debug-assistant` | `incident-history` |
+| `reliability-analysis` | `incident-history`, `blast-radius`, `delivery-metrics`, `infrastructure-inventory` |
+| `dependency-analysis` | `blast-radius`, `change-review` |
+| `database-review` | `schema-health`, `data-landscape` |
 
 Each read the kinds of things its skills read: their `entity_types` grew to
 cover them.
@@ -373,11 +384,13 @@ A step uses a skill as `uses: skill:<key>` ([workflows.md](workflows.md)):
 ## Tested
 
 `tests/test_skill_library.py`, pure (LEKA-401):
-- ten skills, one per domain, on the common contract: they read, say what
-  they read and conclude, need what they say;
+- eleven skills, on the common contract: they read, say what they read and
+  conclude, need what they say;
 - delivery in DORA's terms, its tiers, what no deployment says;
 - one severity scale; an incident history open, recurring, severe, slow;
 - an inventory and what stands out; a security posture; a data landscape;
+  a schema's health from its catalogue (an index's key columns, a foreign
+  key no index starts with, keys, duplicates, money, time zones);
   documentation coverage; a blast radius; a test scope; a change; a
   repository: each signal from the facts that call for it, and only those;
 - an agent offered a skill only within what it reads.

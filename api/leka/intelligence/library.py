@@ -40,6 +40,7 @@ judgements (`judge_*`) are pure, tested without a database.
 
 from __future__ import annotations
 
+import re
 import statistics
 import uuid
 from collections import Counter
@@ -1557,6 +1558,272 @@ async def data_landscape(asked: DataAsked, call: Call) -> DataLandscape:
     return landscape
 
 
+# ── database review: schema-health (2026-10-22) ──────────────────────────────
+
+# The columns money is kept in, by their names; the types that round it.
+MONEY = re.compile(
+    r"(^|_)(amount|price|total|cost|balance|fee|tax|salary|montant|prix|solde|cout)(_|$)"
+)
+FLOATING = frozenset(
+    {
+        "real",
+        "double precision",
+        "float",
+        "float4",
+        "float8",
+        "double",
+        "binary_float",
+        "binary_double",
+    }
+)
+ZONELESS = frozenset({"timestamp", "timestamp without time zone"})
+TABLES = frozenset({"table", "partitioned table", "base table"})
+MOST_TABLES = 2_000
+
+
+class SchemaAsked(BaseModel):
+    id: str = Field(max_length=100, description=f"The database: {ID}")
+
+
+class TableNote(Named):
+    rows: int | None
+    size_bytes: int | None
+    detail: str | None = Field(default=None, description="What is found, as the catalogue says it.")
+
+
+class SchemaHealth(Assessed):
+    database: str
+    engine: str | None
+    tables: int
+    structured: int = Field(description="Tables whose columns' types, keys and indexes LEKA read.")
+    largest: list[TableNote]
+    without_primary_key: list[TableNote]
+    unindexed_foreign_keys: list[TableNote] = Field(
+        description="A foreign key no index starts with: every join, every delete of the "
+        "parent, reads the whole table."
+    )
+    duplicate_indexes: list[TableNote]
+    floating_money: list[TableNote]
+    timestamps_without_zone: list[TableNote]
+
+
+def index_columns(definition: str) -> tuple[str, ...]:
+    """An index's key columns, in order, as its definition writes them —
+    `CREATE INDEX i ON s.t USING btree (a, b DESC) WHERE …` → (a, b);
+    an expression stays one, as written."""
+    text = definition
+    on = text.upper().find(" ON ")
+    start = text.find("(", on if on >= 0 else 0)
+    if start < 0:
+        return ()
+    depth, parts, word = 0, [], ""
+    for char in text[start + 1 :]:
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            if depth == 0:
+                break
+            depth -= 1
+        if char == "," and depth == 0:
+            parts.append(word)
+            word = ""
+        else:
+            word += char
+    parts.append(word)
+    found = []
+    for part in parts:
+        said = part.strip().strip('"`[]')
+        if "(" not in said:
+            said = said.split()[0].strip('"`[]') if said.split() else ""
+        if said:
+            found.append(said.lower())
+    return tuple(found)
+
+
+def _foreign_key(said: str) -> tuple[tuple[str, ...], str]:
+    """« customer_id, day → billing.customers(id, day) » → its columns and all of it."""
+    columns, _, _ = said.partition(" → ")
+    return tuple(c.strip().strip('"`[]').lower() for c in columns.split(",") if c.strip()), said
+
+
+def _strings(value: object) -> list[str]:
+    return [str(v) for v in value] if isinstance(value, list) else []
+
+
+def schema_of(
+    tables: Sequence[tuple[Named, Mapping[str, Any]]], *, database: str, engine: str | None
+) -> SchemaHealth:
+    """What a database's structure shows (pure): each table's attributes as
+    the model holds them — read by the database source, never a row."""
+
+    def note(named: Named, a: Mapping[str, Any], detail: str | None = None) -> TableNote:
+        rows, size = a.get("estimated_rows"), a.get("size_bytes")
+        return TableNote(
+            **named.model_dump(),
+            rows=rows if isinstance(rows, int) else None,
+            size_bytes=size if isinstance(size, int) else None,
+            detail=detail,
+        )
+
+    real = [(n, a) for n, a in tables if str(a.get("object_kind") or "table").lower() in TABLES]
+    structured = [(n, a) for n, a in real if "indexes" in a or "column_types" in a]
+    unkeyed, unindexed, twice, floating, zoneless = [], [], [], [], []
+    for named, a in real:
+        key = tuple(c.lower() for c in _strings(a.get("primary_key")))
+        if not key:
+            unkeyed.append(note(named, a))
+        if (named, a) not in structured:
+            continue
+        whole = [
+            (d, index_columns(d)) for d in _strings(a.get("indexes")) if " WHERE " not in d.upper()
+        ]
+        starts = [cols for _, cols in whole] + ([key] if key else [])
+        for said in _strings(a.get("foreign_keys")):
+            columns, _ = _foreign_key(said)
+            if columns and not any(
+                len(cols) >= len(columns) and set(cols[: len(columns)]) == set(columns)
+                for cols in starts
+            ):
+                unindexed.append(note(named, a, said))
+        seen: dict[tuple[str, ...], str] = {}
+        for definition, cols in whole:
+            if not cols:
+                continue
+            if cols in seen:
+                twice.append(note(named, a, f"{seen[cols]} | {definition}"))
+            else:
+                seen[cols] = definition
+        typed = [c.split(" ", 1) for c in _strings(a.get("column_types")) if " " in c]
+        money = [n for n, t in typed if MONEY.search(n.lower()) and t.lower() in FLOATING]
+        if money:
+            floating.append(note(named, a, ", ".join(money)))
+        if (engine or "") == "postgresql":
+            stamps = [n for n, t in typed if t.lower() in ZONELESS]
+            if stamps:
+                zoneless.append(note(named, a, ", ".join(stamps)))
+
+    def size(t: TableNote) -> tuple[int, int]:
+        return (-(t.rows or 0), -(t.size_bytes or 0))
+
+    largest = sorted((note(n, a) for n, a in real), key=size)
+    health = SchemaHealth(
+        database=database,
+        engine=engine,
+        tables=len(real),
+        structured=len(structured),
+        largest=[t for t in largest if t.rows or t.size_bytes][:10],
+        without_primary_key=sorted(unkeyed, key=size)[:MOST],
+        unindexed_foreign_keys=sorted(unindexed, key=size)[:MOST],
+        duplicate_indexes=sorted(twice, key=size)[:MOST],
+        floating_money=sorted(floating, key=size)[:MOST],
+        timestamps_without_zone=sorted(zoneless, key=size)[:MOST],
+    )
+    health.signals = judge_schema(health)
+    return health
+
+
+# A table this big without what it needs is felt on every read.
+BIG_TABLE = 1_000_000
+
+
+def judge_schema(health: SchemaHealth) -> list[Signal]:
+    said: list[Signal] = []
+
+    def named(notes: Sequence[TableNote]) -> list[str]:
+        return [t.name for t in notes]
+
+    if health.tables and not health.structured:
+        said.append(
+            signal(
+                "schema.not_read",
+                "info",
+                f"LEKA has not read {health.database}'s columns' types, keys and indexes yet: "
+                "its source must sync again.",
+            )
+        )
+    if health.unindexed_foreign_keys:
+        big = any((t.rows or 0) >= BIG_TABLE for t in health.unindexed_foreign_keys)
+        said.append(
+            signal(
+                "schema.unindexed_foreign_key",
+                "critical" if big else "warning",
+                f"{len(health.unindexed_foreign_keys)} foreign keys no index starts with.",
+                tables=named(health.unindexed_foreign_keys),
+            )
+        )
+    if health.without_primary_key:
+        said.append(
+            signal(
+                "schema.no_primary_key",
+                "warning",
+                f"{len(health.without_primary_key)} tables without a primary key.",
+                tables=named(health.without_primary_key),
+            )
+        )
+    if health.floating_money:
+        said.append(
+            signal(
+                "schema.floating_money",
+                "warning",
+                "Money kept in a floating type, which rounds it.",
+                tables=named(health.floating_money),
+            )
+        )
+    if health.duplicate_indexes:
+        said.append(
+            signal(
+                "schema.duplicate_index",
+                "info",
+                "Indexes on the same columns: each slows every write, one serves.",
+                tables=named(health.duplicate_indexes),
+            )
+        )
+    if health.timestamps_without_zone:
+        said.append(
+            signal(
+                "schema.timestamp_without_zone",
+                "info",
+                "Dates kept without their time zone.",
+                tables=named(health.timestamps_without_zone),
+            )
+        )
+    if not health.tables:
+        said.append(signal("schema.empty", "info", "LEKA knows no table in this database."))
+    return said
+
+
+async def schema_health(asked: SchemaAsked, call: Call) -> SchemaHealth:
+    repository, database = await one(call, asked.id, (EntityType.DATABASE,))
+    found = await listed(
+        call.session,
+        repository.data_objects(DataFilters(database_id=database.id)),
+        MOST_TABLES,
+    )
+    citer = Citer(await sources_of(call.session, call.workspace_id, [database, *found]))
+    engine = database.attributes.get("engine")
+    health = schema_of(
+        [(citer.named(e, kind="data_object"), dict(e.attributes)) for e in found],
+        database=database.name,
+        engine=str(engine) if engine else None,
+    )
+    said = citer.named(database, kind="database")
+    # What it cites: the database, and the tables it points out.
+    shown = {said.id} | {
+        t.id
+        for notes in (
+            health.largest,
+            health.without_primary_key,
+            health.unindexed_foreign_keys,
+            health.duplicate_indexes,
+            health.floating_money,
+            health.timestamps_without_zone,
+        )
+        for t in notes
+    }
+    health.cited = [c for c in citer.cited if c.id in shown]
+    return health
+
+
 # ── release and deployment: delivery-metrics ─────────────────────────────────
 
 Tier = Literal["elite", "high", "medium", "low", "unknown"]
@@ -1994,6 +2261,26 @@ LIBRARY = (
         limitations=(
             LIMITED,
             "What a column holds is read from its name and comment, never from a value.",
+        ),
+    ),
+    Skill(
+        key="schema-health",
+        version=VERSION,
+        title="Schema health",
+        summary="One database's structure, as its catalogue says it: its largest tables, the "
+        "tables without a primary key, the foreign keys no index starts with, indexes on the "
+        "same columns, money kept in a floating type, dates without their time zone.",
+        category="data",
+        input=SchemaAsked,
+        output=SchemaHealth,
+        run=schema_health,
+        reads=("database", "schema", "data_object"),
+        sources=(DATABASES,),
+        permission=Permission.WORKSPACE_READ.value,
+        limitations=(
+            LIMITED,
+            "The catalogue's structure and estimated sizes only: no query, no plan, no row.",
+            "A foreign key is said unindexed when no index starts with its columns.",
         ),
     ),
     Skill(

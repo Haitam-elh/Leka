@@ -203,7 +203,7 @@ def codes(signals: list[Any]) -> dict[str, str]:
 # ── the library ──────────────────────────────────────────────────────────────
 
 
-def test_ten_skills_one_per_domain_each_on_the_common_contract() -> None:
+def test_eleven_skills_each_on_the_common_contract() -> None:
     keys = [s.key for s in LIBRARY]
     assert keys == [
         "repository-profile",
@@ -215,6 +215,7 @@ def test_ten_skills_one_per_domain_each_on_the_common_contract() -> None:
         "incident-history",
         "infrastructure-inventory",
         "data-landscape",
+        "schema-health",
         "delivery-metrics",
     ]
     registered = {s.key for s in all_skills()}
@@ -236,6 +237,9 @@ def test_ten_skills_one_per_domain_each_on_the_common_contract() -> None:
         ),
         "infrastructure-inventory": (("aws", "azure", "gcp"),),
         "data-landscape": (
+            ("postgresql", "mysql", "mariadb", "sqlserver", "oracle", "mongodb", "supabase"),
+        ),
+        "schema-health": (
             ("postgresql", "mysql", "mariadb", "sqlserver", "oracle", "mongodb", "supabase"),
         ),
     }
@@ -445,6 +449,81 @@ def test_a_security_posture_the_exposed_first() -> None:
 
 
 # ── data analysis ────────────────────────────────────────────────────────────
+
+
+def test_an_index_s_key_columns_as_its_definition_writes_them() -> None:
+    assert library.index_columns(
+        "CREATE INDEX ix ON billing.invoices USING btree (customer_id, created_at DESC)"
+    ) == ("customer_id", "created_at")
+    assert library.index_columns(
+        'CREATE UNIQUE INDEX "ux" ON s.t USING btree ("Email" text_pattern_ops) WHERE x'
+    ) == ("email",)
+    assert library.index_columns("CREATE INDEX ix ON t (lower(email))") == ("lower(email)",)
+    assert library.index_columns("CREATE NONCLUSTERED INDEX ix ON dbo.t ([a], [b])") == ("a", "b")
+    assert library.index_columns("INDEX ix") == ()
+
+
+def test_a_schema_s_health_from_its_catalogue() -> None:
+    def table(name: str, **attributes: Any) -> tuple[Any, dict[str, Any]]:
+        return named(f"billing.{name}", "data_object"), {"object_kind": "table", **attributes}
+
+    health = library.schema_of(
+        [
+            table(
+                "invoices",
+                primary_key=["id"],
+                estimated_rows=12_000_000,
+                column_types=["id bigint", "customer_id bigint", "amount double precision"],
+                foreign_keys=["customer_id → billing.customers(id)"],
+                indexes=["CREATE UNIQUE INDEX invoices_pkey ON billing.invoices (id)"],
+            ),
+            table(
+                "lines",
+                primary_key=["invoice_id", "n"],
+                column_types=["created_at timestamp without time zone"],
+                # Its key starts with the foreign key's column: covered.
+                foreign_keys=["invoice_id → billing.invoices(id)"],
+                indexes=[
+                    "CREATE INDEX a ON billing.lines (sku)",
+                    "CREATE INDEX b ON billing.lines (sku)",
+                    # Partial: not the same index.
+                    "CREATE INDEX c ON billing.lines (sku) WHERE sku IS NOT NULL",
+                ],
+            ),
+            table("audit", column_types=["at timestamptz"], indexes=[]),
+            # Read before the structure was kept: counted, not judged.
+            table("legacy", primary_key=["id"]),
+            (named("billing.unpaid", "data_object"), {"object_kind": "view"}),
+        ],
+        database="ledger",
+        engine="postgresql",
+    )
+    assert (health.tables, health.structured) == (4, 3)
+    assert [(t.name, t.detail) for t in health.unindexed_foreign_keys] == [
+        ("billing.invoices", "customer_id → billing.customers(id)")
+    ]
+    assert [t.name for t in health.without_primary_key] == ["billing.audit"]
+    assert [t.detail for t in health.duplicate_indexes] == [
+        "CREATE INDEX a ON billing.lines (sku) | CREATE INDEX b ON billing.lines (sku)"
+    ]
+    assert [(t.name, t.detail) for t in health.floating_money] == [("billing.invoices", "amount")]
+    assert [t.detail for t in health.timestamps_without_zone] == ["created_at"]
+    assert health.largest[0].name == "billing.invoices"
+    # On twelve million rows, an unindexed foreign key is felt on every read.
+    assert codes(health.signals) == {
+        "schema.unindexed_foreign_key": "critical",
+        "schema.no_primary_key": "warning",
+        "schema.floating_money": "warning",
+        "schema.duplicate_index": "info",
+        "schema.timestamp_without_zone": "info",
+    }
+    unread = library.schema_of(
+        [table("legacy", primary_key=["id"])], database="ledger", engine="mysql"
+    )
+    assert codes(unread.signals) == {"schema.not_read": "info"}
+    assert codes(library.schema_of([], database="x", engine=None).signals) == {
+        "schema.empty": "info"
+    }
 
 
 def test_a_data_landscape_secrets_personal_unowned_shared() -> None:

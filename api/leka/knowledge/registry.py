@@ -318,6 +318,12 @@ class DataObjectAttributes(Classified):
     column_categories: dict[str, str] | None = None
     estimated_rows: int | None = None
     size_bytes: int | None = None
+    # Its structure, as the database's catalogue says it (2026-10-22): each
+    # column's type ("name type"), each foreign key ("customer_id →
+    # billing.customers(id)"), each index as the engine would create it.
+    column_types: list[str] | None = None
+    foreign_keys: list[str] | None = None
+    indexes: list[str] | None = None
 
 
 class CloudAccountAttributes(Placed):

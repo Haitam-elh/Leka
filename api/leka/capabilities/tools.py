@@ -158,6 +158,40 @@ Handler = Callable[[Mapping[str, Any]], Awaitable[Answer]]
 Reader = Callable[[uuid.UUID], Awaitable[Sequence[Mapping[str, object]]]]
 
 
+# What read_entity gives of a thing's attributes, at most: each list's
+# first items, each text's start, the whole within MOST_ATTRIBUTES.
+MOST_ITEMS = 60
+MOST_TEXT = 500
+MOST_ATTRIBUTES = 8_000
+
+
+def attributes_of(attributes: Mapping[str, Any]) -> dict[str, object]:
+    """A thing's attributes as the model is given them (2026-10-22: a
+    table's columns, keys and indexes, a database's replicas, a service's
+    tier — what an agent judges, not only its name): the empty left out,
+    lists and texts cut, the whole bounded — what does not fit is named in
+    `cut`."""
+    kept: dict[str, object] = {}
+    cut: list[str] = []
+    size = 0
+    for name, value in attributes.items():
+        if value is None or value == [] or value == {} or value == "":
+            continue
+        if isinstance(value, list):
+            value = [v[:MOST_TEXT] if isinstance(v, str) else v for v in value[:MOST_ITEMS]]
+        elif isinstance(value, str):
+            value = value[:MOST_TEXT]
+        said = len(_said(value)) + len(name)
+        if size + said > MOST_ATTRIBUTES:
+            cut.append(name)
+            continue
+        kept[name] = value
+        size += said
+    if cut:
+        kept["cut"] = cut
+    return kept
+
+
 def _types(definition: Definition, asked: object) -> list[EntityType] | None:
     """The types a search may look for: the agent's, narrowed to those
     asked — None when it asked only for types it may not read."""
@@ -250,6 +284,7 @@ def handlers(
             return _refused("out_of_scope")
         types = _types(definition, None) or []
         around = await graph.walk([wanted], depth=1, entity_types=types, limit=MOST_AROUND)
+        held = await knowledge.attributes([wanted]) if knowledge is not None else {}
         nodes = {n.entity.id: n for n in around.nodes} if around else {}
         return Answer(
             _said(
@@ -260,6 +295,7 @@ def handlers(
                     "key": brief.key,
                     "lifecycle": brief.lifecycle.value,
                     "sources": nodes[wanted].sources if wanted in nodes else [],
+                    "attributes": attributes_of(held.get(wanted, {})),
                     "tied_to": [
                         {
                             "relationship": r.type.value,

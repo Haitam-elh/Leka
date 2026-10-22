@@ -2505,6 +2505,7 @@ const fr = {
       "api-design-review": "Revue d'API",
       "reliability-analysis": "Analyse de fiabilité",
       "dependency-analysis": "Analyse de dépendances",
+      "database-review": "Revue de base de données",
       "documentation-assistant": "Assistant de documentation",
       "accessibility-audit": "Audit d'accessibilité",
       "design-review": "Revue de design",
@@ -2596,6 +2597,8 @@ const fr = {
         "Ce qui rend un service fragile : ses points de défaillance, ce qui se passe quand une dépendance tombe, les pannes qui se cachent, les incidents qui reviennent.",
       "dependency-analysis":
         "Les paquets tiers de votre code : leurs vulnérabilités connues, lesquelles comptent, la version qui corrige, ce qui s'exécute à l'installation.",
+      "database-review":
+        "Une base relue : l'intégrité de son schéma, les index que ses requêtes demandent, les migrations qui verrouilleraient ou perdraient des données.",
       "regression-analysis":
         "Ce qu'un changement peut casser qui marchait : les comportements touchés, ce qui en dépend, les tests qui les gardent.",
       "change-impact-analysis":
@@ -7909,6 +7912,7 @@ const fr = {
           "incident-history": "Historique des incidents",
           "infrastructure-inventory": "Inventaire de l'infrastructure",
           "data-landscape": "Paysage des données",
+          "schema-health": "Santé du schéma",
           "delivery-metrics": "Indicateurs de livraison",
         },
         upstream: "ce qui en dépend",
@@ -11201,6 +11205,7 @@ const en: Dictionary = {
       "api-design-review": "API review",
       "reliability-analysis": "Reliability analysis",
       "dependency-analysis": "Dependency analysis",
+      "database-review": "Database review",
       "documentation-assistant": "Documentation assistant",
       "accessibility-audit": "Accessibility audit",
       "design-review": "Design review",
@@ -11289,6 +11294,8 @@ const en: Dictionary = {
         "What makes a service fragile: its points of failure, what happens when a dependency falls, the failures that hide, the incidents that recur.",
       "dependency-analysis":
         "Your code's third-party packages: their known vulnerabilities, which matter, the version that fixes them, what runs at install time.",
+      "database-review":
+        "A database reviewed: its schema's integrity, the indexes its queries need, the migrations that would lock or lose data.",
       "regression-analysis":
         "What a change could break that used to work: the behaviours it alters, what depends on them, the tests guarding them.",
       "change-impact-analysis":
@@ -16441,6 +16448,7 @@ const en: Dictionary = {
           "incident-history": "Incident history",
           "infrastructure-inventory": "Infrastructure inventory",
           "data-landscape": "Data landscape",
+          "schema-health": "Schema health",
           "delivery-metrics": "Delivery metrics",
         },
         upstream: "what depends on it",
