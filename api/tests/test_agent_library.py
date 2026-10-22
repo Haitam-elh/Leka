@@ -226,6 +226,14 @@ ASKED = [
         ),
         "api-design-review",
     ),
+    (
+        RouteQuery(
+            text="Quels sont les points de défaillance uniques du parcours de paiement ?",
+            goal="investigate",
+            kind="dependency",
+        ),
+        "reliability-analysis",
+    ),
 ]
 
 
@@ -735,4 +743,61 @@ def test_the_api_review_judges_a_contract_by_its_own_conventions() -> None:
         assert rule.lower() in said.lower(), rule
     assert credited(
         "api-design-review", "msitarzewski/agency-agents", "garrytan/gstack", "affaan-m/ECC"
+    )
+
+
+def test_the_reliability_analysis_measures_and_hunts_hidden_failures() -> None:
+    """2026-10-22: « Analyse de fiabilité » — Incident Response's and
+    Security & Reliability's reliability analyst: what « reliable » means
+    here, what the history says, the points of failure, what happens when a
+    dependency falls, the failures that hide; read, never tested on
+    production; its method credited, never told it."""
+    d = {d.key: d for d in catalogue()}["reliability-analysis"]
+    assert (d.kind, d.lifecycle, d.version, d.mode) == (
+        Kind.AGENT,
+        Lifecycle.ACTIVE,
+        "1.0.0",
+        "read_only",
+    )
+    assert set(d.tools) == {
+        "search_entities",
+        "read_entity",
+        "dependencies",
+        "what_happened",
+        "read_content",
+        "list_files",
+        "read_file",
+    }
+    assert all(not i.required for i in d.contract.inputs)
+    assert {i.name for i in d.contract.inputs} == {"cible", "objectif", "depot", "echeance"}
+    # Its numbers come from the skills that compute them, each within what
+    # it may read.
+    given, withheld = agent_skill_tools(d)
+    assert {t.name for t in given} == {
+        "incident-history",
+        "blast-radius",
+        "delivery-metrics",
+        "infrastructure-inventory",
+    }
+    assert withheld == []
+    said = " ".join((d.instructions or "").split())
+    for section in (
+        "Ce qu'il regarde",
+        "Sa méthode",
+        "Ce qu'il produit",
+        "Ce qu'il ne doit jamais faire",
+    ):
+        assert section in said, section
+    for rule in (
+        "à valider",
+        "jamais « causé par »",
+        "Les pannes qui se cachent",
+        "Dis où tu as cherché",
+        "Une protection n'est pas un défaut",
+        "jamais les personnes",
+        "ni test de charge",
+    ):
+        assert rule.lower() in said.lower(), rule
+    assert credited(
+        "reliability-analysis", "msitarzewski/agency-agents", "garrytan/gstack", "affaan-m/ECC"
     )

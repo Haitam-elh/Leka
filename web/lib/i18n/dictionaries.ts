@@ -2503,6 +2503,7 @@ const fr = {
       "test-generation": "Génération de tests",
       "qa-acceptance": "Recette (QA)",
       "api-design-review": "Revue d'API",
+      "reliability-analysis": "Analyse de fiabilité",
       "documentation-assistant": "Assistant de documentation",
       "accessibility-audit": "Audit d'accessibilité",
       "design-review": "Revue de design",
@@ -2590,6 +2591,8 @@ const fr = {
         "Une pull request recettée : chaque critère attendu, son statut et sa preuve — le code, le test, la CI.",
       "api-design-review":
         "Une API relue : ce qu'un changement casse pour ceux qui l'appellent, et sa cohérence — erreurs, pagination, ce qu'elle expose.",
+      "reliability-analysis":
+        "Ce qui rend un service fragile : ses points de défaillance, ce qui se passe quand une dépendance tombe, les pannes qui se cachent, les incidents qui reviennent.",
       "regression-analysis":
         "Ce qu'un changement peut casser qui marchait : les comportements touchés, ce qui en dépend, les tests qui les gardent.",
       "change-impact-analysis":
@@ -11193,6 +11196,7 @@ const en: Dictionary = {
       "test-generation": "Test generation",
       "qa-acceptance": "Acceptance (QA)",
       "api-design-review": "API review",
+      "reliability-analysis": "Reliability analysis",
       "documentation-assistant": "Documentation assistant",
       "accessibility-audit": "Accessibility audit",
       "design-review": "Design review",
@@ -11277,6 +11281,8 @@ const en: Dictionary = {
         "A pull request accepted or not: each expected criterion, its status and its proof — the code, the test, the CI.",
       "api-design-review":
         "An API reviewed: what a change breaks for those calling it, and its consistency — errors, pagination, what it exposes.",
+      "reliability-analysis":
+        "What makes a service fragile: its points of failure, what happens when a dependency falls, the failures that hide, the incidents that recur.",
       "regression-analysis":
         "What a change could break that used to work: the behaviours it alters, what depends on them, the tests guarding them.",
       "change-impact-analysis":

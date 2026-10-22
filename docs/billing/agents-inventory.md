@@ -68,7 +68,7 @@ LEKA's own capabilities — understanding, the analysis, its answer (LEKA Assist
 | Harness Optimizer | orchestration | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
 | Learning Specialist | orchestration | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
 | Migration Planner | devops | — | — | — | — | Nommé par un bundle, absent de la liste — à arbitrer | — | ship-safe |
-| Reliability Analyst | incident | — | — | — | — | Nommé par un bundle, absent de la liste — à arbitrer | — | incident-response, security-reliability |
+| Reliability Analyst | incident | `reliability-analysis` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | enterprise + | incident-response, security-reliability |
 | — | architecture | `architecture-analysis` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | growth + | — |
 | — | development | `code-change` | active | expert | 25 € | Option payante, incluse dès le plan indiqué | business + | — |
 | — | operations | `correlate-deploy-with-latency` | draft | — | — | Registre seulement — jamais vendu | — | — |
@@ -81,8 +81,8 @@ LEKA's own capabilities — understanding, the analysis, its answer (LEKA Assist
 |---|---|---|---|---|---|
 | Engineering | 59 € | 91 € | 35 % | yes | — |
 | Ship Safe | 79 € | — | not shown | no | Migration Planner |
-| Incident Response | 89 € | — | not shown | no | Dependency Analyst, Performance Analyst, Reliability Analyst |
-| Security & Reliability | 69 € | — | not shown | no | Dependency Analyst, Database Specialist, Reliability Analyst |
+| Incident Response | 89 € | — | not shown | no | Dependency Analyst, Performance Analyst |
+| Security & Reliability | 69 € | — | not shown | no | Dependency Analyst, Database Specialist |
 | Frontend Craft | 29 € | 48 € | 40 % | yes | — |
 
 A bundle is sold once every member is an agent of the registry on sale; its saving is computed from its members' prices, and shown only when every member has one.

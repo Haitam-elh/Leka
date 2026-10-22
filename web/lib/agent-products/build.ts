@@ -849,6 +849,130 @@ export const BUILD: Record<string, AgentProduct> = {
     ],
   },
 
+  "reliability-analysis": {
+    promise: w(
+      "Sachez ce qui ferait tomber un service, ce qui se passe quand une dépendance lâche, et quoi corriger d'abord.",
+      "Know what would bring a service down, what happens when a dependency gives way, and what to fix first.",
+    ),
+    problem: w(
+      "Les incidents reviennent, une base sans relève porte tout un parcours, une erreur avalée perd des données sans bruit : on l'apprend pendant la panne.",
+      "Incidents recur, a database with no standby carries a whole journey, a swallowed error loses data silently: you learn it during the outage.",
+    ),
+    benefits: [
+      {
+        icon: "target",
+        title: w("Les points de défaillance", "The points of failure"),
+        body: w(
+          "Ce par quoi tout passe sans remplaçant, et ce qu'une panne atteindrait.",
+          "What everything goes through with no replacement, and what an outage would reach.",
+        ),
+      },
+      {
+        icon: "eye",
+        title: w("Les pannes qui se cachent", "The failures that hide"),
+        body: w(
+          "Les erreurs avalées, les tâches qui échouent sans alerte, les appels sans délai d'attente.",
+          "Swallowed errors, jobs failing without an alert, calls without a timeout.",
+        ),
+      },
+      {
+        icon: "clock",
+        title: w("Ce que dit l'histoire", "What the history says"),
+        body: w(
+          "Les incidents, leur temps de résolution, ceux qui reviennent, ceux qui suivent une livraison.",
+          "The incidents, how long they took to resolve, those that recur, those that follow a release.",
+        ),
+      },
+    ],
+    does: w(
+      "Il lit ce dont le service dépend et ce qui dépend de lui, son historique d'incidents et de livraisons, ses alertes et ses documents d'exploitation, et son code quand un dépôt est connecté. Il dit ce que « fiable » veut dire ici, où sont les points de défaillance, ce que fait le code quand une dépendance tombe, puis les actions, par risque.",
+      "It reads what the service depends on and what depends on it, its incident and delivery history, its alerts and runbooks, and its code when a repository is connected. It says what « reliable » means here, where the points of failure are, what the code does when a dependency falls, then the actions, by risk.",
+    ),
+    features: [
+      w("L'objectif de service lu, ou proposé à valider", "The service objective read, or proposed to validate"),
+      w("Les incidents par gravité, leur résolution, ceux qui reviennent", "Incidents by severity, their resolution, those that recur"),
+      w("Les points de défaillance, et ce qu'ils atteignent", "The points of failure, and what they reach"),
+      w("Pour chaque dépendance : délai, reprises, repli", "For each dependency: timeout, retries, fallback"),
+      w("Les erreurs avalées et les tâches qui échouent en silence", "Swallowed errors and jobs failing silently"),
+      w("Les alertes qui suivent ce que vivent les utilisateurs", "Alerts that follow what users experience"),
+      w("Les actions, la plus utile d'abord", "The actions, the most useful first"),
+    ],
+    useCases: [
+      {
+        icon: "alert",
+        title: w("Des incidents qui reviennent", "Incidents that recur"),
+        body: w("Comprendre ce qui se répète, et pourquoi.", "Understand what repeats, and why."),
+        ask: w(
+          "Pourquoi les incidents reviennent-ils sur checkout ?",
+          "Why do incidents keep coming back on checkout?",
+        ),
+      },
+      {
+        icon: "route",
+        title: w("Un parcours critique", "A critical journey"),
+        body: w("Ce par quoi tout passe sans relève.", "What everything goes through with no standby."),
+        ask: w(
+          "Quels sont les points de défaillance uniques du parcours de paiement ?",
+          "What are the single points of failure of the payment journey?",
+        ),
+      },
+      {
+        icon: "rocket",
+        title: w("Avant un pic", "Before a peak"),
+        body: w("Ce qui tiendra, ce qui lâchera d'abord.", "What will hold, what will give way first."),
+        ask: w(
+          "Sommes-nous prêts pour le pic des soldes sur la boutique ?",
+          "Are we ready for the sales peak on the shop?",
+        ),
+      },
+      {
+        icon: "database",
+        title: w("Une dépendance qui tombe", "A dependency that falls"),
+        body: w("Ce que verraient les utilisateurs.", "What users would see."),
+        ask: w(
+          "Que se passe-t-il pour orders-api si la base de données tombe ?",
+          "What happens to orders-api if the database goes down?",
+        ),
+      },
+    ],
+    outline: [
+      w("Verdict", "Verdict"),
+      w("Ce que « fiable » veut dire ici", "What « reliable » means here"),
+      w("Ce que dit l'histoire", "What the history says"),
+      w("Points de défaillance", "Points of failure"),
+      w("Quand une dépendance tombe", "When a dependency falls"),
+      w("Les pannes qui se cachent", "The failures that hide"),
+      w("Actions", "Actions"),
+    ],
+    examples: [
+      {
+        kind: "levels",
+        title: w("Constats", "Findings"),
+        items: [
+          { level: "critical", text: w("Base « orders » sans réplique, sous tout le paiement", "« orders » database with no replica, under the whole payment") },
+          { level: "high", text: w("Appel au prestataire de paiement sans délai d'attente", "Call to the payment provider without a timeout") },
+          { level: "medium", text: w("Erreur d'envoi de facture avalée, sans alerte", "Invoice sending error swallowed, without an alert") },
+          { level: "low", text: w("Alerte sur le processeur, aucune sur les erreurs", "Alert on CPU, none on errors") },
+        ],
+      },
+      {
+        kind: "list",
+        title: w("Actions", "Actions"),
+        items: [
+          w("Un délai et deux reprises espacées sur l'appel de paiement", "A timeout and two spaced retries on the payment call"),
+          w("Une alerte sur la part de paiements en erreur", "An alert on the share of payments failing"),
+          w("Une réplique de la base, essayée en bascule", "A database replica, tried in a failover"),
+        ],
+      },
+    ],
+    limits: [
+      w(
+        "Il lit le modèle, l'historique et le code sans rien provoquer : aucun test de charge, aucune panne simulée — une relève que les sources ne montrent pas est posée en question.",
+        "It reads the model, the history and the code without causing anything: no load test, no simulated outage — a standby the sources do not show is asked as a question.",
+      ),
+    ],
+  },
+
   "qa-acceptance": {
     promise: w(
       "Sachez si une pull request est prête : chaque critère attendu, vérifié avec sa preuve — le code, le test, la CI.",
