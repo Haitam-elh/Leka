@@ -49,7 +49,7 @@ agents:
 
   - path: development/api-design-review/SKILL.md
     name: api-design-review
-    version: 1.0.0
+    version: 1.1.0
     status: active
 
   - path: development/build-fixer/SKILL.md

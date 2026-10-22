@@ -705,7 +705,7 @@ def test_the_api_review_judges_a_contract_by_its_own_conventions() -> None:
     assert (d.kind, d.lifecycle, d.version, d.mode) == (
         Kind.AGENT,
         Lifecycle.ACTIVE,
-        "1.0.0",
+        "1.1.0",
         "read_only",
     )
     assert set(d.tools) == {
@@ -731,8 +731,20 @@ def test_the_api_review_judges_a_contract_by_its_own_conventions() -> None:
         "Ce qu'il ne doit jamais faire",
     ):
         assert section in said, section
-    for rule in ("ses propres conventions", "Rupture", "Rien d'inventé", "tu n'appelles pas l'API"):
-        assert rule.lower() in said.lower(), rule
+    for rule in (
+        "ses propres conventions",
+        "Rupture",
+        "Rien d'inventé",
+        "tu n'appelles pas l'API",
+        # 1.1.0, from its first real review (2026-10-22): what is said
+        # missing is looked for first, a protection is never weakened, a
+        # line cited is a line read.
+        "Dis où tu as cherché",
+        "Une protection n'est pas un défaut",
+        "jamais une plage estimée",
+        "coupée en silence",
+    ):
+        assert rule.lower() in " ".join(said.split()).lower(), rule
     assert credited(
         "api-design-review", "msitarzewski/agency-agents", "garrytan/gstack", "affaan-m/ECC"
     )
