@@ -30,7 +30,7 @@ import asyncio
 import base64
 import json
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -54,6 +54,7 @@ from leka.capabilities.deliverables.design import (
     corrected,
     design_key,
     summary,
+    unchanged,
     unstyled,
     with_assets,
     without_assets,
@@ -121,12 +122,17 @@ PLAN_RULES = """You are LEKA's mock-up planner for the agent whose \
 instructions follow. From its review and the source files it read — and from \
 nothing else — plan the screens its proposal draws, as one JSON object, \
 without a line of HTML:
-- screen: the screen's name; viewport: "desktop", or "mobile" when the \
+- screen: the screen's name and its route — the page the request names, \
+found by its route and its navigation entry, never a component of another \
+page carrying the same words; viewport: "desktop", or "mobile" when the \
 review proposes for a phone.
 - directions: the proposals the review makes — one to three, in its order, \
 each its name, its axis, when it is the right choice, what it costs, and \
 changes: what it changes on the screen, element by element, with the values \
-(sizes, colours, spacing, order, texts) — what a drawer needs to draw it.
+(sizes, colours, spacing, order, texts) — what a drawer needs to draw it. \
+Asked for a new design or a redesign, each direction changes what is SEEN — \
+layout, hierarchy, density, what comes first — never only a value: one that \
+leaves the screen looking as it is today is no direction.
 - recommended: the index of the direction the review recommends; why: in one \
 or two sentences.
 - changes: the recommended direction's main changes — where (file and line), \
@@ -164,8 +170,9 @@ directions answer."""
 PROPOSED = """Draw the direction named in `direction`, starting from `today` — the \
 screen as it is drawn now: the same content, the same example data, no \
 feature, figure or text the code does not have — redrawn as the direction \
-changes it. It meets the method's bar: one primary action, a clear \
-hierarchy, the repository's tokens extended and never a parallel palette, \
+changes it: every change it lists, visibly. Never `today` given back. It \
+meets the method's bar: one primary action, a clear hierarchy, the \
+repository's tokens extended and never a parallel palette, \
 every pressable element with press feedback (:active { transform: \
 scale(0.97) } with transition: transform 160ms cubic-bezier(0.23, 1, 0.32, \
 1)), hover only inside @media (hover: hover) and (pointer: fine), entrances \
@@ -243,6 +250,21 @@ class Designed:
     refusal: str | None = None
 
 
+def checked[T: BaseModel](
+    model: type[T], also: Callable[[T], list[str]] | None
+) -> Callable[[T], list[str]] | None:
+    """What a drawing is held to: its style (2026-10-21), and what the step
+    adds — a direction never drawn as today (2026-10-22)."""
+    if model is not MockupDrawing and also is None:
+        return None
+
+    def problems(value: T) -> list[str]:
+        said = unstyled(value) if isinstance(value, MockupDrawing) else []
+        return [*said, *(also(value) if also is not None else [])]
+
+    return problems
+
+
 async def _asked[T: BaseModel](
     session: AsyncSession | None,
     run: AgentRun,
@@ -255,9 +277,11 @@ async def _asked[T: BaseModel](
     tokens: int,
     budget: float,
     usage: dict[str, Any],
+    also: Callable[[T], list[str]] | None = None,
 ) -> T:
     """One answer of the shape asked — in `session`, or in its own when
-    drawn alongside others — its tokens counted; else _NotDrawnError, said why."""
+    drawn alongside others — its tokens counted; else _NotDrawnError, said why.
+    `also`: what else makes it not what was asked, said to the model."""
     request = Request(
         purpose=f"agent:{definition.key}:{purpose}"[:100],
         messages=[
@@ -278,7 +302,7 @@ async def _asked[T: BaseModel](
                 needs,
                 # A screen drawn bare is drawn again, told why — then by the
                 # next model (2026-10-21).
-                verify=unstyled if model is MockupDrawing else None,  # type: ignore[arg-type]
+                verify=checked(model, also),
             ),
             timeout=budget,
         )
@@ -372,6 +396,7 @@ async def propose_design(
             tokens=DRAW_TOKENS,
             budget=draw_budget,
             usage=usage,
+            also=lambda drawn: unchanged(today, drawn, each),
         )
 
     results = await asyncio.gather(

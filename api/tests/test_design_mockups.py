@@ -48,6 +48,7 @@ from leka.capabilities import correct_design_run, execute_run, redraw_design, sy
 from leka.capabilities.deliverables.design import (
     BASE,
     POLICY,
+    DesignDirection,
     DesignMockup,
     DesignProposal,
     MockupDrawing,
@@ -58,6 +59,7 @@ from leka.capabilities.deliverables.design import (
     cleaned,
     corrected,
     page,
+    unchanged,
     unstyled,
     with_assets,
     without_assets,
@@ -540,3 +542,25 @@ def test_a_mock_up_drawn_bare_is_said_so_and_every_page_has_a_base() -> None:
     assert unstyled(MockupDrawing(css="", body=inline)) == []
     shown = page(DesignMockup(name="Calme", css="", body="<main>x</main>"))
     assert shown.index(BASE) < shown.index("<body>")
+
+
+def test_a_direction_drawn_as_today_is_said_so_with_what_it_changes() -> None:
+    """2026-10-22: asked a new design, a proposal came back the screen as it
+    is. Told so — with what its direction changes — it draws again."""
+    rows = "".join(f'<li class="row"><span class="name">Agent {n}</span></li>' for n in range(30))
+    css = ".row{display:flex;gap:8px;padding:12px}.name{font-weight:600}" * 4
+    today = MockupDrawing(css=css, body=f"<main><h1>Mon environnement</h1><ul>{rows}</ul></main>")
+    direction = DesignDirection(
+        name="Un seul système",
+        axis="La hiérarchie",
+        changes="Le score passe en tête, en grand ; les cartes en grille de trois.",
+    )
+    [said] = unchanged(today, today.model_copy(), direction)
+    assert "drawn the same as today's screen" in said
+    assert "Un seul système" in said and "Le score passe en tête" in said
+    redrawn = MockupDrawing(
+        css=css + ".score{font-size:48px}.grid{display:grid;grid-template-columns:repeat(3,1fr)}",
+        body='<main><p class="score">67 %</p><h1>Mon environnement</h1>'
+        f'<div class="grid">{rows.replace("li", "div")}</div></main>',
+    )
+    assert unchanged(today, redrawn, direction) == []

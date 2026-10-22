@@ -47,7 +47,7 @@ LIBRARY = "_library/design"
 VERSIONS = {
     "ui-quality-review": "2.0.0",
     "accessibility-audit": "1.1.0",
-    "design-review": "3.0.0",
+    "design-review": "3.1.0",
     "motion-review": "2.0.0",
 }
 
