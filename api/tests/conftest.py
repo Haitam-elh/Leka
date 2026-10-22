@@ -89,6 +89,10 @@ def _redirect_to_a_test_database() -> str:
 
 
 TEST_DATABASE_URL = _redirect_to_a_test_database()
+# Scripted answers are short on purpose: a test that does not exercise the
+# deliverable check is never asked again for a section (the ones that do set
+# it, 2026-10-22).
+os.environ.setdefault("LEKA_AGENT_CORRECTIONS", "0")
 
 from leka.core.config import settings
 from leka.main import app
