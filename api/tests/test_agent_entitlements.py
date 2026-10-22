@@ -473,6 +473,8 @@ async def test_each_plan_runs_the_agents_it_includes_and_those_of_the_plans_belo
         "reliability-analysis",
         # Dependencies (2026-10-22): Incident Response's and Security & Reliability's.
         "dependency-analysis",
+        # Databases (2026-10-22): Security & Reliability's.
+        "database-review",
     }
     assert all(a["included"] for a in sold["agents"] if a["key"] not in frontend)
     assert not any(a["included"] for a in sold["agents"] if a["key"] in frontend)

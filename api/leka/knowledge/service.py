@@ -263,6 +263,12 @@ class KnowledgeService:
 
     # ── the landscape (LEKA-362) ─────────────────────────────────────────────
 
+    async def attributes(self, ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, dict[str, object]]:
+        """Each thing's attributes, as the model holds them — what an agent
+        reads of it beside its name (2026-10-22)."""
+        found = await self._entities.by_ids(list(ids))
+        return {key: dict(entity.attributes) for key, entity in found.items()}
+
     async def landscape(self, found: Sequence[Entity]) -> list[LandscapeRead]:
         """A page of services or applications, each with what the
         landscape says of it."""

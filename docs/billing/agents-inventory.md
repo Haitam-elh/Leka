@@ -33,7 +33,7 @@ LEKA's own capabilities — understanding, the analysis, its answer (LEKA Assist
 | Compliance Auditor | security | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
 | Security Advisor | security | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
 | Performance Analyst | performance | — | — | expert | 25 € | Référence seulement — non construit, jamais vendu | — | incident-response |
-| Database Specialist | performance | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | security-reliability |
+| Database Specialist | performance | `database-review` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | enterprise + | security-reliability |
 | API Design Reviewer | performance | `api-design-review` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | enterprise + | ship-safe, security-reliability |
 | Data Analyst | performance | `data-analysis` | active | specialized | 15 € | Option payante, incluse dès le plan indiqué | growth + | — |
 | Benchmark Analyst | performance | — | — | specialized | 15 € | Référence seulement — non construit, jamais vendu | — | — |
@@ -82,7 +82,7 @@ LEKA's own capabilities — understanding, the analysis, its answer (LEKA Assist
 | Engineering | 59 € | 91 € | 35 % | yes | — |
 | Ship Safe | 79 € | — | not shown | no | Migration Planner |
 | Incident Response | 89 € | — | not shown | no | Performance Analyst |
-| Security & Reliability | 69 € | — | not shown | no | Database Specialist |
+| Security & Reliability | 69 € | — | not shown | yes | — |
 | Frontend Craft | 29 € | 48 € | 40 % | yes | — |
 
 A bundle is sold once every member is an agent of the registry on sale; its saving is computed from its members' prices, and shown only when every member has one.

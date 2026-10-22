@@ -21,6 +21,7 @@ from __future__ import annotations
 import pytest
 
 import leka.schema  # noqa: F401 — every module provides its capabilities
+from leka.billing import catalogue as commercial
 from leka.capabilities import Availability, Kind, Lifecycle, Reason, RouteQuery, route
 from leka.capabilities.registry import catalogue
 from leka.capabilities.skills import agent_skill_tools
@@ -241,6 +242,14 @@ ASKED = [
             kind="compliance",
         ),
         "dependency-analysis",
+    ),
+    (
+        RouteQuery(
+            text="Quels index manquent à la base de payment-api ?",
+            goal="check_compliance",
+            kind="compliance",
+        ),
+        "database-review",
     ),
 ]
 
@@ -863,3 +872,58 @@ def test_the_dependency_analysis_reads_lock_files_and_never_recalls_a_vulnerabil
     assert credited(
         "dependency-analysis", "garrytan/gstack", "msitarzewski/agency-agents", "affaan-m/ECC"
     )
+
+
+def test_the_database_review_starts_from_the_catalogue_and_runs_nothing() -> None:
+    """2026-10-22: « Revue de base de données » — Security & Reliability's
+    database specialist: the schema's health computed from the catalogue
+    (schema-health), each table's structure read (read_entity), the code's
+    queries and migrations; integrity, indexes for real queries, migrations
+    that would lock or lose data, access; nothing run; its method credited,
+    never told it."""
+    d = {d.key: d for d in catalogue()}["database-review"]
+    assert (d.kind, d.lifecycle, d.version, d.mode) == (
+        Kind.AGENT,
+        Lifecycle.ACTIVE,
+        "1.0.0",
+        "read_only",
+    )
+    assert {"read_entity", "list_files", "read_file", "read_pull_request"} <= set(d.tools)
+    assert {i.name for i in d.contract.inputs} == {"base", "depot", "changement", "symptome"}
+    assert all(not i.required for i in d.contract.inputs)
+    given, withheld = agent_skill_tools(d)
+    assert ({t.name for t in given}, withheld) == ({"schema-health", "data-landscape"}, [])
+    said = " ".join((d.instructions or "").split())
+    for section in (
+        "Ce qu'il regarde",
+        "Sa méthode",
+        "Ce qu'il produit",
+        "Ce qu'il ne doit jamais faire",
+    ):
+        assert section in said, section
+    for rule in (
+        "schema.not_read",
+        "Ne propose jamais un index sans la requête",
+        "CONCURRENTLY",
+        "injection",
+        "Dis où tu as cherché",
+        "Une protection n'est pas un défaut",
+        "tu ne lances aucune requête",
+    ):
+        assert rule.lower() in said.lower(), rule
+    assert credited(
+        "database-review", "affaan-m/ECC", "msitarzewski/agency-agents", "garrytan/gstack"
+    )
+    # Its last member built, Security & Reliability is sold — its saving not
+    # shown: the reliability analyst has no reference price.
+    bundle = commercial().add_ons.bundle("security-reliability")
+    assert bundle is not None
+    assert (bundle.sellable, bundle.missing) == (True, ())
+    assert {
+        "security-review",
+        "dependency-analysis",
+        "api-design-review",
+        "database-review",
+        "reliability-analysis",
+    } == set(bundle.agents)
+    assert bundle.savings_percent is None

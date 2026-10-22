@@ -218,6 +218,22 @@ async def test_the_data_read_by_the_library(
         "data.personal": "info",
         "data.unowned": "warning",
     }
+    # The ledger's structure (2026-10-22): invoices' foreign key to
+    # customers, no index starting with it, on twelve million rows;
+    # credentials without a primary key; the view not judged.
+    schema = await _skill(client, "schema-health", id=str(data[DATABASE]))
+    health = schema["output"]
+    assert (health["database"], health["tables"], health["structured"]) == ("ledger", 3, 3)
+    [unindexed] = health["unindexed_foreign_keys"]
+    assert (unindexed["name"], unindexed["detail"]) == (
+        "billing.invoices",
+        "customer_id → billing.customers(id)",
+    )
+    assert _names(health["without_primary_key"]) == ["billing.credentials"]
+    assert _codes(schema) == {
+        "schema.unindexed_foreign_key": "critical",
+        "schema.no_primary_key": "warning",
+    }
     everywhere = (await _skill(client, "data-landscape"))["output"]
     assert {"ledger", "shop.acme.io"} <= set(_names(everywhere["databases"]))
     posture = await _skill(client, "security-posture")

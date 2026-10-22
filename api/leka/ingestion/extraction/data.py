@@ -7,7 +7,11 @@ query (`billing.invoices`), what it is (a table, a view…), its columns as a
 reader would scan them — one line each, type, NOT NULL, key, what it points
 to, its comment — and what it is tied to: the tables its foreign keys
 reference and the ones a view reads from, as references. The sizes are the
-catalogue's estimates, rounded by the connector.
+catalogue's estimates, rounded by the connector. Its structure, as metadata
+(version 3, 2026-10-22: the database review): each column's type
+("name type"), each foreign key ("customer_id → billing.customers(id)"),
+each index as the engine would create it — what a review of the schema
+reads, never a row.
 
 The payloads are the ones the database connectors store: the catalogue's
 answers, one object per schema and per table — a table's in the same shape
@@ -28,6 +32,10 @@ from leka.connectors import Capability, SourceKind
 from leka.ingestion.extraction.contract import Extracted, Reference
 from leka.ingestion.extraction.engine import Payload, strategy
 from leka.ingestion.extraction.fields import content, number, ref, required, string, strings
+
+# A table's structure kept, at most: its columns' types, its keys, its indexes.
+MOST_COLUMNS = 500
+MOST_INDEXES = 100
 
 C = Capability
 POSTGRESQL = SourceKind.POSTGRESQL
@@ -78,27 +86,27 @@ def mongodb_database(p: Payload) -> Extracted:
     )
 
 
-@strategy("postgresql.tables", 2, (POSTGRESQL, C.TABLES), (SUPABASE, C.TABLES))
+@strategy("postgresql.tables", 3, (POSTGRESQL, C.TABLES), (SUPABASE, C.TABLES))
 def postgresql_table(p: Payload) -> Extracted:
     return _table(p, "postgresql")
 
 
-@strategy("mysql.tables", 2, (MYSQL, C.TABLES))
+@strategy("mysql.tables", 3, (MYSQL, C.TABLES))
 def mysql_table(p: Payload) -> Extracted:
     return _table(p, "mysql")
 
 
-@strategy("mariadb.tables", 2, (MARIADB, C.TABLES))
+@strategy("mariadb.tables", 3, (MARIADB, C.TABLES))
 def mariadb_table(p: Payload) -> Extracted:
     return _table(p, "mariadb")
 
 
-@strategy("sqlserver.tables", 2, (SQLSERVER, C.TABLES))
+@strategy("sqlserver.tables", 3, (SQLSERVER, C.TABLES))
 def sqlserver_table(p: Payload) -> Extracted:
     return _table(p, "sqlserver")
 
 
-@strategy("oracle.tables", 2, (ORACLE, C.TABLES))
+@strategy("oracle.tables", 3, (ORACLE, C.TABLES))
 def oracle_table(p: Payload) -> Extracted:
     return _table(p, "oracle")
 
@@ -166,6 +174,26 @@ def _table(p: Payload, engine: str) -> Extracted:
             "primary_key": [str(c) for c in keys[0].get("columns") or []] if keys else [],
             "estimated_rows": number(p, "estimated_rows"),
             "size_bytes": number(p, "size_bytes"),
+            # "name type", each column.
+            "column_types": [
+                f"{c['name']} {c['type']}"
+                for c in columns[:MOST_COLUMNS]
+                if c.get("name") and c.get("type")
+            ],
+            # "customer_id → billing.customers(id)", each foreign key.
+            "foreign_keys": [
+                f"{', '.join(str(n) for n in c.get('columns') or [])} → "
+                f"{target.get('schema')}.{target.get('table')}"
+                f"({', '.join(str(n) for n in target.get('columns') or [])})"
+                for c in constraints
+                if c.get("type") == "foreign_key"
+                and isinstance(target := c.get("references"), dict)
+            ][:MOST_INDEXES],
+            "indexes": [
+                str(i.get("definition") or f"INDEX {i.get('name')}")
+                for i in _dicts(p, "indexes")
+                if i.get("definition") or i.get("name")
+            ][:MOST_INDEXES],
             **_where(p)[0],
         },
         signals={"engine": engine, "storage_engine": string(p, "engine"), **_where(p)[1]},
