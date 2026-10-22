@@ -553,6 +553,8 @@ class Gateway:
         *,
         rounds: int = 6,
         conclude: bool = False,
+        judge: Callable[[str], Sequence[str]] | None = None,
+        corrections: int = 2,
     ) -> Completion:
         """Asks, calls the tools the model asks for, gives it what they
         returned, until it answers — `rounds` at most. A tool that fails
@@ -560,16 +562,36 @@ class Gateway:
         the last round is not offered the tools — it answers with what it
         read — rather than end in ToolRoundsError; and a model that asks
         for one even then is asked once more with none declared at all,
-        what it read given as text (`_concluded`)."""
+        what it read given as text (`_concluded`). `judge`: what is wrong
+        with its answer — said back to it with its answer, `corrections`
+        times at most, its tools still offered to read what it lacks; then
+        its answer as it is (2026-10-22: any model, the same deliverable)."""
         messages = list(request.messages)
         asking = request
+        left = corrections if judge is not None else 0
         for round_ in range(rounds):
             last = conclude and round_ == rounds - 1
             if last:
                 asking = replace(asking, tool_choice=ToolChoice.NONE)
             done = await self.complete(replace(asking, messages=messages), needs)
             if not done.tool_calls:
-                return done
+                problems = list(judge(done.text)) if judge is not None and left and not last else []
+                if not problems:
+                    return done
+                left -= 1
+                logger.info(
+                    "model_answer_corrected", purpose=request.purpose, problems=problems[:3]
+                )
+                messages += [
+                    Message(Role.ASSISTANT, done.text),
+                    Message.user(
+                        " ".join(problems)
+                        + " Write the whole deliverable again, corrected — every section, "
+                        "and only the deliverable."
+                    ),
+                ]
+                asking = replace(request, tool_choice=ToolChoice.AUTO)
+                continue
             if last:
                 # It would not stop reading, tools refused: its calls are
                 # not run; it is asked again with no tool to call.

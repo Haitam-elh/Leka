@@ -38,6 +38,11 @@ class ModelAccessSettings:
     # Each failure a provider says is temporary (busy, rate-limited, down)
     # is tried again this many times, then the next model is.
     llm_retries: int = 1
+    # An agent's deliverable short of a section its agent gives is said back
+    # to the model this many times at most, to write again (2026-10-22: any
+    # model, the same deliverable); then delivered, said incomplete. 0: not
+    # checked at all.
+    agent_corrections: int = 2
     # The models each kind of work tries first (LEKA-491): "code=anthropic:
     # claude-sonnet-5; vision=openai:gpt-4.1". Empty: none has its own.
     llm_task_routes: str = ""

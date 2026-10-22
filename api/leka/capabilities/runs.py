@@ -48,6 +48,7 @@ from leka.background import JobQueue, enqueue_job
 from leka.capabilities.catalogue import CatalogueService, Entry, needs_of
 from leka.capabilities.code_tools import CODE_NAMES, CODE_TOOLS, code_handlers
 from leka.capabilities.definition import Definition, check_input
+from leka.capabilities.deliverable_check import missing
 from leka.capabilities.delivery import draw
 from leka.capabilities.gateway import (
     Completion,
@@ -539,6 +540,7 @@ async def _run(
         ),
         [t.name for t in skilled],
     )
+    language = await spoken_language(session, run.requested_by, workspace_id)
     request = Request(
         purpose=f"agent:{definition.key}"[:100],
         messages=messages(
@@ -546,7 +548,7 @@ async def _run(
             run.inputs,
             injected,
             tools=given,
-            language=await spoken_language(session, run.requested_by, workspace_id),
+            language=language,
         ),
         tier=Tier.DEEP,
         max_tokens=MAX_TOKENS,
@@ -562,6 +564,13 @@ async def _run(
                 replace(needs_of(definition), tools=bool(given)),
                 rounds=definition.rounds or TOOL_ROUNDS,
                 conclude=True,
+                # Its deliverable, every section its agent gives — whatever
+                # the model; told what it lacks, it writes it again
+                # (2026-10-22).
+                judge=lambda text: missing(
+                    definition.instructions or "", text, language=language or "fr"
+                ),
+                corrections=settings.agent_corrections,
             ),
             timeout=budget,
         )
@@ -595,6 +604,15 @@ async def _run(
     output = output_of(done.text, run.format)
     if output is None:
         return await _fail(session, run, "invalid_output", format=run.format)
+    # Told and still short of a section: delivered, said incomplete — never
+    # shown as whole.
+    lacking = (
+        missing(definition.instructions or "", done.text, language=language or "fr")
+        if settings.agent_corrections
+        else []
+    )
+    if lacking:
+        steps.add("incomplete", said=lacking[0][:500])
     # What LEKA draws of it — the architect's deck (delivery.py): its files,
     # or why there are none; the analysis stands either way.
     detail = dict(run.detail)
