@@ -11,6 +11,7 @@ from leka.capabilities.deliverables.deck import ArchitectureDeck
 from leka.capabilities.deliverables.layout import deck_slides
 from leka.capabilities.deliverables.pdf_writer import write_pdf
 from leka.capabilities.deliverables.pptx_writer import write_pptx
+from leka.capabilities.deliverables.report_pdf import report_pdf
 
 MEDIA_TYPES = {
     "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
@@ -34,4 +35,4 @@ def render(deck: ArchitectureDeck) -> Rendered:
     return Rendered(pptx=write_pptx(slides), pdf=write_pdf(slides, title), slides=len(slides))
 
 
-__all__ = ["MEDIA_TYPES", "ArchitectureDeck", "Rendered", "render"]
+__all__ = ["MEDIA_TYPES", "ArchitectureDeck", "Rendered", "render", "report_pdf"]

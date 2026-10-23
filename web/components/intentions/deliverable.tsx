@@ -10,6 +10,7 @@ import {
   GitPullRequest,
   Lightbulb,
   Loader2,
+  Wrench,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -20,7 +21,7 @@ import { cn } from "cn";
 import { Deliverables } from "@/components/capabilities/agent-runs";
 import { RunCodeChanges } from "@/components/capabilities/code-changes";
 import { DesignSimulator } from "@/components/capabilities/design-simulator";
-import { ProposeFix } from "@/components/capabilities/propose-fix";
+import { NextSteps } from "@/components/capabilities/next-steps";
 import { RunPublications } from "@/components/capabilities/publications";
 import { Card } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
@@ -30,6 +31,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Markdown } from "@/components/ui/markdown";
 import { routes } from "@/config/routes";
 import { agentTitle } from "@/lib/agent-title";
+import { apiAddress } from "@/lib/api";
 import type { components } from "@/lib/api-types";
 import type { AgentRun, AgentRunDetail } from "@/lib/agent-runs";
 import {
@@ -44,6 +46,7 @@ import { type DiffRow, diffRows, rowOf } from "@/lib/diff";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import type { IntentionDetail } from "@/lib/intentions/api";
+import type { PublicationKind } from "@/lib/publications";
 import { working } from "@/lib/intentions/journey";
 import { SPINNING } from "@/lib/motion";
 
@@ -163,6 +166,7 @@ function Delivered({
   ];
   type View = (typeof views)[number];
   const [chosen, setView] = useState<View | null>(null);
+  const [publishing, setPublishing] = useState<PublicationKind | null>(null);
   const view: View = chosen && views.includes(chosen) ? chosen : views[0];
   return (
     <div className="flex flex-col gap-4" data-testid="deliverable" data-agent={run.key}>
@@ -178,17 +182,28 @@ function Delivered({
         </div>
         <Deliverables run={run} />
         <DrawFiles run={run} />
+        {/* Every agent's deliverable as a PDF (2026-10-23) — the
+            architect's deck has its own. */}
+        {report && !run.deliverables.length ? (
+          <a
+            href={apiAddress(`/agent-runs/${encodeURIComponent(run.id)}/report.pdf`)}
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+            data-testid="deliverable-pdf"
+          >
+            <Download className="size-3.5" aria-hidden="true" />
+            {w.downloadPdf}
+          </a>
+        ) : null}
         {report ? (
           <Button type="button" variant="outline" size="sm" onClick={() => download(run, report)}>
             <Download className="size-3.5" aria-hidden="true" />
             {w.download}
           </Button>
         ) : null}
-        <ProposeFix
-          run={run}
-          intentionId={intentionId}
-          onStarted={(id) => router.push(deliverableHref(intentionId, id))}
-        />
+        <a href="#next-steps" className={buttonVariants({ size: "sm" })} data-testid="deliverable-settle">
+          <Wrench className="size-3.5" aria-hidden="true" />
+          {w.next.open}
+        </a>
       </section>
       {/* An agent that proposes code, its change not there: why, and again. */}
       {CHANGE_AGENTS.has(run.key) && changes.data && !changes.data.length ? (
@@ -196,8 +211,6 @@ function Delivered({
       ) : null}
       {/* The designer, its mock-ups not there: why, and again (2026-10-18). */}
       {DESIGN_AGENTS.has(run.key) && !run.design ? <DesignMissing run={run} /> : null}
-      {/* What to send out of it: tickets for Jira, pages for Confluence. */}
-      <RunPublications runId={run.id} />
       {views.length > 1 ? (
         <div className="flex gap-2" role="tablist" aria-label={w.title}>
           {views.map((each) => (
@@ -231,6 +244,18 @@ function Delivered({
       ) : (
         <StatePanel icon={FileText} title={w.empty} />
       )}
+      {/* The action that settles it (Karim, 2026-10-23), then what is sent
+          out of it: tickets for Jira, pages for Confluence. */}
+      <div id="next-steps" className="flex scroll-mt-24 flex-col gap-4">
+        <NextSteps
+          run={run}
+          intentionId={intentionId}
+          onStarted={(id) => router.push(deliverableHref(intentionId, id))}
+          onPublish={setPublishing}
+          onShowChange={() => setView("change")}
+        />
+        <RunPublications runId={run.id} asking={publishing} onAsking={setPublishing} />
+      </div>
       {others.length ? (
         <Card title={w.others}>
           <ul className="flex flex-col gap-1 text-[0.8125rem]">

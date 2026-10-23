@@ -15,6 +15,11 @@ every other one is expected.
 A deliverable in French is read section by section, by the words of each
 title; in another language, by how many sections it has: the titles are
 translated, never their number.
+
+Framed (Karim, 2026-10-23: « pas que du texte d'analyse — un résumé et un
+plan d'action concret et exécutable »): every markdown deliverable opens on
+« Résumé » and ends on « Plan d'action » (runtime.FRAME_NOTE) — an agent's
+own « Actions » section is that plan.
 """
 
 from __future__ import annotations
@@ -54,6 +59,11 @@ class Section:
     optional: bool
 
 
+# What frames every markdown deliverable (2026-10-23).
+SUMMARY = Section("Résumé", optional=False)
+PLAN = Section("Plan d'action", optional=False)
+
+
 def _plain(text: str) -> list[str]:
     flat = unicodedata.normalize("NFKD", text.lower())
     flat = "".join(c for c in flat if not unicodedata.combining(c))
@@ -80,22 +90,35 @@ def _covers(title: str, line: str) -> bool:
     return sum(w in have for w in wanted) * 2 >= len(wanted)
 
 
-def missing(instructions: str, deliverable: str, *, language: str = "fr") -> list[str]:
+def expected(instructions: str, *, framed: bool = False) -> list[Section]:
+    """The sections a deliverable must hold: its agent's — opened by the
+    summary and closed by the action plan when framed, its own actions
+    becoming that plan."""
+    own = [s for s in sections(instructions) if not s.optional]
+    if not framed:
+        return own
+    kept = [s for s in own if not {"action", "actions", "resume"} & set(_plain(s.title))]
+    return [SUMMARY, *kept, PLAN]
+
+
+def missing(
+    instructions: str, deliverable: str, *, language: str = "fr", framed: bool = False
+) -> list[str]:
     """What the deliverable lacks of what its agent expects — said to the
     model that wrote it; nothing when it holds every section."""
-    expected = [s for s in sections(instructions) if not s.optional]
-    if not expected:
+    expected_ = expected(instructions, framed=framed)
+    if not expected_:
         return []
     opened = _OPENS.findall(deliverable or "")
     if not language.lower().startswith("fr"):
-        wanted = math.ceil(len(expected) * SHARE)
+        wanted = math.ceil(len(expected_) * SHARE)
         if len(opened) >= wanted:
             return []
         return [
-            f"The deliverable has {len(opened)} of the {len(expected)} sections its agent "
-            f"must give: {', '.join(s.title for s in expected)} — each under its own title."
+            f"The deliverable has {len(opened)} of the {len(expected_)} sections its agent "
+            f"must give: {', '.join(s.title for s in expected_)} — each under its own title."
         ]
-    lacking = [s.title for s in expected if not any(_covers(s.title, line) for line in opened)]
+    lacking = [s.title for s in expected_ if not any(_covers(s.title, line) for line in opened)]
     if not lacking:
         return []
     return [
@@ -105,4 +128,4 @@ def missing(instructions: str, deliverable: str, *, language: str = "fr") -> lis
     ]
 
 
-__all__ = ["SHARE", "Section", "missing", "sections"]
+__all__ = ["PLAN", "SHARE", "SUMMARY", "Section", "expected", "missing", "sections"]

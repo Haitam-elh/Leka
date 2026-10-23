@@ -70,6 +70,7 @@ from leka.capabilities.runtime import (
     Refusal,
     RunStatus,
     Withheld,
+    framed,
     inject,
     messages,
     offered,
@@ -568,7 +569,10 @@ async def _run(
                 # the model; told what it lacks, it writes it again
                 # (2026-10-22).
                 judge=lambda text: missing(
-                    definition.instructions or "", text, language=language or "fr"
+                    definition.instructions or "",
+                    text,
+                    language=language or "fr",
+                    framed=framed(definition),
                 ),
                 corrections=settings.agent_corrections,
             ),
@@ -607,7 +611,12 @@ async def _run(
     # Told and still short of a section: delivered, said incomplete — never
     # shown as whole.
     lacking = (
-        missing(definition.instructions or "", done.text, language=language or "fr")
+        missing(
+            definition.instructions or "",
+            done.text,
+            language=language or "fr",
+            framed=framed(definition),
+        )
         if settings.agent_corrections
         else []
     )

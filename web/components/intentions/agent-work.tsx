@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, FileText, LoaderCircle } from "lucide-react";
+import { Bot, FileText, LoaderCircle, Wrench } from "lucide-react";
 import Link from "next/link";
 
 import { Deliverables } from "@/components/capabilities/agent-runs";
@@ -109,11 +109,23 @@ export function AgentWork({ intentionId, live = false }: { intentionId: string; 
                 {run.status === "succeeded" ? (
                   <Link
                     href={deliverableHref(intentionId, run.id)}
-                    className={buttonVariants({ size: "sm", variant: run.deliverables.length ? "outline" : "default" })}
+                    className={buttonVariants({ size: "sm", variant: "outline" })}
                     data-testid="agent-work-open"
                   >
                     <FileText className="size-3.5" aria-hidden="true" />
                     {run.key === "code-review" ? t.intentions.deliverable.openReview : t.intentions.deliverable.open}
+                  </Link>
+                ) : null}
+                {/* Right after the intention, the action that settles it
+                    (2026-10-23): its fix, its tests, its tickets, its pages. */}
+                {run.status === "succeeded" ? (
+                  <Link
+                    href={`${deliverableHref(intentionId, run.id)}#next-steps`}
+                    className={buttonVariants({ size: "sm" })}
+                    data-testid="agent-work-settle"
+                  >
+                    <Wrench className="size-3.5" aria-hidden="true" />
+                    {t.intentions.deliverable.next.open}
                   </Link>
                 ) : null}
               </div>

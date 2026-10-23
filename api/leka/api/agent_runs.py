@@ -83,7 +83,7 @@ from leka.capabilities import (
     without_mark,
 )
 from leka.capabilities.definition import Definition
-from leka.capabilities.deliverables import MEDIA_TYPES
+from leka.capabilities.deliverables import MEDIA_TYPES, report_pdf
 from leka.capabilities.runtime import DRAWN
 from leka.core.errors import ErrorCode, FieldError
 from leka.governance import (
@@ -454,6 +454,54 @@ async def get_run(run_id: uuid.UUID, session: SessionDep, principal: Reader) -> 
         design=design_read(run.detail),
         events=[AgentRunEventRead.model_validate(e) for e in events],
         usage=AgentRunUsage(calls=calls, tokens_in=tokens_in, tokens_out=tokens_out, cost_usd=cost),
+    )
+
+
+@router.get(
+    "/{run_id}/report.pdf",
+    response_class=StreamingResponse,
+    summary="Any agent's deliverable as a PDF",
+    responses={200: {"content": {MEDIA_TYPES["pdf"]: {}}}},
+)
+async def get_report_pdf(
+    run_id: uuid.UUID, session: SessionDep, principal: Reader
+) -> StreamingResponse:
+    """What the agent delivered, laid out as a PDF (Karim, 2026-10-23: « un
+    vrai livrable ») — drawn from the report it kept, never stored. 404 when
+    the run is not there or delivered nothing yet."""
+    run = await CapabilityRunRepository(session, principal.workspace_id).run(run_id)
+    if run is None:
+        raise _missing()
+    if run.status != "succeeded" or not run.output:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "Nothing delivered yet.")
+    definition = find(run.key)
+    agent = definition.title if definition is not None else run.key
+    intention = (
+        await IntentionRepository(session, principal.workspace_id).intention(run.intention_id)
+        if run.intention_id is not None
+        else None
+    )
+    title = intention.title if intention is not None else agent
+    drawn = report_pdf(
+        title=title,
+        agent=agent,
+        when=run.finished_at,
+        markdown=without_mark(without_block(run.output)),
+    )
+    name = f"{agent} — {run.finished_at:%Y-%m-%d}.pdf" if run.finished_at else f"{agent}.pdf"
+    ascii_name = name.encode("ascii", "replace").decode().replace("?", "_").replace('"', "")
+
+    async def body() -> AsyncIterator[bytes]:
+        yield drawn
+
+    return StreamingResponse(
+        body(),
+        media_type=MEDIA_TYPES["pdf"],
+        headers={
+            "Content-Disposition": f'attachment; filename="{ascii_name}"; '
+            f"filename*=UTF-8''{quote(name)}",
+            "Cache-Control": "private, no-store",
+        },
     )
 
 

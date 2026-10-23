@@ -521,6 +521,12 @@ async def test_an_agent_that_keeps_reading_answers_with_what_it_read(
     assert modes[: ROUNDS - 1].count("NONE") == 0
     assert modes[ROUNDS - 1] == "NONE"
     assert [d["format"] for d in done["deliverables"]] == ["pptx", "pdf"]
+    # Any agent's deliverable, as a PDF too (2026-10-23): drawn on demand.
+    report = await client.get(f"{API}/{started['id']}/report.pdf")
+    assert report.status_code == 200
+    assert report.headers["content-type"] == "application/pdf"
+    assert report.content.startswith(b"%PDF")
+    assert (await client.get(f"{API}/{uuid.uuid4()}/report.pdf")).status_code == 404
 
 
 async def test_a_model_that_ignores_no_more_tools_is_asked_with_none_declared(

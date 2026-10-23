@@ -66,11 +66,22 @@ function scopeOf(source: Source | undefined, kind: PublicationKind): string[] {
   return Array.isArray(listed) ? listed.map(String) : [];
 }
 
-export function RunPublications({ runId }: { runId: string }) {
+export function RunPublications({
+  runId,
+  asking: asked,
+  onAsking,
+}: {
+  runId: string;
+  /** Opened from outside — « Régler maintenant » (2026-10-23) — when given. */
+  asking?: PublicationKind | null;
+  onAsking?: (kind: PublicationKind | null) => void;
+}) {
   const t = useDictionary();
   const w = t.publications;
   const { data } = useRunPublications(runId);
-  const [asking, setAsking] = useState<PublicationKind | null>(null);
+  const [own, setOwn] = useState<PublicationKind | null>(null);
+  const asking = asked === undefined ? own : asked;
+  const setAsking = onAsking ?? setOwn;
   return (
     <section
       className="flex flex-col gap-3 rounded-xl border border-shell-line bg-white px-5 py-4"

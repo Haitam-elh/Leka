@@ -293,6 +293,33 @@ held to what was read, end to end on a GitHub stand-in, read-only) and
 `deliverable.test.tsx` (the report, the numbered diff, the comments on
 their lines, red and green).
 
+## 6 sexies. A real deliverable, and what settles it (2026-10-23)
+
+Karim, after the 2026-10-22 call: an analysis any model can write; LEKA
+delivers more — every agent, not only the code change, the designer and the
+architect.
+
+- **Framed.** Every markdown deliverable but the architect's deck opens on
+  « Résumé » (five lines: the verdict, what matters most, what to do first)
+  and ends on « Plan d'action » (numbered, executable steps: what, exactly
+  where, who when known, how to check). The runtime tells every agent so
+  (`runtime.FRAME_NOTE`, `framed()`); `deliverable_check.expected(framed=True)`
+  holds it to it — an agent's own « Actions » is that plan — and a model that
+  forgets is told and writes it again (`agent_corrections`).
+- **A file.** `GET /agent-runs/{id}/report.pdf`: any agent's deliverable laid
+  out as a PDF — LEKA's band, the intention, the agent and when, then its
+  headings, tables, lists and code (`deliverables/report_pdf.py`, reportlab,
+  drawn on demand, never stored). « Télécharger en PDF » on the deliverable;
+  the architect keeps its deck's PDF and PowerPoint, the designer its before /
+  after.
+- **Régler maintenant.** The end of every deliverable, and a button at its
+  top and on the intention's agent block, lead to the action that settles
+  it, the agent's own first (`web/lib/agent-products/actions.ts`): the fix
+  (the code-change agent asked from the deliverable — before / after, then a
+  pull request), the missing tests (the test-generation agent), the tickets
+  (Jira) or the pages (Confluence) drafted from it. Nothing leaves LEKA
+  before a person accepts it.
+
 ## 7. The API
 
 | Route | | Permission |
