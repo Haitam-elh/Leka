@@ -161,9 +161,31 @@ _IDENTIFIER = re.compile(r"\w+(?:[-/_.]\w+)+")
 PLAINLY = 5
 
 
+# What a request says in short that an agent's words say in full
+# (2026-10-23: « Fais la revue de la PR #404 » went to the design, database
+# and API reviews — « PR » too short to count, « revue » in seven names).
+_SHORT = re.compile(r"\b(?:PRs?|MRs?)\b", re.IGNORECASE)
+_FULL = " pull request "
+# A review of a pull request is the code review's, whichever review word
+# says it — « relis », « review »: its name says « revue de code », a
+# request « la revue de la PR ».
+_REVIEW = r"\b(?:revue|relis|relire|relecture|review|reviewer)\b"
+_PULL = r"\b(?:pull request|merge request|PRs?|MRs?)\b"
+_REVIEWS_A_PR = re.compile(rf"{_REVIEW}.*{_PULL}|{_PULL}.*{_REVIEW}", re.IGNORECASE)
+
+
+def _expanded(text: str) -> str:
+    return _SHORT.sub(_FULL, text)
+
+
 def asked_words(text: str) -> frozenset[str]:
-    """A request's words that may say what work it asks — its names aside."""
-    return frozenset(_words(_IDENTIFIER.sub(" ", text)) - _FILLER)
+    """A request's words that may say what work it asks — its names aside,
+    its abbreviations said in full; a pull request's review naming the code
+    review."""
+    said = _expanded(text)
+    if _REVIEWS_A_PR.search(text):
+        said = f"{said} revue code"
+    return frozenset(_words(_IDENTIFIER.sub(" ", said)) - _FILLER)
 
 
 def relevance(definition: Any, asked: frozenset[str]) -> int:
@@ -172,7 +194,7 @@ def relevance(definition: Any, asked: frozenset[str]) -> int:
     delivers or is asked as, one (2026-10-21: words capped at three made
     most agents tie, and the alphabet chose)."""
     named = _words(f"{definition.title} {definition.key.replace('-', ' ')}") - _FILLER
-    told = _words(" ".join((definition.summary, *definition.examples))) - _FILLER - named
+    told = _words(_expanded(" ".join((definition.summary, *definition.examples)))) - _FILLER - named
     return 3 * len(asked & named) + len(asked & told)
 
 
@@ -189,7 +211,23 @@ def plainly_asked(
         (k for k, v in scores.items() if v >= PLAINLY and v * 2 >= best),
         key=lambda k: (-scores[k], k),
     )
+    # Beside the best, only an agent a word of its own names: « la revue de
+    # la PR » names the code review by « revue » and « code », never the
+    # database review by « revue » alone (2026-10-23).
+    if plain:
+        first = _named_by(entries[plain[0]].definition, asked)
+        plain = [
+            plain[0],
+            *(k for k in plain[1:] if _named_by(entries[k].definition, asked) - first),
+        ]
     return plain[:MOST_AGENTS], scores
+
+
+def _named_by(definition: Any, asked: frozenset[str]) -> frozenset[str]:
+    """The words of a request that name an agent."""
+    return frozenset(
+        asked & (_words(f"{definition.title} {definition.key.replace('-', ' ')}") - _FILLER)
+    )
 
 
 def known_key(said: str | None, entries: Mapping[str, Any]) -> str | None:

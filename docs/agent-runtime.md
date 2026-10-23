@@ -320,6 +320,14 @@ architect.
   (Jira) or the pages (Confluence) drafted from it. Nothing leaves LEKA
   before a person accepts it.
 
+**What it read, checked (2026-10-23).** A list of a repository's files cut
+at 400 also gives its folders and how many files each holds (`folders_of`):
+an agent never again says « no front end » of a list that stopped before
+`web/`. And every `file:line` a deliverable cites must be a line of a file the
+agent read (`deliverable_check.unread`): a line past the file's end, or in a
+file never read, is said back to the model, which reads it or cites the file
+alone — whatever the model.
+
 ## 7. The API
 
 | Route | | Permission |

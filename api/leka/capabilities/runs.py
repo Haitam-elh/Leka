@@ -48,7 +48,7 @@ from leka.background import JobQueue, enqueue_job
 from leka.capabilities.catalogue import CatalogueService, Entry, needs_of
 from leka.capabilities.code_tools import CODE_NAMES, CODE_TOOLS, code_handlers
 from leka.capabilities.definition import Definition, check_input
-from leka.capabilities.deliverable_check import missing
+from leka.capabilities.deliverable_check import missing, unread
 from leka.capabilities.delivery import draw
 from leka.capabilities.gateway import (
     Completion,
@@ -525,6 +525,7 @@ async def _run(
     # deliverable shows its comments on the diff it read (review.py); the
     # designer's mock-ups are drawn from the files (mockups.py).
     read: dict[str, Any] = {}
+    reads_code = "read_file" in {t.name for t in given}
     if CODE_NAMES & {t.name for t in given}:
         bound |= code_handlers(session, workspace_id, read)
     if METHOD_NAMES & {t.name for t in given}:
@@ -568,12 +569,16 @@ async def _run(
                 # Its deliverable, every section its agent gives — whatever
                 # the model; told what it lacks, it writes it again
                 # (2026-10-22).
-                judge=lambda text: missing(
-                    definition.instructions or "",
-                    text,
-                    language=language or "fr",
-                    framed=framed(definition),
-                ),
+                # And every line it cites, read (2026-10-23).
+                judge=lambda text: [
+                    *missing(
+                        definition.instructions or "",
+                        text,
+                        language=language or "fr",
+                        framed=framed(definition),
+                    ),
+                    *(unread(text, read.get("files", {})) if reads_code else []),
+                ],
                 corrections=settings.agent_corrections,
             ),
             timeout=budget,

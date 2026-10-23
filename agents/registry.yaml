@@ -54,12 +54,12 @@ agents:
 
   - path: data/database-review/SKILL.md
     name: database-review
-    version: 1.0.0
+    version: 1.1.0
     status: active
 
   - path: development/api-design-review/SKILL.md
     name: api-design-review
-    version: 1.1.0
+    version: 1.2.0
     status: active
 
   - path: development/build-fixer/SKILL.md
@@ -119,7 +119,7 @@ agents:
 
   - path: frontend/design-review/SKILL.md
     name: design-review
-    version: 3.1.0
+    version: 3.2.0
     status: active
 
   - path: frontend/motion-review/SKILL.md

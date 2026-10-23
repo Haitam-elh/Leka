@@ -707,6 +707,12 @@ def test_the_words_plainly_name_the_design_review_not_the_alphabet() -> None:
         assert "api-design-review" not in plain_here, about
     asked, _ = plainly_asked(entries, asked_words("Fais une revue de l'API de acme/api"))
     assert asked[0] == "api-design-review"
+    # A pull request's review is the code review's — never the design's, the
+    # database's or the API's by « revue » alone (2026-10-23).
+    for review in ("Fais la revue de la PR #404 de Haitam-elh/Leka", "Relis la pull request 12"):
+        assert plainly_asked(entries, asked_words(review))[0] == ["code-review"], review
+    pr = plainly_asked(entries, asked_words("Fais la recette de la PR #404 de acme/web"))[0]
+    assert pr == ["qa-acceptance"]
 
 
 async def test_a_model_told_why_its_choice_does_not_fit_chooses_again_itself(

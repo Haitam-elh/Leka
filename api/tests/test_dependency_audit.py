@@ -16,7 +16,7 @@ import pytest
 from pydantic import SecretStr
 
 from leka.capabilities import advisories
-from leka.capabilities.code_tools import AUDIT_DEPENDENCIES, CODE_NAMES, audited
+from leka.capabilities.code_tools import AUDIT_DEPENDENCIES, CODE_NAMES, audited, folders_of
 from leka.capabilities.lockfiles import Package, parse
 from leka.connectors import CodeRefusedError
 from leka.connectors.github import GitHubConfig, GitHubConnector, GitHubCredentials
@@ -366,3 +366,17 @@ async def test_a_lock_file_is_read_whole_raw_up_to_a_bound() -> None:
     with pytest.raises(CodeRefusedError) as refused:
         await code.read_whole("acme/api", "yarn.lock", "main", most=1_000)
     assert refused.value.code == "too_large"
+
+
+def test_a_list_cut_says_its_folders() -> None:
+    """2026-10-23: a list that stopped before web/ made the designer say the
+    repository had no front end; cut, it gives its folders and their files."""
+    paths = ["api/app/main.py", "api/alembic/versions/1.py", "web/app/page.tsx", "web/package.json"]
+    assert folders_of(paths, "") == {
+        "api": 2,
+        "api/alembic": 1,
+        "api/app": 1,
+        "web": 2,
+        "web/app": 1,
+    }
+    assert folders_of(paths, "web") == {"web/app": 1}

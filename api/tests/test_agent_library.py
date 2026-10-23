@@ -746,7 +746,7 @@ def test_the_api_review_judges_a_contract_by_its_own_conventions() -> None:
     assert (d.kind, d.lifecycle, d.version, d.mode) == (
         Kind.AGENT,
         Lifecycle.ACTIVE,
-        "1.1.0",
+        "1.2.0",
         "read_only",
     )
     assert set(d.tools) == {
@@ -773,6 +773,9 @@ def test_the_api_review_judges_a_contract_by_its_own_conventions() -> None:
     ):
         assert section in said, section
     for rule in (
+        "l'objet de la revue",
+        "Lis-la toujours",
+        "Une norme n'est pas une incohérence",
         "ses propres conventions",
         "Rupture",
         "Rien d'inventé",
@@ -901,7 +904,7 @@ def test_the_database_review_starts_from_the_catalogue_and_runs_nothing() -> Non
     assert (d.kind, d.lifecycle, d.version, d.mode) == (
         Kind.AGENT,
         Lifecycle.ACTIVE,
-        "1.0.0",
+        "1.1.0",
         "read_only",
     )
     assert {"read_entity", "list_files", "read_file", "read_pull_request"} <= set(d.tools)
@@ -925,6 +928,10 @@ def test_the_database_review_starts_from_the_catalogue_and_runs_nothing() -> Non
         "Dis où tu as cherché",
         "Une protection n'est pas un défaut",
         "tu ne lances aucune requête",
+        "Aucune migration",
+        "Le verdict suit le volume",
+        "jamais du SQL lancé à la main",
+        "un hachage n'est pas un chiffrement",
     ):
         assert rule.lower() in said.lower(), rule
     assert credited(
