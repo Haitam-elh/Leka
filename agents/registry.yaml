@@ -144,7 +144,7 @@ agents:
 
   - path: incident/incident-investigation/SKILL.md
     name: incident-investigation
-    version: 1.3.0
+    version: 1.4.0
     status: active
 
   - path: incident/reliability-analysis/SKILL.md
