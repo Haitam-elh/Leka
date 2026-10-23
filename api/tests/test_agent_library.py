@@ -38,7 +38,7 @@ VERSIONS = {
     "documentation-assistant": "2.0.0",
     "incident-investigation": "1.3.0",
     "infrastructure-analysis": "1.3.0",
-    "release-analysis": "1.3.0",
+    "release-analysis": "1.4.0",
     "security-review": "1.4.1",
     "test-analysis": "1.3.0",
 }
@@ -47,6 +47,7 @@ VERSIONS = {
 CODE_READ = {
     "code-review": {"list_pull_requests", "read_pull_request"},
     "documentation-assistant": {"list_files", "read_file"},
+    "release-analysis": {"list_pull_requests", "read_pull_request"},
 }
 NOTICES = (settings.agents_dir.parent / "THIRD_PARTY_LICENSES.md").read_text(encoding="utf-8")
 
@@ -560,6 +561,12 @@ def test_the_release_analysis_caps_its_verdict() -> None:
     # 2026-10-18: a staged rollout stopped by signals set before, the
     # error budget.
     assert "Le déploiement par étapes" in said and "Le budget d'erreur" in said
+    # 2026-10-23, tested on leka-core: « since yesterday » answered with
+    # merges of last week, an agent that plans migrations read as a
+    # migration — no pull request read —, 10 % of the users on a single
+    # instance, a 1 % error rate from nowhere, a docs/rollback.md to write.
+    assert "jamais à un titre" in said and "« 10 % des utilisateurs »" in said
+    assert "jamais un chiffre de manuel" in said and "« non trouvé" in said
     assert credited("release-analysis", "affaan-m/ECC", "msitarzewski/agency-agents")
 
 
