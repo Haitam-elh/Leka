@@ -18,9 +18,11 @@
  * - An agent still at work: said, no deliverable yet.
  * - Every deliverable offers to send it out: tickets for Jira, pages for
  *   Confluence (their flow: publications.test.tsx).
- * - A review offers its fix: the code-change agent asked from it, on its
- *   repository, for the intention — and its deliverable opened; a report
- *   that reviewed no code does not.
+ * - Every deliverable ends on « Régler maintenant » (2026-10-23), its agent's
+ *   own action first: a review's fix, the code-change agent asked from it,
+ *   on its repository, for the intention — its deliverable opened; a
+ *   security report's too; the missing tests by the test-generation agent;
+ *   a migration plan's tickets.
  * - The agent block on the intention leads to its deliverable.
  */
 
@@ -467,16 +469,19 @@ describe("the code review's deliverable", () => {
   });
 });
 
-describe("a review's fix", () => {
-  it("asks the code-change agent from the review, on its repository, and opens its deliverable", async () => {
+describe("settling it now (Karim, 2026-10-23)", () => {
+  it("asks the code-change agent from a review, on its repository, and opens its deliverable", async () => {
     runs.forIntention.mockResolvedValue([run()]);
     runs.one.mockResolvedValue(detail());
     runs.start.mockResolvedValue(run({ id: "r2", key: "code-change", status: "queued" }));
     show(<DeliverableView intention={INTENTION} />);
-    await userEvent.click(await screen.findByRole("button", { name: "Proposer la correction" }));
-    const form = screen.getByRole("form", { name: "Corriger ce que la revue a trouvé" });
+    const steps = await screen.findByTestId("next-steps");
+    // One click away from the top, and at the end.
+    expect(screen.getByTestId("deliverable-settle")).toHaveAttribute("href", "#next-steps");
+    await userEvent.click(within(steps).getByTestId("next-step-fix"));
+    const form = screen.getByRole("form", { name: "Corriger dans le code" });
     expect(within(form).getByLabelText("Dépôt GitHub")).toHaveValue("acme/payments");
-    await userEvent.click(within(form).getByRole("button", { name: "Lancer la correction" }));
+    await userEvent.click(within(form).getByRole("button", { name: "Lancer" }));
     await vi.waitFor(() => expect(runs.start).toHaveBeenCalledTimes(1));
     const [asked] = runs.start.mock.calls[0];
     expect(asked).toMatchObject({ key: "code-change", intention_id: "i1", inputs: { depot: "acme/payments" } });
@@ -485,12 +490,44 @@ describe("a review's fix", () => {
     await vi.waitFor(() => expect(push).toHaveBeenCalledWith("/intentions/i1/deliverable?run=r2"));
   });
 
-  it("is not offered for a report that reviewed no code", async () => {
+  it("is offered to every agent, its own action first — a report that read no code included", async () => {
     runs.forIntention.mockResolvedValue([run({ key: "security-review", title: "Revue de sécurité" })]);
     runs.one.mockResolvedValue(detail({ key: "security-review", title: "Revue de sécurité", review: null }));
+    runs.start.mockResolvedValue(run({ id: "r3", key: "code-change", status: "queued" }));
     show(<DeliverableView intention={INTENTION} />);
-    await screen.findByTestId("deliverable-report");
-    expect(screen.queryByRole("button", { name: "Proposer la correction" })).toBeNull();
+    const steps = await screen.findByTestId("next-steps");
+    expect(within(steps).getAllByTestId("next-step").map((step) => step.dataset.kind)).toEqual(["fix", "issues"]);
+    await userEvent.click(within(steps).getByTestId("next-step-fix"));
+    const form = screen.getByRole("form", { name: "Corriger les failles" });
+    // No repository said: the agent looks it up.
+    await userEvent.click(within(form).getByRole("button", { name: "Lancer" }));
+    await vi.waitFor(() => expect(runs.start).toHaveBeenCalledTimes(1));
+    const [asked] = runs.start.mock.calls[0];
+    expect(asked.inputs.demande).toContain("sans affaiblir aucune protection");
+  });
+
+  it("writes the missing tests with the test-generation agent", async () => {
+    runs.forIntention.mockResolvedValue([run({ key: "test-analysis", title: "Analyse des tests" })]);
+    runs.one.mockResolvedValue(detail({ key: "test-analysis", title: "Analyse des tests", review: null }));
+    runs.start.mockResolvedValue(run({ id: "r4", key: "test-generation", status: "queued" }));
+    show(<DeliverableView intention={INTENTION} />);
+    const steps = await screen.findByTestId("next-steps");
+    await userEvent.click(within(steps).getByTestId("next-step-tests"));
+    await userEvent.click(within(screen.getByTestId("next-step-form")).getByRole("button", { name: "Lancer" }));
+    await vi.waitFor(() => expect(runs.start).toHaveBeenCalledTimes(1));
+    expect(runs.start.mock.calls[0][0]).toMatchObject({ key: "test-generation" });
+  });
+
+  it("opens the tickets for a plan that is not code", async () => {
+    runs.forIntention.mockResolvedValue([run({ key: "migration-planning", title: "Plan de migration" })]);
+    runs.one.mockResolvedValue(detail({ key: "migration-planning", title: "Plan de migration", review: null }));
+    show(<DeliverableView intention={INTENTION} />);
+    const steps = await screen.findByTestId("next-steps");
+    expect(within(steps).getAllByTestId("next-step").map((step) => step.dataset.kind)).toEqual(["issues", "pages"]);
+    await userEvent.click(within(steps).getByTestId("next-step-issues"));
+    // The tickets' form opened, just below: its flow is publications.test.tsx's.
+    expect(screen.getByTestId("publication-ask-issues")).toHaveAttribute("aria-expanded", "true");
+    expect(runs.start).not.toHaveBeenCalled();
   });
 });
 

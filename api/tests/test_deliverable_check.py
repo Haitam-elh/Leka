@@ -24,8 +24,9 @@ from httpx import AsyncClient
 
 from leka.capabilities import runs as runs_module
 from leka.capabilities import sync_catalogue
-from leka.capabilities.deliverable_check import missing, sections
+from leka.capabilities.deliverable_check import PLAN, SUMMARY, expected, missing, sections
 from leka.capabilities.registry import catalogue
+from leka.capabilities.runtime import FRAME_NOTE, Injected, framed, messages
 from leka.core.config import settings
 from tests.conftest import FakeIdentity
 from tests.test_agent_runs_api import (  # noqa: F401
@@ -48,6 +49,37 @@ FOUND = {d.key: d for d in catalogue()}
 
 def _said(key: str) -> str:
     return FOUND[key].instructions or ""
+
+
+def test_every_deliverable_opens_on_a_summary_and_ends_on_an_action_plan() -> None:
+    """Karim, 2026-10-23: « pas que du texte d'analyse — un résumé et un plan
+    d'action concret et exécutable », every agent — but the architect's
+    deck, whose order is the deck's."""
+    reliability = FOUND["reliability-analysis"]
+    own = [s.title for s in sections(reliability.instructions or "")]
+    framed_ = [s.title for s in expected(reliability.instructions or "", framed=True)]
+    # Its own « Actions » is the plan.
+    assert "Actions" in own and "Actions" not in framed_
+    assert (framed_[0], framed_[-1]) == (SUMMARY.title, PLAN.title)
+    assert framed_[1:-1] == [t for t in own if t != "Actions"]
+    # An agent that lists no section is framed all the same.
+    assert [s.title for s in expected("", framed=True)] == ["Résumé", "Plan d'action"]
+    whole = "\n\n".join(f"## {t}\n\nDit." for t in framed_)
+    assert missing(reliability.instructions or "", whole, framed=True) == []
+    unframed = "\n\n".join(f"## {t}\n\nDit." for t in own)
+    [said] = missing(reliability.instructions or "", unframed, framed=True)
+    assert "« Résumé »" in said and "« Plan d'action »" in said
+    # Every markdown agent is told so; the deck is not.
+    assert framed(reliability) and not framed(FOUND["application-architecture"])
+    told = messages(reliability, {}, _nothing())[0].content
+    assert FRAME_NOTE in str(told)
+    assert FRAME_NOTE not in str(
+        messages(FOUND["application-architecture"], {}, _nothing())[0].content
+    )
+
+
+def _nothing() -> Injected:
+    return Injected(elements=())
 
 
 def test_the_sections_an_agent_gives_are_read_and_those_that_say_when_may_be_left_out() -> None:

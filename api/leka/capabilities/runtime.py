@@ -306,6 +306,35 @@ one pull request, needs no mock-up.""",
 }
 
 
+# What frames every markdown deliverable but the architect's deck, whose
+# order is the deck's (Karim, 2026-10-23: « pas que du texte d'analyse — un
+# résumé et un plan d'action concret et exécutable »).
+FRAME_NOTE = """---
+
+What every LEKA deliverable holds, around the sections your instructions give \
+(their order unchanged between them):
+- It opens with a section titled « Résumé » — « Summary » when you deliver in \
+English, its translation in another language: five lines at most — the \
+verdict, what matters most of what you found, and what to do first. Whoever \
+stops there knows what to do.
+- It ends with a section titled « Plan d'action » — « Action plan » in \
+English: numbered steps a team carries out as they are, the most important \
+first, each with what to do, exactly where (file:line, the resource, the \
+ticket's project), who carries it when the context says it, and how to check \
+it is done. When your instructions end on actions (« Actions »…), that \
+section is this plan: title it « Plan d'action ».
+- LEKA turns this plan into the action itself once a person asks — a change \
+to the code shown before and after, the missing tests, tickets, pages: write \
+each step so it can be done without rereading the rest. A step needing what \
+you could not see says so."""
+
+
+def framed(definition: Definition) -> bool:
+    """Its deliverable opens on a summary and ends on an action plan: every
+    markdown one but the architect's deck."""
+    return delivered(definition)[0] == "markdown" and definition.renders != "architecture_deck"
+
+
 def messages(
     definition: Definition,
     inputs: Mapping[str, object],
@@ -333,6 +362,8 @@ def messages(
     system = f"{rules}\n\n---\n\n{definition.instructions or ''}"
     if definition.renders in RENDER_NOTES:
         system = f"{system}\n\n{RENDER_NOTES[definition.renders]}"
+    if framed(definition):
+        system = f"{system}\n\n{FRAME_NOTE}"
     material: dict[str, object] = {
         "inputs": dict(inputs),
         "context": [
