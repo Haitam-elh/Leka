@@ -34,7 +34,7 @@ VERSIONS = {
     "build-fixer": "1.2.0",
     "code-review": "1.4.0",
     "data-analysis": "1.3.0",
-    "debug-assistant": "1.4.1",
+    "debug-assistant": "1.5.0",
     "documentation-assistant": "2.0.0",
     "incident-investigation": "1.3.0",
     "infrastructure-analysis": "1.3.0",
@@ -47,6 +47,7 @@ VERSIONS = {
 CODE_READ = {
     "code-review": {"list_pull_requests", "read_pull_request"},
     "documentation-assistant": {"list_files", "read_file"},
+    "debug-assistant": {"list_files", "read_file"},
 }
 NOTICES = (settings.agents_dir.parent / "THIRD_PARTY_LICENSES.md").read_text(encoding="utf-8")
 
@@ -658,6 +659,13 @@ def test_the_debugging_agent_checks_the_failure_before_ranking_causes() -> None:
     assert "jamais l'identifiant à la place du nom" in said
     assert "Jamais le nom d'un champ ou d'un signal" in said
     assert "parce\n  qu'elle a fusionné" in said
+    # 2026-10-23, tested on leka-core: « why can an intention stay stuck in
+    # "analyse en cours"? look in the repository » — answered « symptom not
+    # confirmed », no code read: it had no tool to.
+    assert "Une question sur ce qui peut arriver se lit dans le code" in said
+    assert {"list_files", "read_file"} <= set(
+        {d.key: d for d in catalogue()}["debug-assistant"].tools
+    )
     # 2026-10-20, relaunched: right answer, but it explained that leka-core
     # was not a person, and dated each deployment to the second.
     assert "le livrable n'en\ndit rien" in said and "daté à la\n   minute" in said
