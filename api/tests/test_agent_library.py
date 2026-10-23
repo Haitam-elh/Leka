@@ -30,7 +30,7 @@ from leka.core.config import settings
 from leka.knowledge import EntityType
 
 VERSIONS = {
-    "architecture-analysis": "1.3.0",
+    "architecture-analysis": "1.4.0",
     "build-fixer": "1.2.0",
     "code-review": "1.4.0",
     "data-analysis": "1.3.0",
@@ -470,6 +470,14 @@ def test_the_architecture_analysis_reads_the_real_links() -> None:
     for step in ("Quand ça tombe", "Les qualités, nommées"):
         assert step in said, step
     assert "**Décision à prendre (brouillon)**" in said
+    # 2026-10-23, tested on leka-core: a database already on RDS told to move
+    # to « a managed service » — or back to a hand-made replica —, files that
+    # do not exist in its plan, fields of LEKA's model to fill, a person
+    # named owner, the worker and the scheduler left out.
+    assert "une option\ndéjà en place n'en est pas une" in said
+    assert "pas seulement ceux reliés au premier\n   trouvé" in said
+    assert "Jamais une action sur la façon dont LEKA range ses données" in said
+    assert "« à désigner par l'équipe »" in said
     assert credited("architecture-analysis", "affaan-m/ECC", "msitarzewski/agency-agents")
 
 
