@@ -37,7 +37,7 @@ VERSIONS = {
     "debug-assistant": "1.4.1",
     "documentation-assistant": "2.0.0",
     "incident-investigation": "1.3.0",
-    "infrastructure-analysis": "1.3.0",
+    "infrastructure-analysis": "1.4.0",
     "release-analysis": "1.3.0",
     "security-review": "1.4.1",
     "test-analysis": "1.3.0",
@@ -581,6 +581,13 @@ def test_the_infrastructure_analysis_finds_what_falls_together() -> None:
     # 2026-10-18: across regions, exposed, saving without weakening.
     for step in ("Ce qui traverse les régions", "Ce qui est exposé", "Économiser sans fragiliser"):
         assert step in said, step
+    # 2026-10-23, tested on leka-core: its RDS database and S3 buckets left
+    # out — « everything on one instance » —, a public instance said not
+    # exposed, field names and ids for names, teams supposed.
+    assert "L'inventaire entier d'abord" in said and "jamais omise" in said
+    assert "porte une adresse publique" in said
+    assert "jamais l'identifiant à la place du nom" in said
+    assert "« à désigner »" in said
     assert credited("infrastructure-analysis", "affaan-m/ECC", "msitarzewski/agency-agents")
 
 
