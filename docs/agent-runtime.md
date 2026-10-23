@@ -230,6 +230,17 @@ why its files are missing (`deliverables_error`, a `render_failed` step).
 Its model calls are the run's (`agent_run:<id>`, purpose
 `agent:<key>:deck`).
 
+**Its parameters and its sources (2026-10-23).** The architect's instructions
+name parameters — `{{ORGANISATION}}`, `{{ENTITE}}`, `{{ESPACES_CONFLUENCE}}`…
+— that reached its deck as written. LEKA fills them before the model reads
+them (`runtime.parameters_of`, `filled`): the organisation the request names,
+else the workspace's; where LEKA reads for the others; an unknown one is left
+out with its separator — and the deck writer's copy is filled too
+(`delivery._cleaned`). An agent that names no tools reads the code too when a
+repository is connected (`runs.code_tools_of`: `list_files`, `read_file`), and
+the architect is told to draw only what a source it read shows — never a
+generic brick. A slide's title holds on one line (`layout.header`).
+
 ## 6 ter. What it proposes to change — the code-change agent
 
 An agent whose front matter says `renders: code_change` (`code-change`,
