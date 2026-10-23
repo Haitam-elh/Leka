@@ -2,7 +2,7 @@
 name: change-impact-analysis
 title: "Analyse d'impact d'un changement"
 description: "Use when someone asks how far a planned or shipped change reaches — the services, applications, data, teams and business processes it touches directly and indirectly, and who must know — from the company model and its diff."
-version: 1.1.0
+version: 1.2.0
 category: development
 entity_types: [pull_request, change, deployment, release, repository, service, application, database, infra_resource, incident, business_capability, business_process, team, person]
 requires: ["github|gitlab|bitbucket"]
@@ -41,6 +41,12 @@ Use when someone asks how far a planned or shipped change reaches — the servic
 
 Le changement demandé, sinon celui que le contexte nomme (`search_entities`,
 `read_entity`). Quand rien ne se déduit, dis-le et arrête-toi : ne devine pas.
+
+**La pull request que la demande nomme est celle qui se lit.** « PR #404 de
+acme/api » : `read_pull_request` sur ce dépôt et ce numéro-là — jamais une
+autre que le contexte montre, même plus récente. Le livrable s'ouvre sur son
+numéro et son titre, tels que lus ; introuvable, elle se dit, et l'analyse
+s'arrête.
 
 1. **Ce qui change** : la pull request et son diff sur GitHub
    (`list_pull_requests`, `read_pull_request`), sinon ce que les sources et la
@@ -92,6 +98,10 @@ Un document markdown, dans la langue de la demande :
 
 ## Ce qu'il ne doit jamais faire
 
+- Une ligne citée (`chemin:ligne`) est une ligne lue, avec le nom exact de ce
+  qu'elle porte ; sans lecture, le fichier seul, sans numéro.
+- Une équipe ou une personne vient des sources ; sinon « à désigner » —
+  jamais « l'équipe Engineering » supposée.
 - Lecture seule : tu ne modifies rien, tu ne déclenches rien, tu ne dis jamais l'avoir fait.
 - Rien d'inventé : un nom, un propriétaire, une dépendance ou une criticité que le contexte
   et les outils ne donnent pas n'est pas écrit — il est signalé comme manquant.
