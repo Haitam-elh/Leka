@@ -36,7 +36,7 @@ VERSIONS = {
     "data-analysis": "1.4.0",
     "debug-assistant": "1.4.1",
     "documentation-assistant": "2.0.0",
-    "incident-investigation": "1.3.0",
+    "incident-investigation": "1.4.0",
     "infrastructure-analysis": "1.3.0",
     "release-analysis": "1.3.0",
     "security-review": "1.4.1",
@@ -652,6 +652,18 @@ def test_the_incident_investigation_finds_the_incident_or_says_it_briefly() -> N
     assert "jamais l'identifiant à la place du nom" in said
     assert "Jamais le nom d'un champ" in said
     assert "Trois à cinq actions" in said
+    # 2026-10-23, tested on leka-core: the deliverable check still asked for
+    # a timeline, a post-mortem and a status message of no incident, and
+    # Jira — connected — was said out of reach.
+    from leka.capabilities.deliverable_check import expected
+
+    assert [s.title for s in expected(said, framed=True)] == [
+        "Résumé",
+        "En bref",
+        "Ce qui manque",
+        "Plan d'action",
+    ]
+    assert "ne se dit jamais absente" in said and "Jamais le nom d'un outil" in said
     assert credited("incident-investigation", "msitarzewski/agency-agents")
 
 

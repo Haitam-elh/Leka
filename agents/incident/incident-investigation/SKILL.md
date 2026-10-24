@@ -2,7 +2,7 @@
 name: incident-investigation
 title: "Investigation d'incident"
 description: "Use when an incident must be investigated — its timeline, what it reached, what changed before it, the likely cause — and its post-mortem drafted."
-version: 1.3.0
+version: 1.4.0
 category: operations
 entity_types: [incident, service, deployment, change, release, team, person, application, database, infra_resource, repository, business_capability, business_process]
 requires: []
@@ -97,7 +97,8 @@ cherche jamais un coupable. Dans cet ordre :
 
 ## Quand aucun incident n'est trouvé
 
-Le dire en tête, et livrer **un document court**, rien d'autre :
+Le dire en tête, et livrer **un document court** — le résumé, ces trois
+sections, le plan d'action —, rien d'autre :
 
 1. **En bref** — aucun incident dans les sources, sur quoi la recherche a
    porté (les services et dépôts, la période) : trois lignes.
@@ -108,8 +109,10 @@ Le dire en tête, et livrer **un document court**, rien d'autre :
 3. **Ce qui manque** — la source où les incidents de cette entreprise
    seraient consignés et qui n'est pas connectée, ou ne contient rien.
 
-Ni gravité, ni chronologie, ni post-mortem, ni message de situation, ni
-tableau d'actions : sans incident, ce serait du remplissage.
+Ni gravité, ni chronologie, ni impact, ni cause, ni post-mortem, ni message
+de situation — pas même un titre suivi de « aucun » : sans incident, ce
+serait du remplissage. Le plan d'action tient en deux ou trois lignes :
+vérifier chaque signal relevé, connecter la source qui manque.
 
 ## Ce qu'il produit
 
@@ -120,17 +123,17 @@ demande, écrit pour la personne qui décide :
    que LEKA estime, dit comme tel), ce qui est touché : trois lignes.
 2. **À faire maintenant** — seulement s'il est ouvert : ce qui peut arrêter
    les dégâts, proposé.
-3. **Chronologie** — les jalons datés, chacun cité ; les temps de détection
+3. **Chronologie** — quand un incident est trouvé : les jalons datés, chacun cité ; les temps de détection
    et de résolution quand ils se calculent.
-4. **Impact** — ce qui a été atteint, directement et par ricochet.
-5. **Cause probable** — les hypothèses, celle retenue avec sa confiance, ce
+4. **Impact** — quand un incident est trouvé : ce qui a été atteint, directement et par ricochet.
+5. **Cause probable** — quand un incident est trouvé : les hypothèses, celle retenue avec sa confiance, ce
    qui l'appuie, ce qui la contredit, ses trois niveaux ; « inconnue » quand
    rien ne l'établit.
-6. **Post-mortem (brouillon)** — résumé, chronologie, impact, cause, ce qui a
+6. **Post-mortem (brouillon)** — quand un incident est trouvé : résumé, chronologie, impact, cause, ce qui a
    aidé et ce qui a freiné quand les sources le disent, puis les actions :
    un tableau action, type (empêcher, détecter, réparer plus vite), équipe,
    priorité. Proposées, jamais exécutées.
-7. **Message de situation (brouillon)** — quelques lignes pour les équipes et
+7. **Message de situation (brouillon)** — quand un incident est trouvé : quelques lignes pour les équipes et
    leurs responsables : ce qui se passe, l'impact, ce qui est fait, la
    prochaine étape. Une personne l'envoie ; LEKA, jamais.
 8. **Ce qui manque** — ce qu'il faudrait pour conclure.
@@ -146,6 +149,10 @@ demande, écrit pour la personne qui décide :
   nom de la chose — jamais l'identifiant à la place du nom.
 - Jamais le nom d'un champ des données (`deduced_health`, `status`…) : ce qu'il dit, en mots.
 - Ce qui est établi se dit établi ; ce qui est supposé, « probable », avec ce qui l'appuie.
+- Une source connectée (Jira, Confluence, GitHub…) ne se dit jamais absente ni
+  inaccessible : elle se dit lue, avec ce qu'on y a trouvé — ou rien.
+- Jamais le nom d'un outil ou d'une compétence (`what_happened`,
+  `incident-history`…) : ce qu'il faudrait regarder, en mots.
 - Trois à cinq actions qui auraient empêché ou détecté cet incident — pas une liste de
   souhaits, et jamais une action sur la façon dont LEKA range ses données.
 
