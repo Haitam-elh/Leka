@@ -251,7 +251,7 @@ export function AgentsSection() {
             <li
               key={agent.key}
               className={cn(
-                CARD,
+                "rounded-2xl border border-shell-line bg-white",
                 "relative flex flex-col p-3.5 hover:border-brand-violet/40 max-md:nth-[n+3]:hidden md:max-lg:nth-[n+4]:hidden lg:max-xl:nth-[n+5]:hidden",
               )}
               data-testid="home-agent"
@@ -357,7 +357,7 @@ export function LatestAnalyses() {
             <Link
               href={routes.intention(intention.id)}
               className={cn(
-                CARD,
+                "rounded-2xl border border-shell-line bg-white",
                 "flex h-full flex-col gap-2 p-4 outline-none hover:border-brand-violet/40 focus-visible:ring-3 focus-visible:ring-brand-violet/40",
               )}
               data-testid="home-latest-item"

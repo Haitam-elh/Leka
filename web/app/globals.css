@@ -92,6 +92,13 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Jetons de mouvement pour les animations (LEKA-456). */
+@keyframes scale-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.97); }
+  100% { transform: scale(1); }
+}
+
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);

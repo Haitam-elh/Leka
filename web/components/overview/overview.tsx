@@ -124,10 +124,7 @@ function Card({
 }) {
   return (
     <section
-      className={cn(
-        "flex flex-col rounded-xl border border-shell-line bg-white p-3.5",
-        className,
-      )}
+      className={cn("flex flex-col rounded-2xl border border-shell-line bg-white p-4", className)}
     >
       <div className="mb-3 flex items-center gap-3">
         {titleIcon}
@@ -707,6 +704,9 @@ export function Overview() {
       {load.status === "ready" ? (
         <FirstStepsCard sources={load.sources} />
       ) : null}
+      <div className="mt-4">
+        <Greeting load={load} />
+      </div>
       <div className="grid items-start gap-6 pt-4 xl:grid-cols-[16rem_minmax(0,1fr)_16rem] xl:gap-8">
         <div className="min-w-0 xl:col-start-2 xl:row-start-1" data-testid="home-focus">
           <CompactIntentionComposer />
@@ -720,21 +720,13 @@ export function Overview() {
       <AgentsSection />
       <HomeBundles />
       <LatestAnalyses />
-      <div className="mt-10">
-        <Greeting load={load} />
-      </div>
       <div
         className="mt-4 grid grid-cols-1 gap-4 *:min-w-0 xl:grid-cols-3"
-        data-testid="overview-now"
+        data-testid="overview-cockpit"
       >
         <ApprovalsCard />
         <TroubleCard />
         <IntentionsCard />
-      </div>
-      <div
-        className="mt-4 grid grid-cols-1 gap-4 *:min-w-0 xl:grid-cols-3"
-        data-testid="overview-context"
-      >
         <ActivityCard />
         <FreshnessCard />
         <InsightsCard />
