@@ -33,7 +33,7 @@ VERSIONS = {
     "architecture-analysis": "1.3.0",
     "build-fixer": "1.2.0",
     "code-review": "1.4.0",
-    "data-analysis": "1.3.0",
+    "data-analysis": "1.4.0",
     "debug-assistant": "1.4.1",
     "documentation-assistant": "2.0.0",
     "incident-investigation": "1.3.0",
@@ -601,6 +601,8 @@ def test_the_data_analysis_knows_who_writes_and_how_to_change() -> None:
     assert "en trois temps" in said
     # 2026-10-18: recovery known or unknown, flows and their contracts.
     assert "La reprise" in said and "(RPO)" in said and "Les flux" in said
+    # 2026-10-24, tested on leka-core: `multi_az: false` in the deliverable.
+    assert "Jamais le nom d'un champ" in said
     assert credited("data-analysis", "affaan-m/ECC", "msitarzewski/agency-agents")
 
 
