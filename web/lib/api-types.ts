@@ -4943,6 +4943,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/code-changes/{change_id}/repair": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Repair a pull request in red: LEKA reads what failed and fixes it on its branch
+         * @description « Réparer le problème » (2026-10-24): what failed on its pull request
+         *     read on GitHub, the fix written by the workspace's model and added to
+         *     its leka/ branch as one more commit — closed, reopened first. 202, a
+         *     worker does it; 409 when there is nothing to repair (merged, no pull
+         *     request), a repair runs, three were pushed, or the source does not let
+         *     LEKA write.
+         */
+        post: operations["repair_pull_request_api_v1_code_changes__change_id__repair_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agent-runs/{run_id}/publications": {
         parameters: {
             query?: never;
@@ -11167,6 +11192,11 @@ export interface components {
              */
             rollbacks?: components["schemas"]["CodeChangeRollback"][];
             /**
+             * Repairs
+             * @description Each time LEKA repaired its pull request in red, asked by a person.
+             */
+            repairs?: components["schemas"]["CodeChangeRepair"][];
+            /**
              * Deploys Allowed
              * @description Its source lets LEKA start its deployment workflow for the version before.
              * @default false
@@ -11177,6 +11207,76 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * CodeChangeRepair
+         * @description « Réparer le problème » (2026-10-24): its pull request in red, LEKA
+         *     read what failed and fixed it with one more commit on its branch — the
+         *     checks run again. Or why not: the cause outside the code, nothing in
+         *     red any more, a failure said.
+         */
+        CodeChangeRepair: {
+            /**
+             * State
+             * @description running (LEKA reads and fixes), pushed (its commit on the branch), failed, outside (the cause is not in the code: nothing written), unneeded (nothing in red).
+             * @enum {string}
+             */
+            state: "running" | "pushed" | "failed" | "outside" | "unneeded";
+            /**
+             * Asked At
+             * Format: date-time
+             */
+            asked_at: string;
+            /** By */
+            by?: string | null;
+            /**
+             * Failed
+             * @description The checks in red it read.
+             */
+            failed?: string[];
+            /**
+             * Cause
+             * @description What failed, and why.
+             */
+            cause?: string | null;
+            /**
+             * Summary
+             * @description What the repair changes.
+             */
+            summary?: string | null;
+            /**
+             * Files
+             * @description The files it fixed: their diff on the branch.
+             */
+            files?: components["schemas"]["CodeChangeFileRead"][];
+            /**
+             * Commit
+             * @description The commit it added to the branch.
+             */
+            commit?: string | null;
+            /**
+             * Reopened
+             * @description Its pull request, closed, reopened.
+             * @default false
+             */
+            reopened: boolean;
+            /**
+             * Model
+             * @description The model that wrote it.
+             */
+            model?: string | null;
+            /**
+             * Error
+             * @description Why not: no_model, timeout, edits_not_applied, moved, merged, cannot_reopen, not_allowed, unavailable, error.
+             */
+            error?: string | null;
+            /**
+             * Said
+             * @description Why not, in words.
+             */
+            said?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
         };
         /**
          * CodeChangeRollback
@@ -50155,6 +50255,100 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodeChangeRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    repair_pull_request_api_v1_code_changes__change_id__repair_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -1324,6 +1324,38 @@ class CodeChangeRollback(BaseModel):
     at: datetime | None = None
 
 
+class CodeChangeRepair(BaseModel):
+    """« Réparer le problème » (2026-10-24): its pull request in red, LEKA
+    read what failed and fixed it with one more commit on its branch — the
+    checks run again. Or why not: the cause outside the code, nothing in
+    red any more, a failure said."""
+
+    model_config = ConfigDict(frozen=True)
+
+    state: Literal["running", "pushed", "failed", "outside", "unneeded"] = Field(
+        description="running (LEKA reads and fixes), pushed (its commit on the branch), failed, "
+        "outside (the cause is not in the code: nothing written), unneeded (nothing in red)."
+    )
+    asked_at: datetime
+    by: uuid.UUID | None = None
+    failed: list[str] = Field(default_factory=list, description="The checks in red it read.")
+    cause: str | None = Field(default=None, description="What failed, and why.")
+    summary: str | None = Field(default=None, description="What the repair changes.")
+    files: list[CodeChangeFileRead] = Field(
+        default_factory=list, description="The files it fixed: their diff on the branch."
+    )
+    commit: str | None = Field(default=None, description="The commit it added to the branch.")
+    reopened: bool = Field(default=False, description="Its pull request, closed, reopened.")
+    model: str | None = Field(default=None, description="The model that wrote it.")
+    error: str | None = Field(
+        default=None,
+        description="Why not: no_model, timeout, edits_not_applied, moved, merged, "
+        "cannot_reopen, not_allowed, unavailable, error.",
+    )
+    said: str | None = Field(default=None, description="Why not, in words.")
+    finished_at: datetime | None = None
+
+
 class CodeChangeRead(BaseModel):
     """A code change an agent proposed: its files and their diffs, where it
     stands — proposed, rejected, applied as a pull request, then followed —
@@ -1365,6 +1397,10 @@ class CodeChangeRead(BaseModel):
     )
     rollbacks: list[CodeChangeRollback] = Field(
         default_factory=list, description="Each time a person went back to the version before it."
+    )
+    repairs: list[CodeChangeRepair] = Field(
+        default_factory=list,
+        description="Each time LEKA repaired its pull request in red, asked by a person.",
     )
     deploys_allowed: bool = Field(
         default=False,

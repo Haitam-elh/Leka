@@ -16,6 +16,15 @@ What these protect:
   the run's analysis stands, and its change can be written again — from the
   analysis it delivered and the files it read, read again — never the run
   done again; once its change is there, not again.
+- Its pull request in red, « Réparer le problème » (2026-10-24): what
+  failed read on GitHub — each check, its annotations, the end of its log
+  fetched from GitHub's storage without the token — the files it names read
+  at the pull request's head; the model's fix held to those files, asked
+  again when an edit does not land; one commit on its leka/ branch, on top
+  of where it stands, never forced; closed, reopened first. The change
+  then holds what its pull request holds, so undoing it undoes the repair.
+  A cause outside the code writes nothing; a branch moved meanwhile is
+  said; merged, three repairs, one running, a member: refused.
 - Deciding takes intention:approve: a member cannot. Accepted on a source
   that does not allow pull requests, it stays proposed, said why; allowed,
   LEKA opens ONE pull request — a new branch leka/…, one commit with the
@@ -39,17 +48,23 @@ from httpx import AsyncClient
 from sqlalchemy import text
 
 from leka.api import agent_runs as agent_runs_api
+from leka.api import code_changes as code_changes_api
 from leka.capabilities import CodeChange, execute_run, rewrite_change, sync_catalogue
 from leka.capabilities.changes import (
     Edit,
+    ProposedFile,
+    RepairProposal,
     apply_edits,
     before_of,
     branch_of,
+    cited_paths,
     diff_of,
     edits_from_diff,
     follow_pull_requests,
     on_base,
     paths_named,
+    repair_change,
+    repair_problems,
     reversed_diff,
     safe_path,
     stage_of,
@@ -57,7 +72,7 @@ from leka.capabilities.changes import (
 from leka.capabilities.code_tools import MOST_CHARS, lines_of
 from leka.connectors import SourceKind, SourceService
 from leka.connectors.base import Connector
-from leka.connectors.github.code import checks_of
+from leka.connectors.github.code import MOST_LOG, checks_of, log_excerpt
 from leka.db import session_factory, workspace_scope
 from tests.conftest import FakeIdentity
 from tests.test_agent_runs_api import Script, gemini, leka_gemini, queued  # noqa: F401
@@ -127,11 +142,21 @@ class GitHub:
         # commits main took since the merge.
         self.runs: list[dict[str, Any]] = []
         self.newer = 0
+        # A pull request in red (2026-10-24): files as they are at a commit,
+        # each check's annotations and log, its branch moved by someone.
+        self.at: dict[str, dict[str, str]] = {}
+        self.annotations: dict[int, list[dict[str, Any]]] = {}
+        self.logs: dict[int, str] = {}
+        self.branch_moved = False
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
         body = json.loads(request.content) if request.content else None
         self.asked.append((request.method, path, body))
+        if request.url.host == "storage.example":
+            # GitHub's storage, at a signed address: never given the token.
+            assert "authorization" not in request.headers
+            return httpx.Response(200, text=self.logs[int(path.split("/")[-1])])
         assert request.headers["authorization"].startswith("Bearer ghp_")
         base = f"/repos/{REPO}"
         files = {"app/balance.py": BEFORE, "README.md": README}
@@ -142,7 +167,9 @@ class GitHub:
             return httpx.Response(200, json={"tree": tree, "truncated": False})
         if request.method == "GET" and path.startswith(f"{base}/contents/"):
             name = path.removeprefix(f"{base}/contents/")
-            readable = files | self.extra | self.moved
+            readable = (
+                files | self.extra | self.moved | self.at.get(request.url.params.get("ref", ""), {})
+            )
             if name not in readable:
                 return httpx.Response(404, json={"message": "Not Found"})
             content = base64.b64encode(readable[name].encode()).decode()
@@ -155,8 +182,27 @@ class GitHub:
             return httpx.Response(200, json={"tree": {"sha": "base-tree"}})
         if request.method == "POST" and path == f"{base}/git/trees":
             return httpx.Response(201, json={"sha": "new-tree"})
+        if request.method == "GET" and path == f"{base}/git/commits/new-commit":
+            return httpx.Response(
+                200, json={"tree": {"sha": "head-tree"}, "parents": [{"sha": "base-sha"}]}
+            )
         if request.method == "POST" and path == f"{base}/git/commits":
-            return httpx.Response(201, json={"sha": "new-commit"})
+            # LEKA's commit on the base; its repair, on the pull request's head.
+            repaired = body is not None and body["parents"] == ["new-commit"]
+            return httpx.Response(201, json={"sha": "fix-commit" if repaired else "new-commit"})
+        if request.method == "PATCH" and path.startswith(f"{base}/git/refs/heads/"):
+            if self.branch_moved:
+                return httpx.Response(422, json={"message": "Update is not a fast forward"})
+            return httpx.Response(200, json={"object": {"sha": body["sha"] if body else ""}})
+        if request.method == "GET" and path.startswith(f"{base}/check-runs/"):
+            number = int(path.split("/")[-2])
+            return httpx.Response(200, json=self.annotations.get(number, []))
+        if request.method == "GET" and path.startswith(f"{base}/actions/jobs/"):
+            number = int(path.split("/")[-2])
+            if number not in self.logs:
+                return httpx.Response(410, json={"message": "Gone"})
+            where = f"https://storage.example/logs/{number}?sig=abc"
+            return httpx.Response(302, headers={"location": where})
         if request.method == "POST" and path == f"{base}/git/refs":
             ref = body["ref"] if body else ""
             if ref.removeprefix("refs/heads/") in self.branches:
@@ -182,7 +228,7 @@ class GitHub:
             said = [{"state": state, "created_at": "2026-10-20T12:30:00Z"}] if state else []
             return httpx.Response(200, json=said)
         if request.method == "PATCH" and path == f"{base}/pulls/7":
-            self.pull = {**self.pull, "state": "closed"}
+            self.pull = {**self.pull, "state": (body or {}).get("state", "closed")}
             return httpx.Response(200, json={"number": 7, **self.pull})
         if request.method == "GET" and path == f"{base}/commits/merge-sha":
             return httpx.Response(
@@ -1210,3 +1256,315 @@ async def test_a_change_followed_before_its_version_before_was_kept_still_goes_b
     )
     dispatched = [b for p, b in github.writes() if p.endswith("/workflows/cd.yml/dispatches")]
     assert dispatched == [{"ref": "main", "inputs": {"release": "before-sha"}}]
+
+
+# ── a pull request in red, repaired on asking (2026-10-24) ─────────────────
+
+
+def test_a_log_is_cut_to_where_it_fails_and_how_it_ends() -> None:
+    lines = ["2026-10-24T16:20:01.1234567Z ##[group]Run npm test"]
+    lines += [f"2026-10-24T16:20:02.0000000Z ok {n}" for n in range(2000)]
+    lines += [
+        "2026-10-24T16:21:00.0000000Z \x1b[31m FAIL \x1b[0m components/overview/overview.test.tsx",
+        "2026-10-24T16:21:00.0000000Z TestingLibraryElementError: Unable to find overview-now",
+    ]
+    lines += [f"2026-10-24T16:21:01.0000000Z after {n}" for n in range(500)]
+    lines += ["2026-10-24T16:22:00.0000000Z ##[error]Process completed with exit code 1."]
+    said = log_excerpt("\n".join(lines))
+    assert len(said) <= MOST_LOG
+    # Its times, colours and groups out; where it fails, with what is around.
+    assert "2026-10-24T" not in said and "\x1b" not in said and "##[group]" not in said
+    assert " FAIL  components/overview/overview.test.tsx" in said
+    assert "Unable to find overview-now" in said and "ok 1999" in said
+    # How it ends; what is left out, said.
+    assert said.endswith("##[error]Process completed with exit code 1.")
+    assert "[…]" in said and "ok 10\n" not in said
+
+
+def test_what_failed_names_its_files_as_paths_of_the_repository() -> None:
+    failures = [
+        {
+            "name": "web",
+            "annotations": [
+                {"path": ".github", "message": "Process completed with exit code 1."},
+                {
+                    "path": "web/components/overview/overview.test.tsx",
+                    "message": "at web/components/overview/home-sections.tsx:254",
+                },
+            ],
+            "summary": "",
+            "log": (
+                " FAIL  components/overview/overview.test.tsx > the overview\n"
+                "    at /home/runner/work/Leka/Leka/api/leka/main.py:12\n"
+                "    at node_modules/react-dom/cjs/react-dom.development.js:100\n"
+                "see https://example.com/a/b.html"
+            ),
+        }
+    ]
+    assert cited_paths(failures) == [
+        "web/components/overview/overview.test.tsx",
+        "web/components/overview/home-sections.tsx",
+        "components/overview/overview.test.tsx",
+        "api/leka/main.py",
+    ]
+
+
+def test_a_repair_whose_edits_do_not_land_is_asked_again_told_why() -> None:
+    read = {"app/ledger.py": LEDGER}
+    landing = RepairProposal(
+        cause="c",
+        files=[ProposedFile(path="app/ledger.py", edits=[Edit(find="line 2\n", replace="x\n")])],
+    )
+    assert repair_problems(landing, read) == []
+    wrong = RepairProposal(
+        cause="c",
+        files=[
+            ProposedFile(path="app/ledger.py", edits=[Edit(find="line 99\n", replace="x\n")]),
+            ProposedFile(path="app/other.py", edits=[Edit(find="a", replace="b")]),
+            ProposedFile(path="app/new.py", content="print(1)\n"),
+        ],
+    )
+    problems = repair_problems(wrong, read)
+    assert len(problems) == 2
+    assert problems[0].startswith("app/ledger.py: an edit's `find` is not in the file")
+    assert problems[1].startswith("app/other.py: you were not given this file")
+
+
+TEST_LEDGER = (
+    "from app.ledger import lines\n\n\ndef test_line_2():\n    assert lines()[1] == 'line 2'\n"
+)
+TEST_LEDGER_FIXED = TEST_LEDGER.replace("== 'line 2'", "== 'line 2 changed'")
+
+
+def _red(github: GitHub) -> None:
+    """Its pull request's head in red: the test that reads line 2 still
+    expects it as it was."""
+    github.at = {
+        "base-sha": {"app/ledger.py": LEDGER, "tests/test_ledger.py": TEST_LEDGER},
+        "new-commit": {"app/ledger.py": LEDGER_AFTER, "tests/test_ledger.py": TEST_LEDGER},
+    }
+    github.check_runs = [
+        {"id": 10, "name": "api", "status": "completed", "conclusion": "success"},
+        {
+            "id": 11,
+            "name": "web",
+            "status": "completed",
+            "conclusion": "failure",
+            "html_url": "https://github.com/run/11",
+            "app": {"slug": "github-actions"},
+            "output": {"title": "1 test failed", "summary": ""},
+        },
+    ]
+    github.annotations[11] = [
+        {
+            "path": "tests/test_ledger.py",
+            "start_line": 5,
+            "annotation_level": "failure",
+            "title": "test_line_2",
+            "message": "AssertionError: assert 'line 2 changed' == 'line 2'",
+        },
+        {"path": ".github", "annotation_level": "warning", "message": "Node.js 20 is deprecated"},
+    ]
+    github.logs[11] = (
+        "2026-10-24T16:21:00.0000000Z FAILED tests/test_ledger.py::test_line_2\n"
+        "2026-10-24T16:22:00.0000000Z ##[error]Process completed with exit code 1."
+    )
+
+
+def _fix(find: str = "== 'line 2'\n") -> dict[str, Any]:
+    return {
+        "cause": "Le test lit encore la ligne 2 telle qu'elle était avant le changement.",
+        "summary": "Le test attend la ligne 2 telle que le changement l'écrit.",
+        "files": [
+            {
+                "path": "tests/test_ledger.py",
+                "edits": [
+                    {
+                        "find": f"    assert lines()[1] {find}",
+                        "replace": "    assert lines()[1] == 'line 2 changed'\n",
+                    }
+                ],
+            }
+        ],
+    }
+
+
+async def _applied_in_red(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID], github: GitHub
+) -> uuid.UUID:
+    source = await _github_source(acme["acme"], pull_requests=True)
+    github.extra["app/ledger.py"] = LEDGER
+    change_id = await _proposed(acme["acme"], source, "app/ledger.py", LEDGER, LEDGER_AFTER)
+    _as(identity, acme, "admin")
+    assert (await client.post(f"{API}/{change_id}/accept", json={})).status_code == 200
+    _red(github)
+    followed = (await client.post(f"{API}/{change_id}/follow")).json()["follow"]
+    assert (followed["stage"], followed["checks"]["failed"]) == ("checks_failed", ["web"])
+    return change_id
+
+
+async def test_a_pull_request_in_red_is_repaired_on_its_branch_and_its_checks_run_again(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    github: GitHub,
+    leka_gemini: Callable[..., Script],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repairs: list[uuid.UUID] = []
+
+    async def queue(workspace_id: uuid.UUID, change_id: uuid.UUID) -> bool:
+        repairs.append(change_id)
+        return True
+
+    monkeypatch.setattr(code_changes_api, "queue_repair", queue)
+    change_id = await _applied_in_red(client, identity, acme, github)
+    repair = f"{API}/{change_id}/repair"
+
+    # A member may not; who may approve asks it — a worker does it.
+    _as(identity, acme, "member")
+    assert (await client.post(repair)).status_code == 403
+    _as(identity, acme, "admin")
+    asked = await client.post(repair)
+    assert asked.status_code == 202, asked.text
+    [running] = asked.json()["repairs"]
+    assert (running["state"], running["failed"]) == ("running", ["web"])
+    assert repairs == [change_id]
+    # Asked twice while it runs: one.
+    assert (await client.post(repair)).json()["error"]["details"][0]["message"] == "repairing"
+
+    # The model's first fix copies a line that is not there: asked again,
+    # told why — its second lands.
+    script = leka_gemini(gemini(json.dumps(_fix("== 'line two'\n"))), gemini(json.dumps(_fix())))
+    pushed = len(github.writes())
+    assert await repair_change(acme["acme"], change_id) == {
+        "state": "pushed",
+        "commit": "fix-commit",
+    }
+    assert len(script.asked) == 2
+    material = json.loads(script.asked[0]["contents"][-1]["parts"][0]["text"])
+    # What failed, as GitHub said it — its log fetched without the token —
+    # and the files at the pull request's head, its own and those named.
+    [failed] = material["failed"]
+    assert failed["check"] == "web"
+    assert [a["path"] for a in failed["annotations"]] == ["tests/test_ledger.py"]
+    assert "FAILED tests/test_ledger.py::test_line_2" in failed["log"]
+    assert material["files"] == {
+        "app/ledger.py": LEDGER_AFTER,
+        "tests/test_ledger.py": TEST_LEDGER,
+    }
+    assert "+line 2 changed" in material["change"]["diff"]
+    again = json.dumps(script.asked[1])
+    assert "tests/test_ledger.py: an edit" in again
+
+    # One commit on its branch, on top of its head, never forced.
+    writes = github.writes()[pushed:]
+    tree = next(body for path, body in writes if path.endswith("/git/trees"))
+    assert tree == {
+        "base_tree": "head-tree",
+        "tree": [
+            {
+                "path": "tests/test_ledger.py",
+                "mode": "100644",
+                "type": "blob",
+                "content": TEST_LEDGER_FIXED,
+            }
+        ],
+    }
+    commit = next(body for path, body in writes if path.endswith("/git/commits"))
+    assert commit is not None and commit["parents"] == ["new-commit"]
+    assert commit["message"].startswith("Le test attend la ligne 2")
+    read = (await client.get(f"{API}/{change_id}")).json()
+    [ref] = [(path, body) for path, body in writes if "/git/refs/heads/" in path]
+    assert ref == (
+        f"/repos/{REPO}/git/refs/heads/{read['branch']}",
+        {"sha": "fix-commit", "force": False},
+    )
+    assert not [path for path, _ in writes if path.endswith(("/merge", "/pulls"))]
+
+    # Said: what failed, why, what it fixed, by which model; its checks run
+    # again; the change holds what its pull request holds — so undoing it
+    # undoes the repair too.
+    [done] = read["repairs"]
+    assert (done["state"], done["commit"], done["model"]) == (
+        "pushed",
+        "fix-commit",
+        "gemini-3.8-flash",
+    )
+    assert done["cause"].startswith("Le test lit encore la ligne 2")
+    [fixed] = done["files"]
+    assert (
+        fixed["path"] == "tests/test_ledger.py"
+        and "+    assert lines()[1] == 'line 2 changed'" in fixed["diff"]
+    )
+    assert read["follow"]["stage"] == "checks"
+    assert [f["path"] for f in read["files"]] == ["app/ledger.py", "tests/test_ledger.py"]
+    assert read["files"][1]["why"].startswith("réparation : ")
+    with workspace_scope(acme["acme"]):
+        async with session_factory() as session:
+            kept = await session.get(CodeChange, change_id)
+            assert kept is not None and kept.commit_sha == "fix-commit"
+            assert kept.files[1]["content"] == TEST_LEDGER_FIXED
+
+
+async def test_a_repair_says_why_it_wrote_nothing_and_what_it_may_not_do(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    github: GitHub,
+    leka_gemini: Callable[..., Script],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def queue(workspace_id: uuid.UUID, change_id: uuid.UUID) -> bool:
+        return True
+
+    monkeypatch.setattr(code_changes_api, "queue_repair", queue)
+    change_id = await _applied_in_red(client, identity, acme, github)
+    repair = f"{API}/{change_id}/repair"
+
+    # The cause is not in the code: said, nothing written.
+    assert (await client.post(repair)).status_code == 202
+    outside = {"cause": "Le runner n'a pas démarré : rien à corriger dans le code.", "files": []}
+    leka_gemini(gemini(json.dumps(outside)))
+    pushed = len(github.writes())
+    assert (await repair_change(acme["acme"], change_id))["state"] == "outside"
+    assert github.writes()[pushed:] == []
+    said = (await client.get(f"{API}/{change_id}")).json()["repairs"][-1]
+    assert (said["state"], said["cause"]) == ("outside", outside["cause"])
+
+    # Its branch moved meanwhile: said, never forced.
+    assert (await client.post(repair)).status_code == 202
+    github.branch_moved = True
+    leka_gemini(gemini(json.dumps(_fix())))
+    assert (await repair_change(acme["acme"], change_id))["state"] == "failed"
+    said = (await client.get(f"{API}/{change_id}")).json()["repairs"][-1]
+    assert (said["state"], said["error"]) == ("failed", "moved")
+    github.branch_moved = False
+
+    # Closed in red by a person: reopened, then repaired.
+    github.pull["state"] = "closed"
+    assert (await client.post(repair)).status_code == 202
+    leka_gemini(gemini(json.dumps(_fix())))
+    assert (await repair_change(acme["acme"], change_id))["state"] == "pushed"
+    assert ("/repos/acme/payments/pulls/7", {"state": "open"}) in github.writes()
+    said = (await client.get(f"{API}/{change_id}")).json()["repairs"][-1]
+    assert said["reopened"] is True
+
+    # Nothing in red any more: said, nothing asked of a model.
+    github.check_runs = [{"id": 12, "name": "web", "status": "completed", "conclusion": "success"}]
+    assert (await client.post(repair)).status_code == 202
+    assert (await repair_change(acme["acme"], change_id))["state"] == "unneeded"
+
+    # Merged: nothing left to repair on its branch.
+    with workspace_scope(acme["acme"]):
+        async with session_factory() as session:
+            kept = await session.get(CodeChange, change_id)
+            assert kept is not None
+            kept.follow = {
+                **(kept.follow or {}),
+                "stage": "merged",
+                "merged_at": "2026-10-24T18:00:00Z",
+            }
+            await session.commit()
+    merged = await client.post(repair)
+    assert (merged.status_code, merged.json()["error"]["details"][0]["message"]) == (409, "merged")

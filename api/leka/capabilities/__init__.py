@@ -27,6 +27,7 @@ from leka.capabilities.changes import (
     ChangeRefusedError,
     ChangeService,
     files_read,
+    queue_repair,
 )
 from leka.capabilities.definition import (
     CATEGORIES,
@@ -194,6 +195,7 @@ from leka.capabilities.schemas import (
     CodeChangeFileRead,
     CodeChangeFollow,
     CodeChangeRead,
+    CodeChangeRepair,
     CodeChangeRollback,
     CodeReviewRead,
     DeliverableRead,
@@ -351,6 +353,7 @@ __all__ = [
     "CodeChangeFileRead",
     "CodeChangeFollow",
     "CodeChangeRead",
+    "CodeChangeRepair",
     "CodeChangeRollback",
     "CodeReviewRead",
     "ContextItem",
@@ -510,6 +513,7 @@ __all__ = [
     "queue_draft",
     "queue_files",
     "queue_redraw",
+    "queue_repair",
     "queue_run",
     "queue_workflow",
     "read_deliverable",

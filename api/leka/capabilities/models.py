@@ -610,6 +610,12 @@ class CodeChange(Base, WorkspaceScopedMixin):
     rollbacks: Mapped[list[dict[str, object]]] = mapped_column(
         JSONB, nullable=False, server_default="[]"
     )
+    # Repaired on asking, its checks in red (2026-10-24): each time, what
+    # failed, the cause found, the commit LEKA added to its branch and the
+    # files it fixed — or why not.
+    repairs: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
 
 
 class Publication(Base, WorkspaceScopedMixin):

@@ -7,7 +7,12 @@
                 a source whose admin allowed it (`pull_requests`): a pull
                 request — a new branch from the base, one commit, the pull
                 request. Never a merge, never a push to a branch that exists,
-                never the default branch.
+                never the default branch
+    repair      asked by a person, its checks in red (2026-10-24): what
+                failed read — each check, its annotations, the end of its
+                log — and one more commit on the leka/ branch of the pull
+                request LEKA opened, on top of where it stands, never forced;
+                closed, the pull request reopened first
     follow      the pull request after, read only (2026-10-20): its checks,
                 whether a person merged it, the deployment that took it, the
                 version before its merge
@@ -26,9 +31,11 @@ A repository outside the source's scope is refused before a byte is sent.
 from __future__ import annotations
 
 import base64
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -79,6 +86,50 @@ MAX_DEPLOYMENTS = 20
 MAX_COMPARED = 4
 # The checks a pull request names, at most.
 MAX_CHECKS = 100
+# What is read of a pull request in red (2026-10-24), at most: the checks
+# that failed, the annotations of one, a log as GitHub gives it, and what of
+# it is kept — where it fails, and how it ends.
+MAX_FAILED_READ = 4
+MAX_ANNOTATIONS = 20
+MAX_LOG_BYTES = 5_000_000
+MOST_LOG = 12_000
+LOG_TAIL = 60
+LOG_AROUND = 6
+_STAMP = re.compile(r"^\ufeff?\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z ?")
+_ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+# What a log says where it fails: GitHub's own mark, a test runner's, a
+# compiler's, a stack's.
+_FAILING = re.compile(
+    r"##\[error\]|\bFAIL(?:ED)?\b|\bERROR\b|\berror(?:\[|:| TS\d)|Error:|AssertionError|"
+    r"Traceback|\bexpected\b|\bReceived\b|✗|\u00d7|✕|E {3}",
+)
+
+
+def log_excerpt(text: str, *, most: int = MOST_LOG) -> str:
+    """A check's log as the repair needs it: its times and colours taken
+    out, the lines where it fails with a few around each — the first ones
+    first — then how it ends; `[…]` where lines are left out."""
+    lines = [_ANSI.sub("", _STAMP.sub("", line)).rstrip() for line in text.splitlines()]
+    lines = [line for line in lines if not line.startswith(("##[group]", "##[endgroup]"))]
+    wanted: set[int] = set(range(max(0, len(lines) - LOG_TAIL), len(lines)))
+    budget = most
+    for i, line in enumerate(lines):
+        if budget <= 0:
+            break
+        if _FAILING.search(line):
+            around = range(max(0, i - LOG_AROUND), min(len(lines), i + LOG_AROUND + 1))
+            budget -= sum(len(lines[j]) + 1 for j in around if j not in wanted)
+            wanted.update(around)
+    said: list[str] = []
+    last = -1
+    for i in sorted(wanted):
+        if i != last + 1:
+            said.append("[…]")
+        said.append(lines[i][:500])
+        last = i
+    out = "\n".join(said)
+    # Over: what comes first — where it fails first — kept, with its end.
+    return out if len(out) <= most else out[: most - 2000] + "\n[…]\n" + out[-2000:]
 
 
 def checks_of(runs: Sequence[dict[str, Any]], statuses: Sequence[dict[str, Any]]) -> dict[str, Any]:
@@ -441,32 +492,7 @@ class GitHubCode:
                 if head.status_code != 200:
                     raise self._refused(head, f"la branche {base}")
                 parent = str(head.json()["object"]["sha"])
-            commit = await client.get(f"/repos/{name}/git/commits/{parent}")
-            if commit.status_code != 200:
-                raise self._refused(commit, f"le dernier commit de {base}")
-            tree_entries: list[dict[str, object]] = []
-            for change in changes:
-                entry: dict[str, object] = {"path": change.path, "mode": "100644", "type": "blob"}
-                if change.content is None:
-                    entry["sha"] = None
-                else:
-                    if len(change.content.encode()) > MAX_FILE_BYTES:
-                        raise CodeRefusedError("too_large", f"{change.path} est trop gros.")
-                    entry["content"] = change.content
-                tree_entries.append(entry)
-            tree = await client.post(
-                f"/repos/{name}/git/trees",
-                json={"base_tree": commit.json()["tree"]["sha"], "tree": tree_entries},
-            )
-            if tree.status_code != 201:
-                raise self._refused(tree, "l'arbre du commit")
-            made = await client.post(
-                f"/repos/{name}/git/commits",
-                json={"message": title, "tree": tree.json()["sha"], "parents": [parent]},
-            )
-            if made.status_code != 201:
-                raise self._refused(made, "le commit")
-            sha = str(made.json()["sha"])
+            sha = await self._commit(client, name, parent, changes, title)
             # Its name, else the next: one a try left without a pull request.
             for name_tried in [branch, *(f"{branch}-{n}" for n in range(2, 6))]:
                 ref = await client.post(
@@ -488,6 +514,198 @@ class GitHubCode:
                 raise self._refused(pull, "la pull request")
         made_pull = pull.json()
         return PullRequest(int(made_pull["number"]), str(made_pull["html_url"]), branch, sha)
+
+    async def _commit(
+        self,
+        client: httpx.AsyncClient,
+        name: str,
+        parent: str,
+        changes: Sequence[FileChange],
+        message: str,
+    ) -> str:
+        """One commit of `changes` on top of `parent` — no branch moved."""
+        commit = await client.get(f"/repos/{name}/git/commits/{parent}")
+        if commit.status_code != 200:
+            raise self._refused(commit, f"le commit {parent[:7]}")
+        tree_entries: list[dict[str, object]] = []
+        for change in changes:
+            entry: dict[str, object] = {"path": change.path, "mode": "100644", "type": "blob"}
+            if change.content is None:
+                entry["sha"] = None
+            else:
+                if len(change.content.encode()) > MAX_FILE_BYTES:
+                    raise CodeRefusedError("too_large", f"{change.path} est trop gros.")
+                entry["content"] = change.content
+            tree_entries.append(entry)
+        tree = await client.post(
+            f"/repos/{name}/git/trees",
+            json={"base_tree": commit.json()["tree"]["sha"], "tree": tree_entries},
+        )
+        if tree.status_code != 201:
+            raise self._refused(tree, "l'arbre du commit")
+        made = await client.post(
+            f"/repos/{name}/git/commits",
+            json={"message": message, "tree": tree.json()["sha"], "parents": [parent]},
+        )
+        if made.status_code != 201:
+            raise self._refused(made, "le commit")
+        return str(made.json()["sha"])
+
+    # ── a pull request in red: what failed, its repair (2026-10-24) ─────────
+
+    async def failures(self, repository: str, sha: str) -> list[dict[str, Any]]:
+        """What failed on a commit, as its checks say it, read only: each
+        failed check's name, where to see it, its summary, its annotations —
+        file, line, message — and its log as it ends (GitHub Actions); a
+        commit status in failure, what it says. Nothing failed: []."""
+        name = self._checked(repository)
+        found: list[dict[str, Any]] = []
+        async with self._client() as client:
+            runs = await client.get(
+                f"/repos/{name}/commits/{sha}/check-runs", params={"per_page": MAX_CHECKS}
+            )
+            latest: dict[str, dict[str, Any]] = {}
+            for run in (runs.json().get("check_runs") or []) if runs.status_code == 200 else []:
+                check = str(run.get("name") or "")
+                newer = int(run.get("id") or 0) > int((latest.get(check) or {}).get("id") or 0)
+                if check not in latest or newer:
+                    latest[check] = run
+            failed = [
+                run
+                for run in latest.values()
+                if run.get("status") == "completed" and run.get("conclusion") in FAILED
+            ]
+            for run in failed[:MAX_FAILED_READ]:
+                output = run.get("output") or {}
+                summary = " — ".join(
+                    str(part) for part in (output.get("title"), output.get("summary")) if part
+                )
+                entry: dict[str, Any] = {
+                    "name": str(run.get("name") or ""),
+                    "url": run.get("html_url"),
+                    "conclusion": run.get("conclusion"),
+                    "summary": summary[:2000],
+                    "annotations": [],
+                    "log": "",
+                }
+                notes = await client.get(
+                    f"/repos/{name}/check-runs/{run['id']}/annotations", params={"per_page": 50}
+                )
+                if notes.status_code == 200:
+                    entry["annotations"] = [
+                        {
+                            "path": str(note.get("path") or ""),
+                            "line": note.get("start_line"),
+                            "title": str(note.get("title") or "")[:300],
+                            "message": str(note.get("message") or "")[:2000],
+                        }
+                        for note in notes.json()
+                        if isinstance(note, dict) and note.get("annotation_level") == "failure"
+                    ][:MAX_ANNOTATIONS]
+                if ((run.get("app") or {}).get("slug") or "github-actions") == "github-actions":
+                    entry["log"] = log_excerpt(await self._log(client, name, int(run["id"])))
+                found.append(entry)
+            statuses = await client.get(f"/repos/{name}/commits/{sha}/status")
+            listed = (statuses.json().get("statuses") or []) if statuses.status_code == 200 else []
+            for status in listed:
+                if str(status.get("state") or "") in FAILED:
+                    found.append(
+                        {
+                            "name": str(status.get("context") or ""),
+                            "url": status.get("target_url"),
+                            "conclusion": status.get("state"),
+                            "summary": str(status.get("description") or "")[:2000],
+                            "annotations": [],
+                            "log": "",
+                        }
+                    )
+        return found
+
+    async def _log(self, client: httpx.AsyncClient, name: str, job: int) -> str:
+        """A GitHub Actions job's log, as text — "" when it cannot be read
+        (a token without Actions read, a log gone)."""
+        answer = await client.get(f"/repos/{name}/actions/jobs/{job}/logs")
+        if answer.status_code == 200:
+            return answer.text[-MAX_LOG_BYTES:]
+        location = answer.headers.get("location")
+        if answer.status_code not in (301, 302, 303, 307, 308) or not location:
+            return ""
+        where = urlsplit(location)
+        if where.scheme != "https" or not where.netloc:
+            return ""
+        # A signed address of GitHub's storage: no token sent there.
+        async with self._connector.http(f"https://{where.netloc}") as storage:
+            path = where.path + (f"?{where.query}" if where.query else "")
+            got = await storage.get(path)
+        return got.text[-MAX_LOG_BYTES:] if got.status_code == 200 else ""
+
+    async def push_commit(
+        self,
+        repository: str,
+        *,
+        branch: str,
+        parent: str,
+        changes: Sequence[FileChange],
+        message: str,
+    ) -> str:
+        """One commit on the leka/ branch of a pull request LEKA opened — its
+        repair, a person asked for it — on top of where it stands
+        (`parent`): fast-forward only, never forced, never another branch.
+        Moved since — someone pushed — refused: `moved`."""
+        if not self.writes:
+            raise CodeRefusedError(
+                "pull_requests_off",
+                "Cette source GitHub n'autorise pas LEKA à écrire sur ses pull requests.",
+            )
+        name = self._checked(repository)
+        if not branch.startswith("leka/"):
+            raise CodeRefusedError(
+                "not_leka_branch", "LEKA n'écrit que sur les branches leka/ qu'il a ouvertes."
+            )
+        async with self._client() as client:
+            sha = await self._commit(client, name, parent, changes, message)
+            moved = await client.patch(
+                f"/repos/{name}/git/refs/heads/{branch}", json={"sha": sha, "force": False}
+            )
+            if moved.status_code == 422:
+                raise CodeRefusedError(
+                    "moved",
+                    f"La branche {branch} a bougé pendant la réparation : relancez-la, LEKA "
+                    "repartira de là où elle est.",
+                )
+            if moved.status_code != 200:
+                raise self._refused(moved, f"la branche {branch}")
+        return sha
+
+    async def parent_of(self, repository: str, sha: str) -> str | None:
+        """The commit a commit was made on — None when GitHub cannot say."""
+        async with self._client() as client:
+            answer = await client.get(f"/repos/{self._checked(repository)}/git/commits/{sha}")
+        if answer.status_code != 200:
+            return None
+        parents = answer.json().get("parents") or []
+        return str(parents[0].get("sha") or "") or None if parents else None
+
+    async def reopen_pull_request(self, repository: str, number: int) -> None:
+        """A pull request LEKA opened and a person closed in red, reopened to
+        be repaired (2026-10-24)."""
+        if not self.writes:
+            raise CodeRefusedError(
+                "pull_requests_off",
+                "Cette source GitHub n'autorise pas LEKA à toucher aux pull requests.",
+            )
+        async with self._client() as client:
+            answer = await client.patch(
+                f"/repos/{self._checked(repository)}/pulls/{number}", json={"state": "open"}
+            )
+        if answer.status_code == 422:
+            raise CodeRefusedError(
+                "cannot_reopen",
+                f"GitHub refuse de rouvrir la pull request #{number} : {_message(answer)} — sa "
+                "branche a peut-être été supprimée.",
+            )
+        if answer.status_code != 200:
+            raise self._refused(answer, f"la pull request #{number}")
 
     # ── after, read only: its checks, its merge, its deployment (2026-10-20) ─
 
@@ -665,5 +883,6 @@ __all__ = [
     "GitHubCode",
     "PullRequest",
     "checks_of",
+    "log_excerpt",
     "open_code",
 ]
