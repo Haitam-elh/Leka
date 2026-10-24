@@ -347,7 +347,7 @@ describe("a pull request in red, repaired (2026-10-24)", () => {
   it("is repaired in one click by who may approve, and says what it fixed", async () => {
     shell.permissions = ["intention:approve"];
     const red = change({ ...applied, follow: { stage: "checks_failed", done: false, checks: failing } });
-    const asked = { asked_at: "2026-10-24T16:30:00Z", failed: ["web — lint, types, build"] };
+    const asked = { asked_at: "2026-10-24T16:30:00Z", failed: ["web — lint, types, build"], reopened: false };
     const pushed = change({
       ...applied,
       follow: { stage: "checks", done: false, checks: null },
@@ -427,7 +427,7 @@ describe("a pull request in red, repaired (2026-10-24)", () => {
     unmount();
 
     shell.permissions = ["intention:approve"];
-    const done = { asked_at: "", failed: [], state: "pushed" as const, commit: "abc1234" };
+    const done = { asked_at: "", failed: [], state: "pushed" as const, commit: "abc1234", reopened: false };
     const thrice = change({
       ...red,
       repairs: [1, 2, 3].map((n) => ({ ...done, asked_at: `2026-10-24T1${n}:00:00Z` })),
