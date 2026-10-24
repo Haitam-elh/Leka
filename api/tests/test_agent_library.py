@@ -989,7 +989,7 @@ def test_the_performance_analysis_follows_the_slow_path_and_measures_nothing_it_
     assert (d.kind, d.lifecycle, d.version, d.mode) == (
         Kind.AGENT,
         Lifecycle.ACTIVE,
-        "1.0.0",
+        "1.1.0",
         "read_only",
     )
     assert {"list_files", "read_file", "read_pull_request", "dependencies"} <= set(d.tools)
@@ -1018,6 +1018,13 @@ def test_the_performance_analysis_follows_the_slow_path_and_measures_nothing_it_
         "ni test de charge",
     ):
         assert rule.lower() in said.lower(), rule
+    # 2026-10-23, tested on leka-core: « why could the intentions' history
+    # grow slow? follow the path » — no measure, so no code read at all, the
+    # page named said « no symptom given », skills cited as sources.
+    said = d.instructions or ""
+    assert "l'absence de mesure n'arrête\n   jamais la lecture" in said
+    assert "est le symptôme : il suffit\npour suivre le chemin" in said
+    assert "Jamais le nom d'un outil ou d'une compétence" in said
     assert credited(
         "performance-analysis",
         "garrytan/gstack",
