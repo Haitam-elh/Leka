@@ -186,6 +186,7 @@ async def _start(
                 held_by=held.name if held is not None else None,
                 formats=formats,
                 sources=sources,
+                asked=intention.text,
             )
         except RunRefusedError as error:
             raise AgentsRefusedError("refused", agent=key, why=str(error)) from error

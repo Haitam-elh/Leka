@@ -77,7 +77,14 @@ from leka.core.config import settings
 from leka.platform import LocalObjectStore
 from tests.conftest import FakeIdentity
 from tests.test_agent_runs_api import Script, gemini, leka_gemini, queued, store  # noqa: F401
-from tests.test_code_changes_api import README, REPO, GitHub, _github_source, github  # noqa: F401
+from tests.test_code_changes_api import (  # noqa: F401
+    BEFORE,
+    README,
+    REPO,
+    GitHub,
+    _github_source,
+    github,
+)
 from tests.test_context_engine import model  # noqa: F401
 from tests.test_sources_api import _as, acme, fake_connector  # noqa: F401
 
@@ -232,6 +239,26 @@ def test_the_writer_is_given_the_files_read_within_its_budget() -> None:
 # ── end to end ─────────────────────────────────────────────────────────────
 
 
+def test_the_screen_today_is_drawn_from_its_code_never_from_a_document() -> None:
+    # 2026-10-25: the sidebar removed by LEKA-494 was drawn back, from the
+    # document that still described it.
+    given = read_files(
+        {
+            f"{REPO}:web/components/shell/app-shell.tsx": "<header/>",
+            f"{REPO}:docs/frontend/app-shell.md": "The sidebar…",
+            f"{REPO}:web/components/overview/overview.test.tsx": "expect(…)",
+            f"{REPO}:web/e2e/navigation.spec.ts": "test(…)",
+            f"{REPO}:docs/product/mockups/home.html": "<aside>…",
+            f"{REPO}:README.md": "# Leka",
+            f"{REPO}:web/lib/i18n/dictionaries.ts": "export const fr = {}",
+        }
+    )
+    assert list(given) == [
+        f"{REPO}:web/components/shell/app-shell.tsx",
+        f"{REPO}:web/lib/i18n/dictionaries.ts",
+    ]
+
+
 def _plan(*names: str) -> dict[str, Any]:
     return {
         "screen": "Accueil",
@@ -284,7 +311,7 @@ async def test_the_designer_draws_the_screen_before_and_after(
     # The logo the code shows, in the app's public folder.
     github.extra["public/brand/logo.svg"] = LOGO
     script = leka_gemini(
-        gemini(call={"name": "read_file", "args": {"repository": REPO, "path": "README.md"}}),
+        gemini(call={"name": "read_file", "args": {"repository": REPO, "path": "app/balance.py"}}),
         gemini(REVIEW),
         gemini(json.dumps(_plan("Calme", "Dense"))),
         gemini(json.dumps(TODAY_DRAWN)),
@@ -305,7 +332,9 @@ async def test_the_designer_draws_the_screen_before_and_after(
     assert asked["generationConfig"]["responseMimeType"] == "application/json"
     assert "tools" not in asked
     material = json.loads(asked["contents"][-1]["parts"][0]["text"])
-    assert material["files"] == {f"{REPO}:README.md": README}
+    # The code it read — a document never: it may describe a screen that is
+    # no more (2026-10-25).
+    assert material["files"] == {f"{REPO}:app/balance.py": BEFORE}
     assert MARK not in material["review"]
     assert len(script.asked) == 6
     directions = [json.loads(a["contents"][-1]["parts"][0]["text"]) for a in script.asked[4:]]
@@ -377,25 +406,42 @@ async def test_a_design_not_drawn_says_which_step_and_why(
     leka_gemini: Callable[..., Script],
     github: GitHub,
     store: LocalObjectStore,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _as(identity, acme, "member")
     await _github_source(acme["acme"])
     await sync_catalogue()
+
+    async def queue(workspace_id: uuid.UUID, run_id: uuid.UUID, renders: str) -> bool:
+        return True
+
+    monkeypatch.setattr(runs_module, "queue_redraw", queue)
+    monkeypatch.setattr(agent_runs_api, "queue_redraw", queue)
     cut = gemini('{"css": "h1 {", "body": "<main>')
     cut["candidates"][0]["finishReason"] = "MAX_TOKENS"
-    leka_gemini(gemini(REVIEW), gemini(json.dumps(_plan("Calme"))), cut, cut)
+    plan = gemini(json.dumps(_plan("Calme")))
+    leka_gemini(gemini(REVIEW), plan, cut, cut)
     started = await client.post(
         RUNS,
         json={"key": "design-review", "inputs": {"depot": REPO, "demande": "propose un design"}},
     )
     run_id = started.json()["id"]
     assert await execute_run(acme["acme"], uuid.UUID(run_id)) == {"status": "succeeded"}
+    # Not drawn in its run: drawn again at once (2026-10-25), said which step.
+    detail = (await client.get(f"{RUNS}/{run_id}")).json()
+    assert (detail["design"], detail["drawing"], detail["draw_failed"]) == (None, ["design"], None)
+    [retried] = [e["detail"] for e in detail["events"] if e["kind"] == "render_retried"]
+    assert retried["said"].startswith("aujourd'hui : Cut at its limit")
+    # Twice more, by the worker, and still not: said which step and why.
+    leka_gemini(plan, cut, cut, plan, cut, cut)
+    assert (await redraw_design(acme["acme"], uuid.UUID(run_id)))["error"] == "unanswered"
     detail = (await client.get(f"{RUNS}/{run_id}")).json()
     assert detail["design"] is None
     assert detail["draw_failed"] == "unanswered"
     assert detail["draw_said"].startswith("aujourd'hui : Cut at its limit")
     # Its review proposes a design it does not have: drawable, on asking.
     assert "design" in detail["drawable"]
+    assert (await client.post(f"{RUNS}/{run_id}/design")).status_code == 202
 
 
 @pytest.mark.integration
@@ -418,7 +464,7 @@ async def test_a_design_not_drawn_is_drawn_again_on_asking(
         asked.append((run_id, renders))
         return True
 
-    monkeypatch.setattr(agent_runs_api, "queue_redraw", queue)
+    monkeypatch.setattr(runs_module, "queue_redraw", queue)
     cut = gemini('{"screen": "Acc')
     cut["candidates"][0]["finishReason"] = "MAX_TOKENS"
     leka_gemini(
@@ -436,14 +482,16 @@ async def test_a_design_not_drawn_is_drawn_again_on_asking(
     )
     run_id = started.json()["id"]
     assert await execute_run(acme["acme"], uuid.UUID(run_id)) == {"status": "succeeded"}
-    failed = (await client.get(f"{RUNS}/{run_id}")).json()
-    assert (failed["design"], failed["draw_failed"]) == (None, "unanswered")
-    assert failed["draw_said"].startswith("plan : Cut at its limit")
-
-    again = await client.post(f"{RUNS}/{run_id}/design")
-    assert again.status_code == 202, again.text
-    assert (again.json()["drawing"], again.json()["draw_failed"]) == (["design"], None)
+    # Not drawn in its run: being drawn again at once, by a worker — never
+    # left for a person to ask (2026-10-25).
+    drawing = (await client.get(f"{RUNS}/{run_id}")).json()
+    assert (drawing["design"], drawing["drawing"], drawing["draw_failed"]) == (
+        None,
+        ["design"],
+        None,
+    )
     assert asked == [(uuid.UUID(run_id), "design_mockups")]
+    # Being drawn: not asked twice.
     assert (await client.post(f"{RUNS}/{run_id}/design")).status_code == 409
     done = await redraw_design(acme["acme"], uuid.UUID(run_id))
     assert done["error"] is None

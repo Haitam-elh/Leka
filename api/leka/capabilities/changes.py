@@ -355,6 +355,30 @@ Never change a file you were not given: a file the agent did not read is not \
 changed. Answer with the JSON object only."""
 
 
+def change_problems(proposal: ChangeProposal, read: Mapping[str, str]) -> list[str]:
+    """Why a change cannot be applied as written — said to the model, which
+    writes it again (2026-10-25: edits that did not land left the change
+    unwritten until a person asked again). Each edit held to the file as
+    the writer was given it; a change of no file is none."""
+    if not proposal.files:
+        return ["No file is changed: write the edits the analysis proposes."]
+    given = {key.split(":", 1)[-1]: text for key, text in read.items()}
+    problems: list[str] = []
+    for each in proposal.files:
+        # A path outside the repository is left out, never asked again for.
+        path = safe_path(each.path)
+        if path is None or not each.edits or path not in given:
+            continue
+        _after, why = apply_edits(given[path], each.edits)
+        if why is not None:
+            where = "there more than once" if why == "ambiguous" else "not in the file"
+            problems.append(
+                f"{path}: an edit's `find` is {where} as you were given it — copy whole "
+                "lines exactly, enough of them to appear once."
+            )
+    return problems
+
+
 def shown(read: Mapping[str, str]) -> dict[str, str]:
     """The files the agent read, as the writer is shown them: each whole up
     to MOST_SHOWN, all up to MOST_SHOWN_ALL — the last ones read left out
@@ -411,6 +435,53 @@ async def github_sources(session: AsyncSession, workspace_id: uuid.UUID) -> list
         )
     )
     return list(found)
+
+
+# The repositories a workspace's sources list, read when one lists none, at
+# most; a name, as a word of a request.
+MAX_LISTED = 200
+_WORD = re.compile(r"[a-z0-9][a-z0-9._-]*")
+
+
+async def repositories_here(session: AsyncSession, workspace_id: uuid.UUID) -> list[str]:
+    """The repositories the workspace's connected GitHub sources read: the
+    list an admin chose, else what the source sees."""
+    names: list[str] = []
+    service = SourceService(session, workspace_id, actor_user_id=None)
+    for source in await github_sources(session, workspace_id):
+        listed = (source.config or {}).get("repositories")
+        if isinstance(listed, list) and listed:
+            names += [str(name) for name in listed]
+            continue
+        try:
+            scope = await (await service.open_connector(source)).list_scope()
+        except Exception:
+            logger.warning("repositories_not_listed", source=str(source.id), exc_info=True)
+            continue
+        names += [option.key for option in scope.options[:MAX_LISTED]]
+    return list(dict.fromkeys(names))
+
+
+def repository_named(text: str, repositories: Sequence[str]) -> str | None:
+    """The repository a request means (2026-10-25: « propose un design de la
+    page d'accueil de LEKA » drew another screen; « … de Haitam-elh/Leka »,
+    the right one): named in full; else by its own name, a word of the
+    request (« LEKA » is Haitam-elh/Leka), when one only answers to it; else
+    the only one there is. None when it cannot be told."""
+    said = text.casefold()
+    full = [r for r in repositories if r.casefold() in said]
+    if full:
+        return max(full, key=len)
+    words = set(_WORD.findall(said))
+    named = [r for r in repositories if r.rsplit("/", 1)[-1].casefold() in words]
+    if len(named) == 1:
+        return named[0]
+    return repositories[0] if len(repositories) == 1 else None
+
+
+async def repository_for(session: AsyncSession, workspace_id: uuid.UUID, text: str) -> str | None:
+    """The repository a request means, among those the workspace reads."""
+    return repository_named(text, await repositories_here(session, workspace_id))
 
 
 async def code_for(
@@ -634,7 +705,10 @@ async def propose_change(
     try:
         answered = await asyncio.wait_for(
             Gateway(session, run.workspace_id).structured(
-                request, ChangeProposal, replace(needs_of(definition), tools=False)
+                request,
+                ChangeProposal,
+                replace(needs_of(definition), tools=False),
+                verify=lambda proposal: change_problems(proposal, read or {}),
             ),
             timeout=budget,
         )
@@ -1864,6 +1938,7 @@ __all__ = [
     "before_of",
     "body_of",
     "branch_of",
+    "change_problems",
     "cited_paths",
     "code_for",
     "code_of",
@@ -1877,6 +1952,9 @@ __all__ = [
     "repair_change",
     "repair_change_job",
     "repair_problems",
+    "repositories_here",
+    "repository_for",
+    "repository_named",
     "reversed_diff",
     "run_follow_sweep",
     "safe_path",

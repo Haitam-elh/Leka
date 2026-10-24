@@ -47,7 +47,7 @@ LIBRARY = "_library/design"
 VERSIONS = {
     "ui-quality-review": "2.0.0",
     "accessibility-audit": "1.1.0",
-    "design-review": "3.2.0",
+    "design-review": "3.3.0",
     "motion-review": "2.0.0",
 }
 
@@ -227,3 +227,13 @@ def test_what_people_ask_about_an_interface_reaches_its_agent(text: str, expecte
     assert expected in [c.key for c in routed.selected], [
         (c.key, c.score) for c in routed.candidates[:5]
     ]
+
+
+def test_the_designer_reads_the_screen_as_the_app_renders_it() -> None:
+    # 2026-10-25: the sidebar removed by LEKA-494 was drawn back as « today »,
+    # from a document that still described it.
+    designer = {d.key: d for d in catalogue()}["design-review"]
+    said = " ".join((designer.instructions or "").split())
+    assert "**L'écran tel que l'application le rend.**" in said
+    assert "jamais ce qu'en disent un document, un commentaire, un test ou une maquette" in said
+    assert "Un bloc rendu sous condition" in said

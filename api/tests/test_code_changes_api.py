@@ -50,6 +50,7 @@ from sqlalchemy import text
 from leka.api import agent_runs as agent_runs_api
 from leka.api import code_changes as code_changes_api
 from leka.capabilities import CodeChange, execute_run, rewrite_change, sync_catalogue
+from leka.capabilities import runs as runs_module
 from leka.capabilities.changes import (
     Edit,
     ProposedFile,
@@ -66,6 +67,7 @@ from leka.capabilities.changes import (
     paths_named,
     repair_change,
     repair_problems,
+    repository_named,
     reversed_diff,
     safe_path,
     stage_of,
@@ -117,6 +119,50 @@ def test_a_diff_is_leka_s_own() -> None:
     )
 
 
+def test_the_repository_a_request_means_is_found_never_guessed() -> None:
+    # 2026-10-25: « propose un design de la page d'accueil de LEKA » drew
+    # another screen; « … de Haitam-elh/Leka », the right one.
+    held = ["Haitam-elh/Leka", "acme/payments", "acme/leka-docs"]
+    asked = "Propose un design de la page d'accueil de LEKA"
+    assert repository_named(asked, held) == "Haitam-elh/Leka"
+    # Named in full: that one.
+    assert repository_named("revue de acme/payments", held) == "acme/payments"
+    assert repository_named("revue de Haitam-elh/Leka : modèles", held) == "Haitam-elh/Leka"
+    # Two answer to it, or none: not guessed.
+    assert repository_named("revue de payments et de leka", held) is None
+    assert repository_named("une revue de sécurité", held) is None
+    # The only one there is: that one.
+    assert repository_named("une revue de sécurité", ["acme/payments"]) == "acme/payments"
+
+
+async def test_an_agent_given_no_repository_reads_the_one_its_request_names(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    github: GitHub,
+    leka_gemini: Callable[..., Script],
+) -> None:
+    leka_gemini()
+    _as(identity, acme, "member")
+    await _github_source(acme["acme"])
+    await sync_catalogue()
+    started = await client.post(
+        RUNS,
+        json={"key": "design-review", "inputs": {"demande": "propose un design de payments"}},
+    )
+    assert started.status_code == 202, started.text
+    run = (await client.get(f"{RUNS}/{started.json()['id']}")).json()
+    assert run["inputs"]["depot"] == REPO
+    [found] = [e["detail"] for e in run["events"] if e["kind"] == "repository_found"]
+    assert found["repository"] == REPO
+    # Said by the person: theirs, never replaced.
+    said = await client.post(
+        RUNS, json={"key": "design-review", "inputs": {"depot": "acme/other", "demande": "x"}}
+    )
+    assert said.json()["inputs"]["depot"] == "acme/other"
+
+
 def test_a_pull_request_says_no_id_of_leka_s_own() -> None:
     # 2026-10-24: #426 said « … pour le dépôt [f4ad4e4d-7670-5f9f-83c6-ae09e8cfd613] ».
     change = CodeChange(
@@ -126,6 +172,11 @@ def test_a_pull_request_says_no_id_of_leka_s_own() -> None:
     body = body_of(change, by="Nora")
     assert body.startswith("Prête pour le dépôt. Elle change le titre.")
     assert "f4ad4e4d" not in body
+
+
+async def queue_redraw_none(workspace_id: uuid.UUID, run_id: uuid.UUID, renders: str) -> bool:
+    """No worker here: the tests draw again themselves."""
+    return True
 
 
 # ── a fake GitHub ───────────────────────────────────────────────────────────
@@ -594,7 +645,7 @@ async def test_a_change_is_rejected_and_another_workspace_sees_nothing(
     assert github.writes() == []
 
 
-async def test_an_edit_not_found_is_said_and_the_change_written_again(
+async def test_an_edit_not_found_is_asked_again_and_the_change_written_whole(
     client: AsyncClient,
     identity: FakeIdentity,
     model: dict[str, uuid.UUID],
@@ -613,15 +664,22 @@ async def test_an_edit_not_found_is_said_and_the_change_written_again(
         return True
 
     monkeypatch.setattr(agent_runs_api, "queue_change", queue)
+    redrawn: list[tuple[uuid.UUID, str]] = []
+
+    async def redraw(workspace_id: uuid.UUID, run_id: uuid.UUID, renders: str) -> bool:
+        redrawn.append((run_id, renders))
+        return True
+
+    monkeypatch.setattr(runs_module, "queue_redraw", redraw)
     wrong = _proposal()
     wrong["files"][0]["edits"] = [{"find": "    return total\n", "replace": "x"}]
-    leka_gemini(
+    script = leka_gemini(
         gemini(call={"name": "read_file", "args": {"repository": REPO, "path": "app/balance.py"}}),
         gemini("# Analyse\n\nLe solde ignore les paiements en attente."),
         gemini(json.dumps(wrong)),
-        # Written again: the edit copied right.
+        # Told its edit is not in the file: copied right (2026-10-25).
         gemini(json.dumps(_proposal())),
-        # And again, its branch moved where it changes (2026-10-20).
+        # Written again, its branch moved where it changes (2026-10-20).
         gemini(json.dumps(_proposal())),
     )
     started = await client.post(
@@ -631,25 +689,15 @@ async def test_an_edit_not_found_is_said_and_the_change_written_again(
     run_id = started.json()["id"]
     assert await execute_run(acme["acme"], uuid.UUID(run_id)) == {"status": "succeeded"}
 
-    # No change, said why: the analysis stands.
-    run = (await client.get(f"{RUNS}/{run_id}")).json()
-    assert (run["status"], run["draw_failed"]) == ("succeeded", "edits_not_applied")
-    failed = [e["detail"] for e in run["events"] if e["kind"] == "render_failed"]
-    assert failed[-1]["code"] == "edits_not_applied" and "app/balance.py" in failed[-1]["said"]
-    assert (await client.get(API, params={"run_id": run_id})).json() == []
-
-    # Written again, from its analysis: queued, being written.
-    again = await client.post(f"{RUNS}/{run_id}/change")
-    assert again.status_code == 202, again.text
-    assert (again.json()["drawing"], again.json()["draw_failed"]) == (["change"], None)
-    assert asked == [uuid.UUID(run_id)]
-    assert (await client.post(f"{RUNS}/{run_id}/change")).status_code == 409
-    done = await rewrite_change(acme["acme"], uuid.UUID(run_id))
-    assert done["error"] is None and done["proposed"]
-    [change] = (await client.get(API, params={"run_id": run_id})).json()
-    assert "+    return account.total - account.pending" in change["files"][0]["diff"]
+    # Written the first time — never left for a person to ask again.
+    told = json.dumps(script.asked[3], ensure_ascii=False)
+    assert "app/balance.py: an edit's `find` is not in the file" in told
     run = (await client.get(f"{RUNS}/{run_id}")).json()
     assert (run["drawing"], run["draw_failed"]) == ([], None)
+    assert [e["kind"] for e in run["events"]][-2:] == ["proposed", "succeeded"]
+    [change] = (await client.get(API, params={"run_id": run_id})).json()
+    assert "+    return account.total - account.pending" in change["files"][0]["diff"]
+    assert redrawn == []
     # Its change there: never written twice.
     assert (await client.post(f"{RUNS}/{run_id}/change")).status_code == 409
     # Unless refused because its branch moved where it changes: written
@@ -661,7 +709,11 @@ async def test_an_edit_not_found_is_said_and_the_change_written_again(
                 {"c": change["id"]},
             )
             await session.commit()
-    assert (await client.post(f"{RUNS}/{run_id}/change")).status_code == 202
+    again = await client.post(f"{RUNS}/{run_id}/change")
+    assert again.status_code == 202, again.text
+    assert (again.json()["drawing"], again.json()["draw_failed"]) == (["change"], None)
+    assert asked == [uuid.UUID(run_id)]
+    assert (await client.post(f"{RUNS}/{run_id}/change")).status_code == 409
     assert (await rewrite_change(acme["acme"], uuid.UUID(run_id)))["error"] is None
     written = (await client.get(API, params={"run_id": run_id})).json()
     assert [(c["status"], c["id"] == change["id"]) for c in written] == [
@@ -673,6 +725,77 @@ async def test_an_edit_not_found_is_said_and_the_change_written_again(
     assert architect == 404
 
 
+async def test_a_change_not_written_the_first_time_is_written_again_at_once(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    leka_gemini: Callable[..., Script],
+    github: GitHub,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """2026-10-25: « il doit tout livrer dès le début » — a change not
+    written in its run is written again by a worker, as « Réessayer » does,
+    and once more there before it is said not written."""
+    _as(identity, acme, "member")
+    await _github_source(acme["acme"])
+    await sync_catalogue()
+    redrawn: list[tuple[uuid.UUID, str]] = []
+
+    async def redraw(workspace_id: uuid.UUID, run_id: uuid.UUID, renders: str) -> bool:
+        redrawn.append((run_id, renders))
+        return True
+
+    monkeypatch.setattr(runs_module, "queue_redraw", redraw)
+    wrong = _proposal()
+    wrong["files"][0]["edits"] = [{"find": "    return total\n", "replace": "x"}]
+    leka_gemini(
+        gemini(call={"name": "read_file", "args": {"repository": REPO, "path": "app/balance.py"}}),
+        gemini("# Analyse\n\nLe solde ignore les paiements en attente."),
+        gemini(json.dumps(wrong)),
+        gemini(json.dumps(wrong)),
+    )
+    started = await client.post(
+        RUNS,
+        json={"key": "code-change", "inputs": {"demande": "Corrige le solde", "depot": REPO}},
+    )
+    run_id = started.json()["id"]
+    assert await execute_run(acme["acme"], uuid.UUID(run_id)) == {"status": "succeeded"}
+
+    # Not written in its run: being written again, said so — no failure shown.
+    run = (await client.get(f"{RUNS}/{run_id}")).json()
+    assert (run["drawing"], run["draw_failed"]) == (["change"], None)
+    [retried] = [e["detail"] for e in run["events"] if e["kind"] == "render_retried"]
+    assert retried["code"] == "unanswered"
+    assert redrawn == [(uuid.UUID(run_id), "code_change")]
+
+    # The worker: once wrong, then right.
+    leka_gemini(
+        gemini(json.dumps(wrong)), gemini(json.dumps(wrong)), gemini(json.dumps(_proposal()))
+    )
+    done = await rewrite_change(acme["acme"], uuid.UUID(run_id))
+    assert done["error"] is None and done["proposed"]
+    run = (await client.get(f"{RUNS}/{run_id}")).json()
+    assert (run["drawing"], run["draw_failed"]) == ([], None)
+    assert len((await client.get(API, params={"run_id": run_id})).json()) == 1
+
+    # Wrong every time: said, with why — a person may still ask again.
+    second = await client.post(
+        RUNS,
+        json={"key": "code-change", "inputs": {"demande": "Corrige le solde", "depot": REPO}},
+    )
+    other = second.json()["id"]
+    leka_gemini(
+        gemini(call={"name": "read_file", "args": {"repository": REPO, "path": "app/balance.py"}}),
+        gemini("# Analyse\n\nLe solde ignore les paiements en attente."),
+        *(gemini(json.dumps(wrong)) for _ in range(6)),
+    )
+    assert await execute_run(acme["acme"], uuid.UUID(other)) == {"status": "succeeded"}
+    assert (await rewrite_change(acme["acme"], uuid.UUID(other)))["error"] == "unanswered"
+    run = (await client.get(f"{RUNS}/{other}")).json()
+    assert (run["drawing"], run["draw_failed"]) == ([], "unanswered")
+
+
 async def test_a_change_not_written_says_why_as_it_was(
     client: AsyncClient,
     identity: FakeIdentity,
@@ -680,12 +803,19 @@ async def test_a_change_not_written_says_why_as_it_was(
     acme: dict[str, uuid.UUID],
     leka_gemini: Callable[..., Script],
     github: GitHub,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # 2026-10-18: answers cut at the token limit were said « no model »;
-    # the change writer now has room, and why it failed is said as it was.
+    # the change writer now has room, and why it failed is said as it was —
+    # once it was written again, at once, and still was not (2026-10-25).
     _as(identity, acme, "member")
     await _github_source(acme["acme"])
     await sync_catalogue()
+
+    async def redraw(workspace_id: uuid.UUID, run_id: uuid.UUID, renders: str) -> bool:
+        return True
+
+    monkeypatch.setattr(runs_module, "queue_redraw", redraw)
     cut = gemini('{"repository": "acme/pay')
     cut["candidates"][0]["finishReason"] = "MAX_TOKENS"
     script = leka_gemini(
@@ -701,6 +831,12 @@ async def test_a_change_not_written_says_why_as_it_was(
     run_id = started.json()["id"]
     assert await execute_run(acme["acme"], uuid.UUID(run_id)) == {"status": "succeeded"}
     assert script.asked[2]["generationConfig"]["maxOutputTokens"] == 48_000
+    run = (await client.get(f"{RUNS}/{run_id}")).json()
+    [retried] = [e["detail"] for e in run["events"] if e["kind"] == "render_retried"]
+    assert retried["code"] == "unanswered"
+    assert "Cut at its limit of 48000 tokens" in (retried["said"] or "")
+    leka_gemini(cut, cut, cut, cut)
+    assert (await rewrite_change(acme["acme"], uuid.UUID(run_id)))["error"] == "unanswered"
     run = (await client.get(f"{RUNS}/{run_id}")).json()
     assert run["draw_failed"] == "unanswered"
     assert "Cut at its limit of 48000 tokens" in (run["draw_said"] or "")
@@ -757,10 +893,10 @@ async def test_a_run_without_its_files_kept_reads_those_its_analysis_names(
         return True
 
     monkeypatch.setattr(agent_runs_api, "queue_change", queue)
-    script = leka_gemini(
-        gemini("# Analyse\n\n`app/balance.py` ignore les paiements en attente."),
-        gemini(json.dumps({"repository": REPO, "title": "x", "summary": "y", "files": []})),
-        gemini(json.dumps(_proposal())),
+    monkeypatch.setattr(runs_module, "queue_redraw", queue_redraw_none)
+    none = gemini(json.dumps({"repository": REPO, "title": "x", "summary": "y", "files": []}))
+    leka_gemini(
+        gemini("# Analyse\n\n`app/balance.py` ignore les paiements en attente."), none, none
     )
     started = await client.post(
         RUNS,
@@ -775,10 +911,10 @@ async def test_a_run_without_its_files_kept_reads_those_its_analysis_names(
                 {"r": uuid.UUID(run_id)},
             )
             await session.commit()
-    assert (await client.post(f"{RUNS}/{run_id}/change")).status_code == 202
+    script = leka_gemini(gemini(json.dumps(_proposal())))
     done = await rewrite_change(acme["acme"], uuid.UUID(run_id))
     assert done["error"] is None
-    material = json.loads(script.asked[2]["contents"][-1]["parts"][0]["text"])
+    material = json.loads(script.asked[0]["contents"][-1]["parts"][0]["text"])
     assert material["files"] == {f"{REPO}:app/balance.py": BEFORE}
 
 

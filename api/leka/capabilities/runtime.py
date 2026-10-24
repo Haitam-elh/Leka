@@ -308,11 +308,17 @@ draws it — its structure from top to bottom, its texts, its colours, sizes \
 and fonts with their values —, then two or three proposals, each on its \
 named axis: what changes, why, when it is the right choice, what it costs; \
 and the one you recommend, and why.
-- Before you write it, read in full the files that draw the screen: the \
-page, the components it uses, the style sheets and the tokens. LEKA draws \
-the screen today and each proposal from your review and from the files you \
-read, and shows them side by side, before and after: your review never \
-holds HTML.
+- Before you write it, read in full the files that draw the screen, as the \
+app renders it: the route's page file; the frame around it — its layout and \
+the shell components that layout renders (header, navigation); then each \
+component the page renders, in that order; the style sheets and the tokens. \
+A file cut (truncated) is read to its end with from_line. The screen today \
+is what those files render — never what a document, a comment, a test or a \
+mock-up of the repository says of it: they may describe a screen that is no \
+more. A block shown only under a condition (a first-steps card, an empty \
+state) is said as such, with when it shows. LEKA draws the screen today and \
+each proposal from your review and from the code you read, and shows them \
+side by side, before and after: your review never holds HTML.
 - Without that line LEKA draws nothing: a review of animations alone, or of \
 one pull request, needs no mock-up.""",
 }

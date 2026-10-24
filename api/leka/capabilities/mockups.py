@@ -166,7 +166,14 @@ TODAY = """Draw the screen as its code draws it TODAY: its structure from top to
 bottom, its texts as the code and its dictionaries write them, its colours, \
 sizes, spacing, radii, shadows and fonts as its style sheets and tokens give \
 them, by their values. Faithful, not improved: its flaws are what the \
-directions answer."""
+directions answer. Read it in the code as the app renders it: the frame \
+around the page as its layout and shell components render it — a header, a \
+sidebar, only what those files draw —, then the page, its components in the \
+order the page renders them. Draw only what these files render: nothing a \
+comment or a name suggests, no sidebar, menu or section the shell files you \
+were given do not draw. A block shown only under a condition — a first-steps \
+card, an empty state, an error — is drawn only when the review says this \
+workspace shows it."""
 
 PROPOSED = """Draw the direction named in `direction`, starting from `today` — the \
 screen as it is drawn now: the same content, the same example data, no \
@@ -206,12 +213,26 @@ def without_mark(report: str) -> str:
     return report.replace(MARK, "")
 
 
+# What draws a screen is its code. A document, a test, a mock-up may
+# describe a screen that is no more (2026-10-25: a sidebar removed a week
+# before, drawn from the document that still described it) — never given
+# to draw one.
+_NOT_THE_SCREEN = re.compile(
+    r"(?:^|/)(?:docs?|e2e|tests?|__tests__|__mocks__|stories|mockups?|maquettes?)/"
+    r"|\.(?:md|mdx|txt|rst|adoc)$|\.(?:test|spec|stories)\.[cm]?[jt]sx?$",
+    re.IGNORECASE,
+)
+
+
 def read_files(files: Mapping[str, str]) -> dict[str, str]:
-    """What the writer is given of the files the run read: each cut, all of
-    them within MOST_FILES — the first read first, as the review cites them."""
+    """What the writer is given of the files the run read: its code — never
+    a document, a test or a mock-up — each cut, all of it within MOST_FILES,
+    the first read first, as the review cites them."""
     given: dict[str, str] = {}
     left = MOST_FILES
     for path, text in files.items():
+        if _NOT_THE_SCREEN.search(path.split(":", 1)[-1]):
+            continue
         if left <= 0:
             break
         cut = text[: min(MOST_FILE, left)]
