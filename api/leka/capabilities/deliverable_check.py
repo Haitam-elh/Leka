@@ -27,6 +27,7 @@ from __future__ import annotations
 import math
 import re
 import unicodedata
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 # Where an agent says what it produces, and how it numbers its sections.
@@ -128,4 +129,37 @@ def missing(
     ]
 
 
-__all__ = ["PLAN", "SHARE", "SUMMARY", "Section", "expected", "missing", "sections"]
+# A file and its line, as a deliverable cites them: `api/app/main.py:42`.
+_CODE = (
+    "py|ts|tsx|js|jsx|mjs|cjs|go|rb|java|kt|kts|scala|cs|php|rs|swift|sql|sh|tf|"
+    "yaml|yml|json|toml|ini|cfg|md|css|scss|less|html|vue|svelte|prisma|proto|graphql"
+)
+_CITED_LINE = re.compile(
+    rf"(?<![\w./-])((?:[\w.-]+/)*[\w.-]+\.(?:{_CODE})):(\d+)(?:[-\u2013](\d+))?\b"
+)
+
+
+def unread(deliverable: str, files: Mapping[str, str]) -> list[str]:
+    """The lines a deliverable cites in files the agent never read, or past
+    their end (2026-10-23: `intentions.py:250`, `errors.py:100` — lines no
+    one read) — said to the model, which reads them or cites the file
+    alone. `files`: what it read, « owner/repo:path » → its text."""
+    lines = {key.split(":", 1)[-1]: text.count("\n") + 1 for key, text in files.items()}
+    wrong: list[str] = []
+    for path, first, last in _CITED_LINE.findall(deliverable or ""):
+        read = next((n for p, n in lines.items() if p == path or p.endswith(f"/{path}")), None)
+        line = int(last or first)
+        if read is None:
+            wrong.append(f"{path}:{first} (never read)")
+        elif line > read:
+            wrong.append(f"{path}:{line} (it has {read} lines)")
+    if not wrong:
+        return []
+    said = ", ".join(dict.fromkeys(wrong))
+    return [
+        f"These lines are cited but were not read: {said}. Read each file (read_file) and "
+        "cite the line you read, or cite the file alone — never a line you did not read."
+    ]
+
+
+__all__ = ["PLAN", "SHARE", "SUMMARY", "Section", "expected", "missing", "sections", "unread"]

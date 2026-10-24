@@ -31,12 +31,12 @@ from leka.knowledge import EntityType
 
 VERSIONS = {
     "architecture-analysis": "1.3.0",
-    "build-fixer": "1.2.0",
+    "build-fixer": "1.3.0",
     "code-review": "1.4.0",
-    "data-analysis": "1.3.0",
+    "data-analysis": "1.4.0",
     "debug-assistant": "1.4.1",
     "documentation-assistant": "2.0.0",
-    "incident-investigation": "1.3.0",
+    "incident-investigation": "1.4.0",
     "infrastructure-analysis": "1.3.0",
     "release-analysis": "1.4.0",
     "security-review": "1.4.1",
@@ -47,6 +47,7 @@ VERSIONS = {
 CODE_READ = {
     "code-review": {"list_pull_requests", "read_pull_request"},
     "documentation-assistant": {"list_files", "read_file"},
+    "build-fixer": {"list_pull_requests", "read_pull_request", "read_file"},
     "release-analysis": {"list_pull_requests", "read_pull_request"},
 }
 NOTICES = (settings.agents_dir.parent / "THIRD_PARTY_LICENSES.md").read_text(encoding="utf-8")
@@ -448,6 +449,11 @@ def test_the_build_fixer_proposes_the_smallest_fix() -> None:
     assert "Pas de refonte, pas" in said
     # 2026-10-18: never green at any price.
     assert "Jamais vert à tout prix" in said
+    # 2026-10-24, tested on leka-core: « the last failed build » unknown
+    # while two pull requests had a red check, a merge of two weeks before
+    # as a suspect, « LEKA-390 » in the deliverable.
+    assert "**Les contrôles des pull requests sont des builds.**" in said
+    assert "LEKA-390" not in said
     assert credited("build-fixer", "affaan-m/ECC", "msitarzewski/agency-agents")
 
 
@@ -608,6 +614,8 @@ def test_the_data_analysis_knows_who_writes_and_how_to_change() -> None:
     assert "en trois temps" in said
     # 2026-10-18: recovery known or unknown, flows and their contracts.
     assert "La reprise" in said and "(RPO)" in said and "Les flux" in said
+    # 2026-10-24, tested on leka-core: `multi_az: false` in the deliverable.
+    assert "Jamais le nom d'un champ" in said
     assert credited("data-analysis", "affaan-m/ECC", "msitarzewski/agency-agents")
 
 
@@ -651,6 +659,18 @@ def test_the_incident_investigation_finds_the_incident_or_says_it_briefly() -> N
     assert "jamais l'identifiant à la place du nom" in said
     assert "Jamais le nom d'un champ" in said
     assert "Trois à cinq actions" in said
+    # 2026-10-23, tested on leka-core: the deliverable check still asked for
+    # a timeline, a post-mortem and a status message of no incident, and
+    # Jira — connected — was said out of reach.
+    from leka.capabilities.deliverable_check import expected
+
+    assert [s.title for s in expected(said, framed=True)] == [
+        "Résumé",
+        "En bref",
+        "Ce qui manque",
+        "Plan d'action",
+    ]
+    assert "ne se dit jamais absente" in said and "Jamais le nom d'un outil" in said
     assert credited("incident-investigation", "msitarzewski/agency-agents")
 
 
@@ -753,7 +773,7 @@ def test_the_api_review_judges_a_contract_by_its_own_conventions() -> None:
     assert (d.kind, d.lifecycle, d.version, d.mode) == (
         Kind.AGENT,
         Lifecycle.ACTIVE,
-        "1.1.0",
+        "1.2.0",
         "read_only",
     )
     assert set(d.tools) == {
@@ -780,6 +800,9 @@ def test_the_api_review_judges_a_contract_by_its_own_conventions() -> None:
     ):
         assert section in said, section
     for rule in (
+        "l'objet de la revue",
+        "Lis-la toujours",
+        "Une norme n'est pas une incohérence",
         "ses propres conventions",
         "Rupture",
         "Rien d'inventé",
@@ -808,7 +831,7 @@ def test_the_reliability_analysis_measures_and_hunts_hidden_failures() -> None:
     assert (d.kind, d.lifecycle, d.version, d.mode) == (
         Kind.AGENT,
         Lifecycle.ACTIVE,
-        "1.0.0",
+        "1.1.0",
         "read_only",
     )
     assert set(d.tools) == {
@@ -850,6 +873,13 @@ def test_the_reliability_analysis_measures_and_hunts_hidden_failures() -> None:
         "ni test de charge",
     ):
         assert rule.lower() in said.lower(), rule
+    # 2026-10-23, tested on leka-core: a logged and retried error called
+    # swallowed, with a narrower except recommended; a job timeout and a
+    # pool pre-ping missed; « not read » beside « the code does not handle ».
+    said = d.instructions or ""
+    assert "n'est **pas**\n   avalée" in said and "ne recommande jamais de\n   la resserrer" in said
+    assert "« non\n   lu » et « le code ne gère pas » ne vont jamais ensemble" in said
+    assert "Jamais le nom d'un outil ou d'une compétence" in said
     assert credited(
         "reliability-analysis", "msitarzewski/agency-agents", "garrytan/gstack", "affaan-m/ECC"
     )
@@ -908,7 +938,7 @@ def test_the_database_review_starts_from_the_catalogue_and_runs_nothing() -> Non
     assert (d.kind, d.lifecycle, d.version, d.mode) == (
         Kind.AGENT,
         Lifecycle.ACTIVE,
-        "1.0.0",
+        "1.1.0",
         "read_only",
     )
     assert {"read_entity", "list_files", "read_file", "read_pull_request"} <= set(d.tools)
@@ -932,6 +962,10 @@ def test_the_database_review_starts_from_the_catalogue_and_runs_nothing() -> Non
         "Dis où tu as cherché",
         "Une protection n'est pas un défaut",
         "tu ne lances aucune requête",
+        "Aucune migration",
+        "Le verdict suit le volume",
+        "jamais du SQL lancé à la main",
+        "un hachage n'est pas un chiffrement",
     ):
         assert rule.lower() in said.lower(), rule
     assert credited(
@@ -962,7 +996,7 @@ def test_the_performance_analysis_follows_the_slow_path_and_measures_nothing_it_
     assert (d.kind, d.lifecycle, d.version, d.mode) == (
         Kind.AGENT,
         Lifecycle.ACTIVE,
-        "1.0.0",
+        "1.1.0",
         "read_only",
     )
     assert {"list_files", "read_file", "read_pull_request", "dependencies"} <= set(d.tools)
@@ -991,6 +1025,13 @@ def test_the_performance_analysis_follows_the_slow_path_and_measures_nothing_it_
         "ni test de charge",
     ):
         assert rule.lower() in said.lower(), rule
+    # 2026-10-23, tested on leka-core: « why could the intentions' history
+    # grow slow? follow the path » — no measure, so no code read at all, the
+    # page named said « no symptom given », skills cited as sources.
+    said = d.instructions or ""
+    assert "l'absence de mesure n'arrête\n   jamais la lecture" in said
+    assert "est le symptôme : il suffit\npour suivre le chemin" in said
+    assert "Jamais le nom d'un outil ou d'une compétence" in said
     assert credited(
         "performance-analysis",
         "garrytan/gstack",
@@ -1053,3 +1094,14 @@ def test_the_migration_plan_moves_in_reversible_steps_and_retires_last() -> None
     # Its last member built, Ship Safe is sold — every bundle now is.
     sold = commercial().add_ons
     assert all(b.sellable and not b.missing for b in sold.bundles)
+
+
+def test_the_regression_analysis_reads_the_pull_request_asked() -> None:
+    # 2026-10-23, tested on leka-core: asked about PR #404, it read #378 — one
+    # the context showed —, and cited test lines it never read.
+    d = {d.key: d for d in catalogue()}["regression-analysis"]
+    assert d.version == "1.2.0"
+    said = d.instructions or ""
+    assert "La pull request que la demande nomme est celle qui se lit" in said
+    assert "Une ligne citée (`chemin:ligne`) est une ligne lue" in said
+    assert "« à désigner »" in said
