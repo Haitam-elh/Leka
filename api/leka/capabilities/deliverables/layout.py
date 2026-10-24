@@ -62,11 +62,17 @@ from leka.capabilities.deliverables.scene import (
 )
 
 TOP = 1.05  # under the title and its subtitle
+# A slide's title, at its smallest — still on one line.
+TITLE_LEAST = 9.0
 BOTTOM = HEIGHT - MARGIN
 
 
 def header(slide: Slide, title: str, subtitle: str) -> None:
-    size = fit_size(title, WIDTH - 2 * MARGIN, 0.42, 20, least=11, bold=True)
+    # On one line, never over its subtitle (2026-10-23: a process slide's
+    # long title wrapped onto it): smaller rather than on two lines.
+    size = 20.0
+    while size > TITLE_LEAST and text_width(title, size, bold=True) > WIDTH - 2 * MARGIN:
+        size -= 0.5
     slide.add(
         Box(
             MARGIN,

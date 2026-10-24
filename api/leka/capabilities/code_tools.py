@@ -192,6 +192,24 @@ def lines_of(text: str, arguments: Mapping[str, Any]) -> dict[str, object]:
     }
 
 
+def folders_of(paths: list[str], under: str) -> dict[str, int]:
+    """The folders right under `under`, each with how many of the files
+    listed it holds — two levels down for a folder that holds most."""
+    prefix = under.strip("/")
+    prefix = f"{prefix}/" if prefix else ""
+    counts: dict[str, int] = {}
+    for path in paths:
+        if not path.startswith(prefix):
+            continue
+        rest = path[len(prefix) :].split("/")
+        if len(rest) > 1:
+            counts[prefix + rest[0]] = counts.get(prefix + rest[0], 0) + 1
+            if len(rest) > 2:
+                inner = f"{prefix}{rest[0]}/{rest[1]}"
+                counts[inner] = counts.get(inner, 0) + 1
+    return dict(sorted(counts.items()))
+
+
 def code_handlers(
     session: AsyncSession,
     workspace_id: uuid.UUID,
@@ -229,13 +247,22 @@ def code_handlers(
             paths, more = await found.paths(repository, branch, str(arguments.get("path") or ""))
         except CodeRefusedError as refused:
             return Answer(_said({"error": refused.code}), "refused", refused.code)
+        cut = more or len(paths) > MOST_PATHS
         return Answer(
             _said(
                 {
                     "repository": repository,
                     "branch": branch,
                     "files": paths[:MOST_PATHS],
-                    "more": more or len(paths) > MOST_PATHS,
+                    "more": cut,
+                    # Cut, the folders the list holds — and how many files
+                    # each: never « no front end » for a list that stopped
+                    # before web/ (2026-10-23). List one by its `path`.
+                    **(
+                        {"folders": folders_of(paths, str(arguments.get("path") or ""))}
+                        if cut
+                        else {}
+                    ),
                 }
             ),
             "ok",

@@ -24,7 +24,14 @@ from httpx import AsyncClient
 
 from leka.capabilities import runs as runs_module
 from leka.capabilities import sync_catalogue
-from leka.capabilities.deliverable_check import PLAN, SUMMARY, expected, missing, sections
+from leka.capabilities.deliverable_check import (
+    PLAN,
+    SUMMARY,
+    expected,
+    missing,
+    sections,
+    unread,
+)
 from leka.capabilities.registry import catalogue
 from leka.capabilities.runtime import FRAME_NOTE, Injected, framed, messages
 from leka.core.config import settings
@@ -160,3 +167,18 @@ async def test_a_deliverable_short_of_a_section_is_written_again_then_said_incom
     assert done["output"] == short
     [incomplete] = [e for e in done["events"] if e["kind"] == "incomplete"]
     assert "Zones à risque" in incomplete["detail"]["said"]
+
+
+def test_a_line_cited_is_a_line_read() -> None:
+    """2026-10-23: the API review cited `intentions.py:250` of a file of 121
+    lines, and `errors.py:100` it never read."""
+    read = {"acme/api:api/app/intentions.py": "x\n" * 120, "acme/api:api/app/main.py": "y\n" * 300}
+    said = (
+        "Où : `api/app/intentions.py:250`, `main.py:103`, `api/app/errors.py:100`, "
+        "l'hôte db.x.supabase.co:5432, [schema-health:4021], `intentions.py:12`"
+    )
+    [told] = unread(said, read)
+    assert "api/app/intentions.py:250 (it has 121 lines)" in told
+    assert "api/app/errors.py:100 (never read)" in told
+    assert "main.py:103" not in told and "supabase" not in told and "schema-health" not in told
+    assert unread("`main.py:103`, `api/app/intentions.py:12-14`", read) == []

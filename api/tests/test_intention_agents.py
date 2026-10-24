@@ -40,7 +40,7 @@ from pydantic import SecretStr
 from sqlalchemy import select, text
 
 from leka.capabilities import AgentRun, Gateway
-from leka.capabilities.definition import Kind
+from leka.capabilities.definition import Kind, Lifecycle
 from leka.capabilities.gateway import service
 from leka.capabilities.registry import agents as agent_definitions
 from leka.capabilities.runs import outside_sources
@@ -695,7 +695,7 @@ def test_the_words_plainly_name_the_design_review_not_the_alphabet() -> None:
     entries = {key: SimpleNamespace(definition=d) for key, d in found.items()}
     plain, scores = plainly_asked(entries, asked_words(DESIGN))
     assert plain[0] == "design-review"
-    assert scores["documentation-assistant"] == 0
+    assert "documentation-assistant" not in plain and scores["documentation-assistant"] <= 1
     # A name is what a request is about, never the work it asks: « payment-api »
     # asks nothing of the API review; « l'API » does (2026-10-22).
     for about in (
@@ -707,6 +707,12 @@ def test_the_words_plainly_name_the_design_review_not_the_alphabet() -> None:
         assert "api-design-review" not in plain_here, about
     asked, _ = plainly_asked(entries, asked_words("Fais une revue de l'API de acme/api"))
     assert asked[0] == "api-design-review"
+    # A pull request's review is the code review's — never the design's, the
+    # database's or the API's by « revue » alone (2026-10-23).
+    for review in ("Fais la revue de la PR #404 de Haitam-elh/Leka", "Relis la pull request 12"):
+        assert plainly_asked(entries, asked_words(review))[0] == ["code-review"], review
+    pr = plainly_asked(entries, asked_words("Fais la recette de la PR #404 de acme/web"))[0]
+    assert pr == ["qa-acceptance"]
 
 
 async def test_a_model_told_why_its_choice_does_not_fit_chooses_again_itself(
@@ -781,3 +787,118 @@ async def test_a_model_that_never_chooses_what_the_work_needs_leaves_it_to_the_c
     keys = [a["key"] for a in proposal["agents"]]
     assert (proposal["by"], keys[0]) == ("rules", "design-review")
     assert "documentation-assistant" not in keys
+
+
+# The intentions Haitam and Bilal test every agent with (2026-10-23): each
+# names its agent first, whatever the model — « ajoute un lien » went to the
+# test generation, « la revue de la PR » to the design review.
+EVERY_AGENT = [
+    (
+        "application-architecture",
+        "Construis l'architecture du parcours de création d'une intention dans LEKA (Haitam-elh/Leka)",  # noqa: E501
+    ),
+    ("code-review", "Fais la revue de la PR #404 de Haitam-elh/Leka"),
+    (
+        "code-change",
+        "Dans Haitam-elh/Leka, ajoute un lien « Retour aux agents » en haut de la page d'un agent",
+    ),
+    (
+        "test-generation",
+        "Écris les tests manquants de api/leka/capabilities/deliverables/report_pdf.py dans Haitam-elh/Leka",  # noqa: E501
+    ),
+    (
+        "codebase-explorer",
+        "Explique-moi comment est organisé le code de Haitam-elh/Leka : agents, connecteurs, intentions",  # noqa: E501
+    ),
+    (
+        "documentation-assistant",
+        "Rédige la documentation de l'agent Plan de migration à partir du code de Haitam-elh/Leka",
+    ),
+    (
+        "ui-quality-review",
+        "Fais une revue de qualité de l'interface de la page Agents de LEKA (Haitam-elh/Leka)",
+    ),
+    (
+        "design-review",
+        "Propose une meilleure page Historique des intentions dans LEKA (Haitam-elh/Leka)",
+    ),
+    (
+        "accessibility-audit",
+        "Fais un audit d'accessibilité de la page d'accueil de LEKA (Haitam-elh/Leka)",
+    ),
+    ("motion-review", "Revois les animations de l'application web de Haitam-elh/Leka"),
+    ("qa-acceptance", "Fais la recette de la PR #404 de Haitam-elh/Leka"),
+    ("api-design-review", "Fais une revue de l'API /api/v1/code-changes de Haitam-elh/Leka"),
+    (
+        "dependency-analysis",
+        "Nos dépendances ont-elles des vulnérabilités connues dans Haitam-elh/Leka ? Regarde le front et l'API.",  # noqa: E501
+    ),
+    (
+        "migration-planning",
+        "Prépare le plan de migration de Next.js 15 vers 16 pour l'application web de Haitam-elh/Leka",  # noqa: E501
+    ),
+    (
+        "incident-investigation",
+        "Investigue le dernier incident de LEKA en production et rédige son post-mortem",
+    ),
+    (
+        "debug-assistant",
+        "Pourquoi une intention peut-elle rester bloquée en « analyse en cours » dans LEKA ? Cherche dans Haitam-elh/Leka",  # noqa: E501
+    ),
+    (
+        "build-fixer",
+        "Analyse le dernier build en échec de Haitam-elh/Leka et dis comment le réparer",
+    ),
+    (
+        "security-review",
+        "Fais une revue de sécurité de l'authentification et des sessions de LEKA (Haitam-elh/Leka)",  # noqa: E501
+    ),
+    (
+        "architecture-analysis",
+        "Quelles sont les dépendances entre les services de LEKA et leurs points faibles ?",
+    ),
+    ("infrastructure-analysis", "Analyse l'infrastructure AWS de LEKA en production"),
+    ("data-analysis", "Quelles données personnelles LEKA stocke-t-il, et où ?"),
+    (
+        "release-analysis",
+        "La dernière release de LEKA est-elle sûre ? Analyse ce qui a été livré depuis hier",
+    ),
+    (
+        "regression-analysis",
+        "Qu'est-ce que la PR #404 de Haitam-elh/Leka peut casser qui marchait ?",
+    ),
+    ("change-impact-analysis", "Quel est l'impact de la PR #402 de Haitam-elh/Leka ?"),
+    (
+        "test-analysis",
+        "Qu'est-ce qu'il faut tester avant de livrer la PR #404 de Haitam-elh/Leka ?",
+    ),
+    (
+        "reliability-analysis",
+        "Quels sont les points de défaillance de l'API de LEKA, et que se passe-t-il quand Redis ou PostgreSQL tombe ? Regarde Haitam-elh/Leka",  # noqa: E501
+    ),
+    (
+        "database-review",
+        "Fais une revue de la base de données de LEKA à partir du code de Haitam-elh/Leka : modèles, migrations Alembic, requêtes",  # noqa: E501
+    ),
+    (
+        "performance-analysis",
+        "Pourquoi la page Historique des intentions de LEKA pourrait-elle devenir lente avec beaucoup d'intentions ? Suis le chemin dans Haitam-elh/Leka",  # noqa: E501
+    ),
+]
+
+
+def test_every_agent_s_test_intention_names_it_first() -> None:
+    found = {d.key: d for d in agent_definitions(settings.agents_dir) if d.kind is Kind.AGENT}
+    entries = {
+        key: SimpleNamespace(definition=d)
+        for key, d in found.items()
+        if d.lifecycle is Lifecycle.ACTIVE
+    }
+    wrong = [
+        (want, plainly_asked(entries, asked_words(text))[0])
+        for want, text in EVERY_AGENT
+        if plainly_asked(entries, asked_words(text))[0][:1] != [want]
+    ]
+    assert wrong == []
+    # Every agent in service, one intention each.
+    assert {want for want, _ in EVERY_AGENT} == set(entries)
