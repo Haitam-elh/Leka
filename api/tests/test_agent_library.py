@@ -31,7 +31,7 @@ from leka.knowledge import EntityType
 
 VERSIONS = {
     "architecture-analysis": "1.3.0",
-    "build-fixer": "1.2.0",
+    "build-fixer": "1.3.0",
     "code-review": "1.4.0",
     "data-analysis": "1.4.0",
     "debug-assistant": "1.4.1",
@@ -47,6 +47,7 @@ VERSIONS = {
 CODE_READ = {
     "code-review": {"list_pull_requests", "read_pull_request"},
     "documentation-assistant": {"list_files", "read_file"},
+    "build-fixer": {"list_pull_requests", "read_pull_request", "read_file"},
 }
 NOTICES = (settings.agents_dir.parent / "THIRD_PARTY_LICENSES.md").read_text(encoding="utf-8")
 
@@ -447,6 +448,11 @@ def test_the_build_fixer_proposes_the_smallest_fix() -> None:
     assert "Pas de refonte, pas" in said
     # 2026-10-18: never green at any price.
     assert "Jamais vert à tout prix" in said
+    # 2026-10-24, tested on leka-core: « the last failed build » unknown
+    # while two pull requests had a red check, a merge of two weeks before
+    # as a suspect, « LEKA-390 » in the deliverable.
+    assert "**Les contrôles des pull requests sont des builds.**" in said
+    assert "LEKA-390" not in said
     assert credited("build-fixer", "affaan-m/ECC", "msitarzewski/agency-agents")
 
 
