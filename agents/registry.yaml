@@ -84,7 +84,7 @@ agents:
 
   - path: development/regression-analysis/SKILL.md
     name: regression-analysis
-    version: 1.1.0
+    version: 1.2.0
     status: active
 
   - path: development/release-analysis/SKILL.md
