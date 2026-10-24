@@ -149,7 +149,7 @@ agents:
 
   - path: incident/reliability-analysis/SKILL.md
     name: reliability-analysis
-    version: 1.0.0
+    version: 1.1.0
     status: active
 
   - path: infrastructure/infrastructure-analysis/SKILL.md

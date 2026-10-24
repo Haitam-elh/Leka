@@ -824,7 +824,7 @@ def test_the_reliability_analysis_measures_and_hunts_hidden_failures() -> None:
     assert (d.kind, d.lifecycle, d.version, d.mode) == (
         Kind.AGENT,
         Lifecycle.ACTIVE,
-        "1.0.0",
+        "1.1.0",
         "read_only",
     )
     assert set(d.tools) == {
@@ -866,6 +866,13 @@ def test_the_reliability_analysis_measures_and_hunts_hidden_failures() -> None:
         "ni test de charge",
     ):
         assert rule.lower() in said.lower(), rule
+    # 2026-10-23, tested on leka-core: a logged and retried error called
+    # swallowed, with a narrower except recommended; a job timeout and a
+    # pool pre-ping missed; « not read » beside « the code does not handle ».
+    said = d.instructions or ""
+    assert "n'est **pas**\n   avalée" in said and "ne recommande jamais de\n   la resserrer" in said
+    assert "« non\n   lu » et « le code ne gère pas » ne vont jamais ensemble" in said
+    assert "Jamais le nom d'un outil ou d'une compétence" in said
     assert credited(
         "reliability-analysis", "msitarzewski/agency-agents", "garrytan/gstack", "affaan-m/ECC"
     )
