@@ -40,13 +40,14 @@ VERSIONS = {
     "infrastructure-analysis": "1.3.0",
     "release-analysis": "1.3.0",
     "security-review": "1.4.1",
-    "test-analysis": "1.3.0",
+    "test-analysis": "1.4.0",
 }
 # The code an agent may read, beside the runtime's tools: the code review its
 # pull requests, the documentation assistant its files (2026-10-18).
 CODE_READ = {
     "code-review": {"list_pull_requests", "read_pull_request"},
     "documentation-assistant": {"list_files", "read_file"},
+    "test-analysis": {"list_pull_requests", "read_pull_request"},
 }
 NOTICES = (settings.agents_dir.parent / "THIRD_PARTY_LICENSES.md").read_text(encoding="utf-8")
 
@@ -516,6 +517,10 @@ def test_the_test_analysis_plans_by_behaviour() -> None:
     assert "ne dis jamais qu'un test manque" in said
     # 2026-10-18: what a defect would cost, and a flaky test diagnosed.
     assert "Le coût d'un défaut qui passe" in said and "Ce qui clignote" in said
+    # 2026-10-24, tested on leka-core: the PR named was never read — its
+    # diff « not provided » —, a plan made from its title, a commit taken
+    # for a risk zone by its words.
+    assert "**La pull request nommée se lit**" in said and "jamais sur un titre" in said
     assert credited(
         "test-analysis", "affaan-m/ECC", "garrytan/gstack", "msitarzewski/agency-agents"
     )
