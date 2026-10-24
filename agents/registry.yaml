@@ -49,7 +49,7 @@ agents:
 
   - path: data/data-analysis/SKILL.md
     name: data-analysis
-    version: 1.3.0
+    version: 1.4.0
     status: active
 
   - path: data/database-review/SKILL.md
