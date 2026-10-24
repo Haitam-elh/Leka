@@ -21,7 +21,12 @@ import { makeQueryClient } from "@/lib/query";
 const state = vi.hoisted(() => ({
   plan: "starter" as string | null,
   permissions: ["workspace:read", "workspace:update"],
-  subscription: { status: null as string | null, launch_offer_available: true, available: true },
+  subscription: {
+    status: null as string | null,
+    launch_offer_available: true,
+    available: true,
+    interval: null as string | null,
+  },
   checkout: vi.fn(),
   portal: vi.fn(),
 }));
@@ -107,7 +112,7 @@ const { PlansPage } = await import("@/components/billing/plans-page");
 afterEach(() => {
   state.plan = "starter";
   state.permissions = ["workspace:read", "workspace:update"];
-  state.subscription = { status: null, launch_offer_available: true, available: true };
+  state.subscription = { status: null, launch_offer_available: true, available: true, interval: null };
   state.checkout.mockReset();
   state.portal.mockReset();
 });
@@ -159,7 +164,7 @@ describe("the plans compared", () => {
   });
 
   it("the launch offer already used: the list price, said so nowhere", () => {
-    state.subscription = { status: null, launch_offer_available: false, available: true };
+    state.subscription = { status: null, launch_offer_available: false, available: true, interval: null };
     show();
     expect(within(card("growth")).getByTestId("plan-price")).toHaveTextContent("179 €");
     expect(screen.queryByTestId("plans-launch")).not.toBeInTheDocument();
@@ -181,7 +186,7 @@ describe("the plans compared", () => {
   });
 
   it("subscribed: the exact plan chosen, confirmed in Stripe — Free its end (LEKA-490)", async () => {
-    state.subscription = { status: "active", launch_offer_available: false, available: true };
+    state.subscription = { status: "active", launch_offer_available: false, available: true, interval: "month" };
     const user = userEvent.setup();
     show();
     await user.click(within(card("business")).getByTestId("plan-choose"));
@@ -190,6 +195,18 @@ describe("the plans compared", () => {
     expect(state.portal).not.toHaveBeenCalled();
     await user.click(within(card("free")).getByTestId("plan-choose"));
     expect(state.portal).toHaveBeenCalledWith(true, expect.anything());
+  });
+
+  it("subscribed monthly, its own plan bought yearly — never a button greyed out (2026-10-24)", async () => {
+    state.subscription = { status: "active", launch_offer_available: false, available: true, interval: "month" };
+    const user = userEvent.setup();
+    show();
+    expect(within(card("starter")).getByTestId("plan-current-action")).toBeDisabled();
+    await user.click(screen.getByTestId("plans-year"));
+    const yearly = within(card("starter")).getByTestId("plan-switch-interval");
+    expect(yearly).toHaveTextContent("Passer à l'annuel");
+    await user.click(yearly);
+    expect(state.checkout).toHaveBeenCalledWith({ plan: "starter", interval: "year" }, expect.anything());
   });
 
   it("a card is chosen, never stuck on « Votre formule »: its price and how often it is billed said", async () => {

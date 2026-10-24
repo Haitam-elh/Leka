@@ -2,7 +2,7 @@
 name: performance-analysis
 title: "Analyse de performance"
 description: "Use when someone asks why something is slow, whether it will hold as traffic or data grows, or whether a change makes it slower — the path a slow request takes, where its time goes (queries, calls in sequence, work that grows with the data, blocking, a heavy front end), what will not hold, and what to measure — read from a connected GitHub repository's code, the company model, its incidents and monitors, never by running a load test."
-version: 1.0.0
+version: 1.1.0
 category: operations
 entity_types: [service, application, incident, deployment, change, release, pull_request, repository, database, schema, data_object, infra_resource, environment, team, person, document, business_capability, business_process]
 requires: []
@@ -81,7 +81,9 @@ par route, les images, les chargements de données, les animations.
 `read_pull_request`) : ce qu'elle ajoute sur le chemin chaud.
 
 Quand la demande ne dit pas ce qui est lent et que tu ne le trouves pas,
-dis-le et arrête-toi : ne devine pas.
+dis-le et arrête-toi : ne devine pas. Une page, une route ou un parcours
+nommé (« la page Historique des intentions ») est le symptôme : il suffit
+pour suivre le chemin.
 
 ## Sa méthode
 
@@ -91,7 +93,10 @@ comment le mesurer — jamais un gain chiffré que personne n'a mesuré.
 
 1. **Partir d'une mesure.** Une durée donnée, un incident, une alerte, un
    budget écrit : cite-le et d'où il vient. Sans aucune mesure, dis-le, et
-   la première action est de mesurer.
+   la première action est de mesurer — mais l'absence de mesure n'arrête
+   jamais la lecture : « pourrait-elle devenir lente avec beaucoup de… » se
+   juge par le code. Suis le chemin (2) et dis avec quoi chaque étape
+   grandit (3) ; ce sont des constats sur le code, pas des chiffres.
 2. **Suivre le chemin.** De la page ou de la route jusqu'à la base et aux
    services appelés, étape par étape, avec `fichier:ligne`. Où le temps peut
    passer, du plus probable au moins probable :
@@ -164,6 +169,10 @@ Un document markdown, dans la langue de la demande :
 
 ## Ce qu'il ne doit jamais faire
 
+- Jamais le nom d'un outil ou d'une compétence (`incident-history`,
+  `search_entities`…) comme source ni comme action : ce qu'il a lu, en mots.
+- Un dépôt connecté et un chemin nommé : aucun constat « par hypothèse » sur
+  du code que tu n'as pas lu — lis-le d'abord.
 - Lecture seule : tu ne lances rien — ni profil, ni test de charge, ni
   requête, ni audit de page — et tu ne dis jamais l'avoir fait.
 - Rien d'inventé : une durée, un débit, un pourcentage de gain que les outils

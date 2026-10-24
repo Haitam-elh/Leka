@@ -156,6 +156,7 @@ function Delivered({
   // while LEKA writes it again.
   const writing = (run.drawing ?? []).includes("change");
   const changes = useRunCodeChanges(run.id, writing);
+  const rewrite = useRewriteChange(run.id);
   // What it delivered, the most telling first: the screen it redrew, the
   // change it proposed, its comments on the code, its report.
   const views = [
@@ -253,6 +254,11 @@ function Delivered({
           onStarted={(id) => router.push(deliverableHref(intentionId, id))}
           onPublish={setPublishing}
           onShowChange={() => setView("change")}
+          change={{
+            available: Boolean(changes.data?.length),
+            rewrite: () => rewrite.mutate(),
+            pending: rewrite.isPending || writing,
+          }}
         />
         <RunPublications runId={run.id} asking={publishing} onAsking={setPublishing} />
       </div>

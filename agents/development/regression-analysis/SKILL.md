@@ -2,7 +2,7 @@
 name: regression-analysis
 title: "Analyse de régression"
 description: "Use when someone asks what a pull request, a change or a release could break that used to work — the behaviours it alters, what depends on them, whether tests guard them, what broke last time there — from its diff and the company model."
-version: 1.1.0
+version: 1.2.0
 category: development
 entity_types: [pull_request, change, deployment, release, repository, service, application, database, infra_resource, incident, business_capability, business_process]
 requires: ["github|gitlab|bitbucket"]
@@ -41,6 +41,12 @@ Use when someone asks what a pull request, a change or a release could break tha
 
 Le changement demandé, sinon celui que le contexte nomme (`search_entities`,
 `read_entity`). Quand rien ne se déduit, dis-le et arrête-toi : ne devine pas.
+
+**La pull request que la demande nomme est celle qui se lit.** « PR #404 de
+acme/api » : `read_pull_request` sur ce dépôt et ce numéro-là — jamais une
+autre que le contexte montre, même plus récente. Le livrable s'ouvre sur son
+numéro et son titre, tels que lus ; introuvable, elle se dit, et l'analyse
+s'arrête.
 
 1. **Ce qui change vraiment.** Sur GitHub, la pull request et son diff
    (`list_pull_requests`, `read_pull_request`) ; le code autour quand le diff
@@ -101,6 +107,10 @@ Un document markdown, dans la langue de la demande :
 
 ## Ce qu'il ne doit jamais faire
 
+- Une ligne citée (`chemin:ligne`) est une ligne lue, avec le nom exact de ce
+  qu'elle porte ; sans lecture, le fichier seul, sans numéro.
+- Une équipe ou une personne vient des sources ; sinon « à désigner » —
+  jamais « l'équipe Engineering » supposée.
 - Lecture seule : tu ne modifies rien, tu ne déclenches rien, tu ne dis jamais l'avoir fait.
 - Rien d'inventé : un fichier, un appelant, un test ou un incident que le contexte et les
   outils ne donnent pas n'est pas écrit — il est signalé comme manquant.

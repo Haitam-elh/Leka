@@ -129,6 +129,22 @@ export function PlansPage() {
 
   function action(plan: PricedPlan) {
     const key = plan.key as PlanKey;
+    // Its plan billed the other way — monthly, now yearly — is a change it
+    // may buy (2026-10-24: the yearly one could never be chosen).
+    const otherwise = subscribed && said?.interval != null && said.interval !== interval;
+    if (key === current && pays && otherwise && plan.quotes.some((q) => q.interval === interval)) {
+      return (
+        <Button
+          type="button"
+          className="w-full"
+          disabled={checkout.isPending || portal.isPending}
+          onClick={() => checkout.mutate({ plan: plan.key, interval }, { onError: failed })}
+          data-testid="plan-switch-interval"
+        >
+          {interval === "year" ? w.toYearly : w.toMonthly}
+        </Button>
+      );
+    }
     if (key === current) {
       return (
         <Button type="button" variant="outline" className="w-full" disabled data-testid="plan-current-action">
