@@ -145,9 +145,9 @@ class FakeStripe:
             return httpx.Response(200, json={"id": "bpc_1"})
         if request.method == "POST" and path.startswith("/v1/billing_portal/configurations/"):
             # Its plans' prices given again, every price sold now (2026-10-24).
-            found = next(p for p in self.portals if p["id"] == path.rsplit("/", 1)[-1])
-            found["features"] = {"subscription_update": {"products": _products(body)}}
-            return httpx.Response(200, json={"id": found["id"]})
+            portal = next(p for p in self.portals if p["id"] == path.rsplit("/", 1)[-1])
+            portal["features"] = {"subscription_update": {"products": _products(body)}}
+            return httpx.Response(200, json={"id": portal["id"]})
         if request.method == "POST" and path == "/v1/billing_portal/sessions":
             return httpx.Response(200, json={"url": "https://billing.stripe.test/p_1"})
         if request.method == "GET" and path.startswith("/v1/subscriptions/"):
