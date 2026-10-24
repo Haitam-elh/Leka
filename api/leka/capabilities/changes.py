@@ -574,6 +574,7 @@ async def propose_change(
     *,
     read: Mapping[str, str] | None = None,
     budget: float = CHANGE_BUDGET,
+    target: Mapping[str, object] | None = None,
 ) -> Proposed:
     """The change a run's analysis proposes, applied, diffed and kept:
 
@@ -581,7 +582,10 @@ async def propose_change(
        again — no model asked again;
     2. else the model, given the analysis and the files the agent read — or,
        none kept, the files the analysis names, read again;
-    3. the model failing, what of its own diff did land."""
+    3. the model failing, what of its own diff did land.
+
+    Implementing a design review's direction (`target`, mockups.design_target):
+    the writer is given its mock-up too (2026-10-24)."""
     found = await _repository_of(session, run, analysis)
     from_diff: tuple[list[dict[str, object]], list[dict[str, str]]] = ([], [])
     base = ""
@@ -616,7 +620,12 @@ async def propose_change(
                     read[f"{repository}:{path}"] = text
     request = Request(
         purpose=f"agent:{definition.key}:change"[:100],
-        messages=change_messages(definition, run.inputs, analysis, read),
+        messages=change_messages(
+            definition,
+            {**run.inputs, "maquette": target} if target else run.inputs,
+            analysis,
+            read,
+        ),
         tier=Tier.DEEP,
         max_tokens=CHANGE_TOKENS,
         ref=f"agent_run:{run.id}",
@@ -874,6 +883,12 @@ def before_of(path: str, after: str | None, diff: str) -> tuple[str | None, bool
     return before, before is not None
 
 
+# The ids an analysis cites ([uuid]): LEKA's, never said on GitHub.
+_CITED_ID = re.compile(
+    r"\s*\[[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\]", re.IGNORECASE
+)
+
+
 def body_of(change: CodeChange, *, by: str) -> str:
     files = "\n".join(
         f"- `{f['path']}` ({f['status']}, +{f['additions']} -{f['deletions']})"
@@ -881,7 +896,7 @@ def body_of(change: CodeChange, *, by: str) -> str:
         for f in change.files
     )
     return (
-        f"{change.summary}\n\n### Fichiers\n{files}\n\n---\n"
+        f"{_CITED_ID.sub('', change.summary)}\n\n### Fichiers\n{files}\n\n---\n"
         f"Proposée par LEKA, acceptée par {by}. "
         "LEKA ouvre la pull request ; la relire et la fusionner reste votre décision. "
         "Fusionnée, LEKA suit son déploiement."

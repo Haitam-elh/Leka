@@ -34,7 +34,7 @@ from leka.capabilities.changes import propose_change
 from leka.capabilities.definition import Definition
 from leka.capabilities.deliverables import MEDIA_TYPES, ArchitectureDeck, render
 from leka.capabilities.gateway import Gateway, Message, NoModelError, Request, Tier
-from leka.capabilities.mockups import propose_design, proposes
+from leka.capabilities.mockups import design_target, propose_design, proposes
 from leka.capabilities.models import AgentRun
 from leka.capabilities.runtime import filled, parameters_of
 from leka.platform import ObjectStoreError, Workspace, from_bytes, object_store
@@ -183,7 +183,14 @@ async def draw(
             )
         return Drawn([], usage=designed.usage, step="designed", kept=designed.kept)
     if definition.renders == "code_change":
-        proposed = await propose_change(session, run, definition, analysis, read=read or {})
+        proposed = await propose_change(
+            session,
+            run,
+            definition,
+            analysis,
+            read=read or {},
+            target=await design_target(session, run),
+        )
         if proposed.change is None:
             return Drawn(
                 [],
