@@ -7410,6 +7410,7 @@ const fr = {
       /** What comes next. */
       next: {
         answer: "Répondez aux questions de LEKA.",
+        clarify: "Précisez votre demande : nommez ce sur quoi elle porte.",
         wait: "LEKA s'en charge : cette page se met à jour toute seule.",
         resume: "Relancez l'analyse quand vous voulez.",
         analyse_again: "Relancez l'analyse.",
@@ -7441,6 +7442,7 @@ const fr = {
         resume: "Reprendre l'analyse",
         analyse_again: "Relancer l'analyse",
         answer: "Répondre",
+        clarify: "Préciser ma demande",
         decide: "Décider",
         modify_decision: "Modifier la décision",
         start_actions: "Lancer les actions",
@@ -16004,6 +16006,7 @@ const en: Dictionary = {
       },
       next: {
         answer: "Answer LEKA's questions.",
+        clarify: "Make your request precise: name what it is about.",
         wait: "LEKA is on it: this page updates by itself.",
         resume: "Start the analysis again whenever you want.",
         analyse_again: "Run the analysis again.",
@@ -16035,6 +16038,7 @@ const en: Dictionary = {
         resume: "Resume the analysis",
         analyse_again: "Run the analysis again",
         answer: "Answer",
+        clarify: "Clarify my request",
         decide: "Decide",
         modify_decision: "Change the decision",
         start_actions: "Start the actions",

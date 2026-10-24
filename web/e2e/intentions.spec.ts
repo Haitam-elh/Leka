@@ -131,11 +131,16 @@ test.describe("Intentions", () => {
     const { intention } = (await response.json()) as { intention: { id: string; status: string } };
     expect(intention.status).toBe("needs_clarification");
 
-    await page.goto(`/intentions/${intention.id}/overview`);
+    // « Répondre », from another step: its questions, in sight (2026-10-24:
+    // it led to the page it was on).
+    await page.goto(`/intentions/${intention.id}/history`);
     await expect(page.getByTestId("intention-status")).toContainText("Clarification requise");
+    await page.getByTestId("journey-next").click();
+    await expect(page).toHaveURL(new RegExp(`/intentions/${intention.id}/overview#brief-questions$`));
     const question = page.locator(
       '[data-testid="brief-question"][data-kind="action_without_target"]',
     );
+    await expect(page.locator("#brief-questions")).toBeInViewport();
     await question.getByTestId("brief-words").fill("payment-api");
     await question.getByTestId("brief-send").click();
     await expect(page.getByTestId("intention-status")).toContainText("Prête à analyser");

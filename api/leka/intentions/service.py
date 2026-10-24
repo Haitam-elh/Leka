@@ -194,6 +194,7 @@ def facts_of(
         version=intention.version or 1,
         changed_at=intention.status_changed_at,
         archived=intention.archived_at is not None,
+        asks=understood is None or not understood.clear,
         last=(
             LastMove(
                 name=last.name or "",
