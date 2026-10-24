@@ -134,7 +134,7 @@ agents:
 
   - path: incident/change-impact-analysis/SKILL.md
     name: change-impact-analysis
-    version: 1.1.0
+    version: 1.2.0
     status: active
 
   - path: incident/correlate-deploy-with-latency/SKILL.md
