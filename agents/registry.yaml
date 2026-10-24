@@ -29,7 +29,7 @@ agents:
 
   - path: architecture/architecture-analysis/SKILL.md
     name: architecture-analysis
-    version: 1.3.0
+    version: 1.4.0
     status: active
 
   - path: architecture/migration-planning/SKILL.md
