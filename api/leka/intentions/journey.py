@@ -176,6 +176,9 @@ class Facts:
     # Whether it asks for something to be done on systems: a decision, then
     # actions. A question answered stops at its results.
     acting: bool = True
+    # Whether its words still leave a question to answer — or only its
+    # context is in the way, and its request is to make precise.
+    asks: bool = True
 
 
 # ── what it says ────────────────────────────────────────────────────────────
@@ -361,11 +364,17 @@ def journey(facts: Facts, now: datetime) -> Journey:
     if status == S.CANCELLED:
         return said(J.CANCELLED, "by_person", "nothing", None, {ARCHIVE})
     if status == S.NEEDS_CLARIFICATION:
-        blocked = last is not None and "critical" in last.detail
+        # Its context in the way, not its words: what is critical said, no
+        # question of its words — every move says its readiness, a question
+        # left too (2026-10-24: a request to make precise was said blocked).
+        blocked = (
+            last is not None and "critical" in last.detail and not last.detail.get("ambiguities")
+        )
         return said(
             J.NEEDS_CLARIFICATION,
             "context_blocked" if blocked else "unclear",
-            "answer",
+            # Nothing to answer: its request is made precise, asked again.
+            "answer" if facts.asks else "clarify",
             ASKER,
             set(),
         )

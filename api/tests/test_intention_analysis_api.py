@@ -278,8 +278,11 @@ async def test_an_action_its_context_cannot_ground_is_asked_to_be_clarified(
         [],
     )
     assert analysis["detail"]["critical"][0]["kind"] == "competing"
-    # Never left analysing: the person is asked to clarify, told why.
-    assert (await _get(client, f"/{intention['id']}"))["status"] == "needs_clarification"
+    # Never left analysing: the person is asked to clarify, told why — and,
+    # with nothing to answer, to make the request precise.
+    page = await _get(client, f"/{intention['id']}")
+    assert page["status"] == "needs_clarification"
+    assert (page["journey"]["reason"], page["journey"]["next"]) == ("context_blocked", "clarify")
 
 
 # ── failures ─────────────────────────────────────────────────────────────────
