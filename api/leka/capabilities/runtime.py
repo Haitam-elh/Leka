@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import enum
 import json
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -256,6 +257,17 @@ tools read the company model LEKA builds from them — documentation \
 Linear…), databases, cloud and monitoring. Search them as the instructions \
 search Confluence: by the journey's and the perimeter's words, then by each \
 brick found.
+- When a code repository is connected, read the journey in its code before \
+you draw (list_files, then read_file): the pages and API routes it goes \
+through, the services, jobs and queues they call, the data they write, the \
+external systems they reach. Name each brick as the code names it, with its \
+path.
+- A brick, a flow or a rule is « Existant » or « Documenté » only when a source \
+you read shows it — a file (its path), a document or a thing of the model \
+([id]). Anything else is orange « À confirmer ». Never a generic brick no \
+source names (« Module d'analyse », « Bus d'événements », « Middleware »).
+- Write no parameter as {{…}}: the values are filled in above, and one left \
+empty is left out with its separator.
 - Where a source the instructions name (Confluence, SharePoint, the directory \
 files) is not connected or holds nothing on the journey, work from what is \
 connected, and say it: a row in « Sources consultées et limites » with « NON \
@@ -306,6 +318,49 @@ one pull request, needs no mock-up.""",
 }
 
 
+# An agent's parameters as its instructions write them — {{ORGANISATION}},
+# {{ESPACES_CONFLUENCE}}… — filled by LEKA before the model reads them
+# (2026-10-23: they reached the architect's deck as written).
+PARAMETER = re.compile(r"\{\{([A-Z_]+)\}\}")
+# One left empty, with the dash that joined it: « LEKA - {{ENTITE}} » → « LEKA ».
+_EMPTY_AFTER = r"\s*[\u2013-]\s*\{{\{{{name}\}}\}}"
+
+
+def parameters_of(inputs: Mapping[str, object], organisation: str | None) -> dict[str, str]:
+    """What LEKA knows of the parameters an agent's instructions name: what
+    the request says, the workspace, and where LEKA reads — never invented;
+    one it does not know is left empty, to be left out."""
+
+    def said(key: str) -> str:
+        value = inputs.get(key)
+        return value.strip() if isinstance(value, str) else ""
+
+    return {
+        "ORGANISATION": said("organisation") or (organisation or ""),
+        "ENTITE": said("entite"),
+        "SERVICE": said("service"),
+        "COULEUR_PRINCIPALE": "#1F3864",
+        "GABARIT_REFERENCE": "le gabarit décrit au §5",
+        "ESPACES_CONFLUENCE": "les espaces Confluence connectés à LEKA",
+        "SITES_SHAREPOINT": "les sites SharePoint connectés à LEKA (Microsoft 365)",
+        "ANNUAIRE_CONTACTS": "les personnes et les équipes que le modèle de l'entreprise LEKA "
+        "connaît (search_entities, read_entity)",
+        "REFERENTIEL_APPLICATIF": "le modèle de l'entreprise LEKA : applications, services, "
+        "dépôts, bases",
+        "DOMAINES_INTERNES": "les domaines des adresses des personnes de l'organisation",
+        "SEUIL_FRAICHEUR": "12 mois",
+    }
+
+
+def filled(text: str, parameters: Mapping[str, str]) -> str:
+    """The instructions with each parameter's value; an empty one goes
+    with the dash before it, any other left unknown goes."""
+    for name, value in parameters.items():
+        if not value:
+            text = re.sub(_EMPTY_AFTER.format(name=name), "", text)
+    return PARAMETER.sub(lambda m: parameters.get(m.group(1), ""), text)
+
+
 # What frames every markdown deliverable but the architect's deck, whose
 # order is the deck's (Karim, 2026-10-23: « pas que du texte d'analyse — un
 # résumé et un plan d'action concret et exécutable »).
@@ -342,6 +397,7 @@ def messages(
     *,
     tools: Sequence[AgentTool] = (),
     language: str | None = None,
+    organisation: str | None = None,
 ) -> list[Message]:
     """What the model is given: the runtime's rules, then the agent's
     instructions; what it is asked with and its context, as data. In the
@@ -359,7 +415,10 @@ def messages(
             else "in the language of the inputs."
         ),
     )
-    system = f"{rules}\n\n---\n\n{definition.instructions or ''}"
+    instructions = definition.instructions or ""
+    if PARAMETER.search(instructions):
+        instructions = filled(instructions, parameters_of(inputs, organisation))
+    system = f"{rules}\n\n---\n\n{instructions}"
     if definition.renders in RENDER_NOTES:
         system = f"{system}\n\n{RENDER_NOTES[definition.renders]}"
     if framed(definition):

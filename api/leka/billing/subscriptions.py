@@ -55,7 +55,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from leka.billing.catalogue import Catalogue, Interval, Plan, Quote, catalogue, quote
 from leka.billing.models import BillingAccount, StripeEvent
 from leka.billing.stripe import SignatureError, Stripe, StripeError, verify
-from leka.billing.sync import coupon_id, lookup_key, portal_configuration
+from leka.billing.sync import (
+    coupon_id,
+    ensure_coupon,
+    ensure_plan_price,
+    ensure_portal,
+    portal_configuration,
+)
 from leka.core.config import settings
 from leka.db import session_factory, system_scope, workspace_scope
 from leka.governance import plan_of, set_plan
@@ -121,16 +127,6 @@ def launch_eligible(
 class Checkout:
     url: str
     quote: Quote | None
-
-
-async def _price(client: Stripe, key: str) -> str:
-    found = await client.get("/v1/prices", [("lookup_keys[]", key), ("active", "true")])
-    data = found.get("data") or []
-    if not data:
-        raise CheckoutRefusedError(
-            "not_synced", "This price is not in Stripe yet: run the catalogue sync."
-        )
-    return str(data[0]["id"])
 
 
 async def _customer(client: Stripe, account: BillingAccount) -> str:
@@ -225,7 +221,11 @@ async def checkout(
     # Once a workspace, like the launch offer: never subscribed before.
     trial = bool(plan.trial_days) and not account.launch_offer_used
     priced = quote(plan, interval, offer, today=today, launch=launch, trial=trial)
-    price = await _price(client, lookup_key(plan, interval, offer, today=today))
+    # Made in Stripe when the catalogue changed since the last sync
+    # (2026-10-24: no yearly price after the annual discount went to 30 %).
+    price, _ = await ensure_plan_price(client, plan, interval, offer, today=today)
+    if launch:
+        await ensure_coupon(client, offer)
     customer = await _customer(client, account)
     marks = {
         "workspace_id": str(workspace_id),
@@ -282,7 +282,10 @@ async def _change(
     changes only with its event. The same plan and interval: refused."""
     if account.plan == plan.key and account.interval == interval:
         raise CheckoutRefusedError("same_plan", "Already on this plan.")
-    price = await _price(client, lookup_key(plan, interval, offer, today=today))
+    price, _ = await ensure_plan_price(client, plan, interval, offer, today=today)
+    # The portal confirms only a change to a price it lists: given every
+    # price sold now (2026-10-24: monthly to yearly was refused).
+    configuration, _ = await ensure_portal(client, offer, today=today)
     subscription = await client.get(f"/v1/subscriptions/{account.stripe_subscription_id}")
     items = (subscription.get("items") or {}).get("data") or []
     if not items:
@@ -292,7 +295,7 @@ async def _change(
         {
             "customer": account.stripe_customer_id,
             "return_url": f"{settings.web_url}/billing/plans",
-            "configuration": await portal_configuration(client),
+            "configuration": configuration,
             "locale": locale,
             "flow_data": {
                 "type": "subscription_update_confirm",

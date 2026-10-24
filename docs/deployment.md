@@ -643,7 +643,13 @@ dc exec api python -m leka.billing.cli stripe-sync
 ```
 
 It creates the products, prices, the launch coupon and the customer portal's
-settings that are missing, and prints them. The webhook endpoint, its events
+settings that are missing, and prints them. Since 2026-10-24 a checkout no
+longer depends on it: a plan's or an agent's price the catalogue changed since
+the last sync — the annual discount went from 20 % to 30 %, and no yearly plan
+could be bought — is made in Stripe when it is bought, the launch coupon too,
+and the portal is given every price sold before a subscriber's change
+(`billing/sync.py`: `ensure_plan_price`, `ensure_add_on_price`,
+`ensure_coupon`, `ensure_portal`). The webhook endpoint, its events
 and the test-to-live steps: [pricing.md](pricing.md) § 7.
 
 ## Agent and skill suggestions (LEKA-501)

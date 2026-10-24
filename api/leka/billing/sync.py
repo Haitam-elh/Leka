@@ -115,136 +115,185 @@ async def portal_configuration(stripe: Stripe) -> str | None:
     return None
 
 
-async def sync(stripe: Stripe, offer: Catalogue, *, today: date) -> Synced:
-    """Every product, price and the coupon the catalogue needs, in this
-    Stripe account — those missing created."""
-    created: list[str] = []
-    prices: dict[str, str] = {}
-    for plan in {p for p, _ in sold(offer)}:
-        try:
-            await stripe.get(f"/v1/products/{product_id(plan.key)}")
-        except StripeError as error:
-            if error.status != 404:
-                raise
-            await stripe.post(
-                "/v1/products",
-                {
-                    "id": product_id(plan.key),
-                    "name": f"LEKA CORE {plan.name}",
-                    "description": plan.value.en,
-                    "metadata": {"leka_plan": plan.key},
-                },
-            )
-            created.append(product_id(plan.key))
-    for plan, interval in sold(offer):
-        key = lookup_key(plan, interval, offer, today=today)
-        found = await stripe.get("/v1/prices", [("lookup_keys[]", key), ("active", "true")])
-        if found.get("data"):
-            prices[key] = str(found["data"][0]["id"])
-            continue
-        made = await stripe.post(
-            "/v1/prices",
-            {
-                "product": product_id(plan.key),
-                "currency": offer.currency.lower(),
-                "unit_amount": unit_amount(plan, interval, offer, today=today),
-                "recurring": {"interval": interval},
-                "lookup_key": key,
-                "tax_behavior": "exclusive",
-                "metadata": {"leka_plan": plan.key, "leka_interval": interval},
-            },
-        )
-        prices[key] = str(made["id"])
-        created.append(key)
-    for kind, key, name, cents in sold_add_ons(offer):
-        product = add_on_product_id(kind, key)
-        try:
-            await stripe.get(f"/v1/products/{product}")
-        except StripeError as error:
-            if error.status != 404:
-                raise
-            await stripe.post(
-                "/v1/products",
-                {
-                    "id": product,
-                    "name": f"LEKA — {name}",
-                    "metadata": {"leka_add_on_kind": kind, "leka_add_on_key": key},
-                },
-            )
-            created.append(product)
-        price_key = add_on_lookup_key(kind, key, cents)
-        found = await stripe.get("/v1/prices", [("lookup_keys[]", price_key), ("active", "true")])
-        if found.get("data"):
-            prices[price_key] = str(found["data"][0]["id"])
-            continue
-        made = await stripe.post(
-            "/v1/prices",
-            {
-                "product": product,
-                "currency": offer.currency.lower(),
-                "unit_amount": cents,
-                "recurring": {"interval": "month"},
-                "lookup_key": price_key,
-                "tax_behavior": "exclusive",
-                "metadata": {"leka_add_on_kind": kind, "leka_add_on_key": key},
-            },
-        )
-        prices[price_key] = str(made["id"])
-        created.append(price_key)
-    coupon = coupon_id(offer)
+async def _product(stripe: Stripe, product: str, fields: dict[str, object]) -> bool:
+    """A Stripe product, made when missing — True when it was made."""
     try:
-        await stripe.get(f"/v1/coupons/{coupon}")
+        await stripe.get(f"/v1/products/{product}")
+        return False
     except StripeError as error:
         if error.status != 404:
             raise
-        launch = offer.launch_offer
-        await stripe.post(
-            "/v1/coupons",
-            {
-                "id": coupon,
-                "name": f"Offre de lancement -{launch.percent} % ({launch.months} mois)",
-                "percent_off": launch.percent,
-                "duration": "repeating",
-                "duration_in_months": launch.months,
-                "applies_to": {"products": sorted({product_id(p.key) for p, _ in sold(offer)})},
-            },
-        )
-        created.append(coupon)
-    # The customer portal: card, invoices, cancellation at the period's end,
-    # a change of plan prorated — the documented policy (docs/pricing.md).
-    portal = await portal_configuration(stripe)
-    if portal is None:
-        plans: dict[str, list[str]] = {}
-        for plan, interval in sold(offer):
-            plans.setdefault(product_id(plan.key), []).append(
-                prices[lookup_key(plan, interval, offer, today=today)]
-            )
+    await stripe.post("/v1/products", {"id": product, **fields})
+    return True
+
+
+async def _price_of(stripe: Stripe, key: str, fields: dict[str, object]) -> tuple[str, bool]:
+    """A Stripe price by its lookup key, made when missing — its id, and
+    whether it was made."""
+    found = await stripe.get("/v1/prices", [("lookup_keys[]", key), ("active", "true")])
+    if found.get("data"):
+        return str(found["data"][0]["id"]), False
+    made = await stripe.post("/v1/prices", {**fields, "lookup_key": key})
+    return str(made["id"]), True
+
+
+async def ensure_plan_price(
+    stripe: Stripe, plan: Plan, interval: Interval, offer: Catalogue, *, today: date
+) -> tuple[str, bool]:
+    """A plan's price for an interval, in Stripe — made, with its product,
+    when the catalogue changed since the last sync (2026-10-24: the annual
+    discount went from 20 % to 30 %, and no yearly price could be bought)."""
+    await _product(
+        stripe,
+        product_id(plan.key),
+        {
+            "name": f"LEKA CORE {plan.name}",
+            "description": plan.value.en,
+            "metadata": {"leka_plan": plan.key},
+        },
+    )
+    return await _price_of(
+        stripe,
+        lookup_key(plan, interval, offer, today=today),
+        {
+            "product": product_id(plan.key),
+            "currency": offer.currency.lower(),
+            "unit_amount": unit_amount(plan, interval, offer, today=today),
+            "recurring": {"interval": interval},
+            "tax_behavior": "exclusive",
+            "metadata": {"leka_plan": plan.key, "leka_interval": interval},
+        },
+    )
+
+
+async def ensure_add_on_price(
+    stripe: Stripe, kind: str, key: str, name: str, cents: int, offer: Catalogue
+) -> tuple[str, bool]:
+    """An agent's or a bundle's monthly price, in Stripe — made, with its
+    product, when it was put on sale since the last sync."""
+    product = add_on_product_id(kind, key)
+    await _product(
+        stripe,
+        product,
+        {"name": f"LEKA — {name}", "metadata": {"leka_add_on_kind": kind, "leka_add_on_key": key}},
+    )
+    return await _price_of(
+        stripe,
+        add_on_lookup_key(kind, key, cents),
+        {
+            "product": product,
+            "currency": offer.currency.lower(),
+            "unit_amount": cents,
+            "recurring": {"interval": "month"},
+            "tax_behavior": "exclusive",
+            "metadata": {"leka_add_on_kind": kind, "leka_add_on_key": key},
+        },
+    )
+
+
+async def ensure_coupon(stripe: Stripe, offer: Catalogue) -> tuple[str, bool]:
+    """The launch offer's coupon, in Stripe — made when missing."""
+    coupon = coupon_id(offer)
+    try:
+        await stripe.get(f"/v1/coupons/{coupon}")
+        return coupon, False
+    except StripeError as error:
+        if error.status != 404:
+            raise
+    launch = offer.launch_offer
+    await stripe.post(
+        "/v1/coupons",
+        {
+            "id": coupon,
+            "name": f"Offre de lancement -{launch.percent} % ({launch.months} mois)",
+            "percent_off": launch.percent,
+            "duration": "repeating",
+            "duration_in_months": launch.months,
+            "applies_to": {"products": sorted({product_id(p.key) for p, _ in sold(offer)})},
+        },
+    )
+    return coupon, True
+
+
+def _portal_features(plans: dict[str, list[str]]) -> dict[str, object]:
+    return {
+        "invoice_history": {"enabled": True},
+        "payment_method_update": {"enabled": True},
+        "customer_update": {
+            "enabled": True,
+            "allowed_updates": ["email", "address", "tax_id"],
+        },
+        "subscription_cancel": {"enabled": True, "mode": "at_period_end"},
+        "subscription_update": {
+            "enabled": True,
+            "default_allowed_updates": ["price"],
+            "proration_behavior": "create_prorations",
+            "products": [
+                {"product": product, "prices": ids} for product, ids in sorted(plans.items())
+            ],
+        },
+    }
+
+
+async def ensure_portal(stripe: Stripe, offer: Catalogue, *, today: date) -> tuple[str, bool]:
+    """The customer portal LEKA sends a subscriber to — card, invoices,
+    cancellation at the period's end, a change of plan prorated — made when
+    missing, and given every price the catalogue sells now: a change to a
+    price it does not list is refused by Stripe (2026-10-24: monthly to
+    yearly, after the annual discount changed)."""
+    plans: dict[str, list[str]] = {}
+    for plan, interval in sold(offer):
+        price, _ = await ensure_plan_price(stripe, plan, interval, offer, today=today)
+        plans.setdefault(product_id(plan.key), []).append(price)
+    found = await stripe.get(
+        "/v1/billing_portal/configurations", [("active", "true"), ("limit", "100")]
+    )
+    mine = next(
+        (c for c in found.get("data") or [] if (c.get("metadata") or {}).get("leka") == PORTAL),
+        None,
+    )
+    if mine is None:
         made = await stripe.post(
             "/v1/billing_portal/configurations",
             {
                 "business_profile": {"headline": "LEKA CORE"},
-                "features": {
-                    "invoice_history": {"enabled": True},
-                    "payment_method_update": {"enabled": True},
-                    "customer_update": {
-                        "enabled": True,
-                        "allowed_updates": ["email", "address", "tax_id"],
-                    },
-                    "subscription_cancel": {"enabled": True, "mode": "at_period_end"},
-                    "subscription_update": {
-                        "enabled": True,
-                        "default_allowed_updates": ["price"],
-                        "proration_behavior": "create_prorations",
-                        "products": [
-                            {"product": product, "prices": ids}
-                            for product, ids in sorted(plans.items())
-                        ],
-                    },
-                },
+                "features": _portal_features(plans),
                 "metadata": {"leka": PORTAL},
             },
         )
-        portal = str(made["id"])
+        return str(made["id"]), True
+    listed = (((mine.get("features") or {}).get("subscription_update") or {}).get("products")) or []
+    allowed = {str(p.get("product")): set(p.get("prices") or []) for p in listed}
+    if all(set(ids) <= allowed.get(product, set()) for product, ids in plans.items()):
+        return str(mine["id"]), False
+    await stripe.post(
+        f"/v1/billing_portal/configurations/{mine['id']}",
+        {"features": {"subscription_update": _portal_features(plans)["subscription_update"]}},
+    )
+    return str(mine["id"]), True
+
+
+async def sync(stripe: Stripe, offer: Catalogue, *, today: date) -> Synced:
+    """Every product, price and the coupon the catalogue needs, in this
+    Stripe account — those missing created, the portal given every price."""
+    created: list[str] = []
+    prices: dict[str, str] = {}
+    for plan, interval in sold(offer):
+        price, made = await ensure_plan_price(stripe, plan, interval, offer, today=today)
+        key = lookup_key(plan, interval, offer, today=today)
+        prices[key] = price
+        if made:
+            created.append(key)
+    for kind, key, name, cents in sold_add_ons(offer):
+        price, made = await ensure_add_on_price(stripe, kind, key, name, cents, offer)
+        prices[add_on_lookup_key(kind, key, cents)] = price
+        if made:
+            created.append(add_on_lookup_key(kind, key, cents))
+    coupon, made = await ensure_coupon(stripe, offer)
+    if made:
+        created.append(coupon)
+    portal, made = await ensure_portal(stripe, offer, today=today)
+    if made:
         created.append("portal")
     return Synced(prices, coupon, created, portal)
 
@@ -255,6 +304,10 @@ __all__ = [
     "add_on_lookup_key",
     "add_on_product_id",
     "coupon_id",
+    "ensure_add_on_price",
+    "ensure_coupon",
+    "ensure_plan_price",
+    "ensure_portal",
     "lookup_key",
     "portal_configuration",
     "product_id",

@@ -60,12 +60,16 @@ export function NextSteps({
   onStarted,
   onPublish,
   onShowChange,
+  change,
 }: {
   run: AgentRunDetail;
   intentionId: string;
   onStarted: (runId: string) => void;
   onPublish: (kind: PublicationKind) => void;
   onShowChange: () => void;
+  /** The agent's own change, when it wrote one; else written again on the
+   * click — never a button that does nothing (2026-10-24). */
+  change?: { available: boolean; rewrite: () => void; pending: boolean };
 }) {
   const t = useDictionary();
   const w = t.intentions.deliverable.next;
@@ -76,7 +80,10 @@ export function NextSteps({
 
   function act(step: NextStep) {
     if (step.kind === "issues" || step.kind === "pages") onPublish(step.kind);
-    else if (step.kind === "change") onShowChange();
+    else if (step.kind === "change") {
+      if (change && !change.available) change.rewrite();
+      else onShowChange();
+    }
     else setWriting(writing === step ? null : step);
   }
 
@@ -115,9 +122,10 @@ export function NextSteps({
                   variant={index === 0 ? "default" : "outline"}
                   aria-expanded={step.kind === "fix" || step.kind === "tests" ? writing === step : undefined}
                   onClick={() => act(step)}
+                  disabled={step.kind === "change" && change?.pending}
                   data-testid={`next-step-${step.kind}`}
                 >
-                  {say(step.title)}
+                  {step.kind === "change" && change && !change.available ? w.rewrite : say(step.title)}
                 </Button>
               </div>
             </li>
