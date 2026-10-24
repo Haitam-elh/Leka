@@ -27,6 +27,7 @@ What these protect:
 from __future__ import annotations
 
 import json
+import re
 import time
 import uuid
 from datetime import UTC, date, datetime
@@ -134,8 +135,19 @@ class FakeStripe:
         if request.method == "GET" and path == "/v1/billing_portal/configurations":
             return httpx.Response(200, json={"data": self.portals})
         if request.method == "POST" and path == "/v1/billing_portal/configurations":
-            self.portals.append({"id": "bpc_1", "metadata": {"leka": body["metadata[leka]"]}})
+            self.portals.append(
+                {
+                    "id": "bpc_1",
+                    "metadata": {"leka": body["metadata[leka]"]},
+                    "features": {"subscription_update": {"products": _products(body)}},
+                }
+            )
             return httpx.Response(200, json={"id": "bpc_1"})
+        if request.method == "POST" and path.startswith("/v1/billing_portal/configurations/"):
+            # Its plans' prices given again, every price sold now (2026-10-24).
+            portal = next(p for p in self.portals if p["id"] == path.rsplit("/", 1)[-1])
+            portal["features"] = {"subscription_update": {"products": _products(body)}}
+            return httpx.Response(200, json={"id": portal["id"]})
         if request.method == "POST" and path == "/v1/billing_portal/sessions":
             return httpx.Response(200, json={"url": "https://billing.stripe.test/p_1"})
         if request.method == "GET" and path.startswith("/v1/subscriptions/"):
@@ -151,6 +163,23 @@ class FakeStripe:
         return Stripe(
             "sk_test_fake", base_url="https://stripe.test", transport=httpx.MockTransport(self)
         )
+
+
+def _products(body: dict[str, str]) -> list[dict[str, Any]]:
+    """The products and prices a portal configuration lists, read back from
+    Stripe's form encoding."""
+    found: dict[str, dict[str, Any]] = {}
+    for name, value in body.items():
+        parts = re.findall(r"\[([^\]]*)\]", name)
+        if "products" not in parts:
+            continue
+        at = parts[parts.index("products") + 1]
+        product = found.setdefault(at, {"product": None, "prices": []})
+        if parts[-1] == "product":
+            product["product"] = value
+        elif "prices" in parts:
+            product["prices"].append(value)
+    return list(found.values())
 
 
 def subscription(
@@ -332,6 +361,61 @@ async def test_checkout_charges_what_the_page_shows_the_launch_offer_once(
 
 
 @pytest.mark.integration
+async def test_a_yearly_plan_the_catalogue_changed_since_the_sync_is_bought_all_the_same(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    stripe: FakeStripe,
+) -> None:
+    """2026-10-24: the annual discount went from 20 % to 30 % after the last
+    sync — no yearly price in Stripe, none in the portal: « impossible
+    d'acheter l'annuel ». The price is made at checkout, and the portal given
+    it before a subscriber's change to it."""
+    await _synced(stripe)
+    yearly = next(k for k in stripe.prices if k.startswith("leka_core_growth_year_"))
+    stripe.prices.pop(yearly)
+    for portal in stripe.portals:
+        for product in portal["features"]["subscription_update"]["products"]:
+            product["prices"] = [p for p in product["prices"] if p.startswith("price_")][:1]
+    _as(identity, acme, "admin")
+    workspace = acme["acme"]
+
+    bought = await client.post(f"{API}/checkout", json={"plan": "growth", "interval": "year"})
+    assert bought.status_code == 200, bought.text
+    assert yearly in stripe.prices
+    [opened] = stripe.posted("/v1/checkout/sessions")
+    assert opened["line_items[0][price]"] == stripe.prices[yearly]
+
+    # Subscribed monthly, then yearly: the portal lists the yearly price.
+    stripe.subscriptions["sub_1"] = subscription("growth", "active")
+    await _deliver(
+        client,
+        _event(
+            "checkout.session.completed",
+            {
+                "id": "cs_1",
+                "mode": "subscription",
+                "subscription": "sub_1",
+                "customer": "cus_1",
+                "client_reference_id": str(workspace),
+            },
+            created=1_800_000_100,
+        ),
+    )
+    changed = await client.post(f"{API}/checkout", json={"plan": "growth", "interval": "year"})
+    assert changed.status_code == 200, changed.text
+    listed = [
+        price
+        for product in stripe.portals[0]["features"]["subscription_update"]["products"]
+        for price in product["prices"]
+    ]
+    assert stripe.prices[yearly] in listed
+    [session] = stripe.posted("/v1/billing_portal/sessions")
+    assert (
+        session["flow_data[subscription_update_confirm][items][0][price]"] == stripe.prices[yearly]
+    )
+
+
 async def test_subscribed_the_chosen_plan_confirmed_in_stripe_never_a_second_subscription(
     client: AsyncClient,
     identity: FakeIdentity,
