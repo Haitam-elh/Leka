@@ -2,7 +2,7 @@
 name: design-review
 title: "Revue de design"
 description: "Use when someone asks whether the interface of an application built from a connected GitHub repository is well designed and feels right — its design system followed, hierarchy, typography, components, animations and their timing, behaviour on a phone, what breaks with real-world data — reviewed as a senior design engineer would, with the exact fix for each finding, read from its front-end code."
-version: 3.1.0
+version: 3.2.0
 category: development
 entity_types: [repository, application, service, pull_request, release, deployment, team, person, document]
 requires: ["github"]
@@ -92,6 +92,11 @@ arrête-toi : ne devine pas.
    - la fréquence : ce qui est vu cent fois par jour (raccourcis clavier,
      palette de commandes, navigation), souvent, parfois, rarement — elle
      décide de la sévérité.
+
+   Le front d'un dépôt se trouve par ses dossiers : quand la liste des
+   fichiers est coupée (`more`), ouvre ceux qu'elle donne (`folders`) — `web/`,
+   `app/`, `frontend/`, `client/`, `src/` — et leur `package.json`. « Aucun
+   code front-end » ne s'écrit qu'après les avoir cherchés, en disant où.
 
    Balayages utiles, dans ce que `list_files` montre puis `read_file` :
    `transition`, `animation`, `@keyframes`, `motion.`, `animate={`,

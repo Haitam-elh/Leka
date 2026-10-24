@@ -269,6 +269,9 @@ async def test_the_architect_runs_end_to_end(
         "queued",
         "started",
         "context",
+        # No repository connected: its reading of the code, said withheld.
+        "tool_withheld",
+        "tool_withheld",
         "tool",
         "tool",
         "tool",
@@ -276,7 +279,7 @@ async def test_the_architect_runs_end_to_end(
         "rendered",
         "succeeded",
     ]
-    rendered = done["events"][7]["detail"]
+    rendered = next(e["detail"] for e in done["events"] if e["kind"] == "rendered")
     slides = len(deck_slides(content))
     assert (rendered["formats"], rendered["slides"]) == (["pptx", "pdf"], slides)
     name = "Architecture applicative - Parcours Paiement CB"
@@ -286,13 +289,14 @@ async def test_the_architect_runs_end_to_end(
     ]
     context = done["events"][2]["detail"]
     assert context["given"] > 0
-    tools = [(e["detail"]["name"], e["detail"]["outcome"]) for e in done["events"][3:6]]
+    called = [e for e in done["events"] if e["kind"] == "tool"]
+    tools = [(e["detail"]["name"], e["detail"]["outcome"]) for e in called]
     assert tools == [
         ("search_entities", "ok"),
         ("read_entity", "refused"),
         ("delete_everything", "unknown"),
     ]
-    assert done["events"][4]["detail"]["why"] == "out_of_scope"
+    assert called[1]["detail"]["why"] == "out_of_scope"
     assert done["usage"]["calls"] == 5
     assert done["usage"]["tokens_in"] == 5000
     # An agent's instructions never leave the server.
@@ -643,6 +647,9 @@ async def test_its_tools_follow_who_asked_and_never_act(
     assert withheld == [
         {"name": "restart_service", "why": "acts"},
         {"name": "read_sources", "why": "not_permitted"},
+        # It names no tools: the code's reading too — no repository here.
+        {"name": "list_files", "why": "no_source"},
+        {"name": "read_file", "why": "no_source"},
     ]
     assert script.declared() == TOOL_NAMES
 

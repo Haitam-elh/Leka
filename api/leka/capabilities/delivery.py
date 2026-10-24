@@ -26,6 +26,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 import structlog
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.capabilities.catalogue import needs_of
@@ -35,7 +36,8 @@ from leka.capabilities.deliverables import MEDIA_TYPES, ArchitectureDeck, render
 from leka.capabilities.gateway import Gateway, Message, NoModelError, Request, Tier
 from leka.capabilities.mockups import propose_design, proposes
 from leka.capabilities.models import AgentRun
-from leka.platform import ObjectStoreError, from_bytes, object_store
+from leka.capabilities.runtime import filled, parameters_of
+from leka.platform import ObjectStoreError, Workspace, from_bytes, object_store
 
 logger = structlog.get_logger(__name__)
 
@@ -75,16 +77,37 @@ Answer with the JSON object only."""
 
 
 def deck_messages(
-    definition: Definition, inputs: Mapping[str, object], analysis: str
+    definition: Definition,
+    inputs: Mapping[str, object],
+    analysis: str,
+    *,
+    organisation: str | None = None,
 ) -> list[Message]:
     """The deck writer's rules, then the agent's own instructions — its
-    template; the inputs and the analysis, as data."""
-    system = f"{DECK_RULES}\n\n---\n\n{definition.instructions or ''}"
+    template, its parameters filled; the inputs and the analysis, as data."""
+    instructions = filled(definition.instructions or "", parameters_of(inputs, organisation))
+    system = f"{DECK_RULES}\n\n---\n\n{instructions}"
     material = {"inputs": dict(inputs), "analysis": analysis}
     return [
         Message.system(system),
         Message.user(json.dumps(material, ensure_ascii=False, default=str)),
     ]
+
+
+async def organisation_of(session: AsyncSession, workspace_id: uuid.UUID) -> str | None:
+    """The organisation an agent works for, by default: its workspace's name."""
+    name = await session.scalar(select(Workspace.name).where(Workspace.id == workspace_id))
+    return str(name) if name else None
+
+
+def _cleaned(value: Any, parameters: Mapping[str, str]) -> Any:
+    if isinstance(value, str):
+        return filled(value, parameters) if "{{" in value else value
+    if isinstance(value, list):
+        return [_cleaned(v, parameters) for v in value]
+    if isinstance(value, dict):
+        return {k: _cleaned(v, parameters) for k, v in value.items()}
+    return value
 
 
 def deliverable_key(workspace_id: uuid.UUID, run_id: uuid.UUID, fmt: str) -> str:
@@ -185,7 +208,12 @@ async def draw(
         )
     request = Request(
         purpose=f"agent:{definition.key}:deck"[:100],
-        messages=deck_messages(definition, run.inputs, analysis),
+        messages=deck_messages(
+            definition,
+            run.inputs,
+            analysis,
+            organisation=await organisation_of(session, run.workspace_id),
+        ),
         tier=Tier.DEEP,
         max_tokens=DECK_TOKENS,
         ref=f"agent_run:{run.id}",
@@ -211,7 +239,9 @@ async def draw(
         # Whatever else: the run's analysis stands, said why its files are not.
         logger.exception("deck_not_written", run=str(run.id))
         return Drawn([], "error")
-    deck = answered.value
+    # Any parameter the model copied as written, filled (2026-10-23).
+    parameters = parameters_of(run.inputs, await organisation_of(session, run.workspace_id))
+    deck = ArchitectureDeck.model_validate(_cleaned(answered.value.model_dump(), parameters))
     try:
         rendered = await asyncio.to_thread(render, deck)
     except Exception:
