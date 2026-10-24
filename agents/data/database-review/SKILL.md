@@ -2,7 +2,7 @@
 name: database-review
 title: "Revue de base de données"
 description: "Use when someone asks whether a database is in good shape, or a change to it is safe — its schema's integrity, the indexes its queries need, the queries that will not hold as it grows, a migration that would lock or lose data, who may read what — read from the database's catalogue as a connected source shows it and from a connected GitHub repository's models, queries and migrations, never by querying the data."
-version: 1.0.0
+version: 1.1.0
 category: data
 entity_types: [database, schema, data_object, service, application, team, infra_resource, repository, pull_request, incident, deployment, change, document]
 requires: ["github|postgresql|mysql|mariadb|sqlserver|oracle|mongodb|supabase"]
@@ -147,6 +147,24 @@ schéma réel, le volume réel et les requêtes réelles — jamais d'après un 
     sur la base. Dis lesquels mesurer, avec la commande exacte à lancer par
     une personne (`EXPLAIN (ANALYZE, BUFFERS) …` sur la requête en cause),
     et ce qui confirmerait ou infirmerait le constat.
+11. **Le code, là où il est.** Les migrations et les modèles vivent dans des
+    dossiers connus — `alembic/versions`, `migrations/`, `db/migrate`,
+    `prisma/`, les `models.py` et `models/` de chaque module : quand la liste
+    des fichiers est coupée (`more`), ouvre les dossiers qu'elle donne
+    (`folders`) avant de conclure. « Aucune migration » ne s'écrit qu'après
+    les avoir cherchées là, et dit où.
+12. **Le verdict suit le volume.** Une clé étrangère sans index sur une table
+    de quelques centaines de lignes est un constat mineur ; elle n'est grave
+    que sur une grosse table (`schema-health` le dit). Jamais « À risque »
+    pour des tables minuscules.
+13. **Ce qui se corrige, et comment.** Une correction est une migration dans
+    l'outil du dépôt — réversible, livrée par le code —, jamais du SQL lancé à
+    la main sur la production. Jamais une réécriture des données en place
+    (`UPDATE` de toute une colonne) pour « chiffrer » ou « hacher » : une
+    colonne `*_hash` tient déjà une empreinte, un hachage n'est pas un
+    chiffrement, et une donnée réécrite ne revient pas. Le chiffrement au
+    repos, la réplique, l'exposition : seulement ce que les attributs lus
+    disent — sinon une question.
 
 ## Ce qu'il produit
 
@@ -175,8 +193,9 @@ Un document markdown, dans la langue de la demande :
   `EXPLAIN`, tu ne lis aucune ligne de données — et tu ne dis jamais l'avoir
   fait.
 - Rien d'inventé : une table, une colonne, un index, un volume, une durée de
-  requête que les outils ne t'ont pas donné n'est pas écrit — il est signalé
-  comme manquant ou mis dans « À mesurer ».
+  requête, un pourcentage de gain ou de perte que les outils ne t'ont pas
+  donné n'est pas écrit — il est signalé comme manquant ou mis dans
+  « À mesurer ».
 - Jamais un goût présenté comme une règle : un constat se fonde sur une
   donnée qui peut être perdue ou fausse, une requête réelle, un volume réel,
   un verrou, une exposition.

@@ -191,16 +191,17 @@ async def test_bought_paid_owned_cancelled_no_longer_the_plan_untouched(
     _as(identity, acme, "other_admin")
     assert await _why(client, "security-review") == {"not_owned"}
 
-    # Not in Stripe yet: refused, never a price made up.
-    unsynced = await client.post(
-        f"{API}/billing/add-ons/checkout", json={"kind": "bundle", "key": "review-pair"}
-    )
-    assert unsynced.json()["error"]["details"][0]["message"] == "not_synced"
-    await _synced(selling)
+    # Not in Stripe yet — put on sale since the last sync: its product and
+    # price made there at the catalogue's price, never refused (2026-10-24).
     bought = await client.post(
         f"{API}/billing/add-ons/checkout", json={"kind": "bundle", "key": "review-pair"}
     )
     assert bought.status_code == 200, bought.text
+    [made] = [p for p in selling.posted("/v1/prices") if "review-pair" in p["lookup_key"]]
+    assert (made["unit_amount"], made["recurring[interval]"]) == (
+        str(PAIR["monthly_price"]),
+        "month",
+    )
     assert bought.json()["url"] == "https://checkout.stripe.test/cs_1"
     [opened] = selling.posted("/v1/checkout/sessions")
     # Its Stripe price (LEKA-461), a subscription of its own, marked as the bundle.

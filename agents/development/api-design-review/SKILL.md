@@ -2,7 +2,7 @@
 name: api-design-review
 title: "Revue d'API"
 description: "Use when someone asks whether an API is well designed or whether a change to it is safe — a pull request that could break the applications calling it, or the API as it stands: its contract, its consistency, its errors, its pagination, what it exposes — read from a connected GitHub repository's code and specification, as an API platform engineer would."
-version: 1.1.0
+version: 1.2.0
 category: development
 entity_types: [repository, pull_request, commit, service, application, release, document]
 requires: ["github"]
@@ -63,10 +63,19 @@ décorateurs et routeurs (FastAPI, Flask, Django REST, Express, NestJS,
 Spring, Go…), les schémas de requête et de réponse — et lis ceux du périmètre
 demandé. Dis toujours d'où tu as lu le contrat.
 
-**Le changement.** Quand une pull request est demandée : trouve-la
-(`list_pull_requests`, nom complet `owner/repo` ; « la dernière » est la plus
-récemment mise à jour) et lis-la (`read_pull_request`) : chaque fichier de
-route, de schéma ou de spécification qu'elle touche, avant et après.
+**Le changement.** Quand une pull request est demandée, elle est l'objet de
+la revue — pas toute l'API : trouve-la (`list_pull_requests`, nom complet
+`owner/repo` ; « la dernière » est la plus récemment mise à jour) et lis-la
+(`read_pull_request`) d'abord : chaque fichier de route, de schéma ou de
+spécification qu'elle touche, avant et après. Une pull request qui ne touche
+aucune route, aucun schéma, aucune spécification se dit en une phrase —
+« Compatible : cette pull request ne change pas le contrat de l'API » — sans
+revue de toute l'API, que personne n'a demandée.
+
+**La construction de l'application.** Lis-la toujours (`main.py`, la fabrique
+de l'app, ses middlewares) avant toute question sur une limite de débit, CORS,
+une authentification ou les webhooks : ce qu'elle montre n'est pas une
+question.
 
 **Qui l'appelle.** Ceux que la demande nomme ; sinon ce que le modèle de
 l'entreprise sait de ce qui dépend du service (`search_entities`,
@@ -135,10 +144,14 @@ se valent, les mélanger est le défaut.
    (`main.py`, la fabrique de l'app), ses middlewares, ses dépendances, sa
    configuration, ses tâches de fond et son modèle de données. Dis où tu as
    cherché. Trouvé ailleurs, ce n'est pas un constat.
-9. **Une protection n'est pas un défaut.** Un refus quand le code a changé,
+9. **Une norme n'est pas une incohérence.** `201` avec l'objet créé pour une
+   création, `204` sans corps pour une suppression, un objet de comptes ou de
+   synthèse qui n'est pas une liste — et n'a donc pas de pagination — sont la
+   règle : ne les présente jamais comme un écart.
+10. **Une protection n'est pas un défaut.** Un refus quand le code a changé,
    une confirmation, une permission : ne recommande jamais de l'affaiblir
    (« forcer », « ignorer le conflit »). Au plus, une question.
-10. **Seulement ce qui se prouve.** Chaque constat cite `fichier:ligne` et ce
+11. **Seulement ce qui se prouve.** Chaque constat cite `fichier:ligne` et ce
    que tu y as lu — une ligne que tu as lue, jamais une plage estimée : sans
    la ligne exacte, cite le fichier seul. Une limite de débit, une règle de passerelle ou un client
    que le dépôt ne montre pas n'est pas un défaut : c'est une question, posée
