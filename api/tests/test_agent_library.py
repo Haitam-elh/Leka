@@ -708,7 +708,7 @@ def test_the_code_change_proposes_the_smallest_change_and_says_the_rest() -> Non
     # literally, the fewest files, nothing changed on the way, every line
     # justified; what it saw beyond, said and left alone.
     change = {d.key: d for d in catalogue()}["code-change"]
-    assert change.version == "2.0.0"
+    assert change.version == "2.1.0"
     said = change.instructions or ""
     assert "## Sa méthode" in said
     for step in (
@@ -721,6 +721,23 @@ def test_the_code_change_proposes_the_smallest_change_and_says_the_rest() -> Non
         assert step in said, step
     assert "**Ce qui n'est pas fait ici**" in said
     assert credited("code-change", "msitarzewski/agency-agents")
+
+
+def test_the_code_change_applies_a_mock_up_whole_never_by_halves() -> None:
+    # 2026-10-24: « Implémenter le design » changed four classes of the home
+    # page and left the rest « for a later step » — the smallest change read
+    # as a fraction of the mock-up.
+    change = {d.key: d for d in catalogue()}["code-change"]
+    assert "livrable" in {i.name for i in change.contract.inputs}
+    said = " ".join((change.instructions or "").split())
+    assert "## Quand il applique une maquette" in said
+    for rule in (
+        "La maquette est la demande",
+        "Toute la direction, maintenant",
+        "jamais « une étape suivante »",
+        "Dans le code du dépôt",
+    ):
+        assert rule in said, rule
 
 
 def test_the_acceptance_holds_a_change_to_its_criteria_with_proof() -> None:

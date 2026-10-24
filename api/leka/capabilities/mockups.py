@@ -30,6 +30,7 @@ import asyncio
 import base64
 import json
 import re
+import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any
@@ -532,6 +533,51 @@ def _said(step: str, said: str | None) -> str:
     return f"{step} : {said}"[:300] if said else step
 
 
+# What of a design a code change is given to implement it, at most: the
+# direction's mock-up, and the screen today to tell what moves.
+MOST_TARGET = 40_000
+MOST_TODAY = 20_000
+
+
+def _drawn(css: str, body: str, most: int) -> dict[str, str]:
+    """A mock-up as a code change is given it: its style, then its HTML —
+    images as their path, never their bytes — within `most`."""
+    html = without_assets(body)
+    css = css[: most // 3]
+    return {"css": css, "html": html[: most - len(css)]}
+
+
+async def design_target(session: AsyncSession, run: AgentRun) -> dict[str, object] | None:
+    """The design a code change implements (2026-10-24: « Implémenter le
+    design » gave the code change the review's words alone, cut — it changed
+    four classes of the page and left the rest « for a later step »). Asked
+    from a design review's deliverable (`livrable`): that review's
+    recommended direction — its name, its axis, why, the changes it names
+    file by file, its mock-up — and the screen today. None otherwise."""
+    said = str((run.inputs or {}).get("livrable") or "").strip()
+    try:
+        source_id = uuid.UUID(said)
+    except ValueError:
+        return None
+    source = await session.get(AgentRun, source_id)
+    if source is None or source.workspace_id != run.workspace_id or source.id == run.id:
+        return None
+    proposal = await read_design(source)
+    if proposal is None or not proposal.after:
+        return None
+    chosen = proposal.after[min(proposal.recommended, len(proposal.after) - 1)]
+    return {
+        "screen": proposal.screen,
+        "viewport": proposal.viewport,
+        "direction": chosen.name,
+        "axis": chosen.axis,
+        "why": proposal.why,
+        "changes": [c.model_dump() for c in proposal.changes],
+        "mockup": _drawn(chosen.css, chosen.body, MOST_TARGET),
+        "today": _drawn(proposal.before.css, proposal.before.body, MOST_TODAY),
+    }
+
+
 async def read_design(run: AgentRun) -> DesignProposal | None:
     """The proposal a run drew, as kept — None when it drew none, or it is no
     longer kept. Only ever this run's key, in its workspace."""
@@ -557,6 +603,7 @@ __all__ = [
     "Designed",
     "correct_design",
     "design_messages",
+    "design_target",
     "propose_design",
     "proposes",
     "read_design",

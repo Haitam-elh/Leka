@@ -56,6 +56,7 @@ from leka.capabilities.changes import (
     RepairProposal,
     apply_edits,
     before_of,
+    body_of,
     branch_of,
     cited_paths,
     diff_of,
@@ -114,6 +115,17 @@ def test_a_diff_is_leka_s_own() -> None:
     assert (
         branch_of("Corriger le solde affiché !", change) == "leka/corriger-le-solde-affich-12345678"
     )
+
+
+def test_a_pull_request_says_no_id_of_leka_s_own() -> None:
+    # 2026-10-24: #426 said « … pour le dépôt [f4ad4e4d-7670-5f9f-83c6-ae09e8cfd613] ».
+    change = CodeChange(
+        summary="Prête pour le dépôt [f4ad4e4d-7670-5f9f-83c6-ae09e8cfd613]. Elle change le titre.",
+        files=[{"path": "a.py", "status": "modified", "additions": 1, "deletions": 1}],
+    )
+    body = body_of(change, by="Nora")
+    assert body.startswith("Prête pour le dépôt. Elle change le titre.")
+    assert "f4ad4e4d" not in body
 
 
 # ── a fake GitHub ───────────────────────────────────────────────────────────

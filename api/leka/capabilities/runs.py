@@ -48,7 +48,7 @@ from leka.background import JobQueue, enqueue_job
 from leka.capabilities.catalogue import CatalogueService, Entry, needs_of
 from leka.capabilities.code_tools import CODE_NAMES, CODE_TOOLS, code_handlers
 from leka.capabilities.definition import Definition, check_input
-from leka.capabilities.deliverable_check import missing, unread
+from leka.capabilities.deliverable_check import deferred, missing, unread
 from leka.capabilities.delivery import draw, organisation_of
 from leka.capabilities.gateway import (
     Completion,
@@ -61,6 +61,7 @@ from leka.capabilities.gateway import (
 )
 from leka.capabilities.gateway.service import CUT
 from leka.capabilities.method_tools import METHOD_NAMES, METHOD_TOOLS, method_handlers
+from leka.capabilities.mockups import design_target
 from leka.capabilities.models import AgentRun, AgentRunEvent
 from leka.capabilities.repository import CapabilityRunRepository, stale_runs
 from leka.capabilities.review import review_of
@@ -556,11 +557,16 @@ async def _run(
         [t.name for t in skilled],
     )
     language = await spoken_language(session, run.requested_by, workspace_id)
+    # Asked to implement a design review's direction: its mock-up, given —
+    # never its words alone (2026-10-24).
+    target = await design_target(session, run) if definition.renders == "code_change" else None
+    if target is not None:
+        steps.add("design_target", screen=target["screen"], direction=target["direction"])
     request = Request(
         purpose=f"agent:{definition.key}"[:100],
         messages=messages(
             definition,
-            run.inputs,
+            {**run.inputs, "maquette": target} if target is not None else run.inputs,
             injected,
             tools=given,
             language=language,
@@ -592,6 +598,8 @@ async def _run(
                         framed=framed(definition),
                     ),
                     *(unread(text, read.get("files", {})) if reads_code else []),
+                    # A design implemented whole, never by halves.
+                    *(deferred(text) if target is not None else []),
                 ],
                 corrections=settings.agent_corrections,
             ),

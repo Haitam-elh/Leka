@@ -485,6 +485,9 @@ describe("settling it now (Karim, 2026-10-23)", () => {
     await vi.waitFor(() => expect(runs.start).toHaveBeenCalledTimes(1));
     const [asked] = runs.start.mock.calls[0];
     expect(asked).toMatchObject({ key: "code-change", intention_id: "i1", inputs: { depot: "acme/payments" } });
+    // The deliverable it comes from: a design review's mock-up reaches it
+    // (2026-10-24).
+    expect(asked.inputs.livrable).toBe(detail().id);
     expect(asked.inputs.demande).toContain("Corrige les constats bloquants et importants");
     expect(asked.inputs.demande).toContain("Le solde change.");
     await vi.waitFor(() => expect(push).toHaveBeenCalledWith("/intentions/i1/deliverable?run=r2"));
@@ -516,6 +519,8 @@ describe("settling it now (Karim, 2026-10-23)", () => {
     await userEvent.click(within(screen.getByTestId("next-step-form")).getByRole("button", { name: "Lancer" }));
     await vi.waitFor(() => expect(runs.start).toHaveBeenCalledTimes(1));
     expect(runs.start.mock.calls[0][0]).toMatchObject({ key: "test-generation" });
+    // An input the test generation does not take: never sent.
+    expect(runs.start.mock.calls[0][0].inputs).not.toHaveProperty("livrable");
   });
 
   it("opens the tickets for a plan that is not code", async () => {
