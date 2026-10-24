@@ -34,6 +34,7 @@ import json
 import re
 import unicodedata
 import uuid
+from collections import Counter
 from collections.abc import Collection, Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
@@ -53,6 +54,7 @@ from leka.capabilities import (
 )
 from leka.capabilities.definition import Query, _words, discover
 from leka.capabilities.runtime import DRAWN
+from leka.intentions.asked_as import ASKED_AS
 from leka.intentions.grounding import acting
 from leka.intentions.models import Intention
 from leka.intentions.schemas import (
@@ -161,19 +163,74 @@ _IDENTIFIER = re.compile(r"\w+(?:[-/_.]\w+)+")
 PLAINLY = 5
 
 
+# What a request says in short that an agent's words say in full
+# (2026-10-23: « Fais la revue de la PR #404 » went to the design, database
+# and API reviews — « PR » too short to count, « revue » in seven names).
+_SHORT = re.compile(r"\b(?:PRs?|MRs?)\b", re.IGNORECASE)
+_FULL = " pull request "
+# A review of a pull request is the code review's, whichever review word
+# says it — « relis », « review »: its name says « revue de code », a
+# request « la revue de la PR ».
+_REVIEW = r"\b(?:revue|relis|relire|relecture|review|reviewer)\b"
+_PULL = r"\b(?:pull request|merge request|PRs?|MRs?)\b"
+_REVIEWS_A_PR = re.compile(rf"{_REVIEW}.*{_PULL}|{_PULL}.*{_REVIEW}", re.IGNORECASE)
+
+
+def _expanded(text: str) -> str:
+    return _SHORT.sub(_FULL, text)
+
+
 def asked_words(text: str) -> frozenset[str]:
-    """A request's words that may say what work it asks — its names aside."""
-    return frozenset(_words(_IDENTIFIER.sub(" ", text)) - _FILLER)
+    """A request's words that may say what work it asks — its names aside,
+    its abbreviations said in full; a pull request's review naming the code
+    review."""
+    said = _expanded(text)
+    if _REVIEWS_A_PR.search(text):
+        said = f"{said} revue code"
+    return frozenset(_words(_IDENTIFIER.sub(" ", said)) - _FILLER)
 
 
-def relevance(definition: Any, asked: frozenset[str]) -> int:
-    """How plainly a request asks for an agent's work: each of its words in
-    the agent's name — « design », « Revue de design » — three; in what it
-    delivers or is asked as, one (2026-10-21: words capped at three made
-    most agents tie, and the alphabet chose)."""
-    named = _words(f"{definition.title} {definition.key.replace('-', ' ')}") - _FILLER
-    told = _words(" ".join((definition.summary, *definition.examples))) - _FILLER - named
-    return 3 * len(asked & named) + len(asked & told)
+def _stem(word: str) -> str:
+    """A word's root, the way a request and an agent may each write it:
+    « réparer » and « réparation », « tester » and « tests »."""
+    for end in ("ations", "ation", "ements", "ement", "ees", "ee", "es", "er", "ez", "e", "s"):
+        if word.endswith(end) and len(word) - len(end) >= 4:
+            return word[: -len(end)]
+    return word
+
+
+def _stems(words: Collection[str]) -> frozenset[str]:
+    return frozenset(_stem(w) for w in words)
+
+
+def _name_of(definition: Any) -> frozenset[str]:
+    """What names an agent: its title, its key, and how requests ask for its
+    work (asked_as.ASKED_AS) — as roots."""
+    said = (
+        f"{definition.title} {definition.key.replace('-', ' ')} {ASKED_AS.get(definition.key, '')}"
+    )
+    return _stems(_words(said) - _FILLER)
+
+
+def relevance(definition: Any, asked: frozenset[str], common: Collection[str] = frozenset()) -> int:
+    """How plainly a request asks for an agent's work: each of its words
+    that names the agent — « design », « Revue de design », « ajoute » for
+    the code change — three, one when many agents share it (« analyse »,
+    « revue »: `common`); in what it delivers or is asked as, one
+    (2026-10-21: words capped at three made most agents tie, and the
+    alphabet chose)."""
+    roots = _stems(asked)
+    named = _name_of(definition)
+    told = (
+        _stems(_words(_expanded(" ".join((definition.summary, *definition.examples)))) - _FILLER)
+        - named
+    )
+    hits = roots & named
+    return sum(1 if w in common else 3 for w in hits) + len(roots & told)
+
+
+# A word in this many agents' names says little of which one is asked.
+COMMON = 4
 
 
 def plainly_asked(
@@ -183,13 +240,39 @@ def plainly_asked(
     they do, at least half as relevant as the best — most relevant first;
     and each one's relevance. A word of a name alone is not enough: « Billing
     API, c'est à qui ? » asks nothing of the API review (2026-10-22)."""
-    scores = {key: relevance(e.definition, asked) for key, e in entries.items()}
+    counted = Counter(w for e in entries.values() for w in _name_of(e.definition))
+    common = frozenset(w for w, n in counted.items() if n >= COMMON)
+    scores = {key: relevance(e.definition, asked, common) for key, e in entries.items()}
     best = max(scores.values(), default=0)
     plain = sorted(
         (k for k, v in scores.items() if v >= PLAINLY and v * 2 >= best),
         key=lambda k: (-scores[k], k),
     )
+    # Short of it, the one agent a word of its own names, and something it
+    # does: « bloquée » the debugging, « l'impact » the impact analysis
+    # (2026-10-23) — never a name alone (« Billing API, c'est à qui ? »).
+    if not plain:
+        named = [
+            k
+            for k, v in scores.items()
+            if v >= PLAINLY - 1 and _named_by(entries[k].definition, asked) - common
+        ]
+        plain = named if len(named) == 1 else []
+    # Beside the best, only an agent a word of its own names: « la revue de
+    # la PR » names the code review by « revue » and « code », never the
+    # database review by « revue » alone (2026-10-23).
+    if plain:
+        first = _named_by(entries[plain[0]].definition, asked) - common
+        plain = [
+            plain[0],
+            *(k for k in plain[1:] if (_named_by(entries[k].definition, asked) - common) - first),
+        ]
     return plain[:MOST_AGENTS], scores
+
+
+def _named_by(definition: Any, asked: frozenset[str]) -> frozenset[str]:
+    """The words of a request that name an agent, as roots."""
+    return _stems(asked) & _name_of(definition)
 
 
 def known_key(said: str | None, entries: Mapping[str, Any]) -> str | None:
@@ -470,10 +553,15 @@ async def propose(
         best = relevant.get(plain[0], 0) if plain else 0
         # A question answered without agents is not refused: only work to do,
         # or agents chosen, are held to what the words name.
+        # The agent the words plainly name, among those chosen: a model that
+        # leaves it out — the test generation for « ajoute un lien »
+        # (2026-10-23) — is told so.
         if (
             plain
             and (asks_work or got)
-            and max((relevant.get(k, 0) for k in got), default=0) * 2 < best
+            and (
+                plain[0] not in got or max((relevant.get(k, 0) for k in got), default=0) * 2 < best
+            )
         ):
             fits = by_key[plain[0]].definition
             return [

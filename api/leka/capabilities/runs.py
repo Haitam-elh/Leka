@@ -48,8 +48,8 @@ from leka.background import JobQueue, enqueue_job
 from leka.capabilities.catalogue import CatalogueService, Entry, needs_of
 from leka.capabilities.code_tools import CODE_NAMES, CODE_TOOLS, code_handlers
 from leka.capabilities.definition import Definition, check_input
-from leka.capabilities.deliverable_check import missing
-from leka.capabilities.delivery import draw
+from leka.capabilities.deliverable_check import missing, unread
+from leka.capabilities.delivery import draw, organisation_of
 from leka.capabilities.gateway import (
     Completion,
     Gateway,
@@ -336,6 +336,19 @@ async def _context(
     )
 
 
+# What an agent that declares no tools reads of the code, when a repository
+# is connected (2026-10-23: the architect drew bricks no source names, the
+# code it could not read).
+READ_CODE = ("list_files", "read_file")
+
+
+def code_tools_of(definition: Definition) -> tuple[str, ...]:
+    """The code tools an agent is offered, a GitHub source connected: those
+    it names — or, naming none, the reading of the code."""
+    named = tuple(t.name for t in CODE_TOOLS if t.name in definition.tools)
+    return named if definition.tools else READ_CODE
+
+
 async def execute_run(
     workspace_id: uuid.UUID,
     run_id: uuid.UUID,
@@ -498,7 +511,7 @@ async def _run(
     # only when there is code to read — a GitHub source connected; else the
     # model never hears of them (2026-10-18: the documentation assistant
     # reads the code when it can, and works without it).
-    coded = [t for t in CODE_TOOLS if t.name in definition.tools]
+    coded = [t for t in CODE_TOOLS if t.name in code_tools_of(definition)]
     no_code: list[Withheld] = []
     if coded and not await _reads_code(session, workspace_id):
         no_code, coded = [Withheld(t.name, "no_source") for t in coded], []
@@ -525,6 +538,7 @@ async def _run(
     # deliverable shows its comments on the diff it read (review.py); the
     # designer's mock-ups are drawn from the files (mockups.py).
     read: dict[str, Any] = {}
+    reads_code = "read_file" in {t.name for t in given}
     if CODE_NAMES & {t.name for t in given}:
         bound |= code_handlers(session, workspace_id, read)
     if METHOD_NAMES & {t.name for t in given}:
@@ -550,6 +564,7 @@ async def _run(
             injected,
             tools=given,
             language=language,
+            organisation=await organisation_of(session, workspace_id),
         ),
         tier=Tier.DEEP,
         max_tokens=MAX_TOKENS,
@@ -568,12 +583,16 @@ async def _run(
                 # Its deliverable, every section its agent gives — whatever
                 # the model; told what it lacks, it writes it again
                 # (2026-10-22).
-                judge=lambda text: missing(
-                    definition.instructions or "",
-                    text,
-                    language=language or "fr",
-                    framed=framed(definition),
-                ),
+                # And every line it cites, read (2026-10-23).
+                judge=lambda text: [
+                    *missing(
+                        definition.instructions or "",
+                        text,
+                        language=language or "fr",
+                        framed=framed(definition),
+                    ),
+                    *(unread(text, read.get("files", {})) if reads_code else []),
+                ],
                 corrections=settings.agent_corrections,
             ),
             timeout=budget,

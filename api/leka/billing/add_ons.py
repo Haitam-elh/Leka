@@ -43,10 +43,9 @@ from leka.billing.subscriptions import (
     CheckoutRefusedError,
     _customer,
     _period_end,
-    _price,
     account_of,
 )
-from leka.billing.sync import add_on_lookup_key
+from leka.billing.sync import ensure_add_on_price, sold_add_ons
 from leka.core.config import settings
 
 logger = structlog.get_logger(__name__)
@@ -163,17 +162,23 @@ async def checkout_add_on(
         if intention_id is not None
         else f"{settings.web_url}/capabilities"
     )
-    prices = sold.prices
-    # Each at its Stripe price, found by its lookup key (LEKA-461) — several
-    # agents a line each, one subscription.
+    # Each at its Stripe price (LEKA-461) — several agents a line each, one
+    # subscription — made in Stripe when it was put on sale since the last
+    # sync (2026-10-24).
+    offer = catalogue()
+    named = {(kind, key): (name, cents) for kind, key, name, cents in sold_add_ons(offer)}
     if found.kind == "agents":
-        lines = [add_on_lookup_key("agent", k, prices[k]) for k in found.agents]
+        lines = [("agent", k) for k in found.agents]
     elif found.kind == "bundles":
         # Several bundles, a line each at its own price, one subscription (LEKA-500).
-        lines = [add_on_lookup_key("bundle", k, _bundle_price(k)) for k in found.key.split(",")]
+        lines = [("bundle", k) for k in found.key.split(",")]
     else:
-        lines = [add_on_lookup_key(found.kind, found.key, found.monthly_price)]
-    items = [{"quantity": 1, "price": await _price(client, each)} for each in lines]
+        lines = [(found.kind, found.key)]
+    items = []
+    for kind, key in lines:
+        name, cents = named[(kind, key)]
+        price, _ = await ensure_add_on_price(client, kind, key, name, cents, offer)
+        items.append({"quantity": 1, "price": price})
     made = await client.post(
         "/v1/checkout/sessions",
         {

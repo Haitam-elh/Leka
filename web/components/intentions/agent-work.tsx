@@ -75,14 +75,20 @@ export function AgentWork({ intentionId, live = false }: { intentionId: string; 
             .map((f) => (t.intentions.agents.deliverables as Record<string, string>)[f] ?? f)
             .join(", ");
           return (
-            <li key={run.id} className="flex flex-col gap-3 sm:flex-row sm:items-center" data-testid="agent-work-run">
+            // Its words, then its buttons on a row of their own under them: never
+            // the words squeezed into a column by the buttons (2026-10-23).
+            <li
+              key={run.id}
+              className="grid gap-x-4 gap-y-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start"
+              data-testid="agent-work-run"
+            >
               <IconTile
                 icon={moving ? LoaderCircle : Bot}
                 tone={moving ? "violet" : "success"}
                 className="size-11"
                 spin={moving}
               />
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0">
                 <p className="flex flex-wrap items-center gap-2">
                   <span className="text-[1rem] font-semibold text-brand-navy">{said}</span>
                   <Pill tone={TONES[run.status as keyof typeof TONES] ?? "neutral"}>
@@ -102,7 +108,7 @@ export function AgentWork({ intentionId, live = false }: { intentionId: string; 
                   </p>
                 ) : null}
               </div>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 sm:col-start-2">
                 <Deliverables run={run} />
                 {/* What it delivered, read here — every agent's report, the
                     code review's comments on the diff (2026-10-14). */}
