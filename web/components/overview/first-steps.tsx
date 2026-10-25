@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleCheck, Compass, TriangleAlert, X } from "lucide-react";
+import { CircleCheck, TriangleAlert, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -114,6 +114,7 @@ export function FirstStepsCard({ sources }: { sources: readonly Source[] }) {
     }
   }
 
+  const showDemo = steps.stage !== "ready" && !inDemo && !enterprise;
   // Nothing connected (2026-10-25): Confluence first — the documentation
   // LEKA reads best —, any other tool beside it.
   const action =
@@ -125,41 +126,28 @@ export function FirstStepsCard({ sources }: { sources: readonly Source[] }) {
           ? { label: w.seeSources, href: routes.sources() }
           : null;
 
+  const done = (steps.stage === "ready" ? 1 : 0) + (asked ? 1 : 0);
   return (
+    // A strip under the history (2026-10-25: « le gros carré prend toute la
+    // place »): where one stands, what to do now, one line each.
     <section
-      className="mt-4 rounded-xl border border-brand-violet/30 bg-brand-violet-soft/40 p-4"
+      className="mt-3 rounded-2xl border border-shell-line bg-white p-3 shadow-[0_1px_2px_rgba(16,24,40,0.04)]"
       aria-labelledby="first-steps-title"
       data-testid="first-steps"
       data-stage={steps.stage}
     >
       <div className="flex items-start gap-3">
-        <Compass
-          className="mt-0.5 size-5 shrink-0 text-shell-nav-active"
-          aria-hidden="true"
-        />
+        <Progress done={done} />
         <div className="min-w-0 flex-1">
-          <h2
-            id="first-steps-title"
-            className="text-[1.0625rem] font-semibold text-brand-navy"
-          >
-            {w.title}
-          </h2>
-          <p className="mt-1 text-sm text-shell-muted">{w.value}</p>
-        </div>
-        <button
-          type="button"
-          onClick={hide}
-          aria-label={w.hide}
-          title={w.hide}
-          className="rounded p-1 text-shell-muted outline-none hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-violet/40"
-        >
-          <X className="size-4" aria-hidden="true" />
-        </button>
-      </div>
-
-      <ol className="mt-4 grid gap-3 md:grid-cols-2">
-        <li className="rounded-lg border border-shell-line bg-white p-3">
-          <StepHead done={steps.stage === "ready"} label={w.step1} />
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h2 id="first-steps-title" className="text-sm font-semibold text-brand-navy">
+              {w.title}
+            </h2>
+            <ol className="flex flex-wrap items-center gap-1.5">
+              <StepChip done={steps.stage === "ready"} label={w.step1} />
+              <StepChip done={asked} label={w.step2} />
+            </ol>
+          </div>
           <p
             className="mt-1 text-[0.8125rem] text-shell-muted"
             data-testid="first-steps-stage"
@@ -173,11 +161,11 @@ export function FirstStepsCard({ sources }: { sources: readonly Source[] }) {
               : w.stages[steps.stage]}
           </p>
           {steps.failing.length > 0 ? (
-            <ul className="mt-2 space-y-1.5" data-testid="first-steps-failing">
-              {steps.failing.slice(0, 3).map((source) => (
-                <li key={source.id} className="flex gap-2 text-[0.8125rem]">
+            <ul className="mt-1 space-y-1" data-testid="first-steps-failing">
+              {steps.failing.slice(0, 2).map((source) => (
+                <li key={source.id} className="flex gap-1.5 text-xs">
                   <TriangleAlert
-                    className="mt-0.5 size-4 shrink-0 text-state-warning"
+                    className="mt-px size-3.5 shrink-0 text-state-warning"
                     aria-hidden="true"
                   />
                   <span className="min-w-0">
@@ -197,62 +185,90 @@ export function FirstStepsCard({ sources }: { sources: readonly Source[] }) {
               ))}
             </ul>
           ) : null}
-          {action ? (
-            <Link
-              href={action.href}
-              className={cn(buttonVariants({ size: "sm" }), "mt-3")}
-              data-testid="first-steps-action"
-            >
-              {action.label}
-            </Link>
-          ) : null}
-          {steps.stage === "empty" ? (
-            <Link
-              href={routes.welcome()}
-              className={cn(buttonVariants({ size: "sm", variant: "outline" }), "ms-2 mt-3")}
-              data-testid="first-steps-other"
-            >
-              {w.otherSource}
-            </Link>
-          ) : null}
-          {/* Nothing read yet: Nova Retail, the demonstration, to see it first (LEKA-451). */}
-          {steps.stage !== "ready" && !inDemo && !enterprise ? (
-            <div className="mt-3 border-t border-shell-line pt-3" data-testid="first-steps-demo">
-              <p className="mb-2 text-[0.8125rem] text-shell-muted">{t.demo.exploreHint}</p>
-              <ExploreDemoButton />
-            </div>
-          ) : null}
-        </li>
-        <li className="rounded-lg border border-shell-line bg-white p-3">
-          <StepHead done={asked} label={w.step2} />
-          <p
-            className="mt-1 text-[0.8125rem] text-shell-muted"
-            data-testid="first-steps-ask"
-          >
+          <p className="mt-0.5 text-xs text-shell-muted" data-testid="first-steps-ask">
             {steps.stage === "ready" ? w.ask : w.askFirst}
           </p>
-        </li>
-      </ol>
+          {action || steps.stage === "empty" || showDemo ? (
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
+              {action ? (
+                <Link
+                  href={action.href}
+                  className={buttonVariants({ size: "sm" })}
+                  data-testid="first-steps-action"
+                >
+                  {action.label}
+                </Link>
+              ) : null}
+              {steps.stage === "empty" ? (
+                <Link
+                  href={routes.welcome()}
+                  className={buttonVariants({ size: "sm", variant: "outline" })}
+                  data-testid="first-steps-other"
+                >
+                  {w.otherSource}
+                </Link>
+              ) : null}
+              {/* Nothing read yet: Nova Retail, the demonstration, to see it first (LEKA-451). */}
+              {showDemo ? (
+                <span data-testid="first-steps-demo" title={t.demo.exploreHint}>
+                  <ExploreDemoButton variant="outline" />
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={hide}
+          aria-label={w.hide}
+          title={w.hide}
+          className="rounded p-1 text-shell-muted outline-none hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+        >
+          <X className="size-4" aria-hidden="true" />
+        </button>
+      </div>
     </section>
   );
 }
 
-function StepHead({ done, label }: { done: boolean; label: string }) {
+/** Where one stands: two steps, a ring filled by what is done. */
+function Progress({ done }: { done: number }) {
+  return (
+    <span className="relative flex size-9 shrink-0 items-center justify-center" aria-hidden="true">
+      <svg viewBox="0 0 36 36" className="absolute inset-0 size-full -rotate-90">
+        <circle cx="18" cy="18" r="15" fill="none" strokeWidth="3" className="stroke-brand-violet-soft" />
+        <circle
+          cx="18"
+          cy="18"
+          r="15"
+          fill="none"
+          strokeWidth="3"
+          strokeLinecap="round"
+          className="stroke-shell-nav-active"
+          strokeDasharray={`${(done / 2) * 94.25} 94.25`}
+        />
+      </svg>
+      <span className="text-[0.6875rem] font-semibold tabular-nums text-brand-navy">{done}/2</span>
+    </span>
+  );
+}
+
+function StepChip({ done, label }: { done: boolean; label: string }) {
   const t = useDictionary();
   return (
-    <p className="flex items-center gap-2 text-sm font-medium text-brand-navy">
+    <li
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+        done ? "bg-state-success-soft text-state-success" : "bg-shell-canvas text-shell-muted",
+      )}
+    >
       {done ? (
-        <CircleCheck className="size-4 text-state-success" aria-hidden="true" />
+        <CircleCheck className="size-3.5" aria-hidden="true" />
       ) : (
-        <span
-          className="size-4 rounded-full border-2 border-shell-line"
-          aria-hidden="true"
-        />
+        <span className="size-2.5 rounded-full border-[1.5px] border-current" aria-hidden="true" />
       )}
       {label}
-      {done ? (
-        <span className="sr-only">{t.overview.firstSteps.done}</span>
-      ) : null}
-    </p>
+      {done ? <span className="sr-only">{t.overview.firstSteps.done}</span> : null}
+    </li>
   );
 }

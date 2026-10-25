@@ -104,11 +104,14 @@ test.describe("An Enterprise organisation", () => {
     await expect(page.getByTestId("enterprise-badge")).toHaveAttribute("href", "/billing");
     await expect(page.getByTestId("workspace-switcher")).toContainText(organisation);
 
-    // The home: nothing connected, said in grey; Confluence first; no demonstration.
-    const steps = page.getByTestId("first-steps");
-    await expect(steps).toHaveAttribute("data-stage", "empty");
-    await expect(page.getByTestId("first-steps-stage")).toContainText("Connectez votre première source pour commencer");
-    await expect(page.getByTestId("first-steps-action")).toHaveText("Connecter Confluence");
+    // The home: nothing connected — the question locked, Confluence first
+    // (2026-10-25: one was asked with nothing connected); no demonstration.
+    const lock = page.getByTestId("source-lock");
+    await expect(lock).toHaveAttribute("data-what", "ask");
+    await expect(lock).toContainText("Connectez une source pour poser vos questions");
+    await expect(page.getByTestId("source-lock-connect")).toHaveText("Connecter Confluence");
+    await expect(page.getByTestId("intention-input")).toHaveCount(0);
+    await expect(page.getByTestId("first-steps")).toHaveCount(0);
     await expect(page.getByTestId("home-health")).toHaveText("Aucune source connectée");
     await expect(page.getByTestId("home-environment")).toHaveAttribute("data-sources", "none");
     await expect(page.getByTestId("explore-demo")).toHaveCount(0);
@@ -141,8 +144,20 @@ test.describe("An Enterprise organisation", () => {
     await expect(page.getByTestId("architect-no-source")).toContainText("Aucun Confluence n'est connecté");
     await page.goto("/overview");
 
+    // « Mon environnement » locked too, the way to a source said.
+    await page.goto("/environment");
+    await expect(page.getByTestId("source-lock")).toHaveAttribute("data-what", "environment");
+    // Asked all the same, the server refuses it.
+    const csrf = (await page.context().cookies()).find((c) => c.name === "leka_csrf")?.value ?? "";
+    const refused = await page.request.post("http://localhost:8000/api/v1/intentions", {
+      data: { text: "Pourquoi Billing API est lente ?" },
+      headers: { "X-CSRF-Token": csrf },
+    });
+    expect(refused.status()).toBe(409);
+    await page.goto("/overview");
+
     // Confluence's connection, opened at once.
-    await page.getByTestId("first-steps-action").click();
+    await page.getByTestId("source-lock-connect").click();
     await expect(page).toHaveURL(/\/sources$/);
     // On its connection, not the list of every tool.
     await expect(page.getByRole("dialog")).toContainText("Confluence");

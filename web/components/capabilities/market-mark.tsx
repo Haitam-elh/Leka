@@ -28,6 +28,17 @@ import { cn } from "cn";
  * one. Text and icon at -700 on -50: contrast above 4.5:1.
  */
 
+export type Hue = {
+  /** Its words. */
+  text: string;
+  /** Its icon on its tint. */
+  tile: string;
+  /** The stroke along a box's top. */
+  bar: string;
+  /** Where a box's header's wash starts. */
+  band: string;
+};
+
 export const MARKETS = [
   "product",
   "architecture",
@@ -70,21 +81,42 @@ export const MARKET_ICON: Record<string, LucideIcon> = {
   orchestration: Workflow,
 };
 
-const HUE: Record<string, { text: string; tile: string }> = {
-  product: { text: "text-blue-700", tile: "bg-blue-50 text-blue-700" },
-  architecture: { text: "text-indigo-700", tile: "bg-indigo-50 text-indigo-700" },
-  testing: { text: "text-teal-700", tile: "bg-teal-50 text-teal-700" },
-  incident: { text: "text-rose-700", tile: "bg-rose-50 text-rose-700" },
-  security: { text: "text-slate-700", tile: "bg-slate-100 text-slate-700" },
-  performance: { text: "text-pink-700", tile: "bg-pink-50 text-pink-700" },
-  frontend: { text: "text-sky-700", tile: "bg-sky-50 text-sky-700" },
-  mobile: { text: "text-fuchsia-700", tile: "bg-fuchsia-50 text-fuchsia-700" },
-  devops: { text: "text-cyan-700", tile: "bg-cyan-50 text-cyan-700" },
-  network: { text: "text-lime-700", tile: "bg-lime-50 text-lime-700" },
-  documentation: { text: "text-stone-700", tile: "bg-stone-100 text-stone-700" },
-  orchestration: { text: "text-purple-700", tile: "bg-purple-50 text-purple-700" },
+const HUE: Record<string, Hue> = {
+  product: { text: "text-blue-700", tile: "bg-blue-50 text-blue-700", bar: "bg-blue-500", band: "from-blue-50" },
+  architecture: { text: "text-indigo-700", tile: "bg-indigo-50 text-indigo-700", bar: "bg-indigo-500", band: "from-indigo-50" },
+  testing: { text: "text-teal-700", tile: "bg-teal-50 text-teal-700", bar: "bg-teal-500", band: "from-teal-50" },
+  incident: { text: "text-rose-700", tile: "bg-rose-50 text-rose-700", bar: "bg-rose-500", band: "from-rose-50" },
+  security: { text: "text-slate-700", tile: "bg-slate-100 text-slate-700", bar: "bg-slate-500", band: "from-slate-100" },
+  performance: { text: "text-pink-700", tile: "bg-pink-50 text-pink-700", bar: "bg-pink-500", band: "from-pink-50" },
+  frontend: { text: "text-sky-700", tile: "bg-sky-50 text-sky-700", bar: "bg-sky-500", band: "from-sky-50" },
+  mobile: { text: "text-fuchsia-700", tile: "bg-fuchsia-50 text-fuchsia-700", bar: "bg-fuchsia-500", band: "from-fuchsia-50" },
+  devops: { text: "text-cyan-700", tile: "bg-cyan-50 text-cyan-700", bar: "bg-cyan-500", band: "from-cyan-50" },
+  network: { text: "text-lime-700", tile: "bg-lime-50 text-lime-700", bar: "bg-lime-500", band: "from-lime-50" },
+  documentation: { text: "text-stone-700", tile: "bg-stone-100 text-stone-700", bar: "bg-stone-500", band: "from-stone-100" },
+  orchestration: { text: "text-purple-700", tile: "bg-purple-50 text-purple-700", bar: "bg-purple-500", band: "from-purple-50" },
 };
-const NONE = { text: "text-brand-navy", tile: "bg-shell-canvas text-shell-muted" };
+const NONE: Hue = { text: "text-brand-navy", tile: "bg-shell-canvas text-shell-muted", bar: "bg-shell-line", band: "from-shell-canvas" };
+
+/** A registry domain's hue (2026-10-25: « chacun sa couleur »): an
+ * Enterprise contract's boxes are by domain — never two alike side by side. */
+const DOMAIN_HUE: Record<string, string> = {
+  development: "product",
+  architecture: "architecture",
+  operations: "incident",
+  infrastructure: "devops",
+  security: "security",
+  compliance: "testing",
+  data: "performance",
+  documentation: "documentation",
+  knowledge: "frontend",
+  project_management: "orchestration",
+  business: "network",
+};
+
+/** A box's colours: a marketplace category's, else a registry domain's. */
+export function hueOf(group: string, { market }: { market: boolean }): Hue {
+  return HUE[market ? group : (DOMAIN_HUE[group] ?? group)] ?? NONE;
+}
 
 /** The domain of an agent: its marketplace's, else its category's. */
 export function marketOf(agent: { market?: string | null; category: string }): string {

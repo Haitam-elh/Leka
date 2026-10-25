@@ -21,7 +21,7 @@ from leka.billing.catalogue import (
     load,
     quote,
 )
-from leka.billing.contract import contract_now
+from leka.billing.contract import contract_now, is_enterprise
 from leka.billing.entitlements import (
     Owned,
     end,
@@ -117,6 +117,7 @@ __all__ = [
     "end",
     "entitlements",
     "grant",
+    "is_enterprise",
     "launch_bought",
     "launch_eligible",
     "load",

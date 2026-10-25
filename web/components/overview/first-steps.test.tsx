@@ -121,7 +121,6 @@ describe("FirstStepsCard", () => {
     renderCard([]);
     const card = await screen.findByTestId("first-steps");
     expect(card).toHaveAttribute("data-stage", "empty");
-    expect(card).toHaveTextContent("LEKA lit vos outils");
     expect(screen.getByTestId("first-steps-stage")).toHaveTextContent(
       "Connectez votre première source pour commencer",
     );
@@ -159,7 +158,7 @@ describe("FirstStepsCard", () => {
       "Prêt : LEKA lit développement.",
     );
     expect(screen.getByTestId("first-steps-ask")).toHaveTextContent(
-      "Écrivez-la dans la barre ci-dessous",
+      "Écrivez-la dans la barre ci-dessus",
     );
     expect(card).not.toHaveTextContent("Qu'est-ce qui a changé");
     expect(screen.queryByTestId("first-steps-action")).toBeNull();
