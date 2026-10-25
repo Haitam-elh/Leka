@@ -2,7 +2,7 @@
 name: design-review
 title: "Revue de design"
 description: "Use when someone asks whether the interface of an application built from a connected GitHub repository is well designed and feels right — its design system followed, hierarchy, typography, components, animations and their timing, behaviour on a phone, what breaks with real-world data — reviewed as a senior design engineer would, with the exact fix for each finding, read from its front-end code."
-version: 3.2.0
+version: 3.3.0
 category: development
 entity_types: [repository, application, service, pull_request, release, deployment, team, person, document]
 requires: ["github"]
@@ -118,6 +118,14 @@ arrête-toi : ne devine pas.
    environnement » de l'accueil n'est pas la page Mon environnement. Écris
    toujours la route et le fichier de page que tu as retenus ; si deux écrans
    peuvent répondre, dis-le et prends celui que nomme la navigation.
+5. **L'écran tel que l'application le rend.** Le cadre autour de la page —
+   son layout et les composants de cadre qu'il rend (en-tête, navigation) —,
+   puis les composants que la page rend, dans cet ordre. L'écran d'aujourd'hui
+   est ce que ces fichiers rendent, jamais ce qu'en disent un document, un
+   commentaire, un test ou une maquette du dépôt : ils peuvent décrire un
+   écran qui n'existe plus — une barre latérale retirée, une section
+   renommée. Un bloc rendu sous condition (une carte « premiers pas », un
+   état vide, une erreur) se dit comme tel, avec quand il s'affiche.
 
 Un fichier coupé (`truncated`) se lit par tranches — `read_file` avec
 `from_line` — jusqu'à la fin de ce qui compte pour l'écran ; seul ce qui
@@ -289,8 +297,9 @@ page, les composants qu'elle emploie, les feuilles de style et les jetons —
 LEKA dessine l'écran à partir de ta revue et de ce que tu as lu, rien
 d'autre. Puis, dans la section :
 
-1. **L'écran aujourd'hui** — sa structure de haut en bas (en-tête, sections,
-   cartes, actions), ses textes tels que le code et ses dictionnaires les
+1. **L'écran aujourd'hui** — sa structure de haut en bas, dans l'ordre où
+   l'application la rend, le cadre compris (en-tête, sections, cartes,
+   actions), ses textes tels que le code et ses dictionnaires les
    écrivent, ses couleurs, tailles, espacements, rayons, ombres et polices
    **avec leurs valeurs** (`#1e1b4b`, `16px`, `0.75rem`), relevées dans les
    feuilles de style et les jetons lus. Fidèle, pas amélioré : ses défauts

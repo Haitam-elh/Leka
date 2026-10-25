@@ -121,6 +121,13 @@ MOST_READ_KEPT = 60
 DECK_FILES = ("pdf", "pptx")
 # Asked longer ago and still not drawn: lost (a worker gone) — asked again.
 DRAWING_LOST = timedelta(minutes=20)
+# What stops a change or a design for good — no model here, an AI control's
+# refusal, a quota, no repository to write on: said, never done again by
+# itself. Anything else — a model out of time, edits that did not land — is
+# done again at once (2026-10-25).
+FINAL_RENDER = frozenset(
+    {"no_model", "refused", "limited", "no_repository", "out_of_scope", "not_found"}
+)
 # How long a run may take, all of it: its context, its tools, its model.
 RUN_BUDGET = 15 * 60.0
 # A run found running this long had its worker go away; one queued this
@@ -666,6 +673,7 @@ async def _run(
             )
     # Only the files a person asked for (2026-10-14: a PDF nobody asked for
     # was drawn) — every one when the run says nothing of it.
+    again: str | None = None
     asked = run.detail.get("formats")
     wanted = None if not isinstance(asked, list) else [str(f) for f in asked]
     # The files a code change or a design is drawn from, named: read again
@@ -681,9 +689,21 @@ async def _run(
         )
         if drawn.error is None:
             steps.add(drawn.step, **drawn.said())
+            detail |= drawn.detail()
+        elif definition.renders in REDRAWN and drawn.error not in FINAL_RENDER:
+            # Its change or its mock-ups not delivered the first time: done
+            # again at once by a worker, as « Réessayer » does — never left
+            # for a person to ask (2026-10-25: the design review came without
+            # its mock-ups, the code change without its change).
+            steps.add("render_retried", code=drawn.error, said=drawn.refusal)
+            detail |= {
+                "drawing": [REDRAWN[definition.renders][1]],
+                "drawing_since": now_or().isoformat(),
+            }
+            again = definition.renders
         else:
             steps.add("render_failed", code=drawn.error, said=drawn.refusal)
-        detail |= drawn.detail()
+            detail |= drawn.detail()
     runs = CapabilityRunRepository(session, workspace_id)
     ended = await runs.finish(
         run.id,
@@ -700,6 +720,8 @@ async def _run(
         steps.add("succeeded", chars=len(output))
         _ended(session, run, "succeeded", model=done.model, tool_calls=run.tool_calls)
     await session.commit()
+    if ended and again is not None:
+        await queue_redraw(workspace_id, run.id, again)
     status = "succeeded" if ended else "cancelled"
     logger.info("agent_run_ended", run=str(run.id), key=run.key, status=status)
     return {"status": status}
@@ -957,6 +979,11 @@ async def _redraw_render(
     # Nothing held while the model writes: minutes.
     await session.commit()
     drawn = await draw(session, run, entry.definition, output, read=read)
+    if drawn.error is not None and drawn.error not in FINAL_RENDER:
+        # Once more, at once (2026-10-25): a model out of time, or whose
+        # edits did not land, mostly delivers the second time.
+        logger.info("run_drawn_again", run=str(run_id), code=drawn.error)
+        drawn = await draw(session, run, entry.definition, output, read=read)
     run = await runs.run(run_id, lock=True)
     if run is None:
         return {"proposed": None, "skipped": "gone"}
