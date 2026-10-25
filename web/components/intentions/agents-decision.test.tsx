@@ -370,7 +370,7 @@ describe("what is done", () => {
         id: "r1",
         key: ARCHITECT.key,
         title: ARCHITECT.title,
-        version: "19.1.0",
+        version: "19.2.0",
         status: "failed",
         inputs: {},
         requested_by: ME,

@@ -24,7 +24,7 @@ version: 1
 agents:
   - path: architecture/application-architecture/SKILL.md
     name: application-architecture
-    version: 19.1.0
+    version: 19.2.0
     status: active
 
   - path: architecture/architecture-analysis/SKILL.md

@@ -286,7 +286,7 @@ async def test_the_catalogue_is_made_in_stripe_once() -> None:
     # by a key that says its amount.
     assert "leka_addon_agent_security-review" in fake.products
     assert "leka_addon_agent_security-review_month_2500" in done.prices
-    assert "leka_addon_bundle_engineering_month_5900" in done.prices
+    assert "leka_addon_bundle_engineering_month_4900" in done.prices
     agent = next(
         p for p in fake.posted("/v1/prices") if p["lookup_key"].startswith("leka_addon_agent_")
     )

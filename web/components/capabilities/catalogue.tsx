@@ -36,7 +36,9 @@ import {
   agentStateOf,
   AgentStateSaid,
   Bundles,
+  isEnterprise,
   Owned,
+  useOrganisationName,
 } from "@/components/capabilities/offers";
 
 import { IconTile, type TileTone } from "@/components/environment/parts";
@@ -384,11 +386,23 @@ type Shown = "all" | "agents" | "capabilities";
 type Kind = "agent" | "skill";
 
 /** One box per domain — of one kind only (LEKA-467: agents, sold, and
- * LEKA's skills, included, never in the same box). */
-function Domain({ category, items, kind }: { category: string; items: Capability[]; kind: Kind }) {
+ * LEKA's skills, included, never in the same box). `market`: an agent's box
+ * by the marketplace's categories; else by the registry's domains — an
+ * Enterprise contract's, nothing on sale (2026-10-25). */
+function Domain({
+  category,
+  items,
+  kind,
+  market = kind === "agent",
+}: {
+  category: string;
+  items: Capability[];
+  kind: Kind;
+  market?: boolean;
+}) {
   const t = useDictionary();
   const w = t.catalogue;
-  const agents = kind === "agent";
+  const agents = market;
   const Icon = (agents ? MARKET_ICON[category] : CATEGORY_ICON[category]) ?? Lightbulb;
   const text = agents ? marketText(category) : (CATEGORY_TEXT[category] ?? "text-brand-navy");
   const label = agents
@@ -573,10 +587,13 @@ function Domains({
   tierOf,
   stateOf,
   keep = () => true,
+  byDomain = false,
 }: {
   list: ReturnType<typeof useCapabilities>;
   /** Agents or LEKA's skills: never mixed (LEKA-467). */
   kind: Kind;
+  /** Agents by the registry's domains, not the marketplace's categories. */
+  byDomain?: boolean;
   category?: string | null;
   /** The level asked for, and each agent's — LEKA's own have none. */
   tierOf?: { tier: string; of: (key: string) => string | undefined };
@@ -589,8 +606,9 @@ function Domains({
   const t = useDictionary();
   const offers = useAddOns();
   // An agent's group: its marketplace category; a skill's: its domain.
+  const market = kind === "agent" && !byDomain;
   const groupOf = (capability: Capability): string =>
-    kind === "agent"
+    market
       ? (offers.data?.agents.find((a) => a.key === capability.key)?.market ??
         MARKET_OF_CATEGORY[capability.category] ??
         capability.category)
@@ -622,7 +640,7 @@ function Domains({
       </p>
     );
   }
-  const known = (kind === "agent" ? MARKETS : DOMAINS) as readonly string[];
+  const known = (market ? MARKETS : DOMAINS) as readonly string[];
   const order = [
     ...known,
     ...[...new Set(kept.map(groupOf))].filter((c) => !known.includes(c)).sort(),
@@ -634,9 +652,46 @@ function Domains({
     >
       {order.map((category) => {
         const items = kept.filter((c) => groupOf(c) === category);
-        return items.length ? <Domain key={category} category={category} items={items} kind={kind} /> : null;
+        return items.length ? (
+          <Domain key={category} category={category} items={items} kind={kind} market={market} />
+        ) : null;
       })}
     </div>
+  );
+}
+
+/** The agents made for this organisation (2026-10-25), first and apart:
+ * its own, never sold, never priced — seen by it alone, the server hiding
+ * them from every other workspace. */
+function Dedicated({ list, goal }: { list: ReturnType<typeof useCapabilities>; goal: string | null }) {
+  const t = useDictionary();
+  const w = t.catalogue.dedicated;
+  const organisation = useOrganisationName();
+  const items = (list.data ?? []).filter(
+    (capability) => capability.kind === "agent" && capability.dedicated && (!goal || capability.goals.includes(goal)),
+  );
+  if (!items.length) return null;
+  return (
+    <section className="flex flex-col gap-3" aria-labelledby="catalogue-dedicated-title" data-testid="catalogue-dedicated">
+      <div>
+        <h2 id="catalogue-dedicated-title" className="text-[1.25rem] font-bold text-brand-navy">
+          {w.title}
+        </h2>
+        {organisation ? (
+          <p className="text-[0.8125rem] text-shell-muted" data-testid="catalogue-dedicated-lead">
+            {fill(w.lead, { organisation })}
+          </p>
+        ) : null}
+      </div>
+      <ul
+        className="divide-y divide-shell-line/70 rounded-xl border border-shell-line bg-white px-4"
+        data-testid="catalogue-dedicated-agents"
+      >
+        {items.map((capability) => (
+          <Row key={capability.key} capability={capability} />
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -724,21 +779,26 @@ function Filters({
   // The agents' categories, the marketplace's (LEKA-467): a category
   // chosen narrows the agents; LEKA's skills, which have none, step aside.
   const offers = useAddOns();
+  // Under an Enterprise contract (2026-10-25): the registry's domains, as
+  // the agents are laid out — and neither a level nor a state to buy.
+  const enterprise = isEnterprise(offers.data);
   const categories = [
     ...new Set(
       (capabilities ?? [])
-        .filter((c) => c.kind === "agent")
-        .map(
-          (c) =>
-            offers.data?.agents.find((a) => a.key === c.key)?.market ??
-            MARKET_OF_CATEGORY[c.category] ??
-            c.category,
+        .filter((c) => c.kind === "agent" && !c.dedicated)
+        .map((c) =>
+          enterprise
+            ? c.category
+            : (offers.data?.agents.find((a) => a.key === c.key)?.market ??
+              MARKET_OF_CATEGORY[c.category] ??
+              c.category),
         ),
     ),
   ].sort((x, y) => {
-    const order = MARKETS as readonly string[];
+    const order = (enterprise ? DOMAINS : MARKETS) as readonly string[];
     return (order.indexOf(x) + 1 || 99) - (order.indexOf(y) + 1 || 99);
   });
+  const groups = (enterprise ? w.domains : w.markets) as Record<string, string>;
   const tiers = t.catalogue.offers.tiers as Record<string, string>;
   const ALL = "*";
   // A select of its own: the value « every » as one of its items.
@@ -789,31 +849,35 @@ function Filters({
               { value: ALL, label: w.allCategories },
               ...categories.map((c) => ({
                 value: c,
-                label: (w.markets as Record<string, string>)[c] ?? categorySaid(t, c),
+                label: groups[c] ?? categorySaid(t, c),
               })),
             ],
             "catalogue-category",
           )}
-          {pick(
-            w.allTiers,
-            tier,
-            setTier,
-            [{ value: ALL, label: w.allTiers }, ...Object.entries(tiers).map(([value, label]) => ({ value, label }))],
-            "catalogue-tier",
-          )}
-          {pick(
-            w.states.all,
-            state,
-            (next) => setState(next as AgentState | null),
-            [
-              { value: ALL, label: w.states.all },
-              ...(["included", "owned", "option", "upgrade", "unavailable"] as const).map((value) => ({
-                value,
-                label: w.states[value],
-              })),
-            ],
-            "catalogue-state",
-          )}
+          {enterprise
+            ? null
+            : pick(
+                w.allTiers,
+                tier,
+                setTier,
+                [{ value: ALL, label: w.allTiers }, ...Object.entries(tiers).map(([value, label]) => ({ value, label }))],
+                "catalogue-tier",
+              )}
+          {enterprise
+            ? null
+            : pick(
+                w.states.all,
+                state,
+                (next) => setState(next as AgentState | null),
+                [
+                  { value: ALL, label: w.states.all },
+                  ...(["included", "owned", "option", "upgrade", "unavailable"] as const).map((value) => ({
+                    value,
+                    label: w.states[value],
+                  })),
+                ],
+                "catalogue-state",
+              )}
           {needs.length
             ? pick(
                 w.need,
@@ -970,7 +1034,8 @@ function Stats() {
   const t = useDictionary();
   const w = t.catalogue.stats;
   const data = useAddOns().data;
-  if (!data?.available) return null;
+  // Under an Enterprise contract nothing is on sale: nothing to count.
+  if (!data?.available || isEnterprise(data)) return null;
   const savings = data.bundles
     .filter((b) => b.sellable && b.discount_percent !== null)
     .map((b) => b.discount_percent as number);
@@ -1028,6 +1093,10 @@ export function CatalogueScreen() {
   const owned = (capability: Capability) =>
     capability.kind !== "agent" ||
     Boolean(offers.data?.agents.find((a) => a.key === capability.key)?.owned);
+  // An Enterprise contract (2026-10-25): its agents by domain, never a price.
+  const enterprise = isEnterprise(offers.data);
+  // The dedicated agents have their own section, above the others.
+  const sold = (capability: Capability) => !capability.dedicated && (view !== "mine" || owned(capability));
   const empty = view === "mine" && shown === "all" && !q && !goal ? w.mineEmpty : w.empty;
   useBoughtSaid();
 
@@ -1089,19 +1158,26 @@ export function CatalogueScreen() {
             setState={setState}
           />
           {view === "mine" ? <Owned /> : null}
+          {shown !== "capabilities" && !tier && !state && !category ? <Dedicated list={list} goal={goal} /> : null}
           {view === "available" ? (
             <div className="flex flex-wrap items-end justify-between gap-2" data-testid="catalogue-all-agents">
               <div>
-                <h2 className="text-[1.25rem] font-bold text-brand-navy">{w.allAgents}</h2>
-                <p className="text-[0.8125rem] text-shell-muted">{w.allAgentsLead}</p>
+                <h2 className="text-[1.25rem] font-bold text-brand-navy">
+                  {enterprise ? w.enterprise.agents : w.allAgents}
+                </h2>
+                <p className="text-[0.8125rem] text-shell-muted">
+                  {enterprise ? w.enterprise.agentsLead : w.allAgentsLead}
+                </p>
               </div>
-              <Link
-                href={routes.billingPlans()}
-                className="inline-flex items-center gap-1 text-[0.8125rem] font-medium text-shell-nav-active hover:underline"
-              >
-                {w.compare}
-                <ArrowRight className="size-3.5 rtl:-scale-x-100" aria-hidden="true" />
-              </Link>
+              {enterprise ? null : (
+                <Link
+                  href={routes.billingPlans()}
+                  className="inline-flex items-center gap-1 text-[0.8125rem] font-medium text-shell-nav-active hover:underline"
+                >
+                  {w.compare}
+                  <ArrowRight className="size-3.5 rtl:-scale-x-100" aria-hidden="true" />
+                </Link>
+              )}
             </div>
           ) : null}
           {shown !== "capabilities" ? (
@@ -1117,7 +1193,8 @@ export function CatalogueScreen() {
                   : undefined
               }
               stateOf={state ? { state, of: (key) => agentStateOf(offers.data, key) } : undefined}
-              keep={view === "mine" ? owned : undefined}
+              keep={sold}
+              byDomain={enterprise}
             />
           ) : null}
           {view === "available" && shown !== "capabilities" ? <Bundles selectable /> : null}

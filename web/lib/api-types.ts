@@ -7497,6 +7497,11 @@ export interface components {
             agents: components["schemas"]["AgentOfferRead"][];
             /** Bundles */
             bundles: components["schemas"]["BundleOfferRead"][];
+            /**
+             * Dedicated
+             * @description The agents made for this organisation, assigned by LEKA (2026-10-25): its own, never sold, never priced.
+             */
+            dedicated?: string[];
         };
         /**
          * AgentFieldRead
@@ -10267,6 +10272,11 @@ export interface components {
             entity_types: string[];
             /** Examples */
             examples: string[];
+            /**
+             * Dedicated
+             * @description Made for this organisation and assigned to it by LEKA (2026-10-25): never sold, never priced.
+             */
+            dedicated: boolean;
             /** Always */
             always: boolean;
             /** Available */
@@ -10481,6 +10491,11 @@ export interface components {
             entity_types: string[];
             /** Examples */
             examples: string[];
+            /**
+             * Dedicated
+             * @description Made for this organisation and assigned to it by LEKA (2026-10-25): never sold, never priced.
+             */
+            dedicated: boolean;
             /** Always */
             always: boolean;
             /** Available */
@@ -24957,7 +24972,7 @@ export interface components {
             attempts: number;
             /**
              * Reason
-             * @description skipped: condition_false · not_reached: stopped, cancelled, abandoned · failed: its error.
+             * @description skipped: condition_false, not_here (its agent dedicated to others) · not_reached: stopped, cancelled, abandoned · failed: its error.
              */
             reason: string | null;
             /**

@@ -29,6 +29,7 @@ from leka.capabilities.changes import (
     files_read,
     queue_repair,
 )
+from leka.capabilities.dedicated import dedicated_to, hidden_from
 from leka.capabilities.definition import (
     CATEGORIES,
     Availability,
@@ -484,6 +485,7 @@ __all__ = [
     "cites",
     "connected_sources",
     "correct_design_run",
+    "dedicated_to",
     "default_ready",
     "definitions",
     "deliverable_of",
@@ -496,6 +498,7 @@ __all__ = [
     "find",
     "find_skill",
     "find_workflow",
+    "hidden_from",
     "inject",
     "items_read",
     "leka_cost",

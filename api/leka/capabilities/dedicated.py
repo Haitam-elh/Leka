@@ -3,6 +3,7 @@ architect, on its documentation — seen and run only by the organisations it
 is assigned to, never sold.
 
     dedicated_to()   the agents assigned to a workspace
+    hidden_from()    those it may not see: dedicated to others
     assign()         one assigned, from now on — said by whom at LEKA
     unassign()       one no longer assigned
 
@@ -20,6 +21,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.capabilities.models import DedicatedAgent
+from leka.capabilities.registry import catalogue
 
 
 async def dedicated_to(session: AsyncSession, workspace_id: uuid.UUID) -> frozenset[str]:
@@ -28,6 +30,13 @@ async def dedicated_to(session: AsyncSession, workspace_id: uuid.UUID) -> frozen
         select(DedicatedAgent.key).where(DedicatedAgent.workspace_id == workspace_id)
     )
     return frozenset(found.all())
+
+
+async def hidden_from(session: AsyncSession, workspace_id: uuid.UUID) -> frozenset[str]:
+    """The dedicated agents this workspace may not see: made for others —
+    never shown, never run, never named, not even as a workflow's step."""
+    assigned = await dedicated_to(session, workspace_id)
+    return frozenset(d.key for d in catalogue() if d.dedicated and d.key not in assigned)
 
 
 async def assign(

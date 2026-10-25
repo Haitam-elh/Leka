@@ -121,6 +121,11 @@ class AgentFrontMatter(BaseModel):
         description="The library of guides it works by, read while it runs with "
         "read_method: a directory under agents/_library/ (agents/_library/README.md)",
     )
+    dedicated: bool = Field(
+        default=False,
+        description="Made for the organisations it is assigned to (2026-10-25): seen and run "
+        "by them only, never sold — assigned by LEKA (python -m leka.ops.enterprise)",
+    )
 
     @field_validator("method")
     @classmethod
@@ -276,6 +281,10 @@ class CapabilityRead(BaseModel):
     kinds: list[str]
     entity_types: list[str]
     examples: list[str]
+    dedicated: bool = Field(
+        description="Made for this organisation and assigned to it by LEKA (2026-10-25): "
+        "never sold, never priced."
+    )
     always: bool
     available: bool
     reasons: list[CapabilityReason]
@@ -1130,8 +1139,8 @@ class WorkflowRunStepRead(BaseModel):
     status: WorkflowStepStatus
     attempts: int
     reason: str | None = Field(
-        description="skipped: condition_false · not_reached: stopped, cancelled, abandoned · "
-        "failed: its error."
+        description="skipped: condition_false, not_here (its agent dedicated to others) · "
+        "not_reached: stopped, cancelled, abandoned · failed: its error."
     )
     output: dict[str, object] = Field(description="What it found: codes, summary, ref.")
     started_at: datetime | None

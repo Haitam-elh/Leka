@@ -32,6 +32,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.billing import owned
+from leka.capabilities.dedicated import dedicated_to
 from leka.capabilities.definition import (
     Availability,
     Definition,
@@ -278,11 +279,14 @@ def needs_of(definition: Definition) -> Needs:
     )
 
 
-def composed(entries: list[Entry]) -> list[Entry]:
+def composed(entries: list[Entry], *, hidden: frozenset[str] = frozenset()) -> list[Entry]:
     """A workflow (LEKA-397) as usable as the steps it cannot do without:
     a step that always runs and stops it on failure, its capability not
     usable here or by this person — the workflow is not either, said which;
-    a step it can do without (conditional, or passed on failure), said."""
+    a step it can do without (conditional, or passed on failure), said.
+    A step whose agent is dedicated to other organisations (`hidden`) is
+    never named: needed, the workflow is not here either; else it is left
+    out, unsaid (2026-10-25)."""
     able = {e.definition.key: e.availability for e in entries}
     found: list[Entry] = []
     for entry in entries:
@@ -294,7 +298,15 @@ def composed(entries: list[Entry]) -> list[Entry]:
             continue
         reasons = list(entry.availability.reasons)
         notes = list(entry.availability.notes)
+        needs_hidden = any(
+            step.uses in hidden and step.when is None and step.on_failure == "stop"
+            for step in workflow.steps
+        )
+        if needs_hidden:
+            continue
         for step in workflow.steps:
+            if step.uses in hidden:
+                continue
             used = able.get(step.uses)
             if used is None or used.available:
                 continue
@@ -355,9 +367,17 @@ class CatalogueService:
         # What it pays for (2026-10-14): Free runs no agent; others, those
         # bought alone or in a bundle.
         paid = await owned(self._session, self._workspace_id)
+        # Made for some organisations (2026-10-25): an agent dedicated to
+        # others is not here at all — never shown, never run; its own run
+        # whatever its plan, never sold.
+        assigned = await dedicated_to(self._session, self._workspace_id)
+        hidden: set[str] = set()
         found: list[Entry] = []
         for standing in await self.standings():
             key = standing.definition.key
+            if standing.definition.dedicated and key not in assigned:
+                hidden.add(key)
+                continue
             setting = settings.get(key)
             enabled = setting.enabled if setting is not None else True
             route = await self._route(standing.definition) if standing.definition.model else None
@@ -368,7 +388,7 @@ class CatalogueService:
                 # Agents run (LEKA-395): runs.py.
                 runtime=True,
                 permissions=permissions,
-                owned=paid.why(key),
+                owned=None if standing.definition.dedicated else paid.why(key),
             )
             found.append(
                 Entry(
@@ -382,7 +402,7 @@ class CatalogueService:
                     model=route,
                 )
             )
-        return composed(found)
+        return composed(found, hidden=frozenset(hidden))
 
     async def entry(
         self, key: str, *, permissions: frozenset[str], user_id: uuid.UUID | None = None

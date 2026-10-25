@@ -47,6 +47,7 @@ from leka.capabilities import (
     capability_resource,
     find,
     find_workflow,
+    hidden_from,
     queue_workflow,
     workflow_catalogue,
 )
@@ -117,10 +118,14 @@ def _refused(error: RunRefusedError) -> ApiError:
     return ApiError(code, kind, message, details=details or None)
 
 
-def workflow_read(workflow: Workflow, entry: Entry) -> WorkflowRead:
+def workflow_read(
+    workflow: Workflow, entry: Entry, hidden: frozenset[str] = frozenset()
+) -> WorkflowRead:
+    """`hidden`: the agents dedicated to other organisations — a step using
+    one never said (2026-10-25)."""
     d = entry.definition
     able = entry.availability
-    spec = workflow.spec()["steps"]
+    spec = [said for said in workflow.spec()["steps"] if said["uses"] not in hidden]
     return WorkflowRead(
         key=d.key,
         title=d.title,
@@ -190,8 +195,9 @@ async def workflows(session: SessionDep, principal: Reader) -> list[WorkflowRead
             permissions=_permissions(principal)
         )
     }
+    hidden = await hidden_from(session, principal.workspace_id)
     return [
-        workflow_read(w, entries[key])
+        workflow_read(w, entries[key], hidden)
         for key, w in sorted(workflow_catalogue().items())
         if key in entries
     ]
@@ -205,7 +211,7 @@ async def workflow(key: str, session: SessionDep, principal: Reader) -> Workflow
     )
     if found is None or entry is None:
         raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such workflow.")
-    return workflow_read(found, entry)
+    return workflow_read(found, entry, await hidden_from(session, principal.workspace_id))
 
 
 @router.post(
@@ -279,9 +285,10 @@ async def get_run(run_id: uuid.UUID, session: SessionDep, principal: Reader) -> 
     if found is None:
         raise _missing()
     run, steps, events = found
+    hidden = await hidden_from(session, principal.workspace_id)
     return WorkflowRunDetail(
         **run_read(run, principal).model_dump(),
-        steps=[WorkflowRunStepRead.model_validate(s) for s in steps],
+        steps=[WorkflowRunStepRead.model_validate(s) for s in steps if s.uses not in hidden],
         events=[WorkflowRunEventRead.model_validate(e) for e in events],
     )
 

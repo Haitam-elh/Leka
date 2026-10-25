@@ -245,7 +245,7 @@ async def test_the_architect_runs_end_to_end(
     )
     assert (started["title"], started["version"], started["mine"]) == (
         "Architecte applicatif",
-        "19.1.0",
+        "19.2.0",
         True,
     )
     assert started["deliverables"] == []
@@ -613,7 +613,12 @@ async def test_a_run_is_refused_before_anything_is_kept(
     # An agent only who may approve may run: refused to a member, 403.
     architect = find(ARCHITECT)
     assert architect is not None
-    guarded = replace(architect, key="architect-for-approvers", permission="intention:approve")
+    guarded = replace(
+        architect,
+        key="architect-for-approvers",
+        permission="intention:approve",
+        dedicated=False,
+    )
     every = catalogue_module.catalogue()
     monkeypatch.setattr(catalogue_module, "catalogue", lambda: (*every, guarded))
     forbidden = await refused({"key": "architect-for-approvers"})

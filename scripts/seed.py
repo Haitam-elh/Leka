@@ -29,6 +29,7 @@ from typing import Any
 from sqlalchemy import delete, select
 
 from leka.billing import AgentEntitlement
+from leka.capabilities import DedicatedAgent
 from leka.connectors import Source, SourceKind, SourceStatus
 from leka.core.security import hash_password
 from leka.db import session_factory, system_scope
@@ -192,6 +193,15 @@ async def _build_demo_workspace() -> None:
                 by_whom="seed",
                 reason="LEKA's demo workspace: every agent",
                 started_at=NOW,
+            )
+        )
+        # And its dedicated ones (2026-10-25): never sold, assigned by LEKA.
+        session.add(
+            DedicatedAgent(
+                workspace_id=workspace.id,
+                key="application-architecture",
+                assigned_by="seed",
+                assigned_at=NOW,
             )
         )
         await session.flush()
