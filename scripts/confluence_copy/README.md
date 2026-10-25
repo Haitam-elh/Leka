@@ -8,6 +8,29 @@ source, n'écrit que dans le Confluence cible, et ne contacte rien d'autre.
 Un seul fichier, `confluence_copy.py`, et **Python 3.9 ou plus**, sans rien
 d'autre à installer.
 
+
+## Sous Windows, en un clic (le plus simple)
+
+Pour la personne qui copie, rien à installer, aucune ligne de commande :
+
+1. Celui qui reçoit la copie prépare le zip, une fois :
+
+       python3 build_windows.py --target-url https://votre-site.atlassian.net \
+           --target-email vous@exemple.com --ask-token
+
+   `Copie-Confluence-Windows.zip` arrive sur le Bureau : Python y est inclus
+   (la version officielle « embarquable », sans installation ni droits
+   administrateur), avec l'outil, `Copier-Confluence.bat`, un `LISEZ-MOI.txt`
+   et le Confluence cible déjà renseigné.
+
+2. La personne qui copie : clic droit → « Extraire tout », puis double-clic
+   sur `Copier-Confluence`. L'assistant lui demande seulement l'adresse de son
+   Confluence, son e-mail et son token (saisie masquée), liste ses espaces, et
+   copie ceux choisis — pages, arborescence, pièces jointes (PDF, Excel,
+   images…, 100 Mo au plus chacune).
+
+Sans commande (`python confluence_copy.py`), c'est ce même assistant.
+
 ## 1. Vérifier Python (2 minutes)
 
 ```bash

@@ -122,6 +122,9 @@ class Confluence:
         def ok(found: object) -> tuple[int, dict[str, str], bytes]:
             return 200, {}, json.dumps(found).encode()
 
+        if method == "GET" and path == "/rest/api/space":
+            listed = [{"key": k, "name": n} for k, n in self.spaces.items()]
+            return ok(self._list(listed, query))
         if method == "GET" and (m := re.fullmatch(r"/rest/api/space/(\w+)", path)):
             key = m.group(1)
             return (
@@ -498,3 +501,143 @@ def test_a_token_is_never_said(env: Path, monkeypatch: pytest.MonkeyPatch) -> No
         == 2
     )
     assert "SOURCE_TOKEN" in said[-1] and ".env" in said[-1]
+
+
+# ── the assistant ───────────────────────────────────────────────────────────
+
+
+class Answers:
+    """What a person types, in order — and what they were asked."""
+
+    def __init__(self, *said: str) -> None:
+        self.said = list(said)
+        self.asked: list[str] = []
+
+    def __call__(self, question: str) -> str:
+        self.asked.append(question)
+        return self.said.pop(0)
+
+
+def test_the_assistant_asks_what_is_missing_lists_the_spaces_and_copies_them_whole(
+    env: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, ids = _source()
+    source.spaces["RH"] = "Ressources humaines"
+    source.add("RH", "Accueil RH", None, "<p>Les équipes.</p>")
+    target = _target()
+    # The target given with the tool; the person's own Confluence asked.
+    for key in ("SOURCE_URL", "SOURCE_EMAIL", "SOURCE_TOKEN"):
+        monkeypatch.delenv(key)
+    typed = Answers(SOURCE, "rachid@client.example", "", "o")
+    hidden = Answers(SOURCE_TOKEN)
+    said: list[str] = []
+    code = tool.main([], opener=Sites(source, target), say=said.append, ask=typed, secret=hidden)
+    assert code == 0, said
+    assert "Adresse de VOTRE Confluence" in typed.asked[0]
+    assert "rien ne s'affiche" in hidden.asked[0]
+    assert any("1. Architecture applicative (ARCHI)" in line for line in said)
+    assert any("2. Ressources humaines (RH)" in line for line in said)
+    # « tout » by default: both spaces, their tree, their files.
+    assert set(target.spaces) == {"ARCHI", "RH"}
+    copied = _by_title(target, "ARCHI")
+    assert copied["Couche métier"]["parent"] == copied["Parcours Paiement"]["id"]
+    assert [f["title"] for f in target.files[copied["Couche métier"]["id"]]] == ["schema.png"]
+    assert "Accueil RH" in _by_title(target, "RH")
+    report = json.loads((env / tool.REPORT).read_text(encoding="utf-8"))
+    assert set(report) == {"ARCHI", "RH"} and report["ARCHI"]["pièces_jointes"] == 1
+    assert said[-1] == "Vous pouvez fermer cette fenêtre."
+    # The token never shown.
+    assert SOURCE_TOKEN not in "\n".join(said) and TARGET_TOKEN not in "\n".join(said)
+    assert ids
+
+
+def test_the_assistant_a_wrong_token_asked_again_spaces_chosen_by_number(
+    env: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, _ = _source()
+    source.spaces["RH"] = "Ressources humaines"
+    target = _target()
+    monkeypatch.delenv("SOURCE_TOKEN")
+    typed = Answers("1", "o")
+    hidden = Answers("mauvais-token", SOURCE_TOKEN)
+    said: list[str] = []
+    code = tool.main([], opener=Sites(source, target), say=said.append, ask=typed, secret=hidden)
+    assert code == 0, said
+    assert any("Accès refusé" in line for line in said)
+    assert any(tool.TOKENS_PAGE in line for line in said)
+    assert set(target.spaces) == {"ARCHI"}
+
+
+def test_the_assistant_copies_nothing_unless_told_to(env: Path) -> None:
+    source, _ = _source()
+    target = _target()
+    said: list[str] = []
+    code = tool.main([], opener=Sites(source, target), say=said.append, ask=Answers("ARCHI", "n"))
+    assert code == 0 and target.writes == [] and "Rien n'a été copié." in said
+    with pytest.raises(tool.CopyError):
+        tool.picked("7", [("ARCHI", "Architecture")])
+    assert tool.picked("archi, 1", [("ARCHI", "Architecture")]) == [("ARCHI", "Architecture")]
+
+
+# ── for Windows, in one click ───────────────────────────────────────────────
+
+
+def _builder() -> ModuleType:
+    spec = importlib.util.spec_from_file_location(
+        "build_windows", ROOT / "scripts" / "confluence_copy" / "build_windows.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_windows_bundle_python_included_the_target_given_double_clicked(
+    tmp_path: Path,
+) -> None:
+    import io
+    import zipfile
+
+    builder = _builder()
+    runtime = io.BytesIO()
+    with zipfile.ZipFile(runtime, "w") as fake:
+        fake.writestr("python.exe", b"MZ")
+        fake.writestr("python313.zip", b"PK")
+    python = tmp_path / "embed.zip"
+    python.write_bytes(runtime.getvalue())
+    code = builder.main(
+        [
+            "--target-url",
+            TARGET,
+            "--target-email",
+            "demo@leka.example",
+            "--python-zip",
+            str(python),
+            "--out",
+            str(tmp_path),
+        ]
+    )
+    assert code == 0
+    with zipfile.ZipFile(tmp_path / "Copie-Confluence-Windows.zip") as made:
+        names = set(made.namelist())
+        assert {
+            "copie-confluence/python/python.exe",
+            "copie-confluence/python/python313.zip",
+            "copie-confluence/confluence_copy.py",
+            "copie-confluence/Copier-Confluence.bat",
+            "copie-confluence/LISEZ-MOI.txt",
+            "copie-confluence/.env",
+        } <= names
+        launcher = made.read("copie-confluence/Copier-Confluence.bat")
+        assert b"\r\n" in launcher and b'python\\python.exe" "%~dp0confluence_copy.py"' in launcher
+        assert b"pause" in launcher
+        env = made.read("copie-confluence/.env").decode()
+        assert f"TARGET_URL={TARGET}" in env and "TARGET_EMAIL=demo@leka.example" in env
+        # No token unless asked for: then the person who copies is asked.
+        assert "TARGET_TOKEN=\n" in env and "SOURCE_TOKEN" not in env
+        readme = made.read("copie-confluence/LISEZ-MOI.txt").decode("utf-8-sig")
+        assert "Extraire tout" in readme and "api-tokens" in readme
+        assert (
+            made.read("copie-confluence/confluence_copy.py")
+            == (ROOT / "scripts" / "confluence_copy" / "confluence_copy.py").read_bytes()
+        )

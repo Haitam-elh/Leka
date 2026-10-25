@@ -2,10 +2,16 @@
 jointes — dans un autre Confluence. Hors de LEKA : un seul fichier, Python 3.9
 ou plus, aucune dépendance à installer.
 
+    python confluence_copy.py                  l'assistant : quelques questions, tout est copié
     python confluence_copy.py copy   --space CLE [--root-page ID] [--target-space CLE] [--dry-run]
     python confluence_copy.py export --space CLE [--root-page ID] --out ./export
     python confluence_copy.py import --from ./export [--target-space CLE] [--dry-run]
 
+    (rien)   l'assistant : il demande ce qui manque — l'adresse du Confluence
+             source, le mail, le token (saisie masquée) —, liste les espaces
+             que ce compte peut lire, et copie ceux choisis — pages,
+             arborescence, pièces jointes (PDF, Excel, images…) — dans la
+             cible ; sous Windows, Copier-Confluence.bat le lance
     copy     lit le Confluence source et écrit dans le Confluence cible, page
              par page, les parents avant les enfants
     export   lit le Confluence source et écrit un dossier local — à zipper et
@@ -45,6 +51,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import getpass
 import html
 import json
 import os
@@ -63,7 +70,8 @@ from typing import Any
 
 PAGE_SIZE = 50
 # Une pièce jointe plus lourde n'est pas copiée : elle est dite dans le rapport.
-MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024
+# Confluence Cloud's own limit for a file, by default.
+MAX_ATTACHMENT_BYTES = 100 * 1024 * 1024
 TIMEOUT = 60
 RETRIES = 5
 REPORT = "rapport-copie.json"
@@ -911,6 +919,147 @@ def html_page(text: str, fallback: str) -> tuple[str, str]:
     return title, parser.body()
 
 
+# ── the assistant: no command, a few questions, everything copied ──────────
+
+TOKENS_PAGE = "https://id.atlassian.com/manage-profile/security/api-tokens"
+
+
+def list_spaces(client: Client) -> list[tuple[str, str]]:
+    """The spaces this account can read — those of the site, not personal ones."""
+    return [
+        (str(item["key"]), str(item.get("name") or item["key"]))
+        for item in client.each("/rest/api/space", {"type": "global"})
+        if item.get("key")
+    ]
+
+
+def picked(answer: str, spaces: Sequence[tuple[str, str]]) -> list[tuple[str, str]]:
+    """The spaces an answer names: « tout », numbers, or keys — none: all."""
+    said = answer.strip().lower()
+    if said in ("", "tout", "tous", "all", "*"):
+        return list(spaces)
+    found: list[tuple[str, str]] = []
+    for word in re.split(r"[\s,;]+", said):
+        if not word:
+            continue
+        if word.isdigit() and 1 <= int(word) <= len(spaces):
+            one = spaces[int(word) - 1]
+        else:
+            one = next((s for s in spaces if s[0].lower() == word), ("", ""))
+            if not one[0]:
+                raise CopyError(f"« {word} » n'est ni un numéro de la liste ni une clé d'espace.")
+        if one not in found:
+            found.append(one)
+    return found
+
+
+def assistant(
+    *,
+    opener: Opener = _urlopen,
+    say: Callable[[str], None] = print,
+    ask: Callable[[str], str] = input,
+    secret: Callable[[str], str] = getpass.getpass,
+) -> int:
+    """No command: a few questions — what the .env does not say —, the
+    spaces this account can read listed, those chosen copied whole: pages,
+    tree, attachments. The target is given with the tool (its .env)."""
+    load_env(HERE / ".env")
+    load_env(Path.cwd() / ".env")
+    say("Copie Confluence — l'assistant\n")
+
+    def question(text: str, default: str = "") -> str:
+        said = ask(f"{text}{f' [{default}]' if default else ''} : ").strip()
+        return said or default
+
+    def needed(key: str, text: str, *, hidden: bool = False, default: str = "") -> None:
+        if os.environ.get(key, "").strip():
+            return
+        value = (
+            secret(f"{text} (rien ne s'affiche, c'est normal) : ")
+            if hidden
+            else question(text, default)
+        ).strip()
+        os.environ[key] = value
+
+    # Where to write: given with the tool, else asked.
+    if not os.environ.get("TARGET_TOKEN", "").strip():
+        say("Le Confluence où copier n'est pas renseigné : on vous le demande une fois.")
+    needed("TARGET_URL", "Adresse du Confluence où copier (ex. https://votre-site.atlassian.net)")
+    needed("TARGET_EMAIL", "Adresse e-mail du compte Atlassian où copier")
+    needed("TARGET_TOKEN", "Token API de ce compte", hidden=True)
+    target = Client(site_from_env("TARGET"), opener)
+    target_name = urllib.parse.urlsplit(target.site.base).netloc
+
+    # What to read: the person's own Confluence.
+    needed("SOURCE_URL", "Adresse de VOTRE Confluence (ex. https://votre-entreprise.atlassian.net)")
+    cloud = ".atlassian.net" in os.environ.get("SOURCE_URL", "")
+    if cloud:
+        needed("SOURCE_EMAIL", "Votre adresse e-mail pour ce Confluence")
+    spaces: list[tuple[str, str]] = []
+    for attempt in range(3):
+        if not os.environ.get("SOURCE_TOKEN", "").strip():
+            if cloud:
+                say(f"Votre token API se crée en une minute ici : {TOKENS_PAGE}")
+                say("(« Créer un token d'API », puis copiez-le et collez-le ci-dessous.)")
+            else:
+                say(
+                    "Votre jeton d'accès personnel : Confluence → votre profil → "
+                    "Jetons d'accès personnels."
+                )
+            needed("SOURCE_TOKEN", "Votre token", hidden=True)
+        try:
+            source = Client(site_from_env("SOURCE"), opener)
+            spaces = list_spaces(source)
+            break
+        except CopyError as error:
+            say(f"\n{error}")
+            if attempt == 2:
+                return 2
+            os.environ["SOURCE_TOKEN"] = ""
+            say("Réessayons.\n")
+    if not spaces:
+        say("Ce compte ne voit aucun espace dans ce Confluence.")
+        return 2
+    say(f"\nLes espaces que vous pouvez lire ({len(spaces)}) :")
+    for number, (key, name) in enumerate(spaces, 1):
+        say(f"  {number:>3}. {name} ({key})")
+    try:
+        chosen = picked(
+            question(
+                "\nQuels espaces copier ? Des numéros séparés par des virgules, ou « tout »", "tout"
+            ),
+            spaces,
+        )
+    except CopyError as error:
+        say(str(error))
+        return 2
+    say(f"\n{len(chosen)} espace(s) à copier vers {target_name}, pièces jointes comprises.")
+    if question("On y va ? (o/n)", "o").lower() not in ("o", "oui", "y", "yes"):
+        say("Rien n'a été copié.")
+        return 0
+    reports: dict[str, object] = {}
+    failed = False
+    for key, name in chosen:
+        say(f"\n— {name} ({key}) —")
+        try:
+            space = read_space(source, key)
+            files = sum(len(p.attachments) for p in space.pages)
+            say(f"{len(space.pages)} pages, {files} pièce(s) jointe(s) : copie…\n")
+            report = write(space, Writer(target, key), source=source, report=Report(), say=say)
+        except CopyError as error:
+            say(f"Erreur : {error}")
+            reports[key] = {"erreur": str(error)}
+            failed = True
+            continue
+        say("\n" + report.said())
+        reports[key] = report.as_dict()
+        failed = failed or bool(report.failed)
+    Path(REPORT).write_text(json.dumps(reports, ensure_ascii=False, indent=2), encoding="utf-8")
+    say(f"\nCopie terminée. Rapport : {Path(REPORT).resolve()}")
+    say("Vous pouvez fermer cette fenêtre.")
+    return 1 if failed else 0
+
+
 # ── the command ────────────────────────────────────────────────────────────
 
 
@@ -929,12 +1078,15 @@ def main(
     *,
     opener: Opener = _urlopen,
     say: Callable[[str], None] = print,
+    ask: Callable[[str], str] = input,
+    secret: Callable[[str], str] = getpass.getpass,
 ) -> int:
     parser = argparse.ArgumentParser(
         prog="confluence_copy",
         description="Copier l'arborescence d'un espace Confluence dans un autre Confluence.",
     )
-    sub = parser.add_subparsers(dest="command", required=True)
+    # No command: the assistant.
+    sub = parser.add_subparsers(dest="command")
     for name, helped in (
         ("copy", "lire la source et écrire dans la cible"),
         ("export", "lire la source et écrire un dossier local"),
@@ -962,6 +1114,12 @@ def main(
     imported.add_argument("--dry-run", action="store_true", help="afficher l'arbre, ne rien écrire")
     imported.add_argument("--space-name", help="le nom de l'espace cible, s'il faut le créer")
     args = parser.parse_args(argv)
+    if args.command is None:
+        try:
+            return assistant(opener=opener, say=say, ask=ask, secret=secret)
+        except (CopyError, KeyboardInterrupt, EOFError) as error:
+            say(f"\nArrêté : {error}" if str(error) else "\nArrêté.")
+            return 2
 
     load_env(HERE / ".env")
     load_env(Path.cwd() / ".env")
