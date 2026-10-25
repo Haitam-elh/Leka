@@ -23,6 +23,7 @@ import { CompactIntentionComposer } from "@/components/intentions/compact-compos
 import { FirstStepsCard } from "@/components/overview/first-steps";
 import {
   AgentsSection,
+  DedicatedAgentsSection,
   EnvironmentCard,
   HistoryLink,
   HomeBundles,
@@ -717,6 +718,7 @@ export function Overview() {
         </div>
       </div>
       {/* LEKA-488: one row of agents, the bundles, then the latest analyses. */}
+      <DedicatedAgentsSection />
       <AgentsSection />
       <HomeBundles />
       <LatestAnalyses />

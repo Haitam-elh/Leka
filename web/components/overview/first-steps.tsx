@@ -9,6 +9,7 @@ import { ExploreDemoButton } from "@/components/demo/demo";
 import { useInDemo } from "@/components/demo/in-demo";
 import { buttonVariants } from "@/components/ui/button";
 import { routes } from "@/config/routes";
+import { useEnterprise } from "@/lib/contract";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 import { useIntentionCounts } from "@/lib/intentions/queries";
@@ -87,6 +88,8 @@ export function FirstStepsCard({ sources }: { sources: readonly Source[] }) {
   const w = t.overview.firstSteps;
   const counts = useIntentionCounts();
   const inDemo = useInDemo();
+  // A customer's own organisation (2026-10-25): its data only, no demonstration.
+  const enterprise = useEnterprise();
   const [hidden, setHidden] = useState(true);
 
   // Read after mount: the server has no localStorage.
@@ -111,9 +114,11 @@ export function FirstStepsCard({ sources }: { sources: readonly Source[] }) {
     }
   }
 
+  // Nothing connected (2026-10-25): Confluence first — the documentation
+  // LEKA reads best —, any other tool beside it.
   const action =
     steps.stage === "empty"
-      ? { label: w.connect, href: routes.welcome() }
+      ? { label: w.connectConfluence, href: `${routes.sources()}?connect=confluence` }
       : steps.stage === "failed" && steps.failing[0]
         ? { label: w.fix, href: routes.source(steps.failing[0].id) }
         : steps.stage !== "ready"
@@ -201,8 +206,17 @@ export function FirstStepsCard({ sources }: { sources: readonly Source[] }) {
               {action.label}
             </Link>
           ) : null}
+          {steps.stage === "empty" ? (
+            <Link
+              href={routes.welcome()}
+              className={cn(buttonVariants({ size: "sm", variant: "outline" }), "ms-2 mt-3")}
+              data-testid="first-steps-other"
+            >
+              {w.otherSource}
+            </Link>
+          ) : null}
           {/* Nothing read yet: Nova Retail, the demonstration, to see it first (LEKA-451). */}
-          {steps.stage !== "ready" && !inDemo ? (
+          {steps.stage !== "ready" && !inDemo && !enterprise ? (
             <div className="mt-3 border-t border-shell-line pt-3" data-testid="first-steps-demo">
               <p className="mb-2 text-[0.8125rem] text-shell-muted">{t.demo.exploreHint}</p>
               <ExploreDemoButton />

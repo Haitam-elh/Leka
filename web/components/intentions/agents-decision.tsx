@@ -41,6 +41,7 @@ import type {
 import { may } from "@/lib/intentions/journey";
 import { euros } from "@/lib/billing";
 import { useAddOns, useBuy } from "@/lib/billing-queries";
+import { useEnterprise } from "@/lib/contract";
 import { useDecide, useIntentionAnalysis, intentionKeys } from "@/lib/intentions/queries";
 import { notify } from "@/lib/notify";
 import { useSources } from "@/lib/sources-queries";
@@ -112,6 +113,9 @@ function DeliverableChips({ agent }: { agent: ProposedAgent }) {
 
 function Cost({ agent }: { agent: ProposedAgent }) {
   const w = useDictionary().intentions.agents;
+  // Under an Enterprise contract (2026-10-25): never a cost in credits.
+  const enterprise = useEnterprise();
+  if (enterprise) return null;
   return (
     <span className="text-xs text-shell-muted">
       {agent.credits !== null && agent.credits !== undefined

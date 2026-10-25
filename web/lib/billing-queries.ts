@@ -8,8 +8,9 @@ export function useWorkspaceUsage() {
   return useQuery({ queryKey: ["billing", "usage"], queryFn: billing.usage });
 }
 
-export function useCredits() {
-  return useQuery({ queryKey: ["billing", "credits"], queryFn: billing.credits });
+/** `enabled`: false until the session is known — never a 401 asked for. */
+export function useCredits({ enabled = true }: { enabled?: boolean } = {}) {
+  return useQuery({ queryKey: ["billing", "credits"], queryFn: billing.credits, enabled });
 }
 
 /** What is sold besides the plan, and what this workspace owns. */

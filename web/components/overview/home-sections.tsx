@@ -4,16 +4,27 @@ import {
   ArrowRight,
   ChevronRight,
   History,
+  Network,
+  Rocket,
 } from "lucide-react";
 import Link from "next/link";
 
 import { cn } from "cn";
 import { MarketTile, marketOf } from "@/components/capabilities/market-mark";
-import { AgentCardAction, agentStateOf, AgentStateSaid, Bundles } from "@/components/capabilities/offers";
+import {
+  AgentCardAction,
+  agentStateOf,
+  AgentStateSaid,
+  Bundles,
+  isEnterprise,
+  useOrganisationName,
+} from "@/components/capabilities/offers";
 import { type TileTone } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
 import { StatusPill } from "@/components/intentions/intentions-list";
 import { exactDate, timeAgo } from "@/components/knowledge/time";
+import { sourceTitle } from "@/components/sources/source-logo";
+import { buttonVariants } from "@/components/ui/button";
 import { routes } from "@/config/routes";
 import { agentTitle } from "@/lib/agent-title";
 import { euros } from "@/lib/billing";
@@ -24,6 +35,7 @@ import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import { useIntentions } from "@/lib/intentions/queries";
 import { recommend } from "@/lib/recommend-agents";
+import { isConnected, type SourceKind } from "@/lib/sources";
 import { useSources } from "@/lib/sources-queries";
 import { type Health, overallOf } from "@/lib/twin";
 
@@ -66,7 +78,10 @@ export function EnvironmentCard() {
   const w = t.overview.home;
   const { format } = useLocale();
   const env = useEnvironment().data;
-  const failing = useSources().data?.filter((source) => source.status === "error").length ?? 0;
+  const sources = useSources().data;
+  const failing = sources?.filter((source) => source.status === "error").length ?? 0;
+  // Nothing connected (2026-10-25): said neutral, in grey — never a state.
+  const none = sources !== undefined && !sources.some(isConnected);
   if (!env) {
     return (
       <div
@@ -77,7 +92,7 @@ export function EnvironmentCard() {
   }
   // The page's own rule (LEKA-468): the same figure on both screens.
   const overall = overallOf(env);
-  const { health } = overall;
+  const health: Health = none ? "unknown" : overall.health;
   const percent =
     overall.share !== null && health !== "unknown" ? Math.round(overall.share * 100) : null;
   const last = env.freshness?.last_read_at;
@@ -87,6 +102,7 @@ export function EnvironmentCard() {
       aria-labelledby="home-environment"
       data-testid="home-environment"
       data-health={health}
+      data-sources={none ? "none" : undefined}
     >
       <Link
         href={routes.environment()}
@@ -135,7 +151,7 @@ export function EnvironmentCard() {
         </div>
         <div className="min-w-0 space-y-1.5">
           <Pill tone={HEALTH_TONE[health]} dot data-testid="home-health">
-            {w.health[health]}
+            {none ? w.noSource : w.health[health]}
           </Pill>
           <p
             className="text-[0.6875rem] leading-snug text-shell-muted"
@@ -227,11 +243,11 @@ export function AgentsSection() {
             {w.agents}
           </h2>
           <p className="mt-1 text-[0.875rem] text-shell-muted">
-            {w.agentsBody}
+            {isEnterprise(offers) ? w.agentsBodyContract : w.agentsBody}
           </p>
         </div>
         <Link href={routes.capabilities()} className={LINK}>
-          {w.allAgents}
+          {isEnterprise(offers) ? w.allAgentsOnly : w.allAgents}
           <ArrowRight className="rtl:-scale-x-100 size-4" aria-hidden="true" />
         </Link>
       </div>
@@ -300,6 +316,78 @@ export function AgentsSection() {
               </div>
               <div className="mt-2.5">
                 <AgentCardAction agentKey={agent.key} />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+/** The agents made for this organisation (2026-10-25), first on its home:
+ * each one's card — what it does, the sources it reads, « Lancer ». Never
+ * a price: it is not sold. */
+export function DedicatedAgentsSection() {
+  const t = useDictionary();
+  const w = t.overview.home.dedicated;
+  const offers = useAddOns().data;
+  const organisation = useOrganisationName();
+  const catalogue = useCapabilities({}).data;
+  const keys = offers?.dedicated ?? [];
+  if (!keys.length) return null;
+  const summaries = t.catalogue.summaries as Record<string, string>;
+  return (
+    <section className="mt-10" aria-labelledby="home-dedicated" data-testid="home-dedicated">
+      <h2 id="home-dedicated" className="text-xl font-bold tracking-[-0.01em] text-brand-navy">
+        {w.title}
+      </h2>
+      {organisation ? (
+        <p className="mt-1 text-[0.875rem] text-shell-muted">{fill(w.lead, { organisation })}</p>
+      ) : null}
+      <ul className="mt-4 grid gap-3 md:grid-cols-2">
+        {keys.map((key) => {
+          const capability = catalogue?.find((c) => c.key === key);
+          const sources = [...new Set(capability?.sources.flatMap((group) => group.any_of) ?? [])];
+          return (
+            <li
+              key={key}
+              className={cn(CARD, "flex flex-col gap-3 border-brand-violet/30 p-4")}
+              data-testid="home-dedicated-agent"
+              data-key={key}
+            >
+              <div className="flex items-start gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-violet-soft text-shell-nav-active">
+                  <Network className="size-5" aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <h3 className="text-[0.9375rem] font-semibold text-brand-navy">
+                    <Link href={routes.capability(key)} className="rounded hover:underline">
+                      {agentTitle(t, key, capability?.title ?? key)}
+                    </Link>
+                  </h3>
+                  <p className="mt-0.5 text-[0.8125rem] text-shell-muted">
+                    {summaries[key] ?? capability?.summary ?? ""}
+                  </p>
+                </div>
+              </div>
+              {sources.length ? (
+                <p className="text-xs text-shell-muted" data-testid="home-dedicated-sources">
+                  {fill(w.sources, {
+                    sources: sources.slice(0, 4).map((kind) => sourceTitle(kind as SourceKind)).join(", ") + (sources.length > 4 ? "…" : ""),
+                  })}
+                </p>
+              ) : null}
+              <div className="flex flex-wrap items-center gap-2">
+                <Link
+                  href={`${routes.capability(key)}#use`}
+                  className={buttonVariants({ size: "sm" })}
+                  data-testid="home-dedicated-launch"
+                >
+                  <Rocket aria-hidden="true" />
+                  {w.launch}
+                </Link>
+                <AgentStateSaid agentKey={key} />
               </div>
             </li>
           );

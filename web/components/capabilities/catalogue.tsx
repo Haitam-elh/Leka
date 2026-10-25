@@ -1105,9 +1105,13 @@ export function CatalogueScreen() {
       <BackHome />
       <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1">
-          <h1 className="text-[2.125rem] leading-tight font-bold tracking-[-0.02em] text-brand-navy">{w.title}</h1>
+          <h1 className="text-[2.125rem] leading-tight font-bold tracking-[-0.02em] text-brand-navy">
+            {enterprise ? w.enterprise.title : w.title}
+          </h1>
           <p className="mt-1 text-[1.0625rem] text-shell-accent-muted">{w.subtitle}</p>
-          <p className="text-[0.9375rem] text-shell-muted">{w.subtitleMore}</p>
+          <p className="text-[0.9375rem] text-shell-muted">
+            {enterprise ? w.enterprise.subtitleMore : w.subtitleMore}
+          </p>
           {/* A suggestion to LEKA's team, not an intention (LEKA-501). */}
           <SuggestCapability />
         </div>
@@ -1205,9 +1209,11 @@ export function CatalogueScreen() {
             <section className="flex flex-col gap-3" aria-labelledby="catalogue-skills-title" data-testid="catalogue-skills">
               <div>
                 <h2 id="catalogue-skills-title" className="text-[1.25rem] font-bold text-brand-navy">
-                  {w.skillsTitle}
+                  {enterprise ? w.enterprise.skillsTitle : w.skillsTitle}
                 </h2>
-                <p className="text-[0.8125rem] text-shell-muted">{w.skillsLead}</p>
+                <p className="text-[0.8125rem] text-shell-muted">
+                  {enterprise ? w.enterprise.skillsLead : w.skillsLead}
+                </p>
               </div>
               <Domains
                 list={list}

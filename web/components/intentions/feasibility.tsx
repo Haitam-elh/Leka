@@ -145,28 +145,31 @@ export function FeasibilityPanel({
             </li>
           ))}
         </ul>
-        <div className="flex items-start gap-2 rounded-lg bg-shell-canvas px-3 py-2 text-[0.8125rem]" data-testid="feasibility-credits">
-          <Gauge className="mt-0.5 size-4 shrink-0 text-shell-muted" aria-hidden="true" />
-          <div className="min-w-0 text-brand-navy">
-            <p>
-              {fill(w.credits, {
-                remaining: number(credits.remaining),
-                allowance: number(credits.allowance),
-                plan: w.plans[credits.plan],
-              })}
-            </p>
-            <p className="text-shell-muted">
-              {feasibility.estimate !== null && feasibility.estimate !== undefined
-                ? fill(w.estimate, { credits: number(Math.max(1, feasibility.estimate)) })
-                : w.unknownCost}
-            </p>
-            {credits.enforced ? (
-              <p className="text-xs text-shell-muted">
-                {fill(w.enforced, { date: exactDate(locale, credits.period_end) })}
+        {/* Under an Enterprise contract (2026-10-25): its quota is LEKA's, never shown. */}
+        {credits.plan !== "enterprise" ? (
+          <div className="flex items-start gap-2 rounded-lg bg-shell-canvas px-3 py-2 text-[0.8125rem]" data-testid="feasibility-credits">
+            <Gauge className="mt-0.5 size-4 shrink-0 text-shell-muted" aria-hidden="true" />
+            <div className="min-w-0 text-brand-navy">
+              <p>
+                {fill(w.credits, {
+                  remaining: number(credits.remaining),
+                  allowance: number(credits.allowance),
+                  plan: w.plans[credits.plan],
+                })}
               </p>
-            ) : null}
+              <p className="text-shell-muted">
+                {feasibility.estimate !== null && feasibility.estimate !== undefined
+                  ? fill(w.estimate, { credits: number(Math.max(1, feasibility.estimate)) })
+                  : w.unknownCost}
+              </p>
+              {credits.enforced ? (
+                <p className="text-xs text-shell-muted">
+                  {fill(w.enforced, { date: exactDate(locale, credits.period_end) })}
+                </p>
+              ) : null}
+            </div>
           </div>
-        </div>
+        ) : null}
       </div>
     </Card>
   );

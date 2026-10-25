@@ -41,7 +41,7 @@ const MANAGEMENT = [
  * preference someone changes before they can read the settings page. It
  * opens the picker of every language LEKA offers (components/language).
  */
-export function UserMenu() {
+export function UserMenu({ contract = false }: { contract?: boolean } = {}) {
   const t = useDictionary();
   const router = useRouter();
   const user = useCurrentUser();
@@ -149,7 +149,8 @@ export function UserMenu() {
                 {managed.map((page) => (
                   <DropdownMenuItem key={page.id} onClick={() => router.push(page.href)} data-testid={`menu-${page.id}`}>
                     <page.icon className="size-4" aria-hidden="true" />
-                    {t.nav[page.id]}
+                    {/* Under an Enterprise contract (2026-10-25): « Contrat », never a bill. */}
+                    {page.id === "billing" && contract ? t.shell.contract : t.nav[page.id]}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuGroup>

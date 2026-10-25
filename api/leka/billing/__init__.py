@@ -21,6 +21,7 @@ from leka.billing.catalogue import (
     load,
     quote,
 )
+from leka.billing.contract import contract_now
 from leka.billing.entitlements import (
     Owned,
     end,
@@ -45,6 +46,7 @@ from leka.billing.schemas import (
     BundleOfferRead,
     CheckoutCreate,
     CheckoutRead,
+    ContractRead,
     EntitlementRead,
     PortalRead,
     PricingRead,
@@ -66,6 +68,7 @@ from leka.billing.subscriptions import (
     renewal,
     stripe,
     stripe_locale,
+    under_contract,
 )
 from leka.billing.sync import sync
 
@@ -86,6 +89,7 @@ __all__ = [
     "CheckoutCreate",
     "CheckoutRead",
     "CheckoutRefusedError",
+    "ContractRead",
     "EntitlementRead",
     "Interval",
     "Monitoring",
@@ -108,6 +112,7 @@ __all__ = [
     "catalogue",
     "checkout",
     "checkout_add_on",
+    "contract_now",
     "counts",
     "end",
     "entitlements",
@@ -128,4 +133,5 @@ __all__ = [
     "stripe",
     "stripe_locale",
     "sync",
+    "under_contract",
 ]

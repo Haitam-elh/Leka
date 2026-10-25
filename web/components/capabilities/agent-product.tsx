@@ -251,7 +251,7 @@ export function AgentProductPage({
           <div className="lg:hidden">
             <ChooseCard capability={capability} standing={standing} where="top" />
           </div>
-          <SectionTabs />
+          <SectionTabs contract={standing.contract !== null} />
           <WhySection product={product} capability={capability} />
           <FeaturesSection product={product} capability={capability} />
           <UseCasesSection product={product} capability={capability} />
@@ -414,7 +414,7 @@ function HeroArt({ capability, product }: { capability: CapabilityDetail; produc
 
 // ── The tabs: the page's sections, by their address ────────────────────────
 
-function SectionTabs() {
+function SectionTabs({ contract = false }: { contract?: boolean }) {
   const t = useDictionary();
   const w = t.catalogue.product;
   const [active, setActive] = useState<SectionId>("overview");
@@ -424,7 +424,8 @@ function SectionTabs() {
     "use-cases": w.tabs.useCases,
     integrations: w.tabs.integrations,
     results: w.tabs.results,
-    pricing: w.tabs.pricing,
+    // Dedicated, or under a contract (2026-10-25): its terms, never « Tarifs ».
+    pricing: contract ? t.shell.contract : w.tabs.pricing,
     faq: w.tabs.faq,
   };
 
@@ -871,7 +872,7 @@ function PricingSection({ capability, standing }: { capability: CapabilityDetail
   const { offers, offer, priced, contract } = standing;
   const tiers = t.catalogue.offers.tiers as Record<string, string>;
   return (
-    <Section id="pricing" icon={Wallet} title={w.pricing}>
+    <Section id="pricing" icon={Wallet} title={contract ? t.shell.contract : w.pricing}>
       {contract ? (
         <div className="flex flex-col gap-3 @xl:max-w-sm">
           <p className="text-[0.875rem] text-brand-navy" data-testid="agent-contract">

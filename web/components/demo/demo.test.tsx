@@ -13,6 +13,8 @@ import { LocaleProvider } from "@/lib/i18n/locale-provider";
 
 const api = vi.hoisted(() => ({ openDemo: vi.fn(), enter: vi.fn() }));
 vi.mock("@/lib/workspace", () => ({ workspace: api }));
+// No plan known: a public one — the demonstration offered (2026-10-25: never under a contract).
+vi.mock("@/lib/billing-queries", () => ({ useCredits: () => ({ data: undefined }) }));
 
 const shell = vi.hoisted(() => ({
   current: null as null | { id: string; name: string; slug: string; role: string; demo?: boolean },
