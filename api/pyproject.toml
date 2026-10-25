@@ -127,6 +127,11 @@ ignore = [
 # Developer scripts talk to a terminal; that is what they are for.
 # The glob is path-independent so it holds however ruff is invoked.
 "**/scripts/*.py" = ["T201"]
+# The architect's core runs on any Python from 3.9 (leka/architect/__init__.py):
+# zip(strict=) is 3.10's.
+"leka/architect/**" = ["B905"]
+# Word's XML, one element a line: read as Word writes it.
+"leka/architect/render.py" = ["B905", "E501"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["leka"]

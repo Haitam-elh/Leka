@@ -68,12 +68,13 @@ test.describe("Capabilities", () => {
     await sheet.getByTestId("agent-technical").getByText("Détails techniques").click();
     await expect(sheet.getByTestId("capability-inputs")).toContainText("parcours");
     await expect(sheet.getByTestId("capability-formats")).toContainText("PDF");
-    await expect(sheet.getByTestId("capability-versions")).toContainText("v19.2.0");
+    await expect(sheet.getByTestId("capability-versions")).toContainText("v19.3.0");
     // Run from its sheet (LEKA-395): here it can — a model answers.
     await expect(sheet.getByTestId("agent-run-form")).not.toContainText(
       "Il ne peut pas s'exécuter ici pour l'instant.",
     );
-    await expect(sheet).toContainText("Aucune exécution pour l'instant.");
+    // Its runs, or none yet — another spec may have run it before.
+    await expect(sheet).toContainText(/Aucune exécution pour l'instant\.|Exécutions/);
 
     // Turned off, saying why — then on again.
     await page.goto("/capabilities?tab=configuration");

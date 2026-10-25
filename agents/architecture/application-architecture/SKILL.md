@@ -2,7 +2,7 @@
 name: application-architecture
 title: Architecte applicatif
 description: Use when someone asks for the application architecture of a business journey on a perimeter — a deck with the business layer in ArchiMate 3.0.1, the application layer as sequence diagrams, the business rules, the RACI, the points to confirm and the sources, built only from the documentation, never invented. For any organisation.
-version: 19.2.0
+version: 19.3.0
 category: architecture
 entity_types: [business_process, application, service, document, person, team, knowledge_space, repository, project, issue, database, schema, data_object, infra_resource, environment]
 requires: ["confluence|microsoft_365|google_workspace|notion|guru|slab|github|gitlab|bitbucket|jira|linear|asana|clickup|monday|trello|postgresql|mysql|mariadb|sqlserver|oracle|mongodb|supabase"]
@@ -40,6 +40,16 @@ inputs:
     type: boolean
     required: false
     description: Ajouter la vue applicative (bloc optionnel).
+  # On a Confluence space (2026-10-25): its dossier structured as ArchiMate —
+  # Markdown, PDF, Word —, every section citing its pages (leka/architect).
+  - name: espace
+    type: text
+    required: false
+    description: La clé de l'espace Confluence à documenter, ex. « ARCHI » — le dossier ArchiMate de cet espace.
+  - name: page_racine
+    type: text
+    required: false
+    description: L'identifiant d'une page de cet espace — elle et ses descendantes seulement.
 goals: [map_dependencies, find_knowledge]
 kinds: [dependency, knowledge]
 examples:
