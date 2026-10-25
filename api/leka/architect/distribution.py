@@ -251,7 +251,25 @@ LEKA. Les fichiers PowerPoint et PDF sont dessinés par **le même code que sur
 LEKA**. **Rien ne passe par LEKA** : vos pages vont au modèle que vous
 configurez, et nulle part ailleurs. Aucune télémétrie.
 
-## 1. Installer (moins de 10 minutes)
+## Le plus simple : l'installateur de LEKA
+
+Dans LEKA, « Installer dans votre environnement » : renseignez votre Confluence
+et votre modèle (facultatif, ils ne quittent pas votre navigateur), téléchargez
+l'agent puis **votre installateur**, et collez une seule commande — dans le
+Terminal (macOS, Linux) :
+
+    bash "$(ls -t ~/Downloads/installer-architecte*.sh | head -1)"
+
+ou dans PowerShell (Windows) :
+
+    powershell -ExecutionPolicy Bypass -File (Get-ChildItem $HOME\\Downloads\\installer-architecte*.ps1 | Sort-Object LastWriteTime | Select-Object -Last 1).FullName
+
+Il installe tout dans le dossier `architecte` de votre compte et y crée
+**« Lancer l'architecte »** : double-cliquez, choisissez l'espace, le parcours,
+le périmètre — le PowerPoint et le PDF s'ouvrent. Les étapes ci-dessous font la
+même chose à la main.
+
+## 1. Installer à la main (moins de 10 minutes)
 
 Il faut **Python 3.10 ou plus**. Travaillez dans un dossier à vous — par
 exemple `architecte/` —, où vous dézippez ce paquet : `architecte/leka-architect/`.

@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { expect, type Page, test } from "@playwright/test";
@@ -22,8 +22,7 @@ import { expectShellReady, expectSignedIn, LANDING, loginAnswer } from "./sign-i
  *
  * LEKA_E2E_SCREENS: a folder where each screen is kept, to be looked at.
  * LEKA_E2E_PACKAGE: where the architect's package it downloads is kept, its
- * commands as the dialog shows them beside it (.commands.txt) — to install
- * it by them.
+ * installer beside it (.installer.sh) — to install it by them.
  */
 
 const SCREENS = process.env.LEKA_E2E_SCREENS;
@@ -149,10 +148,15 @@ test.describe("An Enterprise organisation", () => {
     await nothingSold(page);
     await kept(page, "01-accueil");
 
-    // « Installer dans votre environnement »: three ways, its package downloaded.
+    // « Installer dans votre environnement »: three steps, its package downloaded.
     await made.getByTestId("install-open").click();
     const install = page.getByTestId("install-dialog");
     await expect(install).toContainText("rien ne passe par LEKA");
+    // What is typed there never reaches LEKA: no request carries it.
+    const carried: string[] = [];
+    page.on("request", (request) => {
+      if (`${request.url()} ${request.postData() ?? ""}`.includes("jeton-e2e-secret")) carried.push(request.url());
+    });
     // Its button, clicked: the zip, its organisation's instructions in it.
     await install.getByTestId("install-system-macos").click();
     const downloading = page.waitForEvent("download");
@@ -163,12 +167,22 @@ test.describe("An Enterprise organisation", () => {
     await download.saveAs(saved);
     expect(unzipped(saved, "leka-architect/leka_architect/consignes.md")).toBe(OWN);
     expect(unzipped(saved, "leka-architect/copilot/.github/prompts/architecte-applicatif.prompt.md")).toContain(OWN.trim());
-    if (PACKAGE) {
-      const shown = await install.locator("pre").allTextContents();
-      writeFileSync(`${PACKAGE}.commands.txt`, shown.join("\n# ----\n"));
-    }
-    await page.getByTestId("install-tab-mcp").click();
-    await expect(install).toContainText('"args": ["mcp"]');
+    // Its details, then its installer — made by this browser, with them.
+    await install.getByTestId("install-confluence-url").fill("https://acme.atlassian.net");
+    await install.getByTestId("install-confluence-email").fill("ada@acme.example");
+    await install.getByTestId("install-confluence-token").fill("jeton-e2e-secret");
+    await install.getByTestId("install-model-gemini").click();
+    await install.getByTestId("install-model-key").fill("cle-e2e-secrete");
+    const making = page.waitForEvent("download");
+    await install.getByTestId("install-installer").click();
+    const installerFile = await making;
+    expect(installerFile.suggestedFilename()).toBe("installer-architecte.sh");
+    const script = readFileSync((await installerFile.path()) as string, "utf8");
+    expect(script).toContain("CONFLUENCE_TOKEN=jeton-e2e-secret");
+    expect(script).toContain("ARCHITECT_LLM_API_KEY=cle-e2e-secrete");
+    if (PACKAGE) writeFileSync(`${PACKAGE}.installer.sh`, script);
+    expect(carried).toEqual([]);
+    await expect(install).toContainText('bash "$(ls -t ~/Downloads/installer-architecte*.sh | head -1)"');
     await kept(page, "01b-installer");
     const zip = await page.request.get(
       "http://localhost:8000/api/v1/capabilities/application-architecture/package",
