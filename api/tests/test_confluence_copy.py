@@ -641,3 +641,24 @@ def test_the_windows_bundle_python_included_the_target_given_double_clicked(
             made.read("copie-confluence/confluence_copy.py")
             == (ROOT / "scripts" / "confluence_copy" / "confluence_copy.py").read_bytes()
         )
+
+
+def test_the_assistant_in_a_company_s_confluence_a_search_first_never_all_by_default(
+    env: Path,
+) -> None:
+    source, _ = _source()
+    for n in range(12):
+        source.spaces[f"T{n}"] = f"Équipe {n}"
+    target = _target()
+    said: list[str] = []
+    # A word that finds nothing, then one that finds twelve: no default — a
+    # number is asked for.
+    typed = Answers("paiement", "équipe", "", "3", "o")
+    code = tool.main([], opener=Sites(source, target), say=said.append, ask=typed)
+    assert code == 0, said
+    assert any("Vous pouvez lire 13 espaces" in line for line in said)
+    assert any("Aucun espace ne contient ce mot" in line for line in said)
+    assert any("Les espaces trouvés (12)" in line for line in said)
+    assert any("Choisissez au moins un espace." in line for line in said)
+    assert not any("« tout »" in question for question in typed.asked)
+    assert set(target.spaces) == {"T2"}

@@ -922,6 +922,8 @@ def html_page(text: str, fallback: str) -> tuple[str, str]:
 # ── the assistant: no command, a few questions, everything copied ──────────
 
 TOKENS_PAGE = "https://id.atlassian.com/manage-profile/security/api-tokens"
+# Up to this many spaces: all of them by default; beyond, a search first.
+FEW = 8
 
 
 def list_spaces(client: Client) -> list[tuple[str, str]]:
@@ -1020,18 +1022,39 @@ def assistant(
     if not spaces:
         say("Ce compte ne voit aucun espace dans ce Confluence.")
         return 2
-    say(f"\nLes espaces que vous pouvez lire ({len(spaces)}) :")
-    for number, (key, name) in enumerate(spaces, 1):
+    # A company's Confluence: hundreds of spaces — never all by default, only
+    # those named: found by a word of their name, then chosen.
+    shown = spaces
+    if len(spaces) > FEW:
+        say(f"\nVous pouvez lire {len(spaces)} espaces : cherchez celui de votre équipe.")
+        for _ in range(5):
+            word = question("Un mot de son nom, ou sa clé (ex. architecture)").lower()
+            shown = [s for s in spaces if word and (word in s[0].lower() or word in s[1].lower())]
+            if shown:
+                break
+            say("Aucun espace ne contient ce mot : essayez-en un autre.")
+        else:
+            return 2
+    say(f"\nLes espaces trouvés ({len(shown)}) :")
+    for number, (key, name) in enumerate(shown, 1):
         say(f"  {number:>3}. {name} ({key})")
-    try:
-        chosen = picked(
-            question(
-                "\nQuels espaces copier ? Des numéros séparés par des virgules, ou « tout »", "tout"
-            ),
-            spaces,
+    few = len(shown) <= FEW
+    chosen: list[tuple[str, str]] = []
+    for _ in range(3):
+        answer = question(
+            "\nQuels espaces copier ? Leurs numéros, séparés par des virgules"
+            + (", ou « tout »" if few else ""),
+            "tout" if few else "",
         )
-    except CopyError as error:
-        say(str(error))
+        try:
+            chosen = picked(answer, shown) if answer else []
+        except CopyError as error:
+            say(str(error))
+            continue
+        if chosen:
+            break
+        say("Choisissez au moins un espace.")
+    if not chosen:
         return 2
     say(f"\n{len(chosen)} espace(s) à copier vers {target_name}, pièces jointes comprises.")
     if question("On y va ? (o/n)", "o").lower() not in ("o", "oui", "y", "yes"):
