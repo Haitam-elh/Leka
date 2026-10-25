@@ -41,6 +41,7 @@ const fr = {
     welcome: "Bienvenue",
     capabilities: "Compétences",
     capabilityDetail: "Compétence",
+    architect: "Architecte applicatif",
     governance: "Sécurité",
     team: "Équipe",
     billing: "Facturation",
@@ -1860,6 +1861,11 @@ const fr = {
     downloadPdf: "Télécharger le PDF",
     downloadPptx: "Télécharger le PowerPoint",
     slides: "{count} slides",
+    /** The architect's dossier on a Confluence space (2026-10-25). */
+    downloadMd: "Markdown",
+    downloadDocx: "Word",
+    downloadJson: "JSON",
+    dossierSaid: "Dossier ArchiMate : chaque section cite ses pages Confluence.",
     drawing:
       "En cours : l'agent lit vos sources connectées, puis LEKA dessine le PowerPoint et le PDF.",
     pending: "{formats} : pas encore générés, à partir de ce livrable.",
@@ -2235,6 +2241,28 @@ const fr = {
       "Chaque agent peut être acheté individuellement. Les prix sont mensuels, en euros, hors TVA.",
     compare: "Voir la comparaison des offres",
     allTiers: "Tous les niveaux",
+    /** The architect on a Confluence space (2026-10-25): its perimeter, chosen. */
+    architectLaunch: {
+      title: "Architecte applicatif",
+      lead: "Choisissez le périmètre Confluence : un espace entier, ou une page et ses descendantes. LEKA produit le dossier d'architecture structuré ArchiMate — PDF, Word, Markdown —, chaque section citant ses pages.",
+      noSource: "Aucun Confluence n'est connecté : connectez-le, LEKA synchronisera ses espaces.",
+      connect: "Connecter Confluence",
+      source: "Source Confluence",
+      space: "Espace",
+      pages: "{count} {count|page|pages} · profondeur {depth}",
+      noSpace: "Aucun espace synchronisé pour l'instant : attendez la fin de la première synchronisation.",
+      root: "Page racine",
+      rootAll: "Tout l'espace",
+      subject: "Sujet ou parcours à documenter",
+      subjectHint: "Ex. « Facturation » : l'Architecte le documente en priorité.",
+      perimeter: "Périmètre",
+      launch: "Lancer l'Architecte",
+      launching: "Lancement…",
+      readOnly: "Lecture seule : rien n'est écrit dans Confluence.",
+      asked: "/architecte Dossier d'architecture — {subject} — espace {space}{root}",
+      rootSaid: ", page « {title} »",
+      perimeterSaid: "Espace {space}",
+    },
     /** Made for one organisation (2026-10-25): seen by it alone, never sold. */
     dedicated: {
       title: "Agents dédiés",
@@ -2541,6 +2569,9 @@ const fr = {
           "Il le dit : ce que vos sources ne donnent pas est signalé comme manquant, jamais inventé, et chaque affirmation cite ce sur quoi elle repose.",
         who: "Qui peut le lancer, et qui peut l'acheter ?",
         whoAnswer: "Le lancer : {run}. L'acheter : un propriétaire ou un administrateur de l'espace.",
+        /** Dedicated, or under a contract (2026-10-25): nothing to buy. */
+        whoContract: "Qui peut le lancer ?",
+        whoAnswerContract: "Le lancer : {run}.",
         member: "tout membre de l'espace",
       },
       similar: "Agents similaires",
@@ -5525,6 +5556,16 @@ const fr = {
   },
   /** The sources screen (LEKA-345), docs/product/mockups/12-sources.jpeg. */
   sources: {
+    /** « Arborescence » (2026-10-25): what a Confluence source synced. */
+    tree: {
+      title: "Arborescence",
+      lead: "Les pages synchronisées, espace par espace, rangées comme dans Confluence : vérifiez que tout est remonté.",
+      pages: "{count} {count|page|pages}",
+      depth: "profondeur {depth}",
+      none: "Aucune page synchronisée pour l'instant : la première synchronisation les remontera.",
+      open: "Ouvrir dans Confluence",
+      document: "Documenter cet espace",
+    },
     title: "Sources connectées",
     subtitle:
       "Connectez vos outils pour donner à LEKA une vision complète de votre environnement.",
@@ -9060,6 +9101,7 @@ const en: Dictionary = {
     welcome: "Welcome",
     capabilities: "Skills",
     capabilityDetail: "Skill",
+    architect: "Application architect",
     governance: "Security",
     team: "Team",
     billing: "Billing",
@@ -10774,6 +10816,11 @@ const en: Dictionary = {
     downloadPdf: "Download the PDF",
     downloadPptx: "Download the PowerPoint",
     slides: "{count} slides",
+    /** The architect's dossier on a Confluence space (2026-10-25). */
+    downloadMd: "Markdown",
+    downloadDocx: "Word",
+    downloadJson: "JSON",
+    dossierSaid: "ArchiMate dossier: each section cites its Confluence pages.",
     drawing:
       "Running: the agent reads your connected sources, then LEKA draws the PowerPoint and the PDF.",
     pending: "{formats}: not generated yet, from this deliverable.",
@@ -11141,6 +11188,28 @@ const en: Dictionary = {
     allAgentsLead: "Each agent can be bought on its own. Prices are monthly, in euros, excluding VAT.",
     compare: "Compare the plans",
     allTiers: "All levels",
+    /** The architect on a Confluence space (2026-10-25): its perimeter, chosen. */
+    architectLaunch: {
+      title: "Application architect",
+      lead: "Choose the Confluence perimeter: a whole space, or a page and everything under it. LEKA produces the architecture dossier structured as ArchiMate — PDF, Word, Markdown —, each section citing its pages.",
+      noSource: "No Confluence is connected: connect it, LEKA will sync its spaces.",
+      connect: "Connect Confluence",
+      source: "Confluence source",
+      space: "Space",
+      pages: "{count} {count|page|pages} · depth {depth}",
+      noSpace: "No space synced yet: wait for the first sync to finish.",
+      root: "Root page",
+      rootAll: "The whole space",
+      subject: "Subject or journey to document",
+      subjectHint: "E.g. « Billing »: the architect documents it first.",
+      perimeter: "Perimeter",
+      launch: "Launch the architect",
+      launching: "Launching…",
+      readOnly: "Read only: nothing is written to Confluence.",
+      asked: "/architecte Architecture dossier — {subject} — space {space}{root}",
+      rootSaid: ", page « {title} »",
+      perimeterSaid: "Space {space}",
+    },
     /** Made for one organisation (2026-10-25): seen by it alone, never sold. */
     dedicated: {
       title: "Dedicated agents",
@@ -11431,6 +11500,9 @@ const en: Dictionary = {
           "It says so: what your sources do not give is reported as missing, never made up, and every statement cites what it rests on.",
         who: "Who can run it, and who can buy it?",
         whoAnswer: "Run it: {run}. Buy it: an owner or an admin of the workspace.",
+        /** Dedicated, or under a contract (2026-10-25): nothing to buy. */
+        whoContract: "Who can run it?",
+        whoAnswerContract: "Run it: {run}.",
         member: "any member of the workspace",
       },
       similar: "Similar agents",
@@ -14330,6 +14402,16 @@ const en: Dictionary = {
     },
   },
   sources: {
+    /** « Arborescence » (2026-10-25): what a Confluence source synced. */
+    tree: {
+      title: "Tree",
+      lead: "The synced pages, space by space, ordered as in Confluence: check that everything came up.",
+      pages: "{count} {count|page|pages}",
+      depth: "depth {depth}",
+      none: "No page synced yet: the first sync will bring them up.",
+      open: "Open in Confluence",
+      document: "Document this space",
+    },
     title: "Connected sources",
     subtitle:
       "Connect your tools to give LEKA a complete view of your environment.",

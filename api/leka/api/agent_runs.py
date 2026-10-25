@@ -321,10 +321,11 @@ def run_read(run: AgentRun, principal: Principal) -> AgentRunRead:
                 format=f["format"],
                 name=str(f["name"]),
                 size=int(f["size"]),
-                slides=int(f["slides"]),
+                slides=int(f.get("slides") or 0),
+                kind="dossier" if f.get("kind") == "dossier" else "deck",
             )
             for f in files
-            if isinstance(f, dict) and f.get("format") in ("pptx", "pdf")
+            if isinstance(f, dict) and f.get("format") in ("pptx", "pdf", "md", "docx", "json")
         ],
         error=run.error,
         reasons=[r for r in reasons if isinstance(r, dict)],
@@ -634,11 +635,14 @@ async def get_report_pdf(
 @router.get(
     "/{run_id}/deliverables/{fmt}",
     response_class=StreamingResponse,
-    summary="A file an agent run delivered: its PowerPoint or its PDF",
-    responses={200: {"content": {MEDIA_TYPES["pptx"]: {}, MEDIA_TYPES["pdf"]: {}}}},
+    summary="A file an agent run delivered: its deck, or its dossier",
+    responses={200: {"content": {media: {} for media in MEDIA_TYPES.values()}}},
 )
 async def get_deliverable(
-    run_id: uuid.UUID, fmt: Literal["pptx", "pdf"], session: SessionDep, principal: Reader
+    run_id: uuid.UUID,
+    fmt: Literal["pptx", "pdf", "md", "docx", "json"],
+    session: SessionDep,
+    principal: Reader,
 ) -> StreamingResponse:
     """What LEKA drew of what the run delivered (the architect's deck), as
     an attachment. 404 when the run, or that file, is not there."""

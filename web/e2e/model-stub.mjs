@@ -71,7 +71,37 @@ function proposalOf(task) {
   };
 }
 
+/** The application architect's dossier (2026-10-25): every page it was
+ * shown cited — by the ids it was shown them with. */
+function dossierOf(pages) {
+  const ids = [...pages.matchAll(/^\[([^\]]+)\]/gm)].map((m) => m[1]);
+  const cite = (n) => ids.slice(0, n);
+  return {
+    title: "Dossier d'architecture",
+    sections: [
+      { key: "synthese", summary: "Le périmètre, tel que ses pages le décrivent.", pages: cite(1) },
+      { key: "metier", summary: "Les acteurs et processus nommés par les pages.", pages: cite(1) },
+      { key: "application", summary: "Les composants applicatifs et leurs échanges.", pages: cite(3) },
+      { key: "technologie", summary: "Non documenté dans les pages lues.", pages: [] },
+      { key: "flux", summary: "Billing API appelle Ledger.", pages: cite(2) },
+      { key: "dependances", summary: "Billing API dépend de Ledger.", pages: cite(2) },
+      { key: "points", summary: "Qui exploite Ledger ?", pages: [] },
+    ],
+    elements: [
+      { id: "b", layer: "application", type: "Composant applicatif", name: "Billing API", pages: cite(3) },
+      { id: "l", layer: "application", type: "Composant applicatif", name: "Ledger", pages: cite(2) },
+    ],
+    relations: [{ source: "b", target: "l", type: "Flux", label: "factures", pages: cite(2) }],
+    points: ["Qui exploite Ledger ?"],
+  };
+}
+
 function answer(body) {
+  const system = body?.systemInstruction?.parts?.[0]?.text ?? "";
+  if (system.includes("Tu es l'Architecte applicatif. À partir des pages Confluence")) {
+    const asked = (body?.contents ?? []).map((c) => c?.parts?.[0]?.text ?? "").join("\n");
+    return JSON.stringify(dossierOf(asked));
+  }
   const properties = body?.generationConfig?.responseJsonSchema?.properties ?? {};
   let said = {};
   try {

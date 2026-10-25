@@ -380,7 +380,8 @@ export function DedicatedAgentsSection() {
               ) : null}
               <div className="flex flex-wrap items-center gap-2">
                 <Link
-                  href={`${routes.capability(key)}#use`}
+                  // The architect on a Confluence space (2026-10-25): its perimeter chosen first.
+                  href={key === "application-architecture" ? routes.architect() : `${routes.capability(key)}#use`}
                   className={buttonVariants({ size: "sm" })}
                   data-testid="home-dedicated-launch"
                 >

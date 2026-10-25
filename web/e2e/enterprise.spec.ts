@@ -118,12 +118,14 @@ test.describe("An Enterprise organisation", () => {
     await expect(made.getByTestId("home-dedicated-agent")).toContainText(
       "Génère la documentation d'architecture applicative structurée ArchiMate à partir de votre Confluence",
     );
-    await expect(made.getByTestId("home-dedicated-launch")).toHaveAttribute(
-      "href",
-      "/capabilities/application-architecture#use",
-    );
+    // « Lancer »: its perimeter chosen first — none yet: Confluence to connect.
+    await expect(made.getByTestId("home-dedicated-launch")).toHaveAttribute("href", "/architecte");
     await nothingSold(page);
     await kept(page, "01-accueil");
+
+    await made.getByTestId("home-dedicated-launch").click();
+    await expect(page.getByTestId("architect-no-source")).toContainText("Aucun Confluence n'est connecté");
+    await page.goto("/overview");
 
     // Confluence's connection, opened at once.
     await page.getByTestId("first-steps-action").click();

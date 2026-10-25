@@ -292,10 +292,14 @@ def deliverable_of(run: AgentRun, fmt: str) -> Mapping[str, Any] | None:
     files = run.detail.get("deliverables")
     if not isinstance(files, list):
         return None
-    # Only ever a key of this run, in this workspace.
-    key = deliverable_key(run.workspace_id, run.id, fmt)
+    # Only ever a key of this run, in this workspace: its deck's, or its
+    # dossier's (dossier.py).
+    keys = {
+        deliverable_key(run.workspace_id, run.id, fmt),
+        f"{run.workspace_id}/agent-runs/{run.id}/dossier.{fmt}",
+    }
     for one in files:
-        if isinstance(one, dict) and one.get("format") == fmt and one.get("key") == key:
+        if isinstance(one, dict) and one.get("format") == fmt and one.get("key") in keys:
             return one
     return None
 

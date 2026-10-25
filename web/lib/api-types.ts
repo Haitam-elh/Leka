@@ -1316,6 +1316,28 @@ export interface paths {
         patch: operations["update_source_api_v1_sources__source_id__patch"];
         trace?: never;
     };
+    "/api/v1/sources/{source_id}/tree": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Source Tree
+         * @description « Arborescence » (2026-10-25): a Confluence source's spaces and their
+         *     pages as synced — parent and child, how many, how deep. Empty for a
+         *     source that holds no pages.
+         */
+        get: operations["source_tree_api_v1_sources__source_id__tree_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sources/{source_id}/credentials": {
         parameters: {
             query?: never;
@@ -4737,7 +4759,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * A file an agent run delivered: its PowerPoint or its PDF
+         * A file an agent run delivered: its deck, or its dossier
          * @description What LEKA drew of what the run delivered (the architect's deck), as
          *     an attachment. 404 when the run, or that file, is not there.
          */
@@ -13636,7 +13658,7 @@ export interface components {
              * Format
              * @enum {string}
              */
-            format: "pptx" | "pdf";
+            format: "pptx" | "pdf" | "md" | "docx" | "json";
             /**
              * Name
              * @description Its file name.
@@ -13647,8 +13669,19 @@ export interface components {
              * @description In bytes.
              */
             size: number;
-            /** Slides */
+            /**
+             * Slides
+             * @description A deck's slides; 0 for a dossier.
+             * @default 0
+             */
             slides: number;
+            /**
+             * Kind
+             * @description The architect's deck, or its dossier on a Confluence space (2026-10-25).
+             * @default deck
+             * @enum {string}
+             */
+            kind: "deck" | "dossier";
         };
         /**
          * DeliveryAccepted
@@ -23729,6 +23762,20 @@ export interface components {
             /** Status */
             status: string;
         };
+        /**
+         * SourceTreeRead
+         * @description « Arborescence »: what a Confluence source synced, space by space —
+         *     to check every page came up, at every depth.
+         */
+        SourceTreeRead: {
+            /**
+             * Source Id
+             * Format: uuid
+             */
+            source_id: string;
+            /** Spaces */
+            spaces: components["schemas"]["TreeSpaceRead"][];
+        };
         /** SourceUpdate */
         SourceUpdate: {
             /** Display Name */
@@ -24334,6 +24381,43 @@ export interface components {
              * @enum {string}
              */
             origin: "source" | "model";
+        };
+        /**
+         * TreeNodeRead
+         * @description A Confluence page in its space's tree (2026-10-25).
+         */
+        TreeNodeRead: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Url */
+            url?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
+            /** Children */
+            children?: components["schemas"]["TreeNodeRead"][];
+        };
+        /** TreeSpaceRead */
+        TreeSpaceRead: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Url */
+            url?: string | null;
+            /**
+             * Pages
+             * @description Its current pages, synced.
+             */
+            pages: number;
+            /**
+             * Depth
+             * @description How deep its tree goes: 1 for pages without children.
+             */
+            depth: number;
+            /** Nodes */
+            nodes: components["schemas"]["TreeNodeRead"][];
         };
         /**
          * TwinCoverageRead
@@ -33156,6 +33240,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SourceRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    source_tree_api_v1_sources__source_id__tree_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceTreeRead"];
                 };
             };
             /** @description The request could not be understood. */
@@ -49598,7 +49776,7 @@ export interface operations {
             header?: never;
             path: {
                 run_id: string;
-                fmt: "pptx" | "pdf";
+                fmt: "pptx" | "pdf" | "md" | "docx" | "json";
             };
             cookie?: never;
         };
@@ -49612,6 +49790,9 @@ export interface operations {
                 content: {
                     "application/vnd.openxmlformats-officedocument.presentationml.presentation": unknown;
                     "application/pdf": unknown;
+                    "text/markdown; charset=utf-8": unknown;
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": unknown;
+                    "application/json": unknown;
                 };
             };
             /** @description The request could not be understood. */

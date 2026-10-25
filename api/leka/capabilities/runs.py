@@ -44,12 +44,14 @@ import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from leka.architect import DossierError
 from leka.background import JobQueue, enqueue_job
 from leka.capabilities.catalogue import CatalogueService, Entry, needs_of
 from leka.capabilities.code_tools import CODE_NAMES, CODE_TOOLS, code_handlers
 from leka.capabilities.definition import Definition, check_input
 from leka.capabilities.deliverable_check import deferred, missing, unread
 from leka.capabilities.delivery import draw, organisation_of
+from leka.capabilities.dossier import draw_dossier, perimeter_of, summary_of, wants_dossier
 from leka.capabilities.gateway import (
     Completion,
     Gateway,
@@ -98,7 +100,7 @@ from leka.governance import (
 from leka.identity import spoken_language
 from leka.ingestion import ContentRepository, ResolutionRepository
 from leka.knowledge import EntityRepository, GraphRepository, GraphService, KnowledgeService
-from leka.platform import Role
+from leka.platform import ObjectStoreError, Role
 
 logger = structlog.get_logger(__name__)
 
@@ -498,6 +500,10 @@ async def _run(
     if definition.version != run.version:
         run.detail = {**run.detail, "asked_version": run.version}
         run.version = definition.version
+    # On a Confluence space (2026-10-25): the architect's dossier, its steps
+    # leka.architect's — the downloadable agent's — not the deck.
+    if wants_dossier(definition, run.inputs):
+        return await _dossier(session, run, definition, steps, budget)
 
     # Its context, what its types allow.
     context = await _context(session, run, definition)
@@ -724,6 +730,95 @@ async def _run(
         await queue_redraw(workspace_id, run.id, again)
     status = "succeeded" if ended else "cancelled"
     logger.info("agent_run_ended", run=str(run.id), key=run.key, status=status)
+    return {"status": status}
+
+
+async def _dossier(
+    session: AsyncSession,
+    run: AgentRun,
+    definition: Definition,
+    steps: Steps,
+    budget: float,
+) -> dict[str, object]:
+    """The dossier of a Confluence space, or of a page and everything under
+    it — its pages the ones LEKA synced, held to their source."""
+    perimeter = await perimeter_of(session, run.workspace_id, run.inputs)
+    if not perimeter.pages:
+        return await _fail(
+            session,
+            run,
+            "unavailable",
+            refused="no_pages",
+            space=perimeter.space,
+            root=perimeter.root,
+        )
+    held = [str(perimeter.source_id)] if perimeter.source_id else []
+    run.detail = {**run.detail, "sources": held}
+    steps.add(
+        "dossier_pages", space=perimeter.space, root=perimeter.root, pages=len(perimeter.pages)
+    )
+    await session.commit()
+
+    def said(step: str, detail: dict[str, Any]) -> None:
+        steps.add(f"dossier_{step}", **detail)
+
+    try:
+        drawn = await asyncio.wait_for(
+            draw_dossier(session, run, definition, perimeter, said=said), timeout=budget
+        )
+    except NoModelError as error:
+        return await _fail(
+            session,
+            run,
+            "no_model",
+            said=str(error),
+            tried=len(error.attempts),
+            reason=error.reason,
+        )
+    except TimeoutError:
+        return await _fail(session, run, "timeout", seconds=budget)
+    except DossierError as error:
+        return await _fail(session, run, "invalid_output", format="dossier", said=str(error)[:300])
+    except ObjectStoreError:
+        logger.exception("dossier_not_kept", run=str(run.id))
+        return await _fail(session, run, "error", kind="storage")
+    done = drawn.completion
+    if done is not None:
+        steps.add(
+            "answered",
+            provider=done.provider,
+            model=done.model,
+            version=done.version,
+            tokens_in=done.usage.tokens_in,
+            tokens_out=done.usage.tokens_out,
+            calls=drawn.calls,
+        )
+    summary = summary_of(drawn.dossier, perimeter)
+    steps.add("dossier", **{k: v for k, v in summary.items() if k != "lacking"})
+    runs = CapabilityRunRepository(session, run.workspace_id)
+    ended = await runs.finish(
+        run.id,
+        status=RunStatus.SUCCEEDED.value,
+        output=drawn.text[:OUTPUT_KEPT],
+        finished_at=now_or(),
+        provider=done.provider if done is not None else None,
+        model=done.model[:120] if done is not None else None,
+        model_version=done.version[:120] if done is not None else None,
+        tool_calls=run.tool_calls,
+        detail={**run.detail, "deliverables": drawn.files, "dossier": summary, "sources": held},
+    )
+    if ended:
+        steps.add("succeeded", chars=len(drawn.text))
+        _ended(
+            session,
+            run,
+            "succeeded",
+            model=done.model if done is not None else None,
+            tool_calls=run.tool_calls,
+        )
+    await session.commit()
+    status = "succeeded" if ended else "cancelled"
+    logger.info("agent_run_ended", run=str(run.id), key=run.key, status=status, dossier=True)
     return {"status": status}
 
 

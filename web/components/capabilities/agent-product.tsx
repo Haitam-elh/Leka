@@ -989,8 +989,8 @@ function FaqSection({
     [f.price, price],
     [f.missing, f.missingAnswer],
     [
-      f.who,
-      fill(f.whoAnswer, {
+      contract ? f.whoContract : f.who,
+      fill(contract ? f.whoAnswerContract : f.whoAnswer, {
         run: capability.permission === "intention:create" ? f.member : capability.permission,
       }),
     ],

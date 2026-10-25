@@ -704,10 +704,14 @@ class DeliverableRead(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    format: Literal["pptx", "pdf"]
+    format: Literal["pptx", "pdf", "md", "docx", "json"]
     name: str = Field(description="Its file name.")
     size: int = Field(description="In bytes.")
-    slides: int
+    slides: int = Field(default=0, description="A deck's slides; 0 for a dossier.")
+    kind: Literal["deck", "dossier"] = Field(
+        default="deck",
+        description="The architect's deck, or its dossier on a Confluence space (2026-10-25).",
+    )
 
 
 class DesignCorrectionRead(BaseModel):

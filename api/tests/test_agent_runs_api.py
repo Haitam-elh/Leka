@@ -245,7 +245,7 @@ async def test_the_architect_runs_end_to_end(
     )
     assert (started["title"], started["version"], started["mine"]) == (
         "Architecte applicatif",
-        "19.2.0",
+        "19.3.0",
         True,
     )
     assert started["deliverables"] == []
@@ -346,7 +346,9 @@ async def test_the_architect_runs_end_to_end(
     pptx = await client.get(f"{API}/{started['id']}/deliverables/pptx")
     assert pptx.status_code == 200
     assert len(Presentation(BytesIO(pptx.content)).slides) == slides
-    assert (await client.get(f"{API}/{started['id']}/deliverables/docx")).status_code == 422
+    # A format runs deliver, this one did not: none; one they never do: refused.
+    assert (await client.get(f"{API}/{started['id']}/deliverables/docx")).status_code == 404
+    assert (await client.get(f"{API}/{started['id']}/deliverables/exe")).status_code == 422
     assert (await client.get(f"{API}/{uuid.uuid4()}/deliverables/pdf")).status_code == 404
     # Kept under the run, in the workspace.
     kept = [key async for key in store.iter_prefix(f"{acme['acme']}/agent-runs/")]
