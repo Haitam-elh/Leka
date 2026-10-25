@@ -74,6 +74,9 @@ const fr = {
     home: "LEKA — accueil",
     backHome: "Retour à l'accueil",
     plan: "Formule",
+    /** Under an Enterprise contract (2026-10-25): its badge, its page. */
+    enterprise: "Entreprise",
+    contract: "Contrat",
     mainNavigation: "Navigation principale",
     main: {
       home: "Accueil",
@@ -412,6 +415,8 @@ const fr = {
         partial: "Partiellement vérifié",
         stable: "Stable",
       },
+      /** Nothing connected (2026-10-25): said neutral, in grey. */
+      noSource: "Aucune source connectée",
       healthHint: {
         unknown: "Aucune source ne dit encore l'état de vos services.",
         stale: "Vos sources n'ont pas été lues récemment.",
@@ -429,11 +434,22 @@ const fr = {
       agents: "Agents recommandés",
       agentsBody:
         "Choisis pour votre environnement : d'abord ceux qui fonctionnent avec vos sources connectées, puis ceux inclus dans votre formule.",
+      agentsBodyContract:
+        "Choisis pour votre environnement : d'abord ceux qui fonctionnent avec vos sources connectées. Tous sont inclus dans votre contrat.",
+      /** Made for this organisation (2026-10-25): first on its home. */
+      dedicated: {
+        title: "Agents dédiés",
+        lead: "Conçus pour {organisation}",
+        launch: "Lancer",
+        sources: "Sources compatibles : {sources}",
+      },
       fit: {
         connected: "Fonctionne avec vos sources connectées",
         to_connect: "Une source à connecter",
       },
       allAgents: "Voir tous les agents et bundles",
+      /** Under an Enterprise contract (2026-10-25): no bundle to see. */
+      allAgentsOnly: "Voir tous les agents",
       latest: "Dernières analyses",
       latestBody: "Vos demandes et analyses récentes.",
       allHistory: "Voir tout l'historique",
@@ -466,7 +482,7 @@ const fr = {
       step1: "1. Connecter une source",
       step2: "2. Poser une première question",
       stages: {
-        empty: "Aucune source n'est connectée : LEKA n'a encore rien à lire.",
+        empty: "Connectez votre première source pour commencer : LEKA n'a encore rien à lire.",
         connected:
           "Source connectée, pas encore lue : la première lecture va démarrer.",
         syncing:
@@ -477,6 +493,9 @@ const fr = {
       failedUnknown:
         "Cause inconnue : ouvrez la source pour la tester à nouveau.",
       connect: "Connecter une source",
+      /** Confluence first (2026-10-25): the documentation an architect reads. */
+      connectConfluence: "Connecter Confluence",
+      otherSource: "Une autre source",
       fix: "Corriger la source",
       seeSources: "Voir mes sources",
       ask: "Écrivez-la dans la barre ci-dessous, avec vos mots : LEKA l'analyse sur ce qu'il lit de vos sources.",
@@ -1057,6 +1076,39 @@ const fr = {
   },
   /** Facturation (mockup 16): the consumption, counted. */
   billing: {
+    /** An Enterprise contract (2026-10-25): « Facturation » becomes « Contrat ». */
+    contract: {
+      title: "Contrat",
+      subtitle: "Votre contrat Entreprise avec LEKA : ce qu'il comprend, et qui vous accompagne.",
+      type: "Type de contrat",
+      enterprise: "Entreprise",
+      since: "Depuis le {date}",
+      organisation: "Organisation",
+      members: "Membres",
+      membersFoot: "Invitez-les depuis Équipe",
+      contact: "Contact dédié",
+      noContact: "Votre interlocuteur LEKA sera indiqué ici.",
+      includesTitle: "Ce que comprend votre contrat",
+      includes: [
+        "Tous les agents standards, sans option à acheter",
+        "Des sources sans limite",
+        "L'usage des agents suivi en nombre d'exécutions, jamais facturé à l'acte",
+      ],
+      dedicated: "Vos agents dédiés : {names}",
+      logoTitle: "Logo de l'organisation",
+      logoLead:
+        "Par défaut, le nom de votre organisation s'affiche dans l'en-tête. Vous pouvez le remplacer par votre logo : PNG, JPEG ou WebP, 512 Ko au plus.",
+      logoGive: "Choisir une image",
+      logoReplace: "Remplacer le logo",
+      logoRemove: "Retirer le logo",
+      logoGiven: "Logo enregistré",
+      logoRemoved: "Logo retiré : le nom de l'organisation s'affiche à nouveau",
+      logoTooLarge: "Image trop lourde : 512 Ko au plus.",
+      logoType: "Format non pris en charge : PNG, JPEG ou WebP.",
+      logoAdminOnly: "Seul un administrateur de l'organisation peut changer le logo.",
+      logoAlt: "Logo de {name}",
+      logoNone: "Aucun logo : le nom de l'organisation s'affiche.",
+    },
     // The plans compared (LEKA-466), as Karim's « LEKA CORE SaaS Pricing Plans ».
     compare: {
       title: "Choisissez votre niveau de compréhension et d'action",
@@ -2195,6 +2247,11 @@ const fr = {
       agents: "Agents disponibles",
       agentsLead: "Inclus dans votre contrat Entreprise, présentés par domaine.",
       contract: "Inclus dans votre contrat Entreprise.",
+      title: "Agents LEKA",
+      subtitleMore: "Vos agents dédiés d'abord, puis tous les agents standards, inclus dans votre contrat.",
+      skillsTitle: "Compétences LEKA, incluses",
+      skillsLead:
+        "Ce que LEKA sait faire lui-même pour comprendre et analyser vos demandes : des capacités réutilisables, mobilisées dans vos analyses.",
     },
     /** Said once, above the list: what keeps many from running here. */
     wide: {
@@ -2367,6 +2424,7 @@ const fr = {
         upgrade: "Upgrade requis",
         unavailable: "Indisponible",
         dedicated: "Dédié à votre organisation",
+        contract: "Inclus dans votre contrat",
       },
       bundlesTitle: "Bundles LEKA",
       bundlesLead:
@@ -2595,7 +2653,7 @@ const fr = {
       "release-readiness":
         "Si un service est prêt pour sa prochaine release : comment il est livré, ses incidents récents, jusqu'où irait une panne.",
       "application-architecture":
-        "Le deck d'architecture d'un parcours : couche métier ArchiMate, séquences applicatives, règles, RACI — en PDF et PowerPoint.",
+        "Génère la documentation d'architecture applicative structurée ArchiMate à partir de votre Confluence.",
       "architecture-analysis":
         "L'architecture d'une application expliquée : ses composants, ses dépendances, ses points faibles.",
       "detect-undocumented-dependency":
@@ -9033,6 +9091,9 @@ const en: Dictionary = {
     home: "LEKA — home",
     backHome: "Back to home",
     plan: "Plan",
+    /** Under an Enterprise contract (2026-10-25): its badge, its page. */
+    enterprise: "Enterprise",
+    contract: "Contract",
     mainNavigation: "Main navigation",
     main: {
       home: "Home",
@@ -9327,6 +9388,8 @@ const en: Dictionary = {
         partial: "Partly verified",
         stable: "Stable",
       },
+      /** Nothing connected (2026-10-25): said neutral, in grey. */
+      noSource: "No source connected",
       healthHint: {
         unknown: "No source says the state of your services yet.",
         stale: "Your sources have not been read recently.",
@@ -9344,11 +9407,22 @@ const en: Dictionary = {
       agents: "Recommended agents",
       agentsBody:
         "Chosen for your environment: first those that work with your connected sources, then those your plan includes.",
+      agentsBodyContract:
+        "Chosen for your environment: first those that work with your connected sources. All are included in your contract.",
+      /** Made for this organisation (2026-10-25): first on its home. */
+      dedicated: {
+        title: "Dedicated agents",
+        lead: "Built for {organisation}",
+        launch: "Launch",
+        sources: "Compatible sources: {sources}",
+      },
       fit: {
         connected: "Works with your connected sources",
         to_connect: "A source to connect",
       },
       allAgents: "See all agents and bundles",
+      /** Under an Enterprise contract (2026-10-25): no bundle to see. */
+      allAgentsOnly: "See all agents",
       latest: "Latest analyses",
       latestBody: "Your recent requests and analyses.",
       allHistory: "See the whole history",
@@ -9380,7 +9454,7 @@ const en: Dictionary = {
       step1: "1. Connect a source",
       step2: "2. Ask a first question",
       stages: {
-        empty: "No source is connected: LEKA has nothing to read yet.",
+        empty: "Connect your first source to get started: LEKA has nothing to read yet.",
         connected:
           "Source connected, not read yet: the first read is about to start.",
         syncing: "First read under way: answers will come once it is done.",
@@ -9389,6 +9463,9 @@ const en: Dictionary = {
       },
       failedUnknown: "Cause unknown: open the source to test it again.",
       connect: "Connect a source",
+      /** Confluence first (2026-10-25): the documentation an architect reads. */
+      connectConfluence: "Connect Confluence",
+      otherSource: "Another source",
       fix: "Fix the source",
       seeSources: "See my sources",
       ask: "Write it in the bar below, in your own words: LEKA analyses it on what it reads of your sources.",
@@ -9932,6 +10009,39 @@ const en: Dictionary = {
     waitingDecision: "The run is prepared once the decision is approved.",
   },
   billing: {
+    /** An Enterprise contract (2026-10-25): « Facturation » becomes « Contrat ». */
+    contract: {
+      title: "Contract",
+      subtitle: "Your Enterprise contract with LEKA: what it includes, and who supports you.",
+      type: "Contract type",
+      enterprise: "Enterprise",
+      since: "Since {date}",
+      organisation: "Organisation",
+      members: "Members",
+      membersFoot: "Invite them from Team",
+      contact: "Dedicated contact",
+      noContact: "Your LEKA contact will be shown here.",
+      includesTitle: "What your contract includes",
+      includes: [
+        "Every standard agent, no option to buy",
+        "Unlimited sources",
+        "Agent usage counted in runs, never billed per use",
+      ],
+      dedicated: "Your dedicated agents: {names}",
+      logoTitle: "Organisation logo",
+      logoLead:
+        "By default, your organisation's name is shown in the header. You can replace it with your logo: PNG, JPEG or WebP, 512 KB at most.",
+      logoGive: "Choose an image",
+      logoReplace: "Replace the logo",
+      logoRemove: "Remove the logo",
+      logoGiven: "Logo saved",
+      logoRemoved: "Logo removed: the organisation's name is shown again",
+      logoTooLarge: "Image too large: 512 KB at most.",
+      logoType: "Unsupported format: PNG, JPEG or WebP.",
+      logoAdminOnly: "Only an administrator of the organisation can change the logo.",
+      logoAlt: "{name} logo",
+      logoNone: "No logo: the organisation's name is shown.",
+    },
     compare: {
       title: "Choose your level of understanding and action",
       subtitle: "From discovering your environment to mastering your technology system.",
@@ -11043,6 +11153,11 @@ const en: Dictionary = {
       agents: "Available agents",
       agentsLead: "Included in your Enterprise contract, by domain.",
       contract: "Included in your Enterprise contract.",
+      title: "LEKA agents",
+      subtitleMore: "Your dedicated agents first, then every standard agent, included in your contract.",
+      skillsTitle: "LEKA's skills, included",
+      skillsLead:
+        "What LEKA does itself to understand and analyse your requests: reusable capabilities, used in your analyses.",
     },
     /** Said once, above the list: what keeps many from running here. */
     wide: {
@@ -11202,6 +11317,7 @@ const en: Dictionary = {
         upgrade: "Upgrade required",
         unavailable: "Unavailable",
         dedicated: "Dedicated to your organisation",
+        contract: "Included in your contract",
       },
       askAdmin: "Ask an administrator of your workspace to buy it.",
       bundlesTitle: "LEKA bundles",
@@ -11422,7 +11538,7 @@ const en: Dictionary = {
       "release-readiness":
         "Whether a service is ready for its next release: how it ships, its recent incidents, how far a failure would reach.",
       "application-architecture":
-        "A journey's architecture deck: ArchiMate business layer, application sequences, rules, RACI — as PDF and PowerPoint.",
+        "Generates your application architecture documentation, structured as ArchiMate, from your Confluence.",
       "architecture-analysis":
         "An application's architecture explained: its parts, its dependencies, its weak points.",
       "detect-undocumented-dependency":

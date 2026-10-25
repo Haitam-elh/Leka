@@ -61,12 +61,14 @@ test("a new account goes from its workspace to a first analysis", async ({
   await expect(steps).toHaveAttribute("data-stage", "empty");
   await expect(steps).toContainText("LEKA lit vos outils");
   await expect(page.getByTestId("first-steps-stage")).toContainText(
-    "Aucune source n'est connectée",
+    "Connectez votre première source pour commencer",
   );
   await expect(page.getByTestId("first-steps-action")).toHaveAttribute(
     "href",
-    "/welcome",
+    "/sources?connect=confluence",
   );
+  // Confluence first; any other tool beside it (2026-10-25).
+  await expect(page.getByTestId("first-steps-other")).toHaveAttribute("href", "/welcome");
   // Nothing read: said that LEKA cannot answer yet — no example (LEKA-470).
   await expect(page.getByTestId("first-steps-ask")).toContainText(
     "LEKA pourra y répondre une fois une source lue",

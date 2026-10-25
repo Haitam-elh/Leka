@@ -123,12 +123,14 @@ describe("FirstStepsCard", () => {
     expect(card).toHaveAttribute("data-stage", "empty");
     expect(card).toHaveTextContent("LEKA lit vos outils");
     expect(screen.getByTestId("first-steps-stage")).toHaveTextContent(
-      "Aucune source n'est connectée",
+      "Connectez votre première source pour commencer",
     );
     expect(screen.getByTestId("first-steps-action")).toHaveAttribute(
       "href",
-      "/welcome",
+      "/sources?connect=confluence",
     );
+    // Confluence first; any other tool beside it (2026-10-25).
+    expect(screen.getByTestId("first-steps-other")).toHaveAttribute("href", "/welcome");
     expect(screen.getByTestId("first-steps-ask")).toHaveTextContent(
       "LEKA pourra y répondre une fois une source lue.",
     );

@@ -87,6 +87,7 @@ let currentUser: { id: string; email: string; first_name?: string | null } = {
 };
 vi.mock("@/components/shell/shell-provider", () => ({
   useCurrentUser: () => currentUser,
+  useCurrentWorkspace: () => ({ id: "w1", name: "Acme Corp", slug: "acme", role: "owner" }),
 }));
 
 // The box has its own tests; here it is only a place on the page.

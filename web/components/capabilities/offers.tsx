@@ -101,9 +101,11 @@ export function AgentStateSaid({ agentKey }: { agentKey: string }) {
   if (!state) return null;
   return (
     <Pill tone={STATE_TONES[state]} data-testid="agent-state" data-state={state}>
-      {state === "included" && offers.data?.every && !offers.data.agents.find((a) => a.key === agentKey)?.included
-        ? w.states.granted
-        : w.states[state]}
+      {state === "included" && isEnterprise(offers.data)
+        ? w.states.contract
+        : state === "included" && offers.data?.every && !offers.data.agents.find((a) => a.key === agentKey)?.included
+          ? w.states.granted
+          : w.states[state]}
     </Pill>
   );
 }

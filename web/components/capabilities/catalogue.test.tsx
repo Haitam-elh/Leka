@@ -253,7 +253,7 @@ describe("the catalogue", () => {
     expect(owner).toHaveTextContent("Disponible");
     expect(architect).toHaveTextContent("Architecte applicatif");
     // What it does in the reader's words, not the description its model reads.
-    expect(architect).toHaveTextContent("Le deck d'architecture d'un parcours");
+    expect(architect).toHaveTextContent("Génère la documentation d'architecture applicative structurée ArchiMate");
     expect(architect).not.toHaveTextContent("Use when");
     expect(architect).toHaveAttribute("data-available", "false");
     expect(within(architect).getByTestId("capability-reasons")).toHaveTextContent(
@@ -491,7 +491,7 @@ describe("the catalogue", () => {
     const offer = addOns(false, "enterprise");
     sold.addOns.mockResolvedValue({ ...offer, agents: [{ ...offer.agents[0], included: true, owned: true, why: null }] });
     show(<CatalogueScreen />);
-    expect(await screen.findByTestId("agent-state")).toHaveTextContent("Inclus dans votre plan");
+    expect(await screen.findByTestId("agent-state")).toHaveTextContent("Inclus dans votre contrat");
     expect(screen.getByTestId("catalogue-all-agents")).toHaveTextContent("Agents disponibles");
     expect(screen.getByTestId("catalogue-all-agents")).toHaveTextContent("Inclus dans votre contrat Entreprise");
     expect(screen.queryByTestId("agent-price")).not.toBeInTheDocument();
