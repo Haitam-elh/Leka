@@ -222,6 +222,17 @@ class SourceService:
         self._record(source, SourceEventType.CREDENTIALS_ROTATED, hint=stored.hint)
         return source
 
+    async def revoke_credentials(self, source: Source) -> Source:
+        """Its secret erased (2026-10-25: « révocation des tokens de sources »):
+        LEKA can no longer reach it — disabled, its last test forgotten —, what
+        it already read kept. New credentials and a test bring it back."""
+        erased = await self._secrets.erase(source.id)
+        if source.status is not SourceStatus.DISABLED:
+            source.status = next_status(source.status, LifecycleEvent.DISABLE)
+        source.tested_config_fingerprint = None
+        self._record(source, SourceEventType.CREDENTIALS_REVOKED, erased=erased)
+        return source
+
     async def test(self, source: Source) -> tuple[ConnectionTestResult | None, Diagnostic | None]:
         """Run the connector's test within its budget. Never raises a ConnectorError."""
         try:

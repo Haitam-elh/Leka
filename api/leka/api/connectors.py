@@ -384,6 +384,19 @@ async def disable_source(
     return await _read(service, source)
 
 
+@router.post("/sources/{source_id}/revoke", response_model=SourceRead)
+async def revoke_source(
+    source_id: uuid.UUID, service: ManagingService, session: SessionDep, principal: Manager
+) -> SourceRead:
+    """Its credentials erased (2026-10-25): LEKA can no longer reach it — the
+    source is disabled, what it already read kept. New credentials and a test
+    bring it back."""
+    source = await _source(service, source_id)
+    await service.revoke_credentials(source)
+    _audited(session, principal, "credentials_revoked", source)
+    return await _read(service, source)
+
+
 @router.post("/sources/{source_id}/health-check", response_model=HealthRead)
 async def check_source_health(source_id: uuid.UUID, service: ManagingService) -> HealthRead:
     """Check now rather than wait for the schedule. Calls the vendor, lightly."""

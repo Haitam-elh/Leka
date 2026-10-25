@@ -30,18 +30,20 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator, Mapping
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy import func, select
 
 from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
 from leka.capabilities import (
     DECK_FILES,
     DRAWING_LOST,
+    AgentJournalRead,
     AgentRun,
     AgentRunCreate,
     AgentRunDecision,
@@ -51,6 +53,7 @@ from leka.capabilities import (
     AgentRunRead,
     AgentRuntime,
     AgentRunUsage,
+    AgentUsageRead,
     CapabilityRunRepository,
     CodeChange,
     CodeReviewRead,
@@ -85,6 +88,7 @@ from leka.capabilities import (
 from leka.capabilities.definition import Definition
 from leka.capabilities.deliverables import MEDIA_TYPES, report_pdf
 from leka.capabilities.runtime import DRAWN
+from leka.connectors import Source
 from leka.core.errors import ErrorCode, FieldError
 from leka.governance import (
     AIControlService,
@@ -98,6 +102,7 @@ from leka.governance import (
     holding,
     require_permission,
 )
+from leka.identity import User
 from leka.intentions import IntentionRepository
 from leka.platform import ObjectNotFoundError
 
@@ -438,6 +443,127 @@ async def list_runs(
         key=key, status=run_status, intention_id=intention_id, limit=limit
     )
     return [run_read(run, principal) for run in runs]
+
+
+def _held(run: AgentRun) -> list[uuid.UUID]:
+    """The sources a run was held to — none: every one connected."""
+    said = run.detail.get("sources")
+    found: list[uuid.UUID] = []
+    for each in said if isinstance(said, list) else []:
+        try:
+            found.append(uuid.UUID(str(each)))
+        except ValueError:
+            continue
+    return found
+
+
+# Who may read the workspace's trail reads its agents' use (2026-10-25).
+Auditor = Annotated[Principal, Depends(require_permission(Permission.AUDIT_READ))]
+# How a run that did not succeed ended, as the usage counts it.
+FAILED = ("failed", "cancelled")
+
+
+@router.get("/usage", response_model=list[AgentUsageRead], summary="How much each agent ran here")
+async def agent_usage(
+    session: SessionDep,
+    principal: Auditor,
+    days: Annotated[int, Query(ge=1, le=366)] = 30,
+) -> list[AgentUsageRead]:
+    """Each agent's runs over the last `days`: how many, how many succeeded,
+    how many failed, the latest — counted, never priced."""
+    since = datetime.now(UTC) - timedelta(days=days)
+    rows = await session.execute(
+        select(
+            AgentRun.key,
+            func.count(),
+            func.count().filter(AgentRun.status == "succeeded"),
+            func.count().filter(AgentRun.status.in_(FAILED)),
+            func.max(AgentRun.queued_at),
+        )
+        .where(AgentRun.workspace_id == principal.workspace_id, AgentRun.queued_at >= since)
+        .group_by(AgentRun.key)
+    )
+    used = [
+        AgentUsageRead(
+            key=key,
+            title=(found.title if (found := find(key)) is not None else key),
+            runs=runs,
+            succeeded=succeeded,
+            failed=failed,
+            last_at=last,
+        )
+        for key, runs, succeeded, failed, last in rows.tuples()
+    ]
+    return sorted(used, key=lambda u: (-u.runs, u.title))
+
+
+@router.get(
+    "/journal",
+    response_model=list[AgentJournalRead],
+    summary="Who ran which agent, on what, when, how it ended",
+)
+async def agent_journal(
+    session: SessionDep,
+    principal: Auditor,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    before: Annotated[datetime | None, Query(description="Runs asked before then.")] = None,
+) -> list[AgentJournalRead]:
+    """The workspace's agent runs, the latest first: who asked, which agent,
+    the sources it was held to, what it was asked on, when, how it ended."""
+    query = select(AgentRun).where(AgentRun.workspace_id == principal.workspace_id)
+    if before is not None:
+        query = query.where(AgentRun.queued_at < before)
+    runs = (await session.scalars(query.order_by(AgentRun.queued_at.desc()).limit(limit))).all()
+    people = {r.requested_by for r in runs if r.requested_by is not None}
+    names = {
+        user.id: " ".join(p for p in (user.first_name, user.last_name) if p) or user.email
+        for user in (
+            (await session.scalars(select(User).where(User.id.in_(people)))).all() if people else []
+        )
+    }
+    held = {source for run in runs for source in _held(run)}
+    sources = {
+        source.id: source.name
+        for source in (
+            (
+                await session.scalars(
+                    select(Source).where(
+                        Source.workspace_id == principal.workspace_id, Source.id.in_(held)
+                    )
+                )
+            ).all()
+            if held
+            else []
+        )
+    }
+    journal: list[AgentJournalRead] = []
+    for run in runs:
+        asked = run.inputs or {}
+        scope = next(
+            (
+                str(asked[k]).strip()[:200]
+                for k in ("depot", "espace", "perimetre")
+                if isinstance(asked.get(k), str) and str(asked[k]).strip()
+            ),
+            None,
+        )
+        found = find(run.key)
+        journal.append(
+            AgentJournalRead(
+                id=run.id,
+                key=run.key,
+                title=found.title if found is not None else run.key,
+                by=run.requested_by,
+                by_name=names.get(run.requested_by) if run.requested_by else None,
+                sources=[sources[source] for source in _held(run) if source in sources],
+                scope=scope,
+                status=run.status,
+                queued_at=run.queued_at,
+                finished_at=run.finished_at,
+                intention_id=run.intention_id,
+            )
+        )
+    return journal
 
 
 @router.get("/{run_id}", response_model=AgentRunDetail, summary="One agent run, every step")

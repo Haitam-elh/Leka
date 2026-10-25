@@ -133,6 +133,9 @@ class SourceEventType(enum.StrEnum):
     ACTIVATED = "activated"
     RECONFIGURED = "reconfigured"
     CREDENTIALS_ROTATED = "credentials_rotated"
+    # Its secret erased by a person (2026-10-25): the source stops, its data
+    # kept; new credentials and a test bring it back.
+    CREDENTIALS_REVOKED = "credentials_revoked"
     HEALTH_CHANGED = "health_changed"
     DISABLED = "disabled"
     DELETED = "deleted"
