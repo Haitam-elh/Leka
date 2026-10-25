@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { InstallAgent } from "@/components/capabilities/install-dialog";
 import { BackHome, PageContainer } from "@/components/shell/page-container";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { routes } from "@/config/routes";
@@ -102,6 +103,8 @@ export function ArchitectLaunch() {
           <div>
             <h1 className="text-[1.75rem] leading-tight font-bold text-brand-navy">{w.title}</h1>
             <p className="mt-1 text-[0.9375rem] text-shell-muted">{w.lead}</p>
+            {/* The same agent on the organisation's own machines (2026-10-25). */}
+            <InstallAgent agentKey={ARCHITECT} className="mt-3" />
           </div>
         </header>
 

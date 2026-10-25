@@ -132,6 +132,9 @@ ignore = [
 "leka/architect/**" = ["B905"]
 # Word's XML, one element a line: read as Word writes it.
 "leka/architect/render.py" = ["B905", "E501"]
+# What ships with it and what MCP clients read: texts, a sentence a line.
+"leka/architect/distribution.py" = ["B905", "E501"]
+"leka/architect/mcp_server.py" = ["B905", "E501"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["leka"]

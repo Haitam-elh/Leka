@@ -22,6 +22,7 @@ payload (rule 3).
 
 from __future__ import annotations
 
+import asyncio
 from collections import Counter
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
@@ -30,6 +31,7 @@ from fastapi import APIRouter, Depends, Query, Response, status
 
 from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
+from leka.architect import package
 from leka.capabilities import (
     CapabilityDayUse,
     CapabilityDetail,
@@ -62,7 +64,7 @@ from leka.capabilities import (
     Query as Asked,
 )
 from leka.core.errors import ErrorCode, FieldError
-from leka.governance import Permission, Principal, require_permission
+from leka.governance import Permission, Principal, Target, audit_as, require_permission
 from leka.intentions import Usage, Use, capability_usage
 
 router = APIRouter(prefix="/capabilities", tags=["capabilities"])
@@ -328,6 +330,48 @@ async def route(payload: RouteAsk, principal: Reader, session: SessionDep) -> Ro
         by=principal.user_id,
     )
     return routing_read(found)
+
+
+# The agents a customer may install (2026-10-25): their package is built from
+# LEKA's own code (leka.architect.package) — the same agent, the same steps.
+INSTALLABLE = frozenset({"application-architecture"})
+
+
+@router.get(
+    "/{key}/package",
+    response_class=Response,
+    summary="The agent, to install in one's own environment",
+    responses={200: {"content": {"application/zip": {}}}},
+)
+async def agent_package(key: str, principal: Reader, session: SessionDep) -> Response:
+    """leka-architect as a zip — its code, its README, its .env example, its
+    Dockerfile, its MCP configurations, its prompt pack; never a secret —
+    for an organisation that sees the agent (dedicated to it): 404
+    otherwise, as if it did not exist. Each download audited."""
+    if key not in INSTALLABLE:
+        raise _missing()
+    entry = await CatalogueService(session, principal.workspace_id).entry(
+        key, permissions=_permissions(principal), user_id=principal.user_id
+    )
+    if entry is None:
+        raise _missing()
+    payload = await asyncio.to_thread(package.build_zip)
+    audit_as(
+        session,
+        principal,
+        "ai",
+        "agent.package_downloaded",
+        target=Target("capability", None, key),
+        detail={"file": package.file_name(), "bytes": len(payload)},
+    )
+    return Response(
+        payload,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{package.file_name()}"',
+            "Cache-Control": "private, no-store",
+        },
+    )
 
 
 @router.get("/{key}", response_model=CapabilityDetail)
