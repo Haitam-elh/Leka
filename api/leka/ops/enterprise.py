@@ -5,7 +5,8 @@ organisation, its account, its plan, its dedicated agents — idempotent.
         --email admin@client.example --organisation "Nom du client" \\
         --agent application-architecture \\
         [--first-name … --last-name …] [--credits N] \\
-        [--contact-name … --contact-email …] [--remove-agent KEY]
+        [--contact-name … --contact-email …] [--remove-agent KEY] \\
+        [--instructions consignes.md | --instructions - | --clear-instructions]
 
     python -m leka.ops.enterprise show --organisation "Nom du client"
 
@@ -21,7 +22,12 @@ organisation, its account, its plan, its dedicated agents — idempotent.
   credits to the organisation;
 - the agents of `--agent` assigned to it, those of `--remove-agent` taken
   back (leka/capabilities/dedicated.py);
-- the contract it shows: its type, since when, its dedicated contact.
+- the contract it shows: its type, since when, its dedicated contact;
+- with `--instructions`, the organisation's own instructions for the agents
+  of `--agent` — its architect's prompt, its template, its spaces, its
+  directory — in place of the registry's, on LEKA and in the package it
+  downloads (`-`: read from the standard input); `--clear-instructions`:
+  back to the registry's. Never printed: their length only.
 
 Nothing of an organisation is written in LEKA's code: its name, its
 account and its agents are this command's arguments, kept in the database —
@@ -31,6 +37,11 @@ On the production box:
 
     cd /opt/leka && docker compose -f docker-compose.production.yml \\
       --env-file production.env exec api python -m leka.ops.enterprise provision …
+
+    # its instructions, from a file of the box, through the standard input:
+    docker compose -f docker-compose.production.yml --env-file production.env \\
+      exec -T api python -m leka.ops.enterprise provision --email … \\
+      --organisation "…" --agent application-architecture --instructions - < consignes.md
 
 WHY AN ACCOUNT IS MADE HERE. The other admin command (leka.identity.admin)
 never makes one: a person registers and confirms their address. An
@@ -47,13 +58,21 @@ import getpass
 import json
 import os
 import sys
+import uuid
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from leka.capabilities.dedicated import assign, dedicated_to, unassign
+from leka.capabilities.dedicated import (
+    assign,
+    dedicated_to,
+    instruct,
+    instructions_of,
+    unassign,
+)
 from leka.capabilities.registry import find
 from leka.core.security import PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, hash_password
 from leka.db import load_schema, session_factory, system_scope, workspace_scope
@@ -71,6 +90,8 @@ from leka.platform import (
 
 ENTERPRISE = "enterprise"
 OPERATOR = "provisioning"
+# An agent's own instructions, at most: a long prompt, never a document.
+MAX_INSTRUCTIONS = 200_000
 # The name of the variable a first password may be read from — never a password.
 PASSWORD_ENV = "LEKA_ENTERPRISE_PASSWORD"  # noqa: S105
 
@@ -92,6 +113,8 @@ class Provisioned:
     agents: list[str]
     contract: dict[str, object]
     changed: list[str] = field(default_factory=list)
+    # An agent's own instructions, by their length — never their words.
+    instructions: dict[str, int] = field(default_factory=dict)
 
 
 def contract_of(workspace: Workspace) -> dict[str, object]:
@@ -158,6 +181,8 @@ async def provision(
     monthly_credits: int | None = None,
     contact_name: str | None = None,
     contact_email: str | None = None,
+    instructions: str | None = None,
+    clear_instructions: bool = False,
     now: datetime | None = None,
 ) -> Provisioned:
     """The organisation as asked — made or brought to it, never twice."""
@@ -171,6 +196,12 @@ async def provision(
     for key in [*agents, *remove]:
         if find(key) is None:
             raise ProvisioningError(f"Aucun agent {key!r} dans le registre (agents/registry.yaml).")
+    if (instructions is not None or clear_instructions) and not agents:
+        raise ProvisioningError("Des consignes vont à un agent : précisez --agent.")
+    if instructions is not None and not instructions.strip():
+        raise ProvisioningError("Les consignes sont vides.")
+    if instructions is not None and len(instructions) > MAX_INSTRUCTIONS:
+        raise ProvisioningError(f"Les consignes dépassent {MAX_INSTRUCTIONS} caractères.")
     if monthly_credits is not None and monthly_credits < 0:
         raise ProvisioningError("La capacité IA du contrat n'est jamais négative.")
     changed: list[str] = []
@@ -233,6 +264,11 @@ async def provision(
                 for key in remove:
                     if await unassign(session, workspace.id, key):
                         changed.append(f"agent dédié retiré {key}")
+                if instructions is not None or clear_instructions:
+                    given = None if clear_instructions else instructions
+                    for key in agents:
+                        if await instruct(session, workspace.id, key, given):
+                            changed.append(f"consignes de {key}")
 
                 contract = contract_of(workspace)
                 had = contract.get("contact")
@@ -253,6 +289,7 @@ async def provision(
                         changed.append("contrat créé")
 
                 assigned = sorted(await dedicated_to(session, workspace.id))
+                own = await _own(session, workspace.id, assigned)
                 if changed:
                     audit(
                         session,
@@ -278,6 +315,7 @@ async def provision(
                     agents=assigned,
                     contract=updated,
                     changed=changed,
+                    instructions=own,
                 )
 
 
@@ -291,13 +329,39 @@ async def show(organisation: str) -> dict[str, object]:
                 raise ProvisioningError(f"Aucune organisation « {organisation} ».")
             with workspace_scope(workspace.id):
                 plan = await plan_of(session, workspace.id)
+                agents = sorted(await dedicated_to(session, workspace.id))
                 return {
                     "organisation": workspace.name,
                     "workspace_id": str(workspace.id),
                     "plan": plan.name,
-                    "agents": sorted(await dedicated_to(session, workspace.id)),
+                    "agents": agents,
+                    "instructions": await _own(session, workspace.id, agents),
                     "contract": contract_of(workspace),
                 }
+
+
+async def _own(
+    session: AsyncSession, workspace_id: uuid.UUID, agents: Sequence[str]
+) -> dict[str, int]:
+    """Its agents with their own instructions — their length, never their words."""
+    found: dict[str, int] = {}
+    for key in agents:
+        said = await instructions_of(session, workspace_id, key)
+        if said:
+            found[key] = len(said)
+    return found
+
+
+def _instructions(given: str | None) -> str | None:
+    """The instructions of `--instructions`: a file's, or the standard input's (`-`)."""
+    if given is None:
+        return None
+    if given == "-":
+        return sys.stdin.read()
+    try:
+        return Path(given).read_text(encoding="utf-8")
+    except OSError as error:
+        raise ProvisioningError(f"Consignes illisibles : {given} ({error.strerror}).") from error
 
 
 def _password(interactive: bool) -> str | None:
@@ -323,6 +387,14 @@ async def main(argv: list[str] | None = None, *, interactive: bool | None = None
     making.add_argument("--credits", type=int, help="la capacité IA mensuelle du contrat")
     making.add_argument("--contact-name", help="le contact dédié de l'organisation")
     making.add_argument("--contact-email")
+    own = making.add_mutually_exclusive_group()
+    own.add_argument(
+        "--instructions",
+        help="les consignes propres des agents de --agent : un fichier, - pour l'entrée standard",
+    )
+    own.add_argument(
+        "--clear-instructions", action="store_true", help="revenir aux consignes du registre"
+    )
     showing = commands.add_parser("show", help="afficher une organisation")
     showing.add_argument("--organisation", required=True)
     args = parser.parse_args(argv)
@@ -345,6 +417,8 @@ async def main(argv: list[str] | None = None, *, interactive: bool | None = None
             monthly_credits=args.credits,
             contact_name=args.contact_name,
             contact_email=args.contact_email,
+            instructions=_instructions(args.instructions),
+            clear_instructions=args.clear_instructions,
         )
     except ProvisioningError as refusal:
         sys.stdout.write(f"Refusé : {refusal}\n")

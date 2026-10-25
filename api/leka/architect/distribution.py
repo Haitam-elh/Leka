@@ -1,8 +1,11 @@
 """What ships with the downloadable architect, besides its code: its README,
-its .env.example, its Dockerfile, its MCP configurations — one per client —
-and its prompt pack for models without tools. Written here, from the same
-prompts and sections as the code, so the pack never says other than the
-agent does.
+its .env.example, its Dockerfile, its MCP configurations — one per client,
+VS Code's for Windows and for macOS / Linux —, Copilot's prompt and its
+prompt pack for models without tools. Written here, from the same prompts
+and sections as the code, so the pack never says other than the agent does.
+
+Python 3.10 or later (2026-10-25): the deck it draws is LEKA's renderer,
+which needs pydantic, python-pptx and reportlab.
 """
 
 from __future__ import annotations
@@ -10,6 +13,7 @@ from __future__ import annotations
 import json
 
 from . import __version__
+from .journey import TOOLS_NOTE
 from .model import ELEMENT_TYPES, RELATION_TYPES, SCHEMA, SECTIONS
 from .prompts import SYSTEM
 
@@ -20,16 +24,19 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "leka-architect"
 version = "{__version__}"
-description = "L'Architecte applicatif de LEKA : Confluence vers un dossier d'architecture ArchiMate (Markdown, PDF, Word), sur votre LLM."
+description = "L'Architecte applicatif de LEKA : Confluence vers le deck d'architecture d'un parcours (PowerPoint, PDF) et le dossier ArchiMate, sur votre LLM."
 readme = "README.md"
-requires-python = ">=3.9"
-dependencies = ["reportlab>=3.6"]
+requires-python = ">=3.10"
+dependencies = ["reportlab>=3.6", "python-pptx>=1.0", "pydantic>=2.6"]
 
 [project.scripts]
 leka-architect = "leka_architect.cli:main"
 
 [tool.setuptools]
-packages = ["leka_architect"]
+packages = ["leka_architect", "leka_architect.deck"]
+
+[tool.setuptools.package-data]
+leka_architect = ["*.md"]
 """
 
 ENV_EXAMPLE = """# L'Architecte applicatif — sa configuration. Copiez ce fichier en .env
@@ -60,6 +67,11 @@ ARCHITECT_LLM_API_KEY=
 ARCHITECT_LLM_BASE_URL=
 # Azure seulement.
 ARCHITECT_LLM_API_VERSION=2024-10-21
+
+# ── Les fichiers de Connaissances ────────────────────────────────────────
+# L'annuaire des contacts (Excel), le référentiel applicatif… : le dossier où
+# ils sont. Ils servent au RACI ; rien d'autre n'est lu sur votre poste.
+ARCHITECT_KNOWLEDGE_DIR=./connaissances
 """
 
 DOCKERFILE = """FROM python:3.12-slim
@@ -73,13 +85,24 @@ CMD ["--help"]
 """
 
 MCP: dict[str, object] = {
+    # Copilot in VS Code: the .venv of the working folder, its .env.
     "vscode-copilot.json": {
         "servers": {
             "leka-architect": {
                 "type": "stdio",
-                "command": "leka-architect",
+                "command": "${workspaceFolder}/.venv/bin/leka-architect",
                 "args": ["mcp"],
                 "envFile": "${workspaceFolder}/.env",
+            }
+        }
+    },
+    "vscode-copilot-windows.json": {
+        "servers": {
+            "leka-architect": {
+                "type": "stdio",
+                "command": "${workspaceFolder}\\.venv\\Scripts\\leka-architect.exe",
+                "args": ["mcp"],
+                "envFile": "${workspaceFolder}\\.env",
             }
         }
     },
@@ -123,14 +146,28 @@ MCP: dict[str, object] = {
 CLAUDE_CODE = "claude mcp add leka-architect --env ARCHITECT_ENV=/chemin/absolu/vers/.env -- leka-architect mcp"
 
 
-def prompt_pack() -> dict[str, str]:
-    """For a chat model without tools — ChatGPT, Copilot chat: its
-    instructions, the dossier's template, and how to give it the pages."""
+def copilot_prompt(instructions: str) -> str:
+    """Copilot's prompt file in VS Code (.github/prompts/…prompt.md): the
+    instructions, in agent mode, its tools — this package's MCP server's."""
+    return (
+        "---\n"
+        "mode: agent\n"
+        "description: Architecte applicatif — le deck d'architecture d'un parcours "
+        "(PowerPoint et PDF), depuis Confluence\n"
+        "---\n\n"
+        f"{instructions.strip()}\n\n{TOOLS_NOTE}\n"
+    )
+
+
+def prompt_pack(instructions: str | None = None) -> dict[str, str]:
+    """For a chat model without tools — ChatGPT, Copilot chat: the
+    instructions it follows (`instructions`, the deck's), the dossier's, its
+    template, and how to give it the pages."""
     sections = "\n".join(f"{n}. {title} (`{key}`)" for n, (key, title) in enumerate(SECTIONS, 1))
     types = "\n".join(
         f"- **{layer}** : {', '.join(kinds)}" for layer, kinds in ELEMENT_TYPES.items()
     )
-    return {
+    pack = {
         "instructions-systeme.md": SYSTEM + "\n",
         "modele-livrable.md": f"""# Le dossier d'architecture — son modèle
 
@@ -157,61 +194,120 @@ Markdown, PDF et Word, chaque section citant ses pages.
 """,
         "mode-emploi.md": """# Utiliser l'Architecte avec un LLM sans outils (ChatGPT, Copilot chat…)
 
-1. **Les pages.** Depuis Confluence (Paramètres de l'espace → Exporter l'espace,
-   en HTML), ou par l'API :
+## Le deck d'un parcours (PowerPoint et PDF)
 
-       leka-architect pages --space ARCHI --output pages.md
-
-   `pages.md` contient chaque page avec son identifiant entre crochets, sa
-   place dans l'arborescence et son texte : c'est ce que le modèle cite.
-
-2. **Les consignes.** Collez `instructions-systeme.md` en instructions
+1. **Les consignes.** Collez `consignes-architecte.md` en instructions
    personnalisées (ou en premier message).
 
-3. **La demande.** Joignez `pages.md` (ou collez-le en plusieurs messages s'il
-   est long) et demandez : « Produis le dossier d'architecture en JSON, selon
-   le schéma ».
+2. **Les pages.** Depuis Confluence (Paramètres de l'espace → Exporter
+   l'espace, en HTML), ou par l'API :
 
-4. **Le livrable.** Enregistrez la réponse dans `reponse.json`, puis :
+       leka-architect pages --space MO --output pages.md
+
+   Joignez `pages.md` et, pour le RACI, l'annuaire des contacts.
+
+3. **La demande.** « Construis l'architecture du parcours [parcours] sur le
+   périmètre [périmètre]. Réponds par le contenu du deck en JSON, selon le
+   schéma joint » — le schéma : `leka-architect prompts` l'écrit
+   (`schema-deck.json`).
+
+4. **Le livrable.** Enregistrez la réponse dans `deck.json`, puis :
+
+       leka-architect render-deck --deck deck.json --output rapport
+
+   Le PowerPoint modifiable et le PDF sont écrits dans `rapport/`, au gabarit.
+
+## Le dossier ArchiMate d'un espace (Markdown, PDF, Word)
+
+1. **Les pages** : `leka-architect pages --space ARCHI --output pages.md`.
+2. **Les consignes** : `instructions-systeme.md`.
+3. **La demande** : « Produis le dossier d'architecture en JSON, selon le
+   schéma » (`modele-livrable.md`), `pages.md` joint.
+4. **Le livrable** : la réponse dans `reponse.json`, puis
 
        leka-architect render --dossier reponse.json --space ARCHI --output rapport
-
-   Le Markdown, le PDF et le Word sont écrits dans `rapport/`, chaque page
-   citée vérifiée — une page qui n'existe pas est écartée et signalée.
 """,
     }
+    if instructions:
+        pack["consignes-architecte.md"] = instructions.strip() + "\n"
+    return pack
 
 
 README = f"""# L'Architecte applicatif — version installable (v{__version__})
 
-Il lit votre Confluence et produit le **dossier d'architecture applicative
-structuré ArchiMate 3.1** — couches métier, application et technologie,
-flux, dépendances, points à confirmer —, **chaque section citant les pages
-Confluence** dont elle est tirée. En Markdown, PDF et Word.
+Il lit votre Confluence et produit :
 
-C'est le même agent que dans LEKA : les mêmes consignes, les mêmes étapes,
-le même livrable. **Rien ne passe par LEKA** : vos pages vont au modèle que
-vous configurez, et nulle part ailleurs. Aucune télémétrie.
+- **le deck d'architecture d'un parcours** — PowerPoint modifiable et PDF, au
+  gabarit de vos consignes : page de titre et sommaire, le parcours en clair,
+  les règles de gestion, une slide par sous-processus (couche métier ArchiMate
+  et couche applicative en diagramme de séquence), le RACI, les points de
+  contrôle, les sources ;
+- **le dossier ArchiMate d'un espace** — Markdown, PDF, Word, chaque section
+  citant ses pages.
+
+Il suit **les consignes de votre organisation** (`leka_architect/consignes.md`,
+`prompts/consignes-architecte.md`) quand LEKA les a reçues ; sinon celles de
+LEKA. Les fichiers PowerPoint et PDF sont dessinés par **le même code que sur
+LEKA**. **Rien ne passe par LEKA** : vos pages vont au modèle que vous
+configurez, et nulle part ailleurs. Aucune télémétrie.
 
 ## 1. Installer (moins de 10 minutes)
 
-Python 3.9 ou plus :
+Il faut **Python 3.10 ou plus**. Travaillez dans un dossier à vous — par
+exemple `architecte/` —, où vous dézippez ce paquet : `architecte/leka-architect/`.
+Les commandes ci-dessous se tapent dans ce dossier `architecte/`.
 
-    pip install ./leka-architect          # le dossier de ce paquet
+### Windows (PowerShell)
 
-Ou avec Docker :
+Python : https://www.python.org/downloads/windows/ — à l'installation, cochez
+« Add python.exe to PATH ». Puis :
+
+    py -3 --version
+    py -3 -m venv .venv
+    .venv\\Scripts\\python -m pip install .\\leka-architect
+    Copy-Item leka-architect\\.env.example .env
+    notepad .env
+    .venv\\Scripts\\leka-architect --version
+
+(`py` est le lanceur de python.org. Sans lui : `python` à la place de `py -3`.
+Pas besoin d'« activer » l'environnement : on appelle `.venv\\Scripts\\…`.)
+
+### macOS (Terminal)
+
+    python3 --version          # 3.10 ou plus — sinon : brew install python@3.12,
+                               # ou https://www.python.org/downloads/macos/
+    python3 -m venv .venv
+    .venv/bin/pip install ./leka-architect
+    cp leka-architect/.env.example .env
+    open -e .env
+    .venv/bin/leka-architect --version
+
+### Linux
+
+    python3 --version          # 3.10 ou plus
+    sudo apt install python3-venv     # Debian / Ubuntu, s'il manque
+    python3 -m venv .venv
+    .venv/bin/pip install ./leka-architect
+    cp leka-architect/.env.example .env
+    nano .env
+    .venv/bin/leka-architect --version
+
+### Avec Docker (tous systèmes)
 
     docker build -t leka-architect ./leka-architect
+    docker run --rm --env-file .env -v "$PWD:/travail" leka-architect --version
+
+Dans la suite, `leka-architect` veut dire `.venv\\Scripts\\leka-architect`
+(Windows) ou `.venv/bin/leka-architect` (macOS, Linux).
 
 ## 2. Configurer
 
-    cp .env.example .env
-
-Remplissez `.env` :
+Remplissez `.env` (il ne quitte jamais votre poste) :
 
 - **Confluence** : son adresse, l'adresse e-mail du compte et un token API
-  (Cloud), ou un token d'accès personnel (Data Center). Lecture seule : rien
-  n'est jamais écrit dans Confluence. Un export sur disque marche aussi
+  (Cloud : https://id.atlassian.com/manage-profile/security/api-tokens), ou
+  un token d'accès personnel (Data Center). Lecture seule : rien n'est jamais
+  écrit dans Confluence. Un export sur disque marche aussi
   (`ARCHITECT_CONFLUENCE_EXPORT`).
 - **Le modèle** :
   - Azure OpenAI : `ARCHITECT_LLM_PROVIDER=azure`, le nom du déploiement dans
@@ -221,68 +317,55 @@ Remplissez `.env` :
   - Toute API compatible OpenAI (OpenAI, Mistral, Ollama, vLLM, LM Studio, un
     LLM interne) : `ARCHITECT_LLM_PROVIDER=openai`, son adresse dans
     `ARCHITECT_LLM_BASE_URL`, son modèle.
+  - Avec Copilot ou Claude en MCP (§ 4), le modèle est le leur : rien à mettre ici.
+- **Les fichiers de Connaissances** (pour le RACI) : l'annuaire des contacts
+  en Excel et le référentiel applicatif, dans le dossier de
+  `ARCHITECT_KNOWLEDGE_DIR` (par défaut `./connaissances`).
 
 Vérifiez ce qu'il lit :
 
-    leka-architect tree --space ARCHI
+    leka-architect spaces
+    leka-architect tree --space MO
 
-## 3. Lancer la simulation
+## 3. Le deck d'un parcours
 
-    leka-architect simulate --space ARCHI --output ./rapport
-    leka-architect simulate --space ARCHI --root-page 123456 --focus "Facturation" --output ./rapport
+    leka-architect deck --space MO --parcours "Paiement CB" --perimetre "Digital - Espace Client" --output rapport
+    leka-architect deck --space MO --root-page 123456 --parcours "Paiement CB" --perimetre "Digital" --vue-applicative --output rapport
 
-Dans `./rapport` :
+Dans `rapport/` : `architecture-paiement-cb.pptx` (modifiable),
+`architecture-paiement-cb.pdf`, et son contenu en JSON.
 
-    dossier-architecture.md     le dossier, chaque page citée en lien
-    dossier-architecture.pdf
-    dossier-architecture.docx
-    dossier-architecture.json   le dossier lui-même (pour comparer, réécrire)
+Et le dossier ArchiMate d'un espace :
 
-Pour comparer à un document de référence (Word, Markdown, HTML ou texte) :
+    leka-architect simulate --space ARCHI --output rapport
 
-    leka-architect compare --dossier ./rapport --reference reference.docx --output ./rapport
-
-## 4. Dans Copilot, Claude ou Cursor (MCP)
+## 4. Dans GitHub Copilot (VS Code), Claude ou Cursor (MCP)
 
     leka-architect mcp
 
-expose quatre outils : `list_confluence_tree`, `read_confluence_page`,
-`analyze_architecture`, `generate_architecture_document`, et la consigne
-`architecte`. Configurations prêtes à coller, dans `mcp/` :
+expose les outils `list_confluence_spaces`, `list_confluence_tree`,
+`read_confluence_page`, `search_confluence_pages`, `list_knowledge_files`,
+`read_knowledge_file`, `generate_architecture_deck`, `analyze_architecture`,
+`generate_architecture_document`, et la consigne `architecte`.
 
-- **GitHub Copilot dans VS Code** (mode agent) : `mcp/vscode-copilot.json` →
-  `.vscode/mcp.json` de votre projet (il lit le `.env` du projet). Puis, dans
-  le chat Copilot en mode agent : « Génère la doc d'architecture de l'espace
-  ARCHI ».
-- **Claude Desktop** : `mcp/claude-desktop.json` → réglages → Développeur →
-  Modifier la config.
-- **Claude Code** : `{CLAUDE_CODE}`
-- **Cursor** : `mcp/cursor.json` → `.cursor/mcp.json`.
-- **Docker** : `mcp/docker.json`.
+**GitHub Copilot dans VS Code** (mode agent) — ouvrez le dossier `architecte/` dans VS Code :
 
-Sans modèle configuré dans `.env`, c'est le modèle du client (Copilot,
-Claude…) qui rédige le dossier : `analyze_architecture` lui donne les pages et
-les consignes, `generate_architecture_document` écrit ses fichiers.
+1. Copiez `leka-architect/mcp/vscode-copilot-windows.json` (Windows) ou
+   `leka-architect/mcp/vscode-copilot.json` (macOS, Linux) en `.vscode/mcp.json`.
+2. Copiez le dossier `leka-architect/copilot/.github` à la racine : il donne à
+   Copilot les consignes de l'architecte (`/architecte-applicatif`).
+3. Dans le chat Copilot, mode **Agent** : `/architecte-applicatif Construis
+   l'architecture du parcours Paiement CB sur le périmètre Digital`.
+
+**Claude Desktop** : `mcp/claude-desktop.json` → réglages → Développeur →
+Modifier la config. **Claude Code** : `{CLAUDE_CODE}`. **Cursor** :
+`mcp/cursor.json` → `.cursor/mcp.json`. **Docker** : `mcp/docker.json`.
+Dans ces trois-là, mettez le chemin complet de `leka-architect` (celui du `.venv`).
 
 ## 5. Avec un LLM sans outils (ChatGPT, Copilot chat…)
 
 Le pack de prompts est dans `prompts/` (ou `leka-architect prompts`) : les
-instructions système, le modèle du livrable, le mode d'emploi pour joindre les
-pages exportées.
-
-## Exemple de sortie
-
-    # Dossier d'architecture — Facturation
-    *Espace Confluence ARCHI*
-
-    ## 3. Couche application
-    Billing API reçoit les commandes et écrit dans Ledger.
-
-    | Type | Élément | Description | Statut | Sources |
-    |---|---|---|---|---|
-    | Composant applicatif | Billing API | Expose /invoices. | Documenté | [Billing API](https://…/pages/102) |
-
-    **Sources :** [Applications](https://…/pages/101), [Billing API](https://…/pages/102)
+consignes, le mode d'emploi pour joindre les pages exportées, le schéma du deck.
 
 ## Confidentialité
 
@@ -290,7 +373,17 @@ pages exportées.
 - Les pages ne vont qu'au modèle configuré ; aucun appel à LEKA, aucune
   télémétrie.
 - Aucun secret dans ce paquet : vos identifiants restent dans votre `.env`.
+- Les fichiers de Connaissances ne sont lus que dans leur dossier.
 """
 
 
-__all__ = ["CLAUDE_CODE", "DOCKERFILE", "ENV_EXAMPLE", "MCP", "PYPROJECT", "README", "prompt_pack"]
+__all__ = [
+    "CLAUDE_CODE",
+    "DOCKERFILE",
+    "ENV_EXAMPLE",
+    "MCP",
+    "PYPROJECT",
+    "README",
+    "copilot_prompt",
+    "prompt_pack",
+]

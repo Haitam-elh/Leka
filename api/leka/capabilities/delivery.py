@@ -33,6 +33,7 @@ from leka.capabilities.catalogue import needs_of
 from leka.capabilities.changes import propose_change
 from leka.capabilities.definition import Definition
 from leka.capabilities.deliverables import MEDIA_TYPES, ArchitectureDeck, render
+from leka.capabilities.deliverables.deck import DECK_RULES
 from leka.capabilities.gateway import Gateway, Message, NoModelError, Request, Tier
 from leka.capabilities.mockups import design_target, propose_design, proposes
 from leka.capabilities.models import AgentRun
@@ -46,34 +47,6 @@ DECK_TOKENS = 16_000
 # How long drawing may take, the model's answer included.
 DECK_BUDGET = 10 * 60.0
 FORMATS = ("pptx", "pdf")
-
-DECK_RULES = """You are LEKA's deck writer for the agent whose instructions \
-follow. From its analysis — and from nothing else — fill the content of its \
-deck, each part as its template defines it:
-- Only what the analysis holds: no application, service, rule, name or \
-contact of your own. What the template needs and the analysis lacks is \
-`missing: true` (drawn in orange) or « À confirmer », and is one of the \
-points to confirm (`controls`), with where it is (« Process C - bande 2 », \
-« Transverse »).
-- business: the actor (« Client » or « Conseiller », with « ? » when \
-uncertain), the trigger, the source process and its channel, the groupings \
-A, B, C… each with its steps — on the baseline (`branch: main`), \
-alternatives above or below it.
-- processes: one per grouping, same letter and label; its columns in the \
-order of their first call; its bands are its phases; each line is one \
-chain of calls read left to right, each call naming its column exactly.
-- organisation: « <organisation> - <entite> - <service> » from the inputs, \
-else as the analysis names them; empty when neither says — never invented.
-- app_view: only when the inputs ask for it (vue_applicative true), else \
-null; one box per application, flows aggregated, numbered in order.
-- raci: one row per brick and role found; a contact is a name from the \
-analysis, else « À confirmer ».
-- sources: each source consulted, one row « Requêtes restées SANS \
-RÉSULTAT », one row « Couche infrastructure » (« NON DOCUMENTÉ » when \
-absent).
-- In French, as short as the template wants it: a step in a few words, a \
-service by its name and a precision in parentheses.
-Answer with the JSON object only."""
 
 
 def deck_messages(

@@ -131,7 +131,7 @@ test.describe("An Enterprise organisation", () => {
     const install = page.getByTestId("install-dialog");
     await expect(install).toContainText("rien ne passe par LEKA");
     await page.getByTestId("install-tab-mcp").click();
-    await expect(install).toContainText('"command": "leka-architect"');
+    await expect(install).toContainText('"args": ["mcp"]');
     await kept(page, "01b-installer");
     const zip = await page.request.get(
       "http://localhost:8000/api/v1/capabilities/application-architecture/package",

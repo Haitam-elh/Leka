@@ -4582,8 +4582,9 @@ export interface paths {
         };
         /**
          * The agent, to install in one's own environment
-         * @description leka-architect as a zip — its code, its README, its .env example, its
-         *     Dockerfile, its MCP configurations, its prompt pack; never a secret —
+         * @description leka-architect as a zip — its code, LEKA's deck renderer, the
+         *     instructions it follows, its README, its .env example, its Dockerfile,
+         *     its MCP configurations, its prompt pack; never a secret —
          *     for an organisation that sees the agent (dedicated to it): 404
          *     otherwise, as if it did not exist. Each download audited.
          */

@@ -936,6 +936,13 @@ def _process_slide(
         # band's title.
         front_right = centers[0] + front_w / 2
         mid = min(max((BANDS_TOP + bottom) / 2, min(branches)), max(branches))
+        # Its middle on a band's title: at the branch nearest it instead — a
+        # title is never struck through (§5.6; 2026-10-25, « 2 - PAIEMENT »).
+        if any(
+            by0 <= mid <= by0 + bh0 and bx0 < bus_x and bx0 + bw0 > front_right
+            for bx0, by0, bw0, bh0 in banners
+        ):
+            mid = min(branches, key=lambda y: abs(y - mid))
         slide.add(Stroke(front_right, mid, bus_x, mid, color=SERVICE_LINE))
         top_y = min(branches)
         for bx0, by0, bw0, bh0 in banners:

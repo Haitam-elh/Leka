@@ -261,6 +261,30 @@ def test_on_a_process_slide_lifelines_are_behind_and_a_red_line_leads_to_the_fro
     assert all(i.y1 == i.y2 for i in order if isinstance(i, Stroke) and i.arrow and i.color != RED)
 
 
+def test_no_band_title_is_struck_through_by_the_front_s_line() -> None:
+    # 2026-10-25: a band of one line, another of two — the front's middle
+    # fell on « 2 - PAIEMENT », and its line struck the title through.
+    content = deck().model_dump()
+    first = content["processes"][0]
+    chain = first["bands"][0]["lines"][0]
+    first["bands"] = [
+        {"title": "Vérification du solde", "lines": [chain]},
+        {"title": "Paiement", "lines": [chain, chain]},
+    ]
+    process = next(
+        s for s in deck_slides(ArchitectureDeck.model_validate(content)) if "process A" in title(s)
+    )
+    banners = [i for i in process.items if isinstance(i, Box) and i.text[:4] in ("1 - ", "2 - ")]
+    assert len(banners) == 2
+    for stroke in (i for i in process.items if isinstance(i, Stroke) and i.y1 == i.y2):
+        for banner in banners:
+            across = (
+                min(stroke.x1, stroke.x2) < banner.x + banner.w
+                and max(stroke.x1, stroke.x2) > banner.x
+            )
+            assert not (across and banner.y <= stroke.y1 <= banner.y + banner.h), banner.text
+
+
 def test_the_raci_fills_its_slide_before_the_next() -> None:
     slides = deck_slides(deck(contacts=60))
     raci = [s for s in slides if title(s).startswith("Contacts et responsabilités")]

@@ -9,11 +9,14 @@ asks, what it delivers — the same on LEKA and wherever it is installed.
     model       the dossier, structured as ArchiMate 3.1, its evidence
     render      the dossier written: Markdown, Word, PDF
     compare     the dossier against a reference document
+    journey     a journey's deck: the instructions, the analysis, the deck
+                drawn by LEKA's renderer (shipped as leka_architect.deck)
+    knowledge   the knowledge files: a directory of contacts in Excel…
 
 Standing alone: it imports nothing of LEKA's, only the standard library
 (reportlab for the PDF), and runs on any Python from 3.9. LEKA uses it as
 leka.architect; the downloadable agent ships it as leka_architect — the
-same files.
+same files, with LEKA's deck renderer beside them (Python 3.10 or later).
 """
 
 from __future__ import annotations

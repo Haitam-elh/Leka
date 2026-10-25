@@ -112,6 +112,10 @@ class DedicatedAgent(Base, WorkspaceScopedMixin):
     # Who at LEKA: the server command's operator — no account of the workspace.
     assigned_by: Mapped[str] = mapped_column(String(100), nullable=False)
     assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Its organisation's own instructions (2026-10-25), in place of the
+    # registry's: its architect, its words — given by LEKA from the server,
+    # never in the code, never shown to a browser.
+    instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class CapabilityFavourite(Base, WorkspaceScopedMixin):
