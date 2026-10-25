@@ -7,6 +7,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
 import { apiAddress } from "@/lib/api";
+import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 
 /**
@@ -33,25 +34,55 @@ function systemOf(agent: string): System {
   return "linux";
 }
 
-/** Its own installation, in a folder of its own: a virtual environment, nothing
- * system-wide, no administrator rights. */
+/** Its own installation, in a folder of its own — ~/architecte — the zip just
+ * downloaded unzipped in it (2026-10-25: « dézippez dans un dossier » said
+ * no command): a virtual environment, nothing system-wide, no administrator
+ * rights; its .env opened to be filled. No comment in a block: pasted into
+ * macOS' Terminal, zsh runs « # … » as a command and passes a trailing one
+ * as arguments — what is to be said is said in its label. */
 const INSTALL: Record<System, string> = {
-  windows: `# PowerShell, dans le dossier où le paquet est dézippé — Python 3.10+ (python.org)
+  windows: `New-Item -ItemType Directory -Force $HOME\\architecte | Out-Null; cd $HOME\\architecte
+$zip = (Get-ChildItem $HOME\\Downloads\\leka-architect*.zip | Sort-Object LastWriteTime | Select-Object -Last 1).FullName
+Expand-Archive $zip -DestinationPath . -Force
 py -3 -m venv .venv
 .venv\\Scripts\\python -m pip install .\\leka-architect
 Copy-Item leka-architect\\.env.example .env
-notepad .env      # Confluence et votre modèle
-.venv\\Scripts\\leka-architect spaces`,
-  macos: `# Terminal, dans le dossier où le paquet est dézippé — Python 3.10+ (brew install python@3.12)
+notepad .env`,
+  macos: `mkdir -p ~/architecte && cd ~/architecte
+unzip -o "$(ls -t ~/Downloads/leka-architect*.zip | head -1)"
 python3 -m venv .venv
 .venv/bin/pip install ./leka-architect
-cp leka-architect/.env.example .env && open -e .env      # Confluence et votre modèle
-.venv/bin/leka-architect spaces`,
-  linux: `# Dans le dossier où le paquet est dézippé — Python 3.10+ (sudo apt install python3-venv)
+cp leka-architect/.env.example .env && open -e .env`,
+  linux: `mkdir -p ~/architecte && cd ~/architecte
+unzip -o "$(ls -t ~/Downloads/leka-architect*.zip | head -1)"
 python3 -m venv .venv
 .venv/bin/pip install ./leka-architect
-cp leka-architect/.env.example .env && nano .env      # Confluence et votre modèle
-.venv/bin/leka-architect spaces`,
+cp leka-architect/.env.example .env && nano .env`,
+};
+
+/** Where its Python comes from, when the system has none recent enough. */
+const PYTHON: Record<System, string> = {
+  windows: "python.org/downloads — à l'installation, cochez « Add python.exe to PATH »",
+  macos: "brew install python@3.12, ou python.org/downloads",
+  linux: "sudo apt install python3 python3-venv unzip",
+};
+
+/** What .env asks, in the order it asks it — then saved. */
+const ENV = `# Votre Confluence — lu, jamais modifié
+CONFLUENCE_URL=https://votre-entreprise.atlassian.net
+CONFLUENCE_EMAIL=prenom.nom@entreprise.com
+CONFLUENCE_TOKEN=<votre token : https://id.atlassian.com/manage-profile/security/api-tokens>
+
+# Votre modèle — rien à mettre avec Copilot ou Claude (onglet MCP)
+ARCHITECT_LLM_PROVIDER=azure        # azure, anthropic, ou openai (toute API compatible)
+ARCHITECT_LLM_MODEL=<le nom du déploiement, ou du modèle>
+ARCHITECT_LLM_API_KEY=<votre clé>
+ARCHITECT_LLM_BASE_URL=https://<ressource>.openai.azure.com`;
+
+const FOLDER: Record<System, string> = {
+  windows: "$HOME\\architecte",
+  macos: "~/architecte",
+  linux: "~/architecte",
 };
 
 const BIN: Record<System, string> = {
@@ -60,10 +91,22 @@ const BIN: Record<System, string> = {
   linux: ".venv/bin/leka-architect",
 };
 
+const OPEN: Record<System, string> = {
+  windows: "explorer rapport",
+  macos: "open rapport",
+  linux: "xdg-open rapport",
+};
+
+/** Read first: its spaces, their key on the left. */
+function check(system: System): string {
+  return `cd ${FOLDER[system]}
+${BIN[system]} spaces`;
+}
+
+/** Then the deck — the folder of the result opened. */
 function run(system: System): string {
-  const bin = BIN[system];
-  return `${bin} deck --space MO --parcours "Paiement CB" --perimetre "Digital - Espace Client" --output rapport
-${bin} simulate --space ARCHI --output rapport`;
+  return `${BIN[system]} deck --space MO --parcours "Paiement CB" --perimetre "Digital - Espace Client" --output rapport
+${OPEN[system]}`;
 }
 
 const DOCKER = `docker build -t leka-architect ./leka-architect
@@ -88,22 +131,28 @@ function vscode(system: System): string {
 }`;
 }
 
-/** Its instructions in Copilot: the prompt file the package carries. */
+/** Its instructions in Copilot: the prompt file the package carries, put
+ * in the folder VS Code opens. */
 function copilot(system: System): string {
-  const copy =
-    system === "windows"
-      ? "Copy-Item -Recurse leka-architect\\copilot\\.github .github"
-      : "cp -R leka-architect/copilot/.github .github";
-  return `${copy}
-# puis, dans le chat Copilot en mode Agent :
-/architecte-applicatif Construis l'architecture du parcours Paiement CB sur le périmètre Digital`;
+  return system === "windows"
+    ? `cd $HOME\\architecte
+Copy-Item -Recurse -Force leka-architect\\copilot\\.github .github`
+    : `cd ~/architecte
+cp -R leka-architect/copilot/.github .github`;
 }
 
-const CLAUDE = "claude mcp add leka-architect --env ARCHITECT_ENV=/chemin/absolu/vers/.env -- /chemin/absolu/vers/.venv/bin/leka-architect mcp";
+/** What is asked in Copilot's chat, in agent mode — not a command. */
+const ASK = "/architecte-applicatif Construis l'architecture du parcours Paiement CB sur le périmètre Digital";
+
+/** Claude Code: the installed agent, its .env — this folder's. */
+function claude(system: System): string {
+  return system === "windows"
+    ? "claude mcp add leka-architect --env ARCHITECT_ENV=$HOME\\architecte\\.env -- $HOME\\architecte\\.venv\\Scripts\\leka-architect.exe mcp"
+    : "claude mcp add leka-architect --env ARCHITECT_ENV=$HOME/architecte/.env -- $HOME/architecte/.venv/bin/leka-architect mcp";
+}
 
 const OTHER = `leka-architect prompts --output ./prompts
 leka-architect pages --space MO --output pages.md
-# … le modèle répond par le contenu du deck en JSON, enregistré dans deck.json :
 leka-architect render-deck --deck deck.json --output ./rapport`;
 
 const AZURE = `ARCHITECT_LLM_PROVIDER=azure
@@ -221,6 +270,11 @@ export function InstallAgent({ agentKey, className }: { agentKey: string; classN
               <p className="text-[0.8125rem] text-shell-muted">{w.terminalLead}</p>
               {download}
               <Copyable label={w.install} text={INSTALL[system]} />
+              <p className="-mt-1 text-xs text-shell-muted" data-testid="install-python">
+                {fill(w.python, { how: PYTHON[system] })}
+              </p>
+              <Copyable label={w.env} text={ENV} />
+              <Copyable label={w.check} text={check(system)} />
               <Copyable label={w.run} text={run(system)} />
               <Copyable label={w.docker} text={DOCKER} />
             </TabsPanel>
@@ -229,7 +283,8 @@ export function InstallAgent({ agentKey, className }: { agentKey: string; classN
               {download}
               <Copyable label={w.vscode} text={vscode(system)} />
               <Copyable label={w.copilot} text={copilot(system)} />
-              <Copyable label={w.claude} text={CLAUDE} />
+              <Copyable label={w.ask} text={ASK} />
+              <Copyable label={w.claude} text={claude(system)} />
               <p className="text-xs text-shell-muted">{w.mcpMore}</p>
             </TabsPanel>
             <TabsPanel value="other" className="flex flex-col gap-3 pt-4">

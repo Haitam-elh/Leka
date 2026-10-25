@@ -274,8 +274,9 @@ Pas besoin d'« activer » l'environnement : on appelle `.venv\\Scripts\\…`.)
 
 ### macOS (Terminal)
 
-    python3 --version          # 3.10 ou plus — sinon : brew install python@3.12,
-                               # ou https://www.python.org/downloads/macos/
+`python3 --version` doit dire 3.10 ou plus — sinon : `brew install python@3.12`,
+ou https://www.python.org/downloads/macos/. Puis :
+
     python3 -m venv .venv
     .venv/bin/pip install ./leka-architect
     cp leka-architect/.env.example .env
@@ -284,8 +285,9 @@ Pas besoin d'« activer » l'environnement : on appelle `.venv\\Scripts\\…`.)
 
 ### Linux
 
-    python3 --version          # 3.10 ou plus
-    sudo apt install python3-venv     # Debian / Ubuntu, s'il manque
+`python3 --version` doit dire 3.10 ou plus ; sous Debian / Ubuntu, s'il manque :
+`sudo apt install python3 python3-venv`. Puis :
+
     python3 -m venv .venv
     .venv/bin/pip install ./leka-architect
     cp leka-architect/.env.example .env
