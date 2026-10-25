@@ -709,6 +709,43 @@ class DesignCorrectionRead(BaseModel):
     at: datetime
 
 
+class AgentUsageRead(BaseModel):
+    """An agent's use here over a period (2026-10-25): how many runs and how
+    they ended — counted, never priced."""
+
+    model_config = ConfigDict(frozen=True)
+
+    key: str
+    title: str
+    runs: int
+    succeeded: int
+    failed: int
+    last_at: datetime | None = None
+
+
+class AgentJournalRead(BaseModel):
+    """Who ran which agent, on what, when, and how it ended (2026-10-25)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    key: str
+    title: str
+    by: uuid.UUID | None = None
+    by_name: str | None = Field(default=None, description="Who asked it, as their name reads.")
+    sources: list[str] = Field(
+        default_factory=list,
+        description="The sources it was held to, by name — none: every one connected.",
+    )
+    scope: str | None = Field(
+        default=None, description="What it was asked on: a repository, a space, a perimeter."
+    )
+    status: str
+    queued_at: datetime
+    finished_at: datetime | None = None
+    intention_id: uuid.UUID | None = None
+
+
 class AgentRunRead(BaseModel):
     """One run of an agent: where it stands, what it delivers, or why not."""
 

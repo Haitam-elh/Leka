@@ -110,7 +110,8 @@ test.describe("the information architecture", () => {
     // The overview first (LEKA-438): real figures, the trail of decisions.
     await expect(page.getByTestId("governance-overview")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Journal des accès" })).toBeVisible();
-    await page.getByRole("tab", { name: "Accès" }).click();
+    // « Accès » exactly: « Sessions et accès » is another tab (2026-10-25).
+    await page.getByRole("tab", { name: "Accès", exact: true }).click();
     await expect(page).toHaveURL(/\/governance\?tab=access$/);
     await expect(page.getByTestId("access-matrix")).toContainText("Restreindre une entité");
     // A creation form opens in a dialog, and Escape closes it.
@@ -118,6 +119,20 @@ test.describe("the information architecture", () => {
     await expect(page.getByRole("dialog", { name: "Nouveau rôle" })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    // Sessions et accès (2026-10-25): this device, said as such, never signed
+    // out from here; what LEKA keeps.
+    await page.getByRole("tab", { name: "Sessions et accès" }).click();
+    await expect(page).toHaveURL(/\/governance\?tab=security$/);
+    const current = page.locator('[data-testid="device-session"][data-current="true"]');
+    await expect(current).toContainText("Cet appareil");
+    await expect(current.getByTestId("device-sign-out")).toHaveCount(0);
+    await expect(page.getByTestId("security-stored")).toContainText("jamais son contenu");
+    // Usage des agents: counted over a period, never priced.
+    await page.getByRole("tab", { name: "Usage des agents" }).click();
+    await expect(page).toHaveURL(/\/governance\?tab=agents$/);
+    await expect(page.getByTestId("agent-usage-tab")).toBeVisible();
+    await expect(page.getByTestId("agent-usage-tab")).not.toContainText("€");
   });
 
   test("keeps the shell around an address that matches nothing", async ({ page }) => {

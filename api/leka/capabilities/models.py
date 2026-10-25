@@ -100,6 +100,20 @@ class WorkspaceCapability(Base, WorkspaceScopedMixin):
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class DedicatedAgent(Base, WorkspaceScopedMixin):
+    """An agent made for one organisation (2026-10-25): seen and run only by
+    the organisations it is assigned to — assigned by LEKA, from the server
+    (python -m leka.ops.enterprise), never bought."""
+
+    __tablename__ = "dedicated_agents"
+    __table_args__ = (UniqueConstraint("workspace_id", "key", name="uq_dedicated_agents_key"),)
+
+    key: Mapped[str] = mapped_column(String(100), nullable=False)
+    # Who at LEKA: the server command's operator — no account of the workspace.
+    assigned_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class CapabilityFavourite(Base, WorkspaceScopedMixin):
     """A capability a person keeps at hand: « Mes capacités »."""
 
