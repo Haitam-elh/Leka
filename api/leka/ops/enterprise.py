@@ -59,9 +59,7 @@ from leka.core.security import PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, hash_pa
 from leka.db import load_schema, session_factory, system_scope, workspace_scope
 from leka.governance.audit import audit
 from leka.governance.plans import plan_of, set_plan
-from leka.identity.models import User
-from leka.identity.repository import UserRepository
-from leka.identity.service import password_is_breached
+from leka.identity import User, UserRepository, password_is_breached
 from leka.platform import (
     MembershipRepository,
     Role,
