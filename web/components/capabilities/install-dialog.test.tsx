@@ -3,8 +3,8 @@
  *
  * What these protect: offered for an agent that has a package only; three
  * ways — a terminal, an MCP client, a model without tools —, each with the
- * authenticated download and its commands to copy; nothing through LEKA,
- * said.
+ * authenticated download and its commands to copy — Windows', macOS' or
+ * Linux's, as chosen; nothing through LEKA, said.
  */
 
 import { render, screen, waitFor, within } from "@testing-library/react";
@@ -34,18 +34,30 @@ describe("« Installer dans votre environnement »", () => {
       "href",
       expect.stringContaining("/api/v1/capabilities/application-architecture/package"),
     );
-    expect(dialog).toHaveTextContent("pip install ./leka-architect");
-    expect(dialog).toHaveTextContent("leka-architect simulate --space ARCHI --output ./rapport");
+    // macOS: its own folder's environment, the deck of a journey.
+    await user.click(screen.getByTestId("install-system-macos"));
+    expect(screen.getByTestId("install-system-macos")).toHaveAttribute("aria-checked", "true");
+    expect(dialog).toHaveTextContent(".venv/bin/pip install ./leka-architect");
+    expect(dialog).toHaveTextContent('.venv/bin/leka-architect deck --space MO --parcours "Paiement CB"');
     await user.click(within(dialog).getAllByTestId("install-copy")[0]);
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining("pip install ./leka-architect")));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining(".venv/bin/pip install ./leka-architect")));
     expect(within(dialog).getAllByTestId("install-copy")[0]).toHaveTextContent("Copié");
+    // Windows: PowerShell's.
+    await user.click(screen.getByTestId("install-system-windows"));
+    expect(dialog).toHaveTextContent("py -3 -m venv .venv");
+    expect(dialog).toHaveTextContent(".venv\\Scripts\\python -m pip install .\\leka-architect");
+    expect(dialog).toHaveTextContent("Copy-Item leka-architect\\.env.example .env");
 
     await user.click(screen.getByTestId("install-tab-mcp"));
-    expect(dialog).toHaveTextContent('"command": "leka-architect"');
+    expect(dialog).toHaveTextContent('"command": "${workspaceFolder}\\\\.venv\\\\Scripts\\\\leka-architect.exe"');
+    expect(dialog).toHaveTextContent("/architecte-applicatif");
+    await user.click(screen.getByTestId("install-system-linux"));
+    expect(dialog).toHaveTextContent('"command": "${workspaceFolder}/.venv/bin/leka-architect"');
     expect(dialog).toHaveTextContent("claude mcp add leka-architect");
     await user.click(screen.getByTestId("install-tab-other"));
     expect(dialog).toHaveTextContent("ARCHITECT_LLM_PROVIDER=azure");
     expect(dialog).toHaveTextContent("leka-architect prompts --output ./prompts");
+    expect(dialog).toHaveTextContent("leka-architect render-deck --deck deck.json");
     expect(dialog).toHaveTextContent("Le paquet ne contient aucun secret");
   });
 

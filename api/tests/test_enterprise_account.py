@@ -11,6 +11,10 @@ What these protect:
   is, no password asked; an unknown agent, a short password, no password
   for a new account: refused, said why. An agent is taken back on asking.
 - No organisation's name is LEKA's: the same command makes a second one.
+- Its own instructions — its architect's prompt — given from a file or the
+  standard input, said by their length only, run in place of the
+  registry's; taken back, the registry's again. Without an agent, or a file
+  that is not there: refused.
 - On Enterprise, members and sources have no limit.
 - A source's credentials are revoked by who manages sources: erased, the
   source disabled, its data kept, said in its history and the audit trail;
@@ -23,10 +27,12 @@ What these protect:
 # ruff: noqa: F811 — fixtures imported to be requested by name.
 from __future__ import annotations
 
+import io
 import json
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from httpx import AsyncClient
@@ -34,6 +40,9 @@ from sqlalchemy import func, select, text
 
 from leka.billing.limits import limit_of
 from leka.capabilities import AgentRun, DedicatedAgent
+from leka.capabilities.dedicated import instructions_of, own_definition
+from leka.capabilities.definition import Definition
+from leka.capabilities.registry import find
 from leka.connectors import SourceCredential, SourceEvent
 from leka.core.security import verify_password
 from leka.db import session_factory, system_scope, workspace_scope
@@ -355,3 +364,69 @@ async def test_each_agent_s_use_is_counted_never_priced_and_its_runs_journaled(
     # Another workspace's runs are not its.
     _as(identity, acme, "other_admin")
     assert (await client.get("/api/v1/agent-runs/journal")).json() == []
+
+
+# An organisation's own instructions, as LEKA is given them — never a real one
+# in the code (2026-10-25).
+OWN = "PROMPT SYSTÈME — AGENT « ARCHITECTE APPLICATIF » — consignes du client\nPRINCIPE ABSOLU."
+
+
+async def test_its_own_instructions_given_never_printed_and_taken_back(
+    organisations: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv(enterprise.PASSWORD_ENV, PASSWORD)
+    name = _name(organisations, "Client Consignes")
+    email = f"own-{uuid.uuid4().hex[:6]}@client.example"
+    told = tmp_path / "consignes.md"
+    told.write_text(OWN, encoding="utf-8")
+    asked = ["provision", "--email", email, "--organisation", name]
+    architect = ["--agent", "application-architecture"]
+    assert (
+        await enterprise.main([*asked, *architect, "--instructions", str(told)], interactive=False)
+        == 0
+    )
+    printed = capsys.readouterr().out
+    said = json.loads(printed)
+    assert said["instructions"] == {"application-architecture": len(OWN)}
+    assert "consignes de application-architecture" in said["changed"]
+    assert "PRINCIPE" not in printed  # their length, never their words
+    workspace = uuid.UUID(said["workspace_id"])
+    with workspace_scope(workspace):
+        async with session_factory() as session:
+            kept = await instructions_of(session, workspace, "application-architecture")
+            ran = await own_definition(session, workspace, find_agent("application-architecture"))
+    assert kept == OWN and ran.instructions == OWN
+    # The same, again: nothing changed. From the standard input: the same.
+    monkeypatch.setattr("sys.stdin", io.StringIO(OWN))
+    assert (
+        await enterprise.main([*asked, *architect, "--instructions", "-"], interactive=False) == 0
+    )
+    assert (
+        "consignes de application-architecture"
+        not in json.loads(capsys.readouterr().out)["changed"]
+    )
+    # Given without an agent, empty, or a file that is not there: refused, said.
+    for wrong in (
+        ["--instructions", str(told)],
+        [*architect, "--instructions", str(tmp_path / "nope.md")],
+    ):
+        assert await enterprise.main([*asked, *wrong], interactive=False) == 1
+        assert "Refusé" in capsys.readouterr().out
+    # Taken back: the registry's again.
+    assert (
+        await enterprise.main([*asked, *architect, "--clear-instructions"], interactive=False) == 0
+    )
+    assert json.loads(capsys.readouterr().out)["instructions"] == {}
+    with workspace_scope(workspace):
+        async with session_factory() as session:
+            ran = await own_definition(session, workspace, find_agent("application-architecture"))
+    assert ran.instructions == find_agent("application-architecture").instructions
+
+
+def find_agent(key: str) -> Definition:
+    found = find(key)
+    assert found is not None
+    return found

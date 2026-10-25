@@ -29,6 +29,7 @@ import threading
 import uuid
 import zipfile
 from collections.abc import Iterator
+from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -38,12 +39,26 @@ from httpx import AsyncClient
 
 from leka.architect import package
 from leka.capabilities import sync_catalogue
+from leka.capabilities.dedicated import instruct
+from leka.capabilities.registry import find
+from leka.db import session_factory, workspace_scope
 from tests.conftest import FakeIdentity
 from tests.test_sources_api import _as, acme, fake_connector  # noqa: F401
 
 API = "/api/v1"
 ARCHITECT = "application-architecture"
 CORE = Path(package.__file__).resolve().parent
+# An organisation's own instructions, as LEKA is given them — never a real
+# one in the code (2026-10-25).
+OWN = (
+    "PROMPT SYSTÈME — AGENT « ARCHITECTE APPLICATIF » — consignes du client\n"
+    "PRINCIPE ABSOLU : factuel, rien d'inventé.\n"
+    "7.1 « Obtenir des espaces » -> « Obtenir les pages dans un espace ».\n"
+    "□ Rien ne dépasse du cadre ⇒ PPTX + PDF livrés."
+)
+# What the model was told, call by call: (system, user).
+TOLD: list[tuple[str, str]] = []
+
 PAGES = [
     ("100", "Accueil", None, "<p>Le SI de facturation.</p>"),
     ("101", "Applications", "100", "<p>Billing API appelle Ledger.</p>"),
@@ -81,19 +96,129 @@ def _dossier(ids: list[str]) -> dict[str, Any]:
     }
 
 
+def _deck() -> dict[str, Any]:
+    """A deck's content, as a model fills it from the analysis."""
+    return {
+        "parcours": "Facturation",
+        "perimetre": "Périmètre Digital - Espace Client",
+        "business": {
+            "actor": "Client",
+            "trigger": "Demande sa facture",
+            "process_name": "Facturation",
+            "channel": "Espace Client",
+            "groupings": [
+                {"letter": "A", "label": "Consultation", "steps": [{"label": "Ouvre ses factures"}]}
+            ],
+        },
+        "processes": [
+            {
+                "letter": "A",
+                "label": "Consultation",
+                "front": "DIGITAL",
+                "columns": [{"name": "Billing API"}, {"name": "Ledger"}],
+                "bands": [
+                    {
+                        "title": "Lecture",
+                        "lines": [
+                            {
+                                "calls": [
+                                    {"column": "Billing API", "label": "GET /invoices"},
+                                    {"column": "Ledger", "label": "lireFactures"},
+                                ]
+                            }
+                        ],
+                    }
+                ],
+            }
+        ],
+        "raci": [{"application": "Billing API", "contact": "Ada Lovelace", "statut": "Documenté"}],
+        "sources": [{"source": "Espace ARCHI", "elements": "3 pages", "statut": "Consulté"}],
+    }
+
+
+def _xlsx(path: Path, rows: list[list[str]], sheet: str = "Annuaire global") -> None:
+    """A workbook as Excel writes one: its sheets, its shared strings."""
+    strings = sorted({cell for row in rows for cell in row})
+    index = {text: n for n, text in enumerate(strings)}
+    cells = "".join(
+        f'<row r="{n}">'
+        + "".join(
+            f'<c r="{chr(65 + i)}{n}" t="s"><v>{index[cell]}</v></c>' for i, cell in enumerate(row)
+        )
+        + "</row>"
+        for n, row in enumerate(rows, 1)
+    )
+    main = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    rels = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+    with zipfile.ZipFile(path, "w") as book:
+        book.writestr(
+            "xl/workbook.xml",
+            f'<workbook xmlns="{main}" xmlns:r="{rels}"><sheets>'
+            f'<sheet name="{sheet}" sheetId="1" r:id="rId1"/></sheets></workbook>',
+        )
+        book.writestr(
+            "xl/_rels/workbook.xml.rels",
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            f'<Relationship Id="rId1" Type="{rels}/worksheet" Target="worksheets/sheet1.xml"/>'
+            "</Relationships>",
+        )
+        book.writestr(
+            "xl/sharedStrings.xml",
+            f'<sst xmlns="{main}">'
+            + "".join(f"<si><t>{escape(text)}</t></si>" for text in strings)
+            + "</sst>",
+        )
+        book.writestr(
+            "xl/worksheets/sheet1.xml",
+            f'<worksheet xmlns="{main}"><sheetData>{cells}</sheetData></worksheet>',
+        )
+
+
+@pytest.fixture
+def knowledge(tmp_path: Path) -> Path:
+    """The knowledge files: a directory of contacts — its first row dates,
+    its headers on the second, as the client's."""
+    folder = tmp_path / "connaissances"
+    folder.mkdir()
+    _xlsx(
+        folder / "annuaire.xlsx",
+        [
+            ["MAJ 01/09/2026"],
+            ["Application", "Nom\\Prénom", "Mail contact"],
+            ["Billing API", "Ada Lovelace", "ada@acme.example"],
+            ["Payroll", "Bob Martin", "bob@acme.example"],
+        ],
+    )
+    (tmp_path / "secret.txt").write_text("hors du dossier", encoding="utf-8")
+    return folder
+
+
 @pytest.fixture
 def model() -> Iterator[tuple[str, list[str]]]:
     """An OpenAI-compatible model on this machine: it cites the pages it is
     shown. Answers its address, and every path it was asked."""
     asked: list[str] = []
+    TOLD.clear()
 
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self) -> None:
             asked.append(self.path)
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            system = body["messages"][0]["content"]
             user = body["messages"][-1]["content"]
+            TOLD.append((system, user))
             ids = re.findall(r"^\[([^\]]+)\]", user, re.MULTILINE)
-            said = json.dumps({"choices": [{"message": {"content": json.dumps(_dossier(ids))}}]})
+            # The deck writer, the analysis of a journey, else the dossier.
+            if "deck writer" in system:
+                content = json.dumps(_deck())
+            elif "Comment cela tourne ici" in system:
+                content = (
+                    "## Couche métier\nLe client consulte ses factures [101].\n"
+                    "## RACI\nBilling API : Ada Lovelace."
+                )
+            else:
+                content = json.dumps(_dossier(ids))
+            said = json.dumps({"choices": [{"message": {"content": content}}]})
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
@@ -112,7 +237,7 @@ def model() -> Iterator[tuple[str, list[str]]]:
 @pytest.fixture
 def unpacked(tmp_path: Path) -> Path:
     """The zip LEKA hands out, unpacked: its folder."""
-    with zipfile.ZipFile(io.BytesIO(package.build_zip())) as zipped:
+    with zipfile.ZipFile(io.BytesIO(package.build_zip(OWN))) as zipped:
         zipped.extractall(tmp_path / "download")
     return tmp_path / "download" / "leka-architect"
 
@@ -171,19 +296,53 @@ def test_the_package_is_leka_s_own_code_and_what_ships_with_it(unpacked: Path) -
         "prompts/instructions-systeme.md",
         "prompts/modele-livrable.md",
         "prompts/mode-emploi.md",
+        "prompts/consignes-architecte.md",
+        "mcp/vscode-copilot-windows.json",
+        "leka_architect/deck/__init__.py",
     ):
         assert (unpacked / shipped).is_file(), shipped
-    assert 'requires-python = ">=3.9"' in (unpacked / "pyproject.toml").read_text()
+    pyproject = (unpacked / "pyproject.toml").read_text()
+    assert 'requires-python = ">=3.10"' in pyproject and '"leka_architect.deck"' in pyproject
+    # LEKA's deck renderer, the same files, their imports made relative.
+    for name in package.DECK_FILES:
+        shipped_deck = (unpacked / "leka_architect" / "deck" / name).read_text()
+        assert shipped_deck == package.relative((package.DECK / name).read_text()), name
+        assert "from leka." not in shipped_deck, name
+    # The organisation's own instructions: what it follows, everywhere.
+    assert (unpacked / "leka_architect" / "consignes.md").read_text() == OWN
+    assert (unpacked / "prompts/consignes-architecte.md").read_text().strip() == OWN
+    prompt = (unpacked / "copilot/.github/prompts/architecte-applicatif.prompt.md").read_text()
+    assert prompt.startswith("---\nmode: agent\n") and OWN in prompt
+    assert "`list_confluence_spaces`" in prompt and "`generate_architecture_deck`" in prompt
+    windows = json.loads((unpacked / "mcp/vscode-copilot-windows.json").read_text())
+    assert windows["servers"]["leka-architect"]["command"] == (
+        "${workspaceFolder}\\.venv\\Scripts\\leka-architect.exe"
+    )
     # No secret in it: the example's keys are empty.
     for line in (unpacked / ".env.example").read_text().splitlines():
         if re.match(r"^[A-Z_]*(TOKEN|KEY)=", line):
             assert line.endswith("="), line
     copilot = json.loads((unpacked / "mcp/vscode-copilot.json").read_text())
     assert copilot["servers"]["leka-architect"]["args"] == ["mcp"]
+    assert (
+        copilot["servers"]["leka-architect"]["command"]
+        == "${workspaceFolder}/.venv/bin/leka-architect"
+    )
     pack = (unpacked / "prompts/instructions-systeme.md").read_text()
     assert "PRINCIPE ABSOLU" in pack and "Couche technologie" in pack
     readme = (unpacked / "README.md").read_text()
     assert "Rien ne passe par LEKA" in readme and "leka-architect simulate" in readme
+    # Installed on each system, its commands said.
+    for said in (
+        "### Windows (PowerShell)",
+        "### macOS (Terminal)",
+        "### Linux",
+        "leka-architect deck",
+    ):
+        assert said in readme, said
+    # Without instructions of its own: none of its organisation's.
+    with zipfile.ZipFile(io.BytesIO(package.build_zip())) as zipped:
+        assert "leka-architect/leka_architect/consignes.md" not in zipped.namelist()
 
 
 def test_simulate_tree_compare_render_on_a_simulated_confluence_and_model(
@@ -261,8 +420,63 @@ def test_simulate_tree_compare_render_on_a_simulated_confluence_and_model(
     assert refused.returncode == 1 and "ARCHITECT_LLM_MODEL" in refused.stderr
 
 
-def test_the_mcp_server_over_stdio(unpacked: Path, export: Path, tmp_path: Path) -> None:
+def test_the_deck_of_a_journey_on_its_own_instructions(
+    unpacked: Path, export: Path, knowledge: Path, model: tuple[str, list[str]], tmp_path: Path
+) -> None:
+    address, asked = model
+    out = tmp_path / "deck"
+    done = _cli(
+        unpacked,
+        "deck",
+        "--space",
+        "ARCHI",
+        "--parcours",
+        "Facturation",
+        "--perimetre",
+        "Digital - Espace Client",
+        "--connaissances",
+        str(knowledge),
+        "--output",
+        str(out),
+        ARCHITECT_LLM_PROVIDER="openai",
+        ARCHITECT_LLM_MODEL="local-model",
+        ARCHITECT_LLM_BASE_URL=address,
+        ARCHITECT_CONFLUENCE_EXPORT=str(export),
+    )
+    assert done.returncode == 0, done.stderr
+    assert "3 pages lues" in done.stderr and "Connaissances : 1 fichiers lus" in done.stderr
+    pptx = (out / "architecture-facturation.pptx").read_bytes()
+    assert pptx[:2] == b"PK" and b"ppt/slides/slide1.xml" in pptx
+    assert (out / "architecture-facturation.pdf").read_bytes()[:4] == b"%PDF"
+    assert "Ada Lovelace" in (out / "analyse.md").read_text()
+    # Two calls: the analysis, then the deck — both on the organisation's
+    # own instructions; the pages and the directory's row naming a brick
+    # given to the analysis, not another's.
+    assert asked == ["/v1/chat/completions", "/v1/chat/completions"]
+    (analysis_system, analysis_user), (deck_system, _) = TOLD
+    assert analysis_system.startswith(OWN) and "Comment cela tourne ici" in analysis_system
+    assert "[102]" in analysis_user and "Ada Lovelace" in analysis_user
+    assert "Payroll" not in analysis_user
+    assert "deck writer" in deck_system and OWN in deck_system
+
+    # Its content, drawn again — as one any model wrote after the prompt pack.
+    again = _cli(
+        unpacked,
+        "render-deck",
+        "--deck",
+        str(out / "architecture-facturation.json"),
+        "--output",
+        str(tmp_path / "again"),
+    )
+    assert again.returncode == 0, again.stderr
+    assert (tmp_path / "again" / "architecture-facturation.pptx").is_file()
+
+
+def test_the_mcp_server_over_stdio(
+    unpacked: Path, export: Path, knowledge: Path, tmp_path: Path
+) -> None:
     out = tmp_path / "mcp-rapport"
+    deck_out = tmp_path / "mcp-deck"
     messages = [
         {
             "jsonrpc": "2.0",
@@ -299,11 +513,44 @@ def test_the_mcp_server_over_stdio(unpacked: Path, export: Path, tmp_path: Path)
         },
         {"jsonrpc": "2.0", "id": 6, "method": "prompts/get", "params": {"name": "architecte"}},
         {"jsonrpc": "2.0", "id": 7, "method": "nope"},
+        *(
+            {
+                "jsonrpc": "2.0",
+                "id": n,
+                "method": "tools/call",
+                "params": {"name": name, "arguments": arguments},
+            }
+            for n, (name, arguments) in enumerate(
+                [
+                    ("search_confluence_pages", {"space": "ARCHI", "title": "billing"}),
+                    ("list_knowledge_files", {}),
+                    ("read_knowledge_file", {"file": "annuaire.xlsx", "contains": "billing"}),
+                    ("read_knowledge_file", {"file": "../secret.txt"}),
+                    (
+                        "generate_architecture_deck",
+                        {
+                            "parcours": "Facturation",
+                            "perimetre": "Digital",
+                            "deck": _deck(),
+                            "output_dir": str(deck_out),
+                        },
+                    ),
+                    ("list_confluence_spaces", {}),
+                ],
+                start=8,
+            )
+        ),
     ]
     served = subprocess.run(
         [sys.executable, "-m", "leka_architect", "mcp"],
         input="\n".join(json.dumps(m) for m in messages) + "\n",
-        env=_env(unpacked, ARCHITECT_CONFLUENCE_EXPORT=str(export)),
+        env=_env(
+            unpacked,
+            ARCHITECT_CONFLUENCE_EXPORT=str(export),
+            ARCHITECT_KNOWLEDGE_DIR=str(knowledge),
+            # A pipe on Windows: its streams cp1252 — the server speaks UTF-8.
+            PYTHONIOENCODING="cp1252",
+        ),
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -312,10 +559,15 @@ def test_the_mcp_server_over_stdio(unpacked: Path, export: Path, tmp_path: Path)
     )
     assert served.returncode == 0, served.stderr
     answers = {a["id"]: a for a in map(json.loads, served.stdout.splitlines())}
-    assert set(answers) == {1, 2, 3, 4, 5, 6, 7}  # the notification answered nothing
+    assert set(answers) == set(range(1, 14))  # the notification answered nothing
     assert answers[1]["result"]["protocolVersion"] == "2025-06-18"
     assert answers[1]["result"]["serverInfo"]["name"] == "leka-architect"
     assert [t["name"] for t in answers[2]["result"]["tools"]] == [
+        "list_confluence_spaces",
+        "search_confluence_pages",
+        "list_knowledge_files",
+        "read_knowledge_file",
+        "generate_architecture_deck",
         "list_confluence_tree",
         "read_confluence_page",
         "analyze_architecture",
@@ -328,8 +580,28 @@ def test_the_mcp_server_over_stdio(unpacked: Path, export: Path, tmp_path: Path)
     assert "Aucun modèle n'est configuré ici" in analysed and "[102]" in analysed
     assert answers[5]["result"]["isError"] is False
     assert (out / "dossier-architecture.docx").is_file()
-    assert "PRINCIPE ABSOLU" in answers[6]["result"]["messages"][0]["content"]["text"]
+    # Its organisation's instructions, its tools named, the deck's schema.
+    told = answers[6]["result"]["messages"][0]["content"]["text"]
+    assert told.startswith(OWN) and "`search_confluence_pages`" in told
+    assert "Le schéma de `deck`" in told and "ProcessView" in told
     assert answers[7]["error"]["code"] == -32601
+
+    def text(n: int) -> str:
+        return str(answers[n]["result"]["content"][0]["text"])
+
+    assert "Billing API [102]" in text(8) and "Applications" not in text(8)
+    assert "annuaire.xlsx" in text(9)
+    # The directory's row naming the brick, its headers kept — not another's.
+    assert "3 | Billing API | Ada Lovelace | ada@acme.example" in text(10)
+    assert "2 | Application" in text(10) and "Payroll" not in text(10)
+    # Nothing outside its folder.
+    assert answers[11]["result"]["isError"] is True and "secret" not in text(11).replace(
+        "../secret.txt", ""
+    )
+    assert answers[12]["result"]["isError"] is False, text(12)
+    assert (deck_out / "architecture-facturation.pptx").read_bytes()[:2] == b"PK"
+    assert (deck_out / "architecture-facturation.pdf").read_bytes()[:4] == b"%PDF"
+    assert "un seul espace" in text(13)
 
 
 async def test_downloaded_only_where_it_is_dedicated_audited(
@@ -343,6 +615,19 @@ async def test_downloaded_only_where_it_is_dedicated_audited(
     assert 'filename="leka-architect-' in found.headers["content-disposition"]
     with zipfile.ZipFile(io.BytesIO(found.content)) as zipped:
         assert "leka-architect/leka_architect/cli.py" in zipped.namelist()
+        # No instructions of its own: LEKA's, the registry's.
+        told = zipped.read("leka-architect/leka_architect/consignes.md").decode()
+    assert told == find(ARCHITECT).instructions  # type: ignore[union-attr]
+    # Its own, given by LEKA: those, in what it downloads — its own only.
+    with workspace_scope(acme["acme"]):
+        async with session_factory() as session:
+            assert await instruct(session, acme["acme"], ARCHITECT, OWN)
+            await session.commit()
+    found = await client.get(f"{API}/capabilities/{ARCHITECT}/package")
+    with zipfile.ZipFile(io.BytesIO(found.content)) as zipped:
+        assert zipped.read("leka-architect/leka_architect/consignes.md").decode() == OWN
+        names = zipped.namelist()
+    assert "leka-architect/copilot/.github/prompts/architecte-applicatif.prompt.md" in names
     # Another organisation's: as if it did not exist.
     _as(identity, acme, "other_admin")
     assert (await client.get(f"{API}/capabilities/{ARCHITECT}/package")).status_code == 404
@@ -352,4 +637,4 @@ async def test_downloaded_only_where_it_is_dedicated_audited(
     _as(identity, acme, "admin")
     trail = (await client.get(f"{API}/governance/audit", params={"category": "ai"})).json()
     downloaded = [e for e in trail["events"] if e["action"] == "agent.package_downloaded"]
-    assert len(downloaded) == 1 and downloaded[0]["target_label"] == ARCHITECT
+    assert len(downloaded) == 2 and downloaded[0]["target_label"] == ARCHITECT

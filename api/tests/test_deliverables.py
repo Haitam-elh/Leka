@@ -231,7 +231,14 @@ def test_what_the_sources_lack_is_orange() -> None:
     missing = next(b for b in boxes if b.text == "planifie ? (à confirmer)")
     assert (missing.fill, missing.color) == (ORANGE, "FFFFFF")
     step = next(b for b in boxes if b.text == "Notifie le client")
-    assert (step.color, step.dashed) == (ORANGE, True)
+    assert step.color == ORANGE
+    # Its shape, under its words: dashed, orange.
+    shape = next(
+        b
+        for b in boxes
+        if b.line == ORANGE and b.x <= step.x <= b.x + b.w and b.y <= step.y <= b.y + b.h
+    )
+    assert shape.dashed
 
 
 def test_a_process_too_long_for_a_slide_is_split_its_business_layer_repeated() -> None:
@@ -259,6 +266,55 @@ def test_on_a_process_slide_lifelines_are_behind_and_a_red_line_leads_to_the_fro
     assert len(reds) == 3 and reds[-1].arrow
     # Arrows between service boxes are horizontal: one line, one chain.
     assert all(i.y1 == i.y2 for i in order if isinstance(i, Stroke) and i.arrow and i.color != RED)
+
+
+def test_no_band_title_is_struck_through_by_the_front_s_line() -> None:
+    # 2026-10-25: a band of one line, another of two — the front's middle
+    # fell on « 2 - PAIEMENT », and its line struck the title through.
+    content = deck().model_dump()
+    first = content["processes"][0]
+    chain = first["bands"][0]["lines"][0]
+    first["bands"] = [
+        {"title": "Vérification du solde", "lines": [chain]},
+        {"title": "Paiement", "lines": [chain, chain]},
+    ]
+    process = next(
+        s for s in deck_slides(ArchitectureDeck.model_validate(content)) if "process A" in title(s)
+    )
+    banners = [i for i in process.items if isinstance(i, Box) and i.text[:4] in ("1 - ", "2 - ")]
+    assert len(banners) == 2
+    for stroke in (i for i in process.items if isinstance(i, Stroke) and i.y1 == i.y2):
+        for banner in banners:
+            across = (
+                min(stroke.x1, stroke.x2) < banner.x + banner.w
+                and max(stroke.x1, stroke.x2) > banner.x
+            )
+            assert not (across and banner.y <= stroke.y1 <= banner.y + banner.h), banner.text
+
+
+def test_a_step_s_words_never_run_under_its_arrow() -> None:
+    # 2026-10-25: four lines in a narrow step ran under its « ⇒ ».
+    content = deck().model_dump()
+    long = "Vérification d'éligibilité du signalement selon le modèle de menace du projet"
+    for grouping in content["business"]["groupings"]:
+        grouping["steps"] = [{"label": long} for _ in range(4)]
+    slides = deck_slides(ArchitectureDeck.model_validate(content))
+    arrows = [
+        i
+        for s in slides
+        for i in s.items
+        if isinstance(i, Stroke) and i.arrow and i.width == 0.5 and i.y1 == i.y2
+    ]
+    assert arrows
+    for slide in slides:
+        for arrow in (
+            i for i in slide.items if isinstance(i, Stroke) and i.arrow and i.width == 0.5
+        ):
+            for box in slide.items:
+                if not isinstance(box, Box) or box.text != long:
+                    continue
+                if box.x < arrow.x2 and box.x + box.w > arrow.x1 and box.y < arrow.y1 + 0.5:
+                    assert box.y > arrow.y1, "a step's words start above its arrow"
 
 
 def test_the_raci_fills_its_slide_before_the_next() -> None:

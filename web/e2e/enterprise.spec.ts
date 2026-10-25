@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { expect, type Page, test } from "@playwright/test";
@@ -20,15 +21,22 @@ import { expectShellReady, expectSignedIn, LANDING, loginAnswer } from "./sign-i
  * header.
  *
  * LEKA_E2E_SCREENS: a folder where each screen is kept, to be looked at.
+ * LEKA_E2E_PACKAGE: where the architect's package it downloads is kept, its
+ * commands as the dialog shows them beside it (.commands.txt) — to install
+ * it by them.
  */
 
 const SCREENS = process.env.LEKA_E2E_SCREENS;
+const PACKAGE = process.env.LEKA_E2E_PACKAGE;
+// The organisation's own instructions, as LEKA is given them — never a real
+// one in the code (2026-10-25).
+const OWN = "PROMPT SYSTÈME — AGENT « ARCHITECTE APPLICATIF » — consignes de l'organisation\n□ PPTX + PDF livrés.\n";
 const PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
   "base64",
 );
 
-function provision(email: string, organisation: string, password: string): void {
+function provision(email: string, organisation: string, password: string, instructions?: string): void {
   execFileSync(
     pythonExecutable(),
     [
@@ -45,14 +53,27 @@ function provision(email: string, organisation: string, password: string): void 
       "Ada Lovelace",
       "--contact-email",
       "ada@leka.example",
+      // Its own instructions through the standard input, as on the box.
+      ...(instructions === undefined ? [] : ["--instructions", "-"]),
     ],
     {
       cwd: path.join(repositoryRoot(), "api"),
       // The first password from the environment, never on the command line.
       env: { ...process.env, ...MODEL_ENV, LEKA_ENTERPRISE_PASSWORD: password },
-      stdio: "inherit",
+      input: instructions,
+      stdio: [instructions === undefined ? "inherit" : "pipe", "inherit", "inherit"],
     },
   );
+}
+
+/** A file of a zip, read by Python's own zipfile. */
+function unzipped(zip: string, name: string): string {
+  return execFileSync(pythonExecutable(), [
+    "-c",
+    "import sys, zipfile; sys.stdout.write(zipfile.ZipFile(sys.argv[1]).read(sys.argv[2]).decode())",
+    zip,
+    name,
+  ]).toString("utf8");
 }
 
 async function signInAs(page: Page, email: string, password: string): Promise<void> {
@@ -95,8 +116,10 @@ test.describe("An Enterprise organisation", () => {
     const email = `pilote-${stamp}@leka.example`;
     const password = `Pilote-${stamp}-mot-de-passe`;
     provision(email, organisation, password);
-    // Run twice: the same organisation, nothing doubled.
+    // Run twice: the same organisation, nothing doubled — then its architect
+    // given its own instructions.
     provision(email, organisation, password);
+    provision(email, organisation, password, OWN);
     await signInAs(page, email, password);
 
     // The header: « Entreprise » and its name — its contract one click away.
@@ -130,8 +153,22 @@ test.describe("An Enterprise organisation", () => {
     await made.getByTestId("install-open").click();
     const install = page.getByTestId("install-dialog");
     await expect(install).toContainText("rien ne passe par LEKA");
+    // Its button, clicked: the zip, its organisation's instructions in it.
+    await install.getByTestId("install-system-macos").click();
+    const downloading = page.waitForEvent("download");
+    await install.getByTestId("install-download").first().click();
+    const download = await downloading;
+    expect(download.suggestedFilename()).toMatch(/^leka-architect-.*\.zip$/);
+    const saved = PACKAGE ?? test.info().outputPath("leka-architect.zip");
+    await download.saveAs(saved);
+    expect(unzipped(saved, "leka-architect/leka_architect/consignes.md")).toBe(OWN);
+    expect(unzipped(saved, "leka-architect/copilot/.github/prompts/architecte-applicatif.prompt.md")).toContain(OWN.trim());
+    if (PACKAGE) {
+      const shown = await install.locator("pre").allTextContents();
+      writeFileSync(`${PACKAGE}.commands.txt`, shown.join("\n# ----\n"));
+    }
     await page.getByTestId("install-tab-mcp").click();
-    await expect(install).toContainText('"command": "leka-architect"');
+    await expect(install).toContainText('"args": ["mcp"]');
     await kept(page, "01b-installer");
     const zip = await page.request.get(
       "http://localhost:8000/api/v1/capabilities/application-architecture/package",

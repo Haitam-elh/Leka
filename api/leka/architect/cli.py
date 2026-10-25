@@ -1,6 +1,11 @@
 """leka-architect — the application architect in a terminal.
 
+    leka-architect deck     --space MO --parcours "Paiement CB" --perimetre "Digital" \\
+                            [--root-page ID] [--vue-applicative] [--connaissances DIR] \\
+                            --output ./rapport
+    leka-architect render-deck --deck deck.json --output ./rapport
     leka-architect simulate --space ARCHI [--root-page ID] [--focus …] --output ./rapport
+    leka-architect spaces
     leka-architect tree     --space ARCHI [--root-page ID]
     leka-architect pages    --space ARCHI [--root-page ID] --output pages.md
     leka-architect render   --dossier reponse.json --output ./rapport
@@ -20,16 +25,18 @@ configured, nowhere else.
 from __future__ import annotations
 
 import argparse
+import io
+import json
 import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from . import __version__, prompts
+from . import __version__, journey, knowledge, prompts
 from .analysis import Budget, analyse, batches
 from .compare import compare, reference
 from .compare import markdown as comparison
-from .confluence import Client, ConfluenceError, Site, read_folder, read_space
+from .confluence import Client, ConfluenceError, Site, list_spaces, read_folder, read_space
 from .llm import LLMError, from_env
 from .model import Dossier, DossierError, dossier_of, parsed
 from .pages import Page, Tree
@@ -38,7 +45,8 @@ from .write import read_dossier, write_dossier
 
 def load_env(path: Path) -> None:
     """KEY=VALUE lines, never over what the environment already says."""
-    for line in path.read_text(encoding="utf-8").splitlines():
+    # utf-8-sig: Windows' Notepad starts what it saves with a BOM.
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -59,17 +67,20 @@ def _env(asked: str | None) -> None:
             return
 
 
+def _site() -> Site:
+    return Site(
+        url=os.environ.get("CONFLUENCE_URL", ""),
+        email=os.environ.get("CONFLUENCE_EMAIL", ""),
+        token=os.environ.get("CONFLUENCE_TOKEN", ""),
+    )
+
+
 def _pages(space: str, root: str | None, export: str | None) -> list[Page]:
     folder = export or os.environ.get("ARCHITECT_CONFLUENCE_EXPORT")
     if folder:
         found = read_folder(Path(folder))
         return Tree(found).under(root) if root else found
-    site = Site(
-        url=os.environ.get("CONFLUENCE_URL", ""),
-        email=os.environ.get("CONFLUENCE_EMAIL", ""),
-        token=os.environ.get("CONFLUENCE_TOKEN", ""),
-    )
-    return read_space(Client(site), space, root=root)
+    return read_space(Client(_site()), space, root=root)
 
 
 def _scope(space: str, root: str | None) -> str:
@@ -104,6 +115,72 @@ def simulate(args: argparse.Namespace) -> int:
     _say(f"{len(dossier.elements)} éléments, {len(dossier.pages_read)} pages citées.")
     for path in written:
         sys.stdout.write(f"{path}\n")
+    return 0
+
+
+def _told(inputs: dict[str, object]) -> str:
+    """The instructions it follows: its package's, their parameters filled."""
+    said = journey.instructions()
+    if said is None:
+        raise OSError(
+            "Ce paquet ne porte pas de consignes (consignes.md) : téléchargez-le depuis LEKA."
+        )
+    return journey.filled(said, journey.parameters(inputs))
+
+
+def deck(args: argparse.Namespace) -> int:
+    """The deck of a journey: the pages read, the analysis, the deck's
+    content, drawn — an editable PowerPoint and its PDF."""
+    shipped = journey.renderer()
+    inputs: dict[str, object] = {
+        "parcours": args.parcours,
+        "perimetre": args.perimetre,
+        "organisation": args.organisation or "",
+        "entite": args.entite or "",
+        "service": args.service or "",
+        "vue_applicative": bool(args.vue_applicative),
+    }
+    told = _told(inputs)
+    model = from_env()
+    pages = _pages(args.space, args.root_page, args.export)
+    _say(f"{len(pages)} pages lues ({_scope(args.space, args.root_page)}).")
+    _say(f"Modèle : {model.said}.")
+    folder = Path(args.connaissances or os.environ.get("ARCHITECT_KNOWLEDGE_DIR", "connaissances"))
+    found = knowledge.tables(folder)
+    corpus = "\n".join(f"{p.title}\n{p.text}" for p in pages)
+    extracts = knowledge.relevant(found, corpus) if found else ""
+    if found:
+        _say(f"Connaissances : {len({f for f, _, _ in found})} fichiers lus ({folder}).")
+    analysis = journey.analysis_of(model, told, pages, inputs, knowledge=extracts, said=_say)
+    _say("Analyse faite ; le deck s'écrit.")
+    content = journey.deck_of(
+        model,
+        told,
+        analysis,
+        inputs,
+        rules=shipped.DECK_RULES,
+        schema=shipped.ArchitectureDeck.model_json_schema(),
+        check=shipped.ArchitectureDeck.model_validate,
+    )
+    folder_out = Path(args.output)
+    folder_out.mkdir(parents=True, exist_ok=True)
+    (folder_out / "analyse.md").write_text(analysis, encoding="utf-8")
+    for path in [*journey.draw(content, folder_out), folder_out / "analyse.md"]:
+        sys.stdout.write(f"{path}\n")
+    return 0
+
+
+def render_deck(args: argparse.Namespace) -> int:
+    """A deck's content (JSON) drawn — one any model wrote after the prompt pack."""
+    raw = parsed(Path(args.deck).read_text(encoding="utf-8"))
+    for path in journey.draw(raw, Path(args.output)):
+        sys.stdout.write(f"{path}\n")
+    return 0
+
+
+def spaces(_: argparse.Namespace) -> int:
+    for space in list_spaces(Client(_site())):
+        sys.stdout.write(f"{space['key']}\t{space['name']}\n")
     return 0
 
 
@@ -182,7 +259,14 @@ def prompt_pack(args: argparse.Namespace) -> int:
 
     folder = Path(args.output)
     folder.mkdir(parents=True, exist_ok=True)
-    for name, text in pack().items():
+    written = pack(journey.instructions())
+    try:
+        schema = journey.renderer().ArchitectureDeck.model_json_schema()
+    except ImportError:
+        pass
+    else:
+        written["schema-deck.json"] = json.dumps(schema, ensure_ascii=False, indent=2) + "\n"
+    for name, text in written.items():
         (folder / name).write_text(text, encoding="utf-8")
         sys.stdout.write(f"{folder / name}\n")
     return 0
@@ -192,7 +276,7 @@ def parser() -> argparse.ArgumentParser:
     found = argparse.ArgumentParser(
         prog="leka-architect",
         description="L'Architecte applicatif de LEKA : "
-        "Confluence → dossier d'architecture ArchiMate.",
+        "Confluence → deck d'architecture d'un parcours, dossier ArchiMate.",
     )
     found.add_argument("--version", action="version", version=f"leka-architect {__version__}")
     found.add_argument("--env", help="un fichier .env à lire")
@@ -202,6 +286,32 @@ def parser() -> argparse.ArgumentParser:
         command.add_argument("--space", required=required, help="la clé de l'espace, ex. ARCHI")
         command.add_argument("--root-page", help="l'identifiant d'une page racine")
         command.add_argument("--export", help="un export Confluence (dossier) plutôt que l'API")
+
+    journey_ = commands.add_parser("deck", help="le deck d'un parcours : PowerPoint et PDF")
+    perimeter(journey_)
+    journey_.add_argument("--parcours", required=True, help="ex. « Paiement CB »")
+    journey_.add_argument("--perimetre", required=True, help="ex. « Digital - Espace Client »")
+    journey_.add_argument("--organisation")
+    journey_.add_argument("--entite")
+    journey_.add_argument("--service")
+    journey_.add_argument(
+        "--vue-applicative", action="store_true", help="ajouter la vue applicative"
+    )
+    journey_.add_argument(
+        "--connaissances", help="le dossier des fichiers de Connaissances (./connaissances)"
+    )
+    journey_.add_argument("--output", default="rapport", help="le dossier où écrire (./rapport)")
+    journey_.set_defaults(handler=deck)
+
+    drawn_deck = commands.add_parser(
+        "render-deck", help="dessiner un deck JSON : PowerPoint et PDF"
+    )
+    drawn_deck.add_argument("--deck", required=True)
+    drawn_deck.add_argument("--output", default="rapport")
+    drawn_deck.set_defaults(handler=render_deck)
+
+    listed_spaces = commands.add_parser("spaces", help="les espaces Confluence lisibles")
+    listed_spaces.set_defaults(handler=spaces)
 
     run = commands.add_parser("simulate", help="produire le dossier d'architecture")
     perimeter(run)
@@ -243,11 +353,23 @@ def parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    # Written to a file or a pipe on Windows (cp1252), a « → » never stops it.
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(errors="replace")
     args = parser().parse_args(argv)
     _env(args.env)
     try:
         return int(args.handler(args))
-    except (ConfluenceError, LLMError, DossierError, OSError) as error:
+    except (ConfluenceError, LLMError, DossierError, OSError, knowledge.KnowledgeError) as error:
+        _say(f"Erreur : {error}")
+        return 1
+    except ImportError as error:
+        # The renderer's own packages (pydantic, python-pptx): an install gone wrong.
+        _say(f"Erreur : {error} — réinstallez : pip install ./leka-architect")
+        return 1
+    except ValueError as error:
+        # A deck's content the template refuses (pydantic's ValidationError).
         _say(f"Erreur : {error}")
         return 1
 

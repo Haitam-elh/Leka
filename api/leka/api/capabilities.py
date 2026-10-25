@@ -57,6 +57,7 @@ from leka.capabilities import (
     RouteAsk,
     RouteQuery,
     RoutingRead,
+    instructions_of,
     mentions,
     routing_read,
 )
@@ -344,8 +345,9 @@ INSTALLABLE = frozenset({"application-architecture"})
     responses={200: {"content": {"application/zip": {}}}},
 )
 async def agent_package(key: str, principal: Reader, session: SessionDep) -> Response:
-    """leka-architect as a zip — its code, its README, its .env example, its
-    Dockerfile, its MCP configurations, its prompt pack; never a secret —
+    """leka-architect as a zip — its code, LEKA's deck renderer, the
+    instructions it follows, its README, its .env example, its Dockerfile,
+    its MCP configurations, its prompt pack; never a secret —
     for an organisation that sees the agent (dedicated to it): 404
     otherwise, as if it did not exist. Each download audited."""
     if key not in INSTALLABLE:
@@ -355,7 +357,12 @@ async def agent_package(key: str, principal: Reader, session: SessionDep) -> Res
     )
     if entry is None:
         raise _missing()
-    payload = await asyncio.to_thread(package.build_zip)
+    # The instructions it follows: its organisation's own when LEKA was given
+    # them (2026-10-25), else the registry's — never another's.
+    told = await instructions_of(session, principal.workspace_id, key)
+    payload = await asyncio.to_thread(
+        package.build_zip, told or entry.definition.instructions or None
+    )
     audit_as(
         session,
         principal,

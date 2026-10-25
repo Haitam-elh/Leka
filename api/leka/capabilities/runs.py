@@ -48,6 +48,7 @@ from leka.architect import DossierError
 from leka.background import JobQueue, enqueue_job
 from leka.capabilities.catalogue import CatalogueService, Entry, needs_of
 from leka.capabilities.code_tools import CODE_NAMES, CODE_TOOLS, code_handlers
+from leka.capabilities.dedicated import own_definition
 from leka.capabilities.definition import Definition, check_input
 from leka.capabilities.deliverable_check import deferred, missing, unread
 from leka.capabilities.delivery import draw, organisation_of
@@ -476,7 +477,8 @@ async def _run(
             reasons=[dict(r) for r in refused.reasons],
         )
     assert entry is not None  # refusal_of said not_found otherwise
-    definition = entry.definition
+    # Its organisation's own instructions, when it has them (2026-10-25).
+    definition = await own_definition(session, workspace_id, entry.definition)
     decided = evaluate(
         subject,
         Permission(definition.permission),
@@ -916,7 +918,13 @@ async def _redraw(
     output = run.output
     # Nothing held while the model writes: minutes.
     await session.commit()
-    drawn = await draw(session, run, entry.definition, output, formats=formats)
+    drawn = await draw(
+        session,
+        run,
+        await own_definition(session, workspace_id, entry.definition),
+        output,
+        formats=formats,
+    )
     # Then kept, the run read again as it is now.
     run = await runs.run(run_id, lock=True)
     if run is None:
