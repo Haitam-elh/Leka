@@ -24972,7 +24972,7 @@ export interface components {
             attempts: number;
             /**
              * Reason
-             * @description skipped: condition_false · not_reached: stopped, cancelled, abandoned · failed: its error.
+             * @description skipped: condition_false, not_here (its agent dedicated to others) · not_reached: stopped, cancelled, abandoned · failed: its error.
              */
             reason: string | null;
             /**
