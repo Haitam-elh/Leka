@@ -193,6 +193,15 @@ async def acme() -> AsyncIterator[dict[str, uuid.UUID]]:
                 ),
                 {"w": people["acme"]},
             )
+            # And the agents dedicated to it, as an Enterprise customer's
+            # (2026-10-25): the architect is no one else's.
+            await session.execute(
+                text(
+                    "INSERT INTO dedicated_agents (workspace_id, key, assigned_by, assigned_at) "
+                    "VALUES (:w, 'application-architecture', 'tests', now())"
+                ),
+                {"w": people["acme"]},
+            )
             await session.commit()
     yield people
     with system_scope():

@@ -43,11 +43,17 @@ test.describe("Capabilities", () => {
     // A model answers here (the stand-in, LEKA-429) and agents run
     // (LEKA-395): nothing is in its way.
     await expect(architect).toHaveAttribute("data-available", "true");
-    // Its price, owned here — LEKA's demo runs every agent (2026-10-14) —
-    // and the bundles under the domains.
-    await expect(architect.getByTestId("agent-price")).toContainText("25 € / mois");
-    // The demo's plan includes it (Karim's matrix, LEKA-454), said in words.
-    await expect(architect.getByTestId("agent-state")).toHaveText("Inclus dans votre plan");
+    // Made for this organisation (2026-10-25): first, apart, never priced.
+    const dedicated = page.getByTestId("catalogue-dedicated");
+    await expect(dedicated).toContainText("Conçus pour Acme Corp");
+    await expect(dedicated.locator('[data-testid="capability-card"][data-key="application-architecture"]')).toHaveCount(1);
+    await expect(architect.getByTestId("agent-price")).toHaveCount(0);
+    await expect(architect.getByTestId("agent-state")).toHaveText("Dédié à votre organisation");
+    // An agent on sale: its price — the demo's plan includes it (Karim's
+    // matrix, LEKA-454), said in words —, and the bundles under the domains.
+    const review = code.locator('[data-testid="capability-card"][data-key="code-review"]');
+    await expect(review.getByTestId("agent-price")).toContainText("9 € / mois");
+    await expect(review.getByTestId("agent-state")).toHaveText("Inclus dans votre plan");
     await expect(page.getByTestId("bundle")).toHaveCount(5);
 
     // Its words find it.
@@ -62,7 +68,7 @@ test.describe("Capabilities", () => {
     await sheet.getByTestId("agent-technical").getByText("Détails techniques").click();
     await expect(sheet.getByTestId("capability-inputs")).toContainText("parcours");
     await expect(sheet.getByTestId("capability-formats")).toContainText("PDF");
-    await expect(sheet.getByTestId("capability-versions")).toContainText("v19.1.0");
+    await expect(sheet.getByTestId("capability-versions")).toContainText("v19.2.0");
     // Run from its sheet (LEKA-395): here it can — a model answers.
     await expect(sheet.getByTestId("agent-run-form")).not.toContainText(
       "Il ne peut pas s'exécuter ici pour l'instant.",

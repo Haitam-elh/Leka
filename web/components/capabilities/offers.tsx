@@ -10,7 +10,7 @@ import { Card } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
 import { MarketTile, marketOf } from "@/components/capabilities/market-mark";
 import { useConfirm } from "@/components/interactions/confirm";
-import { usePermissions } from "@/components/shell/shell-provider";
+import { useCurrentWorkspace, usePermissions } from "@/components/shell/shell-provider";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { routes } from "@/config/routes";
 import { agentTitle } from "@/lib/agent-title";
@@ -49,18 +49,21 @@ function bought(t: ReturnType<typeof useDictionary>, error: unknown) {
 
 /**
  * Where an agent stands for this workspace (LEKA-467), the server's word —
- * one of five, said in words, never a mark alone:
+ * one of six, said in words, never a mark alone:
  *
+ *     dedicated    made for this organisation, assigned by LEKA: its own,
+ *                  never sold, never priced (2026-10-25)
  *     included     its plan includes it — or LEKA granted every agent
  *     owned        bought: an option active
  *     option       on sale, not bought: a paid monthly option
  *     upgrade      its plan runs no agent: a higher plan first
  *     unavailable  not on sale: nothing to buy
  */
-export type AgentState = "included" | "owned" | "option" | "upgrade" | "unavailable";
+export type AgentState = "dedicated" | "included" | "owned" | "option" | "upgrade" | "unavailable";
 
 export function agentStateOf(offers: AddOns | undefined, key: string): AgentState | null {
   if (!offers) return null;
+  if (offers.dedicated?.includes(key)) return "dedicated";
   const offer = offers.agents.find((a) => a.key === key);
   if (!offer || offer.why === "not_for_sale") return "unavailable";
   if (offer.included || offers.every) return "included";
@@ -70,12 +73,24 @@ export function agentStateOf(offers: AddOns | undefined, key: string): AgentStat
 }
 
 const STATE_TONES: Record<AgentState, "success" | "violet" | "warning" | "neutral"> = {
+  dedicated: "violet",
   included: "success",
   owned: "success",
   option: "violet",
   upgrade: "warning",
   unavailable: "neutral",
 };
+
+/** An Enterprise contract (2026-10-25): its agents its own — never a price,
+ * never a bundle, never « Acheter ». */
+export function isEnterprise(offers: AddOns | undefined): boolean {
+  return offers?.plan === "enterprise";
+}
+
+/** The organisation a dedicated agent was made for: the active workspace. */
+export function useOrganisationName(): string {
+  return useCurrentWorkspace()?.name ?? "";
+}
 
 /** An agent's state, in words: what the line says before any action. */
 export function AgentStateSaid({ agentKey }: { agentKey: string }) {
@@ -105,7 +120,8 @@ export function AgentOfferAction({ agentKey }: { agentKey: string }) {
   const may = useMayBuy();
   const offer = offers.data?.agents.find((a) => a.key === agentKey);
   const state = agentStateOf(offers.data, agentKey);
-  if (!offers.data || !state) return null;
+  // Dedicated, or under an Enterprise contract: nothing priced, nothing to buy.
+  if (!offers.data || !state || state === "dedicated" || isEnterprise(offers.data)) return null;
   return (
     <span
       className="flex shrink-0 flex-col items-end gap-1"
@@ -273,7 +289,7 @@ export function AgentPrice({ agentKey, compact = false }: { agentKey: string; co
   const buy = useBuy();
   const may = useMayBuy();
   const offer = offers.data?.agents.find((a) => a.key === agentKey);
-  if (!offer || !offers.data) return null;
+  if (!offer || !offers.data || isEnterprise(offers.data)) return null;
   const tiers = w.tiers as Record<string, string>;
   if (compact) {
     const round = "flex size-7 shrink-0 items-center justify-center rounded-full border";
@@ -521,7 +537,8 @@ export function Bundles({ selectable = false }: { selectable?: boolean }) {
   const offers = useAddOns();
   const [picked, setPicked] = useState<string[]>([]);
   const data = offers.data;
-  if (!data?.available || !data.bundles.length) return null;
+  // Under an Enterprise contract every agent is its own: no bundle to sell.
+  if (!data?.available || !data.bundles.length || isEnterprise(data)) return null;
   const titles = new Map(data.agents.map((a: AgentOffer) => [a.key, agentTitle(t, a.key, a.title)]));
   const markets = new Map(data.agents.map((a: AgentOffer) => [a.key, marketOf(a)]));
   const savings = data.bundles

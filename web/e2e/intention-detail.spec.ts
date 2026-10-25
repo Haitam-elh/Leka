@@ -22,10 +22,11 @@ import { signIn } from "./sign-in";
  * it all.
  */
 
-// As the registry names them: what a real analysis proposes.
+// As the registry names them: what a real analysis proposes — agents on
+// sale (the architect, dedicated since 2026-10-25, never is).
 const AGENTS: Record<string, [string, string]> = {
   "code-review": ["Revue de code", "development"],
-  "application-architecture": ["Architecte applicatif", "architecture"],
+  "security-review": ["Revue de sécurité", "security"],
   "test-analysis": ["Analyse des tests", "development"],
   "release-analysis": ["Analyse de release", "development"],
 };
@@ -60,7 +61,7 @@ function propose(intentionId: string, agents: Record<string, [string, string]> =
       "                for k, (t, c) in AGENTS.items()]",
       "            proposal['steps'] = [",
       "                {'title': 'Analyse du code et des dépendances', 'detail': 'Scan du code. Dépendances impactées.', 'agent': 'code-review'},",
-      "                {'title': \"Analyse d'architecture\", 'detail': \"Cartographie de l'architecture actuelle.\", 'agent': 'application-architecture'},",
+      "                {'title': 'Revue de sécurité', 'detail': 'Failles et dépendances vulnérables.', 'agent': 'security-review'},",
       "                {'title': 'Analyse des tests', 'detail': 'Tests à créer ou à adapter.', 'agent': 'test-analysis'},",
       "                {'title': 'Plan de migration', 'detail': 'Synthèse des résultats. Plan étape par étape.', 'agent': None}]",
       "            proposal['informative'] = False",

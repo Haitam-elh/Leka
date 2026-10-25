@@ -82,8 +82,9 @@ def test_each_is_sold_at_its_reference_tier_and_engineering_is_on_sale() -> None
     assert bundle is not None
     assert (bundle.sellable, bundle.missing) == (True, ())
     assert set(ENGINEERING) <= set(bundle.agents)
-    # 59 € against its seven agents alone (9 + 9 + 9 + 9 + 15 + 15 + 25).
-    assert (bundle.monthly_price, bundle.alone_price, bundle.savings_percent) == (5900, 9100, 35)
+    # 49 € against its six agents alone (9 + 9 + 9 + 9 + 15 + 15) — the
+    # architect, dedicated since 2026-10-25, out of it.
+    assert (bundle.monthly_price, bundle.alone_price, bundle.savings_percent) == (4900, 6600, 26)
 
 
 ASKED = [

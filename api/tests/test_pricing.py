@@ -66,7 +66,12 @@ def test_the_catalogue_lekas_ships_is_whole() -> None:
     # LEKA's own capabilities are every plan's; each plan includes some of
     # the registry's agents, every plan above it too (Karim, 2026-10-15).
     sold_ = offer.add_ons
-    assert {"application-architecture", "test-analysis"} <= set(sold_.agents)
+    assert {"incident-investigation", "test-analysis"} <= set(sold_.agents)
+    # A dedicated agent is in no plan, no bundle, never sold (2026-10-25).
+    assert "application-architecture" not in sold_.agents
+    assert all(
+        "application-architecture" not in sold_.included_in(plan.key) for plan in offer.plans
+    )
     assert sold_.included_in("free") == frozenset()
     assert sold_.included_in("starter") == {
         "code-review",
@@ -130,7 +135,7 @@ def test_the_catalogue_lekas_ships_is_whole() -> None:
     sold = offer.add_ons
     assert (sold.available, sold.provisional, sold.minimum_plan) == (True, True, "starter")
     assert sold.tiers == {"standard": 900, "specialized": 1500, "expert": 2500}
-    assert sold.prices["application-architecture"] == 2500
+    assert sold.prices["incident-investigation"] == 2500
     assert sold.prices["code-review"] == 900
     # The reference's bundles, at its prices (LEKA-454), sold once every
     # agent they name is built: Engineering and Frontend Craft (LEKA-461),
@@ -138,7 +143,7 @@ def test_the_catalogue_lekas_ships_is_whole() -> None:
     # every one. Their saving computed, shown only when it can be: the
     # reliability analyst and the migration planner have no reference price.
     assert {b.key: b.monthly_price for b in sold.bundles} == {
-        "engineering": 5900,
+        "engineering": 4900,
         "ship-safe": 7900,
         "incident-response": 8900,
         "security-reliability": 6900,
@@ -146,7 +151,7 @@ def test_the_catalogue_lekas_ships_is_whole() -> None:
     }
     assert all(b.sellable for b in sold.bundles)
     assert {b.key: b.savings_percent for b in sold.bundles} == {
-        "engineering": 35,
+        "engineering": 26,
         "ship-safe": None,
         "incident-response": None,
         "security-reliability": None,

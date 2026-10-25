@@ -2183,6 +2183,19 @@ const fr = {
       "Chaque agent peut être acheté individuellement. Les prix sont mensuels, en euros, hors TVA.",
     compare: "Voir la comparaison des offres",
     allTiers: "Tous les niveaux",
+    /** Made for one organisation (2026-10-25): seen by it alone, never sold. */
+    dedicated: {
+      title: "Agents dédiés",
+      lead: "Conçus pour {organisation}",
+      made: "Conçu pour {organisation}",
+      contract: "Conçu pour {organisation} et inclus dans votre contrat : il n'est pas vendu.",
+    },
+    /** An Enterprise contract (2026-10-25): every agent its own, never priced. */
+    enterprise: {
+      agents: "Agents disponibles",
+      agentsLead: "Inclus dans votre contrat Entreprise, présentés par domaine.",
+      contract: "Inclus dans votre contrat Entreprise.",
+    },
     /** Said once, above the list: what keeps many from running here. */
     wide: {
       no_model:
@@ -2353,6 +2366,7 @@ const fr = {
         option: "Option payante",
         upgrade: "Upgrade requis",
         unavailable: "Indisponible",
+        dedicated: "Dédié à votre organisation",
       },
       bundlesTitle: "Bundles LEKA",
       bundlesLead:
@@ -11017,6 +11031,19 @@ const en: Dictionary = {
     allAgentsLead: "Each agent can be bought on its own. Prices are monthly, in euros, excluding VAT.",
     compare: "Compare the plans",
     allTiers: "All levels",
+    /** Made for one organisation (2026-10-25): seen by it alone, never sold. */
+    dedicated: {
+      title: "Dedicated agents",
+      lead: "Built for {organisation}",
+      made: "Built for {organisation}",
+      contract: "Built for {organisation} and included in your contract: it is not sold.",
+    },
+    /** An Enterprise contract (2026-10-25): every agent its own, never priced. */
+    enterprise: {
+      agents: "Available agents",
+      agentsLead: "Included in your Enterprise contract, by domain.",
+      contract: "Included in your Enterprise contract.",
+    },
     /** Said once, above the list: what keeps many from running here. */
     wide: {
       no_model:
@@ -11174,6 +11201,7 @@ const en: Dictionary = {
         option: "Paid option",
         upgrade: "Upgrade required",
         unavailable: "Unavailable",
+        dedicated: "Dedicated to your organisation",
       },
       askAdmin: "Ask an administrator of your workspace to buy it.",
       bundlesTitle: "LEKA bundles",

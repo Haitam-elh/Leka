@@ -78,7 +78,7 @@ def test_the_repositorys_catalogue_loads_whole() -> None:
     assert (architect.kind, architect.lifecycle, architect.version) == (
         Kind.AGENT,
         Lifecycle.ACTIVE,
-        "19.1.0",
+        "19.2.0",
     )
     assert architect.title == "Architecte applicatif"
     assert [(i.name, i.required) for i in architect.contract.inputs] == [

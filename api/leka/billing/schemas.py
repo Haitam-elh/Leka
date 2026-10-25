@@ -220,6 +220,11 @@ class AddOnsRead(_Read):
     every: bool = Field(description="LEKA granted it every agent (its team's, for tests).")
     agents: list[AgentOfferRead]
     bundles: list[BundleOfferRead]
+    dedicated: list[str] = Field(
+        default_factory=list,
+        description="The agents made for this organisation, assigned by LEKA (2026-10-25): "
+        "its own, never sold, never priced.",
+    )
 
 
 class AddOnCheckoutCreate(BaseModel):

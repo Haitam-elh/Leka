@@ -42,6 +42,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/components/shell/shell-provider", () => ({
   usePermissions: () => permissions.value,
   useCurrentUser: () => ({ id: "me" }),
+  useCurrentWorkspace: () => ({ id: "w1", name: "Acme Corp", slug: "acme", role: "owner" }),
 }));
 vi.mock("@/lib/capabilities", async (original) => ({
   ...(await original<typeof import("@/lib/capabilities")>()),
@@ -145,6 +146,7 @@ function capability(overrides: Partial<Capability> = {}): Capability {
     kinds: ["ownership"],
     entity_types: [],
     examples: [],
+    dedicated: false,
     always: false,
     available: true,
     reasons: [],
@@ -468,6 +470,41 @@ describe("the catalogue", () => {
     const price = await screen.findByTestId("agent-price");
     expect(price).toHaveTextContent("À partir du plan Starter");
     expect(within(price).queryByTestId("agent-buy")).not.toBeInTheDocument();
+  });
+
+  it("puts the agents made for this organisation first, apart, never priced (2026-10-25)", async () => {
+    api.list.mockResolvedValue([capability(), { ...ARCHITECT, dedicated: true, available: true, reasons: [] }]);
+    sold.addOns.mockResolvedValue({ ...addOns(false), agents: [], dedicated: ["application-architecture"] });
+    show(<CatalogueScreen />);
+    const dedicated = await screen.findByTestId("catalogue-dedicated");
+    expect(dedicated).toHaveTextContent("Agents dédiés");
+    expect(dedicated).toHaveTextContent("Conçus pour Acme Corp");
+    const card = within(dedicated).getByTestId("capability-card");
+    expect(card).toHaveAttribute("data-key", "application-architecture");
+    expect(await within(card).findByTestId("agent-state")).toHaveTextContent("Dédié à votre organisation");
+    expect(within(card).queryByTestId("agent-price")).not.toBeInTheDocument();
+    // Said once: never among the agents on sale too.
+    expect(screen.getAllByTestId("capability-card").filter((c) => c.dataset.key === "application-architecture")).toHaveLength(1);
+  });
+
+  it("under an Enterprise contract: its agents by domain, never a price, never a bundle (2026-10-25)", async () => {
+    const offer = addOns(false, "enterprise");
+    sold.addOns.mockResolvedValue({ ...offer, agents: [{ ...offer.agents[0], included: true, owned: true, why: null }] });
+    show(<CatalogueScreen />);
+    expect(await screen.findByTestId("agent-state")).toHaveTextContent("Inclus dans votre plan");
+    expect(screen.getByTestId("catalogue-all-agents")).toHaveTextContent("Agents disponibles");
+    expect(screen.getByTestId("catalogue-all-agents")).toHaveTextContent("Inclus dans votre contrat Entreprise");
+    expect(screen.queryByTestId("agent-price")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("bundles")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("catalogue-figures")).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("€");
+    // By the registry's domains, not the marketplace's categories; no level,
+    // no state to buy to choose from.
+    const box = screen.getAllByTestId("catalogue-domain").find((d) => d.dataset.kind === "agent");
+    expect(box).toHaveAttribute("data-domain", "architecture");
+    expect(within(box!).getByRole("heading", { level: 3 })).toHaveTextContent(/^Architecture$/);
+    expect(screen.queryByTestId("catalogue-tier")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("catalogue-state")).not.toBeInTheDocument();
   });
 
   it("lets an admin turn one off, only saying why — and anyone else read it", async () => {

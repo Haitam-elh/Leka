@@ -57,7 +57,9 @@ import {
   agentStateOf,
   AgentStateSaid,
   type AgentState,
+  isEnterprise,
   useAgentPurchase,
+  useOrganisationName,
 } from "@/components/capabilities/offers";
 import { ExploreDemoButton } from "@/components/demo/demo";
 import { useInDemo } from "@/components/demo/in-demo";
@@ -184,6 +186,10 @@ type Standing = {
   state: AgentState | null;
   /** It may run here now: its plan or a purchase lets it, and nothing else holds it back. */
   runnable: boolean;
+  /** Its price may be shown: on sale here — never dedicated, never under an Enterprise contract. */
+  priced: boolean;
+  /** What is said instead of a price (2026-10-25): made for this organisation, or its contract's. */
+  contract: string | null;
 };
 
 export function AgentProductPage({
@@ -203,11 +209,20 @@ export function AgentProductPage({
   const product = productOf(capability.key);
   const offer = offers?.agents.find((a) => a.key === capability.key) ?? null;
   const state = offers ? agentStateOf(offers, capability.key) : null;
+  const organisation = useOrganisationName();
+  const contract =
+    state === "dedicated"
+      ? fill(t.catalogue.dedicated.contract, { organisation })
+      : isEnterprise(offers)
+        ? t.catalogue.enterprise.contract
+        : null;
   const standing: Standing = {
     offers,
     offer,
     state,
-    runnable: capability.available && (state === "included" || state === "owned"),
+    runnable: capability.available && (state === "included" || state === "owned" || state === "dedicated"),
+    priced: Boolean(offer) && state !== "unavailable" && contract === null,
+    contract,
   };
 
   // Opened on a section by its address: the section, once it is drawn.
@@ -300,7 +315,8 @@ function Hero({
   const w = t.catalogue.product;
   const say = useSay();
   const { format } = useLocale();
-  const { offer, state } = standing;
+  const { offer, state, priced } = standing;
+  const organisation = useOrganisationName();
   const Icon = (offer?.market && MARKET_ICON[offer.market]) || Sparkles;
   const tiers = t.catalogue.offers.tiers as Record<string, string>;
   return (
@@ -321,13 +337,18 @@ function Hero({
             {product ? say(product.promise) : summaryOf(t, capability)}
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-2.5">
-            {offer && state !== "unavailable" ? (
+            {state === "dedicated" && organisation ? (
+              <Pill tone="violet" data-testid="agent-dedicated">
+                {fill(t.catalogue.dedicated.made, { organisation })}
+              </Pill>
+            ) : null}
+            {priced && offer ? (
               <span className="text-[0.9375rem] font-semibold tabular-nums text-brand-navy" data-testid="agent-hero-price">
                 {euros(offer.monthly_price, format)}{" "}
                 <span className="text-[0.8125rem] font-normal text-shell-muted">{w.perMonth}</span>
               </span>
             ) : null}
-            {offer?.included_from ? (
+            {priced && offer?.included_from ? (
               <Pill tone="violet">{fill(w.includedFrom, { plan: planName(offer.included_from) })}</Pill>
             ) : null}
             {offer ? <Pill tone="neutral">{tiers[offer.tier] ?? offer.tier}</Pill> : null}
@@ -847,12 +868,21 @@ function PricingSection({ capability, standing }: { capability: CapabilityDetail
   const t = useDictionary();
   const w = t.catalogue.product;
   const { format } = useLocale();
-  const { offers, offer, state } = standing;
+  const { offers, offer, priced, contract } = standing;
   const tiers = t.catalogue.offers.tiers as Record<string, string>;
-  const sold = offer && state !== "unavailable";
   return (
     <Section id="pricing" icon={Wallet} title={w.pricing}>
-      {sold && offers ? (
+      {contract ? (
+        <div className="flex flex-col gap-3 @xl:max-w-sm">
+          <p className="text-[0.875rem] text-brand-navy" data-testid="agent-contract">
+            {contract}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <AgentStateSaid agentKey={capability.key} />
+          </div>
+          <AgentCta capability={capability} standing={standing} />
+        </div>
+      ) : priced && offer && offers ? (
         <div className="grid gap-5 @xl:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">
           <div className="flex flex-col gap-3">
             <p className="flex items-baseline gap-1.5">
@@ -925,12 +955,13 @@ function FaqSection({
   const f = w.faqs;
   const say = useSay();
   const { format } = useLocale();
-  const { offers, offer, state } = standing;
+  const { offers, offer, priced, contract } = standing;
   const kinds = kindsOf(capability);
   const deliverable = deliverableOf(capability);
   const what = w.formats[deliverable === "proposal" ? "report" : deliverable];
-  const price =
-    offer && offers && state !== "unavailable"
+  const price = contract
+    ? contract
+    : priced && offer && offers
       ? [
           fill(f.priceOption, {
             price: euros(offer.monthly_price, format),
@@ -1028,10 +1059,14 @@ function SimilarSection({ capability, offers }: { capability: CapabilityDetail; 
                 </div>
               </div>
               <div className="mt-3 flex flex-1 items-end justify-between gap-2">
-                <span className="text-[0.875rem] font-semibold tabular-nums text-brand-navy">
-                  {euros(agent.monthly_price, format)}{" "}
-                  <span className="text-xs font-normal text-shell-muted">{w.perMonth}</span>
-                </span>
+                {isEnterprise(offers) ? (
+                  <span />
+                ) : (
+                  <span className="text-[0.875rem] font-semibold tabular-nums text-brand-navy">
+                    {euros(agent.monthly_price, format)}{" "}
+                    <span className="text-xs font-normal text-shell-muted">{w.perMonth}</span>
+                  </span>
+                )}
                 {state === "option" ? (
                   <AgentAdd agentKey={agent.key} />
                 ) : state === "included" || state === "owned" ? (
@@ -1064,7 +1099,7 @@ function AgentCta({ capability, standing }: { capability: CapabilityDetail; stan
   if (!state || !offers) {
     return <div className="h-11 animate-pulse rounded-lg bg-shell-canvas" aria-hidden="true" />;
   }
-  if (state === "included" || state === "owned") {
+  if (state === "included" || state === "owned" || state === "dedicated") {
     return (
       <div className="flex flex-col gap-2">
         {runnable ? (
@@ -1076,7 +1111,11 @@ function AgentCta({ capability, standing }: { capability: CapabilityDetail; stan
           <div className="flex flex-col gap-1" data-testid="agent-cta" data-cta={state}>
             <span className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-state-success/10 text-[0.875rem] font-semibold text-state-success">
               <CircleCheck className="size-4" aria-hidden="true" />
-              {state === "owned" ? w.ctas.owned : w.ctas.included}
+              {state === "owned"
+                ? w.ctas.owned
+                : state === "dedicated"
+                  ? t.catalogue.offers.states.dedicated
+                  : w.ctas.included}
             </span>
             {capability.reasons.map((reason) => (
               <span key={reason.code} className="text-xs text-state-warning">
@@ -1156,8 +1195,7 @@ function ChooseCard({
   const w = t.catalogue.product;
   const { format } = useLocale();
   const inDemo = useInDemo();
-  const { offer, state } = standing;
-  const sold = offer && state !== "unavailable";
+  const { offer, priced } = standing;
   return (
     <section
       aria-labelledby={`choose-${where}`}
@@ -1167,7 +1205,7 @@ function ChooseCard({
       <h2 id={`choose-${where}`} className="text-lg font-bold text-brand-navy">
         {w.choose}
       </h2>
-      {sold ? (
+      {priced && offer ? (
         <>
           <p className="mt-3 flex items-baseline gap-1.5">
             <span className="text-[2rem] leading-none font-bold tabular-nums text-brand-navy">
@@ -1189,8 +1227,9 @@ function ChooseCard({
 function PlansCard({ standing }: { standing: Standing }) {
   const t = useDictionary();
   const w = t.catalogue.product;
-  const { offers, offer } = standing;
-  if (!offers || !offer) return null;
+  const { offers, offer, contract } = standing;
+  // Dedicated, or under a contract: no plan to compare.
+  if (!offers || !offer || contract) return null;
   const from = offer.included_from;
   const plans = from ? PLAN_ORDER.filter((p) => rank(p) >= rank(from)) : [];
   // The mockup's marks: a coloured square for each plan.
@@ -1232,7 +1271,7 @@ function PlansCard({ standing }: { standing: Standing }) {
 function FactsCard({ capability, standing }: { capability: CapabilityDetail; standing: Standing }) {
   const t = useDictionary();
   const w = t.catalogue.product;
-  const { offer } = standing;
+  const { offer, priced } = standing;
   const kinds = kindsOf(capability);
   const deliverable = deliverableOf(capability);
   const markets = t.catalogue.markets as Record<string, string>;
@@ -1244,7 +1283,7 @@ function FactsCard({ capability, standing }: { capability: CapabilityDetail; sta
     [FileText, w.fact.deliverable, w.formats[deliverable === "proposal" ? "report" : deliverable]],
     [Eye, w.fact.access, capability.mode === "read_only" ? w.fact.readOnly : w.fact.proposes],
     [Users, w.fact.run, capability.permission === "intention:create" ? w.fact.runMember : capability.permission],
-    [Wallet, w.fact.buy, w.fact.buyAdmin],
+    ...(priced ? ([[Wallet, w.fact.buy, w.fact.buyAdmin]] as [LucideIcon, string, string][]) : []),
   ];
   return (
     <section aria-labelledby="facts-title" className="rounded-2xl border border-shell-line bg-white p-5" data-testid="agent-facts">

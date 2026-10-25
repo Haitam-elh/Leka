@@ -148,6 +148,7 @@ def capability_read(entry: Entry, use: Use) -> CapabilityRead:
         kinds=sorted(d.kinds),
         entity_types=list(d.entity_types),
         examples=list(d.examples),
+        dedicated=d.dedicated,
         always=d.always,
         available=able.available,
         reasons=[CapabilityReason(code=r.code, detail=dict(r.detail)) for r in able.reasons],
