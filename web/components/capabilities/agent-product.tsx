@@ -51,6 +51,7 @@ import { useEffect, useState } from "react";
 import { cn } from "cn";
 
 import { reasonSaid, summaryOf, titleOf } from "@/components/capabilities/catalogue";
+import { InstallAgent } from "@/components/capabilities/install-dialog";
 import { MARKET_ICON } from "@/components/capabilities/market-mark";
 import {
   AgentAdd,
@@ -1219,6 +1220,8 @@ function ChooseCard({
       ) : null}
       <div className="mt-4 flex flex-col gap-2.5">
         <AgentCta capability={capability} standing={standing} />
+        {/* Dedicated (2026-10-25): on the organisation's own machines too. */}
+        {standing.state === "dedicated" ? <InstallAgent agentKey={capability.key} className="w-full justify-center" /> : null}
         {inDemo ? null : <ExploreDemoButton />}
       </div>
     </section>

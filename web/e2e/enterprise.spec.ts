@@ -123,6 +123,20 @@ test.describe("An Enterprise organisation", () => {
     await nothingSold(page);
     await kept(page, "01-accueil");
 
+    // « Installer dans votre environnement »: three ways, its package downloaded.
+    await made.getByTestId("install-open").click();
+    const install = page.getByTestId("install-dialog");
+    await expect(install).toContainText("rien ne passe par LEKA");
+    await page.getByTestId("install-tab-mcp").click();
+    await expect(install).toContainText('"command": "leka-architect"');
+    await kept(page, "01b-installer");
+    const zip = await page.request.get(
+      "http://localhost:8000/api/v1/capabilities/application-architecture/package",
+    );
+    expect(zip.ok()).toBe(true);
+    expect(zip.headers()["content-type"]).toBe("application/zip");
+    await page.keyboard.press("Escape");
+    await expect(install).toBeHidden();
     await made.getByTestId("home-dedicated-launch").click();
     await expect(page.getByTestId("architect-no-source")).toContainText("Aucun Confluence n'est connecté");
     await page.goto("/overview");
@@ -178,6 +192,11 @@ test.describe("An Enterprise organisation", () => {
     await expect(page.getByTestId("header-logo")).toBeVisible();
     await kept(page, "06-logo");
 
+    // Its owner reads the audit trail: who ran which agent, on what.
+    await page.goto("/governance?tab=agents");
+    await expect(page.getByRole("tab", { name: "Journal", exact: true })).toBeVisible();
+    await expect(page.getByTestId("agent-usage-tab")).toBeVisible();
+
     // Every screen of running it answers.
     for (const [address, name] of [
       ["/team", "07-equipe"],
@@ -190,6 +209,7 @@ test.describe("An Enterprise organisation", () => {
     ] as const) {
       await page.goto(address);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      await page.waitForLoadState("networkidle");
       await expect(page.getByRole("alert").filter({ hasText: /erreur|error/i })).toHaveCount(0);
       await nothingSold(page, { money: address !== "/settings" });
       await kept(page, name);

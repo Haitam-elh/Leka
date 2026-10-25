@@ -10,6 +10,7 @@ import {
 import Link from "next/link";
 
 import { cn } from "cn";
+import { InstallAgent } from "@/components/capabilities/install-dialog";
 import { MarketTile, marketOf } from "@/components/capabilities/market-mark";
 import {
   AgentCardAction,
@@ -388,6 +389,8 @@ export function DedicatedAgentsSection() {
                   <Rocket aria-hidden="true" />
                   {w.launch}
                 </Link>
+                {/* On the organisation's own machines (2026-10-25). */}
+                <InstallAgent agentKey={key} />
                 <AgentStateSaid agentKey={key} />
               </div>
             </li>
