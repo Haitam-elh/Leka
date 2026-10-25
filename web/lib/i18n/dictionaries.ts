@@ -405,6 +405,18 @@ const fr = {
    * yet (service health, incidents, insights), the card says so rather
    * than showing the mockup's number (decided 2026-09-25).
    */
+  /** Locked until a source is connected (2026-10-25): an Enterprise organisation's questions and environment. */
+  sourceLock: {
+    title: {
+      ask: "Connectez une source pour poser vos questions",
+      environment: "Connectez une source pour voir votre environnement",
+    },
+    body: "LEKA répond à partir de votre documentation. Tant qu'aucune source n'est connectée, il n'a rien à lire : commencez par Confluence.",
+    locked: "Verrouillé",
+    connect: "Connecter Confluence",
+    other: "Une autre source",
+    refused: "Connectez d'abord une source — Confluence, par exemple : LEKA répond à partir d'elle.",
+  },
   overview: {
     /** The home's blocks of the sprint's mockup (LEKA-456). */
     home: {
@@ -443,6 +455,7 @@ const fr = {
         lead: "Conçus pour {organisation}",
         launch: "Lancer",
         sources: "Sources compatibles : {sources}",
+        seeAll: "Voir tous les agents dédiés",
       },
       fit: {
         connected: "Fonctionne avec vos sources connectées",
@@ -499,9 +512,9 @@ const fr = {
       otherSource: "Une autre source",
       fix: "Corriger la source",
       seeSources: "Voir mes sources",
-      ask: "Écrivez-la dans la barre ci-dessous, avec vos mots : LEKA l'analyse sur ce qu'il lit de vos sources.",
+      ask: "Écrivez-la dans la barre ci-dessus, avec vos mots : LEKA l'analyse sur ce qu'il lit de vos sources.",
       askFirst:
-        "Écrivez-la dans la barre ci-dessous, avec vos mots. LEKA pourra y répondre une fois une source lue.",
+        "Écrivez-la dans la barre ci-dessus, avec vos mots. LEKA pourra y répondre une fois une source lue.",
     },
     greeting: "Bonjour {name},",
     statusNoSources: "Connectez une première source pour commencer.",
@@ -2332,6 +2345,9 @@ const fr = {
     agentsTitle: "Agents",
     ownTitle: "Compétences LEKA",
     agentsCount: "{count} {count|agent|agents}",
+    /** A domain's box opened whole, and closed again (2026-10-25). */
+    domainAll: "Tout voir ({count})",
+    domainLess: "Réduire",
     ownCount: "{count} {count|compétence|compétences}",
     show: "Afficher",
     shows: { all: "Tout", agents: "Agents", capabilities: "Compétences LEKA" },
@@ -9443,6 +9459,18 @@ const en: Dictionary = {
       "{count} connected {count|source is|sources are} in error: LEKA cannot read anything to answer you.",
     connectSource: "Connect a source",
   },
+  /** Locked until a source is connected (2026-10-25): an Enterprise organisation's questions and environment. */
+  sourceLock: {
+    title: {
+      ask: "Connect a source to ask your questions",
+      environment: "Connect a source to see your environment",
+    },
+    body: "LEKA answers from your documentation. Until a source is connected, it has nothing to read: start with Confluence.",
+    locked: "Locked",
+    connect: "Connect Confluence",
+    other: "Another source",
+    refused: "Connect a source first — Confluence, for instance: LEKA answers from it.",
+  },
   overview: {
     home: {
       environment: "My environment",
@@ -9480,6 +9508,7 @@ const en: Dictionary = {
         lead: "Built for {organisation}",
         launch: "Launch",
         sources: "Compatible sources: {sources}",
+        seeAll: "See all dedicated agents",
       },
       fit: {
         connected: "Works with your connected sources",
@@ -9533,9 +9562,9 @@ const en: Dictionary = {
       otherSource: "Another source",
       fix: "Fix the source",
       seeSources: "See my sources",
-      ask: "Write it in the bar below, in your own words: LEKA analyses it on what it reads of your sources.",
+      ask: "Write it in the bar above, in your own words: LEKA analyses it on what it reads of your sources.",
       askFirst:
-        "Write it in the bar below, in your own words. LEKA can answer it once a source is read.",
+        "Write it in the bar above, in your own words. LEKA can answer it once a source is read.",
     },
     greeting: "Hello {name},",
     statusNoSources: "Connect a first source to get started.",
@@ -11300,6 +11329,9 @@ const en: Dictionary = {
     agentsTitle: "Agents",
     ownTitle: "LEKA skills",
     agentsCount: "{count} {count|agent|agents}",
+    /** A domain's box opened whole, and closed again (2026-10-25). */
+    domainAll: "See all ({count})",
+    domainLess: "Show less",
     ownCount: "{count} {count|skill|skills}",
     show: "Show",
     shows: { all: "All", agents: "Agents", capabilities: "LEKA skills" },

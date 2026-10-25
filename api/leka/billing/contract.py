@@ -20,6 +20,11 @@ from leka.governance import plan_of
 from leka.platform import MembershipRepository, Workspace
 
 
+async def is_enterprise(session: AsyncSession, workspace_id: uuid.UUID) -> bool:
+    """Whether the workspace is under an Enterprise contract."""
+    return (await plan_of(session, workspace_id)).name == ENTERPRISE
+
+
 async def contract_now(session: AsyncSession, workspace_id: uuid.UUID) -> ContractRead | None:
     """Its contract — None on a public plan: it has none."""
     plan = await plan_of(session, workspace_id)

@@ -340,12 +340,25 @@ export function DedicatedAgentsSection() {
   const summaries = t.catalogue.summaries as Record<string, string>;
   return (
     <section className="mt-10" aria-labelledby="home-dedicated" data-testid="home-dedicated">
-      <h2 id="home-dedicated" className="text-xl font-bold tracking-[-0.01em] text-brand-navy">
-        {w.title}
-      </h2>
-      {organisation ? (
-        <p className="mt-1 text-[0.875rem] text-shell-muted">{fill(w.lead, { organisation })}</p>
-      ) : null}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 id="home-dedicated" className="text-xl font-bold tracking-[-0.01em] text-brand-navy">
+            {w.title}
+          </h2>
+          {organisation ? (
+            <p className="mt-1 text-[0.875rem] text-shell-muted">{fill(w.lead, { organisation })}</p>
+          ) : null}
+        </div>
+        {/* All of them, on the agents' page, their section (2026-10-25). */}
+        <Link
+          href={`${routes.capabilities()}#dedicated`}
+          className={LINK}
+          data-testid="home-dedicated-all"
+        >
+          {w.seeAll}
+          <ArrowRight className="rtl:-scale-x-100 size-4" aria-hidden="true" />
+        </Link>
+      </div>
       <ul className="mt-4 grid gap-3 md:grid-cols-2">
         {keys.map((key) => {
           const capability = catalogue?.find((c) => c.key === key);

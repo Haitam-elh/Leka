@@ -266,9 +266,8 @@ describe("the catalogue", () => {
     // Not run yet: nothing said about it.
     expect(architect).not.toHaveTextContent("Pas encore exécutée");
     expect(screen.queryByTestId("catalogue-stats")).not.toBeInTheDocument();
-    expect(screen.getByTestId("catalogue-top")).toHaveTextContent("Responsabilités");
-    expect(screen.getByTestId("catalogue-latest")).toHaveTextContent("Architecte applicatif");
-    expect(screen.getByTestId("catalogue-latest")).not.toHaveTextContent("Use when");
+    // No figures under the agents (2026-10-25: « ça rajoute des trucs pour rien »).
+    expect(screen.queryByTestId("catalogue-usage")).not.toBeInTheDocument();
     // A suggestion to LEKA's team, not a new intention (LEKA-501).
     expect(screen.getByTestId("catalogue-ask")).not.toHaveAttribute("href");
   });
@@ -416,13 +415,10 @@ describe("the catalogue", () => {
     await waitFor(() => expect(api.favourite).toHaveBeenCalledWith("ownership", true));
   });
 
-  it("leaves the usage out when nothing ran, and says the model only when it holds one back", async () => {
-    api.summary.mockResolvedValue({ ...SUMMARY, runs: 0, runs_previous: 0 });
+  it("says the model only when it holds one back", async () => {
     api.list.mockResolvedValue([capability()]);
     show(<CatalogueScreen />);
     await screen.findAllByTestId("capability-card");
-    await waitFor(() => expect(api.summary).toHaveBeenCalled());
-    expect(screen.queryByTestId("catalogue-usage")).not.toBeInTheDocument();
     expect(screen.queryByTestId("catalogue-wide")).not.toBeInTheDocument();
   });
 

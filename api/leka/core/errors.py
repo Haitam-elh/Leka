@@ -77,6 +77,9 @@ class ErrorCode(enum.StrEnum):
     # bought. The screens offer the plan, or the agent and its bundles.
     PLAN_REQUIRED = "plan_required"
     AGENT_NOT_OWNED = "agent_not_owned"
+    # An Enterprise organisation asks once a source is connected (2026-10-25):
+    # the screens lock the question and say « Connectez Confluence ».
+    SOURCE_REQUIRED = "source_required"
 
     # ── Authentication (LEKA-330, spelling preserved) ────────────────────
     INVALID_CREDENTIALS = "invalid_credentials"

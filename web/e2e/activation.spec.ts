@@ -59,7 +59,6 @@ test("a new account goes from its workspace to a first analysis", async ({
   await expect(page).toHaveURL(/\/overview$/);
   const steps = page.getByTestId("first-steps");
   await expect(steps).toHaveAttribute("data-stage", "empty");
-  await expect(steps).toContainText("LEKA lit vos outils");
   await expect(page.getByTestId("first-steps-stage")).toContainText(
     "Connectez votre première source pour commencer",
   );
@@ -95,7 +94,7 @@ test("a new account goes from its workspace to a first analysis", async ({
     "Prêt : LEKA lit développement.",
   );
   await expect(page.getByTestId("first-steps-ask")).toContainText(
-    "Écrivez-la dans la barre ci-dessous",
+    "Écrivez-la dans la barre ci-dessus",
   );
 
   // A question of its own, from the overview's box, at any moment.

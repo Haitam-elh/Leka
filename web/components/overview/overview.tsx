@@ -30,6 +30,7 @@ import {
   LatestAnalyses,
 } from "@/components/overview/home-sections";
 import { PageContainer } from "@/components/shell/page-container";
+import { useSourceLock } from "@/components/sources/source-lock";
 import { useCurrentUser } from "@/components/shell/shell-provider";
 import { exactDate, shortWhen } from "@/components/knowledge/time";
 import { entityHref } from "@/components/environment/parts";
@@ -692,6 +693,7 @@ function FreshnessCard() {
 
 export function Overview() {
   const load = useOverviewData();
+  const locked = useSourceLock();
 
   // What needs someone first — a decision, something in trouble, a request
   // under way — then what moved and whether what LEKA sees can be trusted
@@ -703,15 +705,17 @@ export function Overview() {
           it, « Mon environnement » reduced to its state, top right — under
           the question on a narrower screen; the agents, one link to them all
           and the bundles; the latest analyses; the bundles' cards, no
-          banner; then what the home already said — nothing lost. The first steps stay above the question
-          (LEKA-445): below the agents, a newcomer never saw them. */}
-      {load.status === "ready" ? (
-        <FirstStepsCard sources={load.sources} />
-      ) : null}
+          banner; then what the home already said — nothing lost. The first
+          steps under the history, a strip (2026-10-25): above, they took the
+          whole page. */}
       <div className="grid items-start gap-6 pt-4 xl:grid-cols-[16rem_minmax(0,1fr)_16rem] xl:gap-8">
         <div className="min-w-0 xl:col-start-2 xl:row-start-1" data-testid="home-focus">
           <CompactIntentionComposer />
           <HistoryLink />
+          {/* Under the history, small (2026-10-25); the lock says it instead. */}
+          {load.status === "ready" && !locked ? (
+            <FirstStepsCard sources={load.sources} />
+          ) : null}
         </div>
         <div className="mx-auto w-full max-w-sm xl:col-start-3 xl:row-start-1 xl:max-w-none">
           <EnvironmentCard />

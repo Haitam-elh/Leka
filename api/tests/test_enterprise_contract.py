@@ -9,6 +9,9 @@ What these protect:
 - Nothing commercial under a contract, refused by the server: no checkout
   of a plan or an agent, no Stripe portal, no renewal changed (409
   `enterprise_contract`).
+- No question before a source (2026-10-25: one was asked with nothing
+  connected): 409 `source_required`, nothing kept, until a source is
+  connected — a draft is not; a public plan asks as before.
 - Its logo, given by its admin: a PNG, JPEG or WebP image, 512 KB at most,
   its bytes what its type says — no SVG; read by its members only; replaced,
   the one before removed; removed, its name again. Never set by the
@@ -24,6 +27,7 @@ from pathlib import Path
 import pytest
 from httpx import AsyncClient
 
+from leka.connectors import Source, SourceKind, SourceStatus
 from leka.db import session_factory, workspace_scope
 from leka.governance import set_plan
 from leka.platform import LocalObjectStore, Workspace, storage
@@ -173,3 +177,39 @@ async def test_neither_its_logo_nor_its_contract_is_a_preference(
         assert error_code(changed) == "validation_failed"
     contract = (await client.get(f"{API}/billing/contract")).json()
     assert contract["contact"]["name"] == "Ada Lovelace"
+
+
+async def _source(workspace: uuid.UUID, status: SourceStatus) -> uuid.UUID:
+    with workspace_scope(workspace):
+        async with session_factory() as session:
+            row = Source(
+                workspace_id=workspace,
+                kind=SourceKind.CONFLUENCE,
+                name=f"Confluence ({status.value})",
+                status=status,
+                config={},
+            )
+            session.add(row)
+            await session.commit()
+            return row.id
+
+
+async def test_no_question_before_a_source(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    await _contracted(acme["acme"])
+    _as(identity, acme, "member")
+    words = {"text": "Pourquoi Billing API est lente ?"}
+    refused = await client.post(f"{API}/intentions", json=words)
+    assert refused.status_code == 409, refused.text
+    assert error_code(refused) == "source_required"
+    assert (await client.get(f"{API}/intentions")).json()["data"] == []
+    # Being set up is not connected.
+    await _source(acme["acme"], SourceStatus.DRAFT)
+    assert (await client.post(f"{API}/intentions", json=words)).status_code == 409
+    await _source(acme["acme"], SourceStatus.ACTIVE)
+    asked = await client.post(f"{API}/intentions", json=words)
+    assert asked.status_code == 201, asked.text
+    # A public plan asks as before, sources or not.
+    _as(identity, acme, "other_admin")
+    assert (await client.post(f"{API}/intentions", json=words)).status_code == 201
