@@ -24,7 +24,6 @@ import { type TileTone } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
 import { StatusPill } from "@/components/intentions/intentions-list";
 import { exactDate, timeAgo } from "@/components/knowledge/time";
-import { sourceTitle } from "@/components/sources/source-logo";
 import { buttonVariants } from "@/components/ui/button";
 import { routes } from "@/config/routes";
 import { agentTitle } from "@/lib/agent-title";
@@ -36,7 +35,7 @@ import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import { useIntentions } from "@/lib/intentions/queries";
 import { recommend } from "@/lib/recommend-agents";
-import { isConnected, type SourceKind } from "@/lib/sources";
+import { isConnected } from "@/lib/sources";
 import { useSources } from "@/lib/sources-queries";
 import { type Health, overallOf } from "@/lib/twin";
 
@@ -339,10 +338,10 @@ export function DedicatedAgentsSection() {
   if (!keys.length) return null;
   const summaries = t.catalogue.summaries as Record<string, string>;
   return (
-    <section className="mt-10" aria-labelledby="home-dedicated" data-testid="home-dedicated">
+    <section className="mt-8" aria-labelledby="home-dedicated" data-testid="home-dedicated">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 id="home-dedicated" className="text-xl font-bold tracking-[-0.01em] text-brand-navy">
+          <h2 id="home-dedicated" className="text-lg font-bold tracking-[-0.01em] text-brand-navy">
             {w.title}
           </h2>
           {organisation ? (
@@ -359,40 +358,34 @@ export function DedicatedAgentsSection() {
           <ArrowRight className="rtl:-scale-x-100 size-4" aria-hidden="true" />
         </Link>
       </div>
-      <ul className="mt-4 grid gap-3 md:grid-cols-2">
+      {/* One line each (2026-10-25, Karim: « ça prend la moitié de la page
+          pour rien »): what it is, what it does, its actions. */}
+      <ul className="mt-3 flex flex-col gap-2">
         {keys.map((key) => {
           const capability = catalogue?.find((c) => c.key === key);
-          const sources = [...new Set(capability?.sources.flatMap((group) => group.any_of) ?? [])];
           return (
             <li
               key={key}
-              className={cn(CARD, "flex flex-col gap-3 border-brand-violet/30 p-4")}
+              className={cn(CARD, "flex flex-wrap items-center gap-x-4 gap-y-2 border-brand-violet/30 px-4 py-3")}
               data-testid="home-dedicated-agent"
               data-key={key}
             >
-              <div className="flex items-start gap-3">
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-violet-soft text-shell-nav-active">
-                  <Network className="size-5" aria-hidden="true" />
-                </span>
-                <div className="min-w-0">
-                  <h3 className="text-[0.9375rem] font-semibold text-brand-navy">
-                    <Link href={routes.capability(key)} className="rounded hover:underline">
-                      {agentTitle(t, key, capability?.title ?? key)}
-                    </Link>
-                  </h3>
-                  <p className="mt-0.5 text-[0.8125rem] text-shell-muted">
-                    {summaries[key] ?? capability?.summary ?? ""}
-                  </p>
-                </div>
-              </div>
-              {sources.length ? (
-                <p className="text-xs text-shell-muted" data-testid="home-dedicated-sources">
-                  {fill(w.sources, {
-                    sources: sources.slice(0, 4).map((kind) => sourceTitle(kind as SourceKind)).join(", ") + (sources.length > 4 ? "…" : ""),
-                  })}
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand-violet-soft text-shell-nav-active">
+                <Network className="size-4.5" aria-hidden="true" />
+              </span>
+              <div className="min-w-0 flex-1 basis-60">
+                <h3 className="text-[0.9375rem] font-semibold text-brand-navy">
+                  <Link href={routes.capability(key)} className="rounded hover:underline">
+                    {agentTitle(t, key, capability?.title ?? key)}
+                  </Link>
+                </h3>
+                <p className="truncate text-[0.8125rem] text-shell-muted" title={summaries[key] ?? capability?.summary ?? ""}>
+                  {summaries[key] ?? capability?.summary ?? ""}
                 </p>
-              ) : null}
-              <div className="flex flex-wrap items-center gap-2">
+              </div>
+              {/* Its actions wrap on a phone, never wider than the screen. */}
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <AgentStateSaid agentKey={key} />
                 <Link
                   // The architect on a Confluence space (2026-10-25): its perimeter chosen first.
                   href={key === "application-architecture" ? routes.architect() : `${routes.capability(key)}#use`}
@@ -404,7 +397,6 @@ export function DedicatedAgentsSection() {
                 </Link>
                 {/* On the organisation's own machines (2026-10-25). */}
                 <InstallAgent agentKey={key} />
-                <AgentStateSaid agentKey={key} />
               </div>
             </li>
           );

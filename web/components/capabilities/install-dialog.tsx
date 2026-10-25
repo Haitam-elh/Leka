@@ -1,30 +1,49 @@
 "use client";
 
-import { Check, Copy, Download, PackageOpen } from "lucide-react";
+import { Check, ChevronRight, Copy, Download, FileCode2, Lock, PackageOpen } from "lucide-react";
 import { useState } from "react";
 
+import { cn } from "cn";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
 import { apiAddress } from "@/lib/api";
+import {
+  EMPTY_SETUP,
+  installer,
+  installerName,
+  MANUAL,
+  MODELS,
+  type ModelKind,
+  runCommand,
+  type Setup,
+  type System,
+} from "@/lib/architect-install";
+import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 
 /**
  * « Installer dans votre environnement » (2026-10-25): the architect on the
  * organisation's own machines, its own model, its own Confluence — nothing
- * through LEKA. Three ways: a terminal, an MCP client (Copilot in VS Code,
- * Claude, Cursor), a model without tools (the prompt pack). Each its
- * download — authenticated, refused to an organisation the agent is not
- * dedicated to (GET /capabilities/{key}/package) — and its commands, to
- * copy: Windows', macOS' or Linux's (2026-10-25), this browser's first.
+ * through LEKA. Three steps (2026-10-25: « personne va le faire »):
+ *
+ *   1. its details — Confluence, the model —, optional, each with where to
+ *      find it; they stay in this browser, never sent to LEKA;
+ *   2. two downloads: the agent (authenticated, refused to an organisation it
+ *      is not dedicated to) and its installer, made here with those details;
+ *   3. one command to paste: Python checked, the agent unzipped in
+ *      ~/architecte and installed, .env written, Copilot set up, « Lancer
+ *      l'architecte » made — to double-click.
+ *
+ * Every « Détail » says where to click, for Windows, macOS or Linux. By hand,
+ * the same steps as numbered blocks — for a computer that refuses scripts.
  */
 
 /** The agents a customer may install: their package is built from LEKA's own code. */
 export const INSTALLABLE: ReadonlySet<string> = new Set(["application-architecture"]);
 
-/** Where it is installed: the commands differ (2026-10-25: Windows, macOS, Linux). */
-type System = "windows" | "macos" | "linux";
 const SYSTEMS: readonly System[] = ["windows", "macos", "linux"];
+const MODEL_KINDS: readonly ModelKind[] = ["copilot", "azure", "anthropic", "gemini", "mistral", "openai", "other"];
 
 /** The system of this browser — a guess, changed in one click. */
 function systemOf(agent: string): System {
@@ -33,86 +52,57 @@ function systemOf(agent: string): System {
   return "linux";
 }
 
-/** Its own installation, in a folder of its own: a virtual environment, nothing
- * system-wide, no administrator rights. */
-const INSTALL: Record<System, string> = {
-  windows: `# PowerShell, dans le dossier où le paquet est dézippé — Python 3.10+ (python.org)
-py -3 -m venv .venv
-.venv\\Scripts\\python -m pip install .\\leka-architect
-Copy-Item leka-architect\\.env.example .env
-notepad .env      # Confluence et votre modèle
-.venv\\Scripts\\leka-architect spaces`,
-  macos: `# Terminal, dans le dossier où le paquet est dézippé — Python 3.10+ (brew install python@3.12)
-python3 -m venv .venv
-.venv/bin/pip install ./leka-architect
-cp leka-architect/.env.example .env && open -e .env      # Confluence et votre modèle
-.venv/bin/leka-architect spaces`,
-  linux: `# Dans le dossier où le paquet est dézippé — Python 3.10+ (sudo apt install python3-venv)
-python3 -m venv .venv
-.venv/bin/pip install ./leka-architect
-cp leka-architect/.env.example .env && nano .env      # Confluence et votre modèle
-.venv/bin/leka-architect spaces`,
-};
+// ── Parts ───────────────────────────────────────────────────────────────
 
-const BIN: Record<System, string> = {
-  windows: ".venv\\Scripts\\leka-architect",
-  macos: ".venv/bin/leka-architect",
-  linux: ".venv/bin/leka-architect",
-};
-
-function run(system: System): string {
-  const bin = BIN[system];
-  return `${bin} deck --space MO --parcours "Paiement CB" --perimetre "Digital - Espace Client" --output rapport
-${bin} simulate --space ARCHI --output rapport`;
+/** Its words, each address in them a link — opened apart. */
+function Linked({ text }: { text: string }) {
+  const parts = text.split(/(https:\/\/[^\s),]+[^\s),.])/g);
+  return (
+    <>
+      {parts.map((part, n) =>
+        part.startsWith("https://") ? (
+          <a
+            key={n}
+            href={part}
+            target="_blank"
+            rel="noreferrer"
+            className="font-medium break-all text-shell-nav-active underline underline-offset-2"
+          >
+            {part}
+          </a>
+        ) : (
+          <span key={n}>{part}</span>
+        ),
+      )}
+    </>
+  );
 }
 
-const DOCKER = `docker build -t leka-architect ./leka-architect
-docker run --rm --env-file .env -v "$PWD/rapport:/travail/rapport" leka-architect deck --space MO --parcours "Paiement CB" --perimetre "Digital" --output rapport`;
-
-/** Copilot in VS Code: the .venv of the folder opened, its .env. */
-function vscode(system: System): string {
-  const command =
-    system === "windows"
-      ? "${workspaceFolder}\\\\.venv\\\\Scripts\\\\leka-architect.exe"
-      : "${workspaceFolder}/.venv/bin/leka-architect";
-  const env = system === "windows" ? "${workspaceFolder}\\\\.env" : "${workspaceFolder}/.env";
-  return `{
-  "servers": {
-    "leka-architect": {
-      "type": "stdio",
-      "command": "${command}",
-      "args": ["mcp"],
-      "envFile": "${env}"
-    }
-  }
-}`;
+/** A « Détail »: closed until asked, its steps numbered. */
+function Detail({ title, steps, testId, children }: { title: string; steps?: readonly string[]; testId?: string; children?: React.ReactNode }) {
+  return (
+    <details className="group rounded-lg border border-shell-line bg-shell-canvas/50 px-3 py-2" data-testid={testId}>
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[0.8125rem] font-medium text-shell-nav-active outline-none select-none focus-visible:ring-2 focus-visible:ring-brand-violet/40 [&::-webkit-details-marker]:hidden">
+        <ChevronRight className="size-3.5 shrink-0 transition-transform group-open:rotate-90" aria-hidden="true" />
+        {title}
+      </summary>
+      <div className="mt-2 flex flex-col gap-2 text-[0.8125rem] text-brand-navy">
+        {steps ? (
+          <ol className="list-decimal space-y-1 ps-5">
+            {steps.map((step) => (
+              <li key={step}>
+                <Linked text={step} />
+              </li>
+            ))}
+          </ol>
+        ) : null}
+        {children}
+      </div>
+    </details>
+  );
 }
 
-/** Its instructions in Copilot: the prompt file the package carries. */
-function copilot(system: System): string {
-  const copy =
-    system === "windows"
-      ? "Copy-Item -Recurse leka-architect\\copilot\\.github .github"
-      : "cp -R leka-architect/copilot/.github .github";
-  return `${copy}
-# puis, dans le chat Copilot en mode Agent :
-/architecte-applicatif Construis l'architecture du parcours Paiement CB sur le périmètre Digital`;
-}
-
-const CLAUDE = "claude mcp add leka-architect --env ARCHITECT_ENV=/chemin/absolu/vers/.env -- /chemin/absolu/vers/.venv/bin/leka-architect mcp";
-
-const OTHER = `leka-architect prompts --output ./prompts
-leka-architect pages --space MO --output pages.md
-# … le modèle répond par le contenu du deck en JSON, enregistré dans deck.json :
-leka-architect render-deck --deck deck.json --output ./rapport`;
-
-const AZURE = `ARCHITECT_LLM_PROVIDER=azure
-ARCHITECT_LLM_MODEL=<nom du déploiement>
-ARCHITECT_LLM_BASE_URL=https://<ressource>.openai.azure.com
-ARCHITECT_LLM_API_VERSION=2024-10-21
-ARCHITECT_LLM_API_KEY=<clé>`;
-
-function Copyable({ text, label }: { text: string; label: string }) {
+function Copyable({ text, label }: { text: string; label?: string }) {
   const t = useDictionary();
   const w = t.catalogue.install;
   const [copied, setCopied] = useState(false);
@@ -146,6 +136,74 @@ function Copyable({ text, label }: { text: string; label: string }) {
   );
 }
 
+function Step({ n, title, lead, children }: { n: number; title: string; lead?: string; children: React.ReactNode }) {
+  return (
+    <section className="flex gap-3" aria-labelledby={`install-step-${n}`} data-testid={`install-step-${n}`}>
+      <span
+        className="flex size-7 shrink-0 items-center justify-center rounded-full bg-brand-navy text-[0.8125rem] font-bold text-white"
+        aria-hidden="true"
+      >
+        {n}
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-2.5">
+        <div>
+          <h3 id={`install-step-${n}`} className="text-[0.9375rem] font-semibold text-brand-navy">
+            {title}
+          </h3>
+          {lead ? <p className="mt-0.5 text-[0.8125rem] text-shell-muted">{lead}</p> : null}
+        </div>
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+  testId,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  type?: "text" | "password" | "email" | "url";
+  testId: string;
+}) {
+  return (
+    <label className="flex flex-col gap-1 text-xs font-medium text-brand-navy">
+      {label}
+      <Input
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        autoComplete="off"
+        spellCheck={false}
+        onChange={(event) => onChange(event.target.value)}
+        data-testid={testId}
+      />
+    </label>
+  );
+}
+
+/** The installer, written here and saved — nothing sent anywhere. */
+function save(system: System, setup: Setup): void {
+  const blob = new Blob([installer(system, setup)], { type: "text/plain;charset=utf-8" });
+  const address = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = address;
+  link.download = installerName(system);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(address), 1000);
+}
+
+// ── The dialog ──────────────────────────────────────────────────────────
+
 export function InstallAgent({ agentKey, className }: { agentKey: string; className?: string }) {
   const t = useDictionary();
   const w = t.catalogue.install;
@@ -153,18 +211,14 @@ export function InstallAgent({ agentKey, className }: { agentKey: string; classN
   const [system, setSystem] = useState<System>(() =>
     systemOf(typeof navigator === "undefined" ? "" : navigator.userAgent),
   );
+  const [setup, setSetup] = useState<Setup>(EMPTY_SETUP);
   if (!INSTALLABLE.has(agentKey)) return null;
-  const download = (
-    <a
-      href={apiAddress(`/capabilities/${encodeURIComponent(agentKey)}/package`)}
-      className={buttonVariants({ size: "sm" })}
-      download
-      data-testid="install-download"
-    >
-      <Download aria-hidden="true" />
-      {w.download}
-    </a>
-  );
+  const terminal = w.terminals[system];
+  const kind = setup.model;
+  const set = (patch: Partial<Setup>) => setSetup((current) => ({ ...current, ...patch }));
+  const choose = (model: ModelKind) =>
+    set({ model, modelName: MODELS[model].name, modelUrl: MODELS[model].url, modelKey: "" });
+
   return (
     <>
       <Button
@@ -178,13 +232,20 @@ export function InstallAgent({ agentKey, className }: { agentKey: string; classN
         <PackageOpen aria-hidden="true" />
         {w.open}
       </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-2xl" data-testid="install-dialog">
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          // Closed, its details are forgotten: nothing kept of a token.
+          if (!next) setSetup(EMPTY_SETUP);
+        }}
+      >
+        <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-2xl" data-testid="install-dialog">
           <DialogHeader>
             <DialogTitle>{w.title}</DialogTitle>
             <DialogDescription>{w.lead}</DialogDescription>
           </DialogHeader>
-          {/* Its system: the commands below are its own. */}
+
           <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label={w.system}>
             <span className="text-xs font-medium text-shell-muted">{w.system}</span>
             {SYSTEMS.map((name) => (
@@ -205,40 +266,143 @@ export function InstallAgent({ agentKey, className }: { agentKey: string; classN
               </button>
             ))}
           </div>
-          <Tabs defaultValue="terminal">
-            <TabsList>
-              <TabsTab value="terminal" data-testid="install-tab-terminal">
-                {w.terminal}
-              </TabsTab>
-              <TabsTab value="mcp" data-testid="install-tab-mcp">
-                {w.mcp}
-              </TabsTab>
-              <TabsTab value="other" data-testid="install-tab-other">
-                {w.other}
-              </TabsTab>
-            </TabsList>
-            <TabsPanel value="terminal" className="flex flex-col gap-3 pt-4">
-              <p className="text-[0.8125rem] text-shell-muted">{w.terminalLead}</p>
-              {download}
-              <Copyable label={w.install} text={INSTALL[system]} />
-              <Copyable label={w.run} text={run(system)} />
-              <Copyable label={w.docker} text={DOCKER} />
-            </TabsPanel>
-            <TabsPanel value="mcp" className="flex flex-col gap-3 pt-4">
-              <p className="text-[0.8125rem] text-shell-muted">{w.mcpLead}</p>
-              {download}
-              <Copyable label={w.vscode} text={vscode(system)} />
-              <Copyable label={w.copilot} text={copilot(system)} />
-              <Copyable label={w.claude} text={CLAUDE} />
-              <p className="text-xs text-shell-muted">{w.mcpMore}</p>
-            </TabsPanel>
-            <TabsPanel value="other" className="flex flex-col gap-3 pt-4">
-              <p className="text-[0.8125rem] text-shell-muted">{w.otherLead}</p>
-              {download}
-              <Copyable label={w.azure} text={AZURE} />
-              <Copyable label={w.pack} text={OTHER} />
-            </TabsPanel>
-          </Tabs>
+
+          <div className="flex flex-col gap-6">
+            <Step n={1} title={w.step1} lead={w.step1Lead}>
+              <fieldset className="flex flex-col gap-2 rounded-xl border border-shell-line p-3">
+                <legend className="px-1 text-xs font-semibold text-brand-navy">{w.confluence}</legend>
+                <Field
+                  label={w.url}
+                  value={setup.confluenceUrl}
+                  onChange={(confluenceUrl) => set({ confluenceUrl })}
+                  placeholder={w.urlPlaceholder}
+                  type="url"
+                  testId="install-confluence-url"
+                />
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Field
+                    label={w.email}
+                    value={setup.confluenceEmail}
+                    onChange={(confluenceEmail) => set({ confluenceEmail })}
+                    placeholder={w.emailPlaceholder}
+                    type="email"
+                    testId="install-confluence-email"
+                  />
+                  <Field
+                    label={w.token}
+                    value={setup.confluenceToken}
+                    onChange={(confluenceToken) => set({ confluenceToken })}
+                    type="password"
+                    testId="install-confluence-token"
+                  />
+                </div>
+                <Detail title={w.urlHow.title} steps={w.urlHow.steps} />
+                <Detail title={w.tokenHow.title} steps={w.tokenHow.steps} testId="install-token-how" />
+              </fieldset>
+
+              <fieldset className="flex flex-col gap-2 rounded-xl border border-shell-line p-3">
+                <legend className="px-1 text-xs font-semibold text-brand-navy">{w.model}</legend>
+                <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={w.model}>
+                  {MODEL_KINDS.map((name) => (
+                    <button
+                      key={name}
+                      type="button"
+                      role="radio"
+                      aria-checked={kind === name}
+                      onClick={() => choose(name)}
+                      className={cn(
+                        "rounded-lg border px-2.5 py-1 text-xs font-medium",
+                        kind === name
+                          ? "border-brand-navy bg-brand-navy text-white"
+                          : "border-shell-line bg-white text-brand-navy hover:bg-brand-violet-soft/60",
+                      )}
+                      data-testid={`install-model-${name}`}
+                    >
+                      {w.models[name]}
+                    </button>
+                  ))}
+                </div>
+                {kind === "copilot" ? (
+                  <p className="text-[0.8125rem] text-shell-muted">{w.copilotSaid}</p>
+                ) : (
+                  <>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Field
+                        label={kind === "azure" ? w.modelNameAzure : w.modelName}
+                        value={setup.modelName}
+                        onChange={(modelName) => set({ modelName })}
+                        testId="install-model-name"
+                      />
+                      <Field
+                        label={w.modelKey}
+                        value={setup.modelKey}
+                        onChange={(modelKey) => set({ modelKey })}
+                        type="password"
+                        testId="install-model-key"
+                      />
+                    </div>
+                    {kind === "azure" || kind === "other" ? (
+                      <Field
+                        label={kind === "azure" ? w.modelUrlAzure : w.modelUrl}
+                        value={setup.modelUrl}
+                        onChange={(modelUrl) => set({ modelUrl })}
+                        placeholder={kind === "azure" ? "https://votre-ressource.openai.azure.com" : "https://…/v1"}
+                        type="url"
+                        testId="install-model-url"
+                      />
+                    ) : null}
+                    <Detail title={w.keyHow.title} steps={w.keyHow[kind]} testId="install-key-how" />
+                  </>
+                )}
+              </fieldset>
+              <p className="flex items-start gap-1.5 text-xs text-shell-muted" data-testid="install-stay">
+                <Lock className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+                {w.stay}
+              </p>
+            </Step>
+
+            <Step n={2} title={w.step2} lead={w.step2Lead}>
+              <div className="flex flex-wrap gap-2">
+                <a
+                  href={apiAddress(`/capabilities/${encodeURIComponent(agentKey)}/package`)}
+                  className={buttonVariants({ size: "sm" })}
+                  download
+                  data-testid="install-download"
+                >
+                  <Download aria-hidden="true" />
+                  {w.downloadAgent}
+                </a>
+                <Button type="button" size="sm" onClick={() => save(system, setup)} data-testid="install-installer">
+                  <FileCode2 aria-hidden="true" />
+                  {w.downloadInstaller}
+                </Button>
+              </div>
+              <Detail title={w.filesHow.title} steps={w.filesHow.steps} />
+            </Step>
+
+            <Step n={3} title={w.step3} lead={fill(w.step3Lead, { terminal })}>
+              <Detail title={fill(w.openHow.title, { terminal })} steps={w.openHow[system]} testId="install-open-how" />
+              <Copyable text={runCommand(system)} />
+              <ul className="list-disc space-y-0.5 ps-5 text-[0.8125rem] text-shell-muted">
+                {w.does.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+              <p className="rounded-lg bg-brand-violet-soft/50 px-3 py-2 text-[0.8125rem] font-medium text-brand-navy" data-testid="install-launch">
+                {w.launch}
+              </p>
+              <Detail title={w.copilotHow.title} steps={w.copilotHow.steps} testId="install-copilot-how" />
+              <Detail title={w.laterHow.title} steps={w.laterHow.steps} />
+              <Detail title={w.problemsHow.title} steps={w.problemsHow.steps} />
+              <Detail title={w.manualHow.title} testId="install-manual">
+                <p className="text-shell-muted">{fill(w.manualHow.lead, { terminal })}</p>
+                <Copyable label={`1. ${w.manualInstall}`} text={MANUAL[system].install} />
+                <Copyable label={`2. ${w.manualEnv}`} text={MANUAL[system].env} />
+                <Copyable label={`3. ${w.manualCheck}`} text={MANUAL[system].check} />
+                <Copyable label={`4. ${w.manualRun}`} text={MANUAL[system].run} />
+              </Detail>
+            </Step>
+          </div>
           <p className="text-xs text-shell-muted">{w.private}</p>
         </DialogContent>
       </Dialog>
