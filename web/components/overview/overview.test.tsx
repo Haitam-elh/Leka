@@ -367,7 +367,7 @@ describe("the overview", () => {
     );
     // Silence is never health.
     expect(screen.getByTestId("overview-silent")).toHaveTextContent(
-      "2 éléments n'ont aucun signal : leur état n'est pas connu — ce n'est pas « sain ».",
+      "2 éléments n'ont aucun signal : leur état n'est pas connu, ce n'est pas « sain ».",
     );
     expect(await screen.findByText("1 élément est en difficulté.")).toBeVisible();
   });
@@ -402,7 +402,7 @@ describe("the overview", () => {
     mount();
     const card = await screen.findByTestId("overview-freshness");
     expect(card).toHaveTextContent("Lu il y a 7 min");
-    expect(card).toHaveTextContent("Sources lues toutes les 60 min — pas en temps réel");
+    expect(card).toHaveTextContent("Sources lues toutes les 60 min : pas en temps réel");
     expect(card).toHaveTextContent("Runbooks space en échec");
     expect(card).toHaveTextContent("Non couvert : État des services.");
   });

@@ -352,7 +352,10 @@ files; only the files the analysis says must change.
 - title: a short pull request title in the imperative; summary: what changes \
 and why, for the person who decides, in the language of the inputs.
 Never change a file you were not given: a file the agent did not read is not \
-changed. Answer with the JSON object only."""
+changed. Answer with the JSON object only.
+
+Never write the em dash « — »: a colon, a comma, a semicolon or \
+parentheses, as the sentence needs."""
 
 
 def change_problems(proposal: ChangeProposal, read: Mapping[str, str]) -> list[str]:
@@ -1742,7 +1745,10 @@ update the test to the new behaviour, as strict as it was.
 - When the failure is not in the code — a runner down, a secret missing, a \
 service that did not start, a network error — give no files, and say so in \
 cause.
-Answer with the JSON object only."""
+Answer with the JSON object only.
+
+Never write the em dash « — »: a colon, a comma, a semicolon or \
+parentheses, as the sentence needs."""
 
 
 def cited_paths(failures: Sequence[Mapping[str, Any]]) -> list[str]:

@@ -426,7 +426,7 @@ def recommend(
             Recommendation(
                 id="ask_differently",
                 code="recommend.ask_differently",
-                text="Ask differently — name what it is about, the period — or connect "
+                text="Ask differently (name what it is about, the period), or connect "
                 "what would know.",
                 action="other",
                 changes_systems=False,

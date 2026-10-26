@@ -394,7 +394,7 @@ def test_a_line_for_a_model_to_read() -> None:
     made = {e.label: e for e in assemble(_material(), limit=100, strategy="neighbourhood").elements}
 
     assert text(made["Checkout"]) == (
-        'service "Checkout" (service:checkout) — language: python; tier: 1 '
+        'service "Checkout" (service:checkout): language: python; tier: 1 '
         "[from Catalogue, a deleted source]"
     )
     assert text(made["Checkout → Billing API"]) == (

@@ -369,7 +369,7 @@ class DeclaredConnector[ConfigT: BaseModel, ResourceT: Declared](
                 raise diagnose(
                     DiagnosticCode.UNSUPPORTED,
                     message=f"« {where} » répond en XML : les connecteurs sur mesure ne lisent "
-                    "que le JSON — les API XML et SOAP ne sont pas prises en charge.",
+                    "que le JSON : les API XML et SOAP ne sont pas prises en charge.",
                     detail=detail,
                 ) from None
             if kind == "text/html":

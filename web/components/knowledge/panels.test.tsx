@@ -46,7 +46,7 @@ describe("MetadataPanel", () => {
     );
 
     expect(screen.queryByRole("heading", { name: "Vide" })).toBeNull();
-    expect(screen.getByRole("definition")).toHaveTextContent("—");
+    expect(screen.getByRole("definition")).toHaveTextContent("-");
     expect(container.querySelector("[data-slot=metadata-panel]")).not.toBeNull();
   });
 

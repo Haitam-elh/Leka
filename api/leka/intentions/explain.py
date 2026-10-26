@@ -284,7 +284,7 @@ def claims_of(result: Result, conflicts: Sequence[ExplainedConflict]) -> list[An
             code="correlated_events",
             count=len(correlated),
             holds=bool(correlated),
-            definition="Changes tied to an incident by time alone or by LEKA's inference — "
+            definition="Changes tied to an incident by time alone or by LEKA's inference: "
             "none of them confirmed by a source as its cause.",
             refs=correlated,
         ),
@@ -308,7 +308,7 @@ def claims_of(result: Result, conflicts: Sequence[ExplainedConflict]) -> list[An
                 code="impacted_users",
                 count=max(int(n) for _, n in stated),  # type: ignore[call-overload]
                 holds=True,
-                definition="The people reached, as a source states them — never estimated.",
+                definition="The people reached, as a source states them: never estimated.",
                 refs=[i for i, _ in stated],
             )
         )

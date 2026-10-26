@@ -450,7 +450,7 @@ function AlertRow({ alert }: { alert: Alert }) {
       />
       <div className="min-w-0 flex-1 text-[0.8125rem]">
         <p className="font-medium text-brand-navy">
-          {alert.subject_name} — {w.kinds[alert.kind]}
+          {alert.subject_name} · {w.kinds[alert.kind]}
           {incident?.key ? ` (${incident.key})` : ""}
         </p>
         <p className="text-xs text-shell-muted">
@@ -466,7 +466,7 @@ function AlertRow({ alert }: { alert: Alert }) {
               : null,
             alert.status === "resolved"
               ? fill(w.resolvedBy, {
-                  signal: ((alert.resolution?.signal as string[] | undefined) ?? []).join(", ") || "—",
+                  signal: ((alert.resolution?.signal as string[] | undefined) ?? []).join(", ") || "-",
                 })
               : alert.status === "closed"
                 ? w.closed
@@ -553,7 +553,7 @@ export function AlertsCard({ monitoring }: { monitoring: Monitoring | undefined 
   if (!monitoring) return null;
   const { entitlement } = monitoring;
   const plan = (name: string | null) =>
-    name ? name.charAt(0).toUpperCase() + name.slice(1) : "—";
+    name ? name.charAt(0).toUpperCase() + name.slice(1) : "-";
   return (
     <Card
       title={w.title}

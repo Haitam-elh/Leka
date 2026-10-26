@@ -312,7 +312,7 @@ class MySQLConnector(Connector[MySQLConfig, MySQLCredentials]):
         if "SELECT" in privileges:
             warnings.append(
                 "Ce compte peut lire les lignes (SELECT). LEKA n'en a pas besoin : REFERENCES "
-                "sur les bases à décrire suffit — SELECT ne sert qu'à lire la définition des "
+                "sur les bases à décrire suffit : SELECT ne sert qu'à lire la définition des "
                 "vues."
             )
         beyond = sorted(privileges - STRUCTURE_ONLY - {"SELECT"})

@@ -410,7 +410,7 @@ export function LogsTab({ entityId }: { entityId: string }) {
 
 /** A value as people read it. */
 function valueSaid(value: unknown, locale: string): string {
-  if (value === null || value === undefined) return "—";
+  if (value === null || value === undefined) return "-";
   if (typeof value === "boolean") return value ? "✓" : "✗";
   if (typeof value === "number") return new Intl.NumberFormat(locale).format(value);
   if (typeof value === "string") {

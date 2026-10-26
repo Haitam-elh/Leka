@@ -180,7 +180,7 @@ describe("the Digital Twin", () => {
   it("says how fresh it is — never in real time — and a late read", () => {
     show(<FreshnessLine freshness={{ last_read_at: read(7), every_minutes: 60, late: false, webhooks: false }} />);
     expect(screen.getByTestId("twin-freshness")).toHaveTextContent(
-      "Lu il y a 7 minSources lues toutes les 60 min — pas en temps réel",
+      "Lu il y a 7 minSources lues toutes les 60 min : pas en temps réel",
     );
     show(<FreshnessLine freshness={{ last_read_at: read(200), every_minutes: 60, late: true, webhooks: false }} />);
     expect(screen.getByTestId("twin-late")).toHaveTextContent("En retard : aucune lecture depuis plus de 2 h");
@@ -322,7 +322,7 @@ describe("the Digital Twin", () => {
       />,
     );
     const [open] = within(screen.getByTestId("alerts")).getAllByTestId("alert");
-    expect(open).toHaveTextContent("payment-api — Dégradé (OPS-1841)");
+    expect(open).toHaveTextContent("payment-api · Dégradé (OPS-1841)");
     expect(open).toHaveTextContent("confirmé · ouverte il y a 1 h");
     expect(within(open).getByRole("link", { name: /Analyser avec LEKA/ })).toHaveAttribute(
       "href",

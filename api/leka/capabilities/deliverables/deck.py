@@ -11,9 +11,10 @@ Every text is the model's, from the sources; what it could not find is
 
 from __future__ import annotations
 
-from typing import Literal
+import re
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # What the deck writer is told, before the agent's own instructions — on
 # LEKA (delivery.py) and in the downloadable architect, which ships this file.
@@ -43,7 +44,58 @@ RÉSULTAT », one row « Couche infrastructure » (« NON DOCUMENTÉ » when \
 absent).
 - In French, as short as the template wants it: a step in a few words, a \
 service by its name and a precision in parentheses.
-Answer with the JSON object only."""
+Answer with the JSON object only.
+
+Never write the em dash « — »: a colon, a comma, a semicolon or \
+parentheses, as the sentence needs."""
+
+
+_DASH = "\u2014"
+_ASIDE = re.compile(r" \u2014 ([^\u2014]{1,160}?) \u2014(?=[,.;:)\s]|$)")
+
+
+_FR = re.compile(
+    r"[éèêàçùôîûâ]|\b(le|la|les|des|du|de|par|pour|et|un|une|en|au|aux|sur|avec|sans)\b", re.I
+)
+_EN = re.compile(r"\b(the|and|of|by|for|with|without|to|in|on|an|a)\b", re.I)
+
+
+def _french(text: str) -> bool:
+    return len(_FR.findall(text)) >= len(_EN.findall(text))
+
+
+def plain(text: str) -> str:
+    """A model's « — » as the punctuation it stands for (2026-10-26: on a
+    client's slide it reads as a machine's): an aside between two → in
+    parentheses; one alone → a colon, or a comma where a colon came before;
+    alone in a cell → « - »."""
+    if _DASH not in text:
+        return text
+    if text.strip() == _DASH:
+        return "-"
+    text = _ASIDE.sub(lambda m: f" ({m.group(1).strip()})", text)
+    colon = " : " if _french(text) else ": "
+    head, *rest = text.split(_DASH)
+    out = head.rstrip()
+    for part in rest:
+        tail = part.lstrip()
+        if not out:
+            out = tail
+        elif tail[:1] in (",", ".", ";", ":", ")"):
+            out += tail
+        else:
+            out += (", " if ":" in out.split(".")[-1] else colon) + tail
+    return out
+
+
+def _plained(value: Any) -> Any:
+    if isinstance(value, str):
+        return plain(value)
+    if isinstance(value, list):
+        return [_plained(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _plained(v) for k, v in value.items()}
+    return value
 
 
 class _Model(BaseModel):
@@ -185,6 +237,12 @@ class AppView(_Model):
 class ArchitectureDeck(_Model):
     """An application architecture deck, as the template wants it."""
 
+    @model_validator(mode="before")
+    @classmethod
+    def _no_dash(cls, data: Any) -> Any:
+        """Every text as drawn: no « — » (plain)."""
+        return _plained(data)
+
     parcours: str = Field(description="Le nom du parcours, ex. « Paiement CB ».")
     organisation: str = Field(
         default="",
@@ -225,4 +283,5 @@ __all__ = [
     "Rule",
     "SourceRow",
     "Step",
+    "plain",
 ]

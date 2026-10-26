@@ -256,7 +256,7 @@ async def _diagnose(address: str) -> int:
     assert isinstance(sender, SmtpEmailSender | ResendEmailSender)
     message = EmailMessage(
         to=address,
-        subject="LEKA — e-mail de test",
+        subject="LEKA · e-mail de test",
         body=(
             "Si vous lisez ce message, LEKA sait envoyer des e-mails depuis ce serveur.\n\n"
             f"Expéditeur : {settings.email_from}\n"

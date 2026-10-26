@@ -101,7 +101,7 @@ function EnterpriseBadge({ name }: { name: string }) {
       ) : null}
       <Link
         href={routes.billing()}
-        aria-label={`${t.shell.enterprise} — ${t.shell.contract}`}
+        aria-label={`${t.shell.enterprise} · ${t.shell.contract}`}
         data-testid="enterprise-badge"
         className={`${BADGE} hover:bg-brand-violet/90 focus-visible:ring-3 focus-visible:ring-brand-violet/40`}
       >

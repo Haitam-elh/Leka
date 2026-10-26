@@ -341,8 +341,8 @@ async def deliveries(
 
 _WORDS: dict[str, dict[str, str]] = {
     "fr": {
-        "subject": "LEKA — alerte « {rule} » : {name} {kind}",
-        "test_subject": "LEKA — test de l'alerte « {rule} »",
+        "subject": "LEKA · Alerte « {rule} » : {name} {kind}",
+        "test_subject": "LEKA · Test de l'alerte « {rule} »",
         "body": "{name} est {kind} ({certainty}), depuis le {since}.\nGravité : {severity}.",
         "test_body": "Ceci est un test : l'alerte « {rule} » vous écrira ici.",
         "end": "Le détail et l'intention à lancer : Mon environnement, dans LEKA.",
@@ -357,8 +357,8 @@ _WORDS: dict[str, dict[str, str]] = {
         "low": "basse",
     },
     "en": {
-        "subject": "LEKA — alert « {rule} »: {name} {kind}",
-        "test_subject": "LEKA — test of the alert « {rule} »",
+        "subject": "LEKA · Alert « {rule} »: {name} {kind}",
+        "test_subject": "LEKA · Test of the alert « {rule} »",
         "body": "{name} is {kind} ({certainty}), since {since}.\nSeverity: {severity}.",
         "test_body": "This is a test: the alert « {rule} » will write to you here.",
         "end": "The detail and the intention to start: Mon environnement, in LEKA.",

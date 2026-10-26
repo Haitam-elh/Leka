@@ -71,8 +71,10 @@ const fr = {
     capabilities: "Votre équipe technologique à la demande.",
   },
   shell: {
+    /** A label, then its value: « Pull request : #439 ». */
+    colon: " : ",
     tagline: "Understand. Decide. Act.",
-    home: "LEKA — accueil",
+    home: "LEKA, accueil",
     backHome: "Retour à l'accueil",
     plan: "Formule",
     /** Under an Enterprise contract (2026-10-25): its badge, its page. */
@@ -112,7 +114,7 @@ const fr = {
     /** Someone signed in who belongs to no workspace yet — a new account. */
     firstWorkspace: {
       title: "Créez votre espace de travail",
-      body: "C'est là que LEKA rassemble les outils de votre entreprise — code, projets, documentation — pour les comprendre ensemble. Vous pourrez y inviter votre équipe.",
+      body: "C'est là que LEKA rassemble les outils de votre entreprise (code, projets, documentation) pour les comprendre ensemble. Vous pourrez y inviter votre équipe.",
       name: "Nom de l'espace",
       create: "Créer l'espace",
       creating: "Création…",
@@ -415,7 +417,7 @@ const fr = {
     locked: "Verrouillé",
     connect: "Connecter Confluence",
     other: "Une autre source",
-    refused: "Connectez d'abord une source — Confluence, par exemple : LEKA répond à partir d'elle.",
+    refused: "Connectez d'abord une source (Confluence, par exemple) : LEKA répond à partir d'elle.",
   },
   overview: {
     /** The home's blocks of the sprint's mockup (LEKA-456). */
@@ -440,7 +442,7 @@ const fr = {
       incidents: "{count} {count|incident ouvert|incidents ouverts}",
       measured: "État connu pour {known} {known|élément|éléments} sur {total}",
       troubled: "{count} {count|élément dégradé ou indisponible|éléments dégradés ou indisponibles}",
-      sourcesFailing: "{count} {count|source en erreur|sources en erreur} — voir les sources",
+      sourcesFailing: "{count} {count|source en erreur|sources en erreur} : voir les sources",
       lastSync: "Dernière synchronisation",
       neverSynced: "Aucune source lue pour l'instant",
       history: "Historique des analyses",
@@ -475,7 +477,7 @@ const fr = {
       troubleTitle: "Ce qui ne va pas",
       troubleNone: "Rien d'indisponible ni de dégradé selon les sources lues.",
       silent:
-        "{count} {count|élément n'a|éléments n'ont} aucun signal : leur état n'est pas connu — ce n'est pas « sain ».",
+        "{count} {count|élément n'a|éléments n'ont} aucun signal : leur état n'est pas connu, ce n'est pas « sain ».",
       analyse: "Analyser",
       alertsOpen: "{count} {count|alerte ouverte|alertes ouvertes}.",
       alertsFrom: "Les alertes proactives sont incluses dès {plan}.",
@@ -490,7 +492,7 @@ const fr = {
     firstSteps: {
       title: "Premiers pas",
       value:
-        "LEKA lit vos outils — code, tickets, cloud, documentation, supervision — et répond à vos questions sur votre environnement, en citant ce qui le dit. Rien n'est modifié chez vous : la lecture seule suffit.",
+        "LEKA lit vos outils (code, tickets, cloud, documentation, supervision) et répond à vos questions sur votre environnement, en citant ce qui le dit. Rien n'est modifié chez vous : la lecture seule suffit.",
       hide: "Masquer les premiers pas",
       done: "(fait)",
       step1: "1. Connecter une source",
@@ -603,7 +605,7 @@ const fr = {
       title: "{count} éléments dépendent de {name}",
       incident: "En incident",
       attention: "Demande de l'attention",
-      deduced: "Rien ne le surveille — son état est déduit",
+      deduced: "Rien ne le surveille : son état est déduit",
       unwatched: "Rien ne le surveille",
       watched: "Surveillé",
     },
@@ -964,10 +966,10 @@ const fr = {
       "Les actions s'exécutent une fois la décision validée (vue d'ensemble).",
     questionTitle: "Une question n'appelle aucune action.",
     questionBody:
-      "LEKA y répond (vue d'ensemble), il n'agit jamais sur vos systèmes. Pour agir, demandez-le — « Redémarre auth-service en production » : LEKA propose, une personne décide, puis l'action s'exécute ici.",
+      "LEKA y répond (vue d'ensemble), il n'agit jamais sur vos systèmes. Pour agir, demandez-le (« Redémarre auth-service en production ») : LEKA propose, une personne décide, puis l'action s'exécute ici.",
     prepare: "Préparer l'exécution",
     prepareBody:
-      "LEKA prépare le plan de la décision validée : chaque action, et qui l'exécute — un système autorisé, ou une personne.",
+      "LEKA prépare le plan de la décision validée : chaque action, et qui l'exécute : un système autorisé, ou une personne.",
     plan: "Plan n° {number}",
     statuses: {
       planned: "Prêt",
@@ -1065,16 +1067,16 @@ const fr = {
       open: "Voir",
     },
     errors: {
-      no_answer: "Pas de réponse : le système a pu agir ou non — à vérifier",
+      no_answer: "Pas de réponse : le système a pu agir ou non, à vérifier",
       blocked_address: "Adresse refusée : elle n'est pas publique",
       reported_failed: "Signalée en échec",
       no_longer_authorized: "N'est plus autorisée",
       circuit_open:
-        "Pas envoyée : ce système échoue depuis quelques minutes — réessayez plus tard",
+        "Pas envoyée : ce système échoue depuis quelques minutes, réessayez plus tard",
       cancelled: "Interrompue",
       checks_failed: "Vérifications non passées à son heure",
       interrupted:
-        "Interrompue en plein appel : ce que le système a fait n'est pas connu — à vérifier avant de relancer",
+        "Interrompue en plein appel : ce que le système a fait n'est pas connu, à vérifier avant de relancer",
       http: "Le système a répondu {status}",
     },
     succeededBody:
@@ -1128,7 +1130,7 @@ const fr = {
       title: "Choisissez votre niveau de compréhension et d'action",
       subtitle: "De la découverte de votre environnement à la maîtrise de votre système technologique.",
       monthly: "Mensuel",
-      yearly: "Annuel — économisez {percent} %",
+      yearly: "Annuel : économisez {percent} %",
       period: "Facturation",
       launch:
         "Offre de lancement : −{percent} % les {months} premiers mois sur le mensuel. Non cumulable avec la remise annuelle.",
@@ -1288,7 +1290,7 @@ const fr = {
     credits: {
       title: "Crédits IA du mois",
       explain:
-        "Chaque action IA — lire une intention, l'analyser, lancer un agent — consomme des crédits. Le modèle propre à votre organisation n'en consomme pas.",
+        "Chaque action IA (lire une intention, l'analyser, lancer un agent) consomme des crédits. Le modèle propre à votre organisation n'en consomme pas.",
       used: "{used} utilisés sur {allowance}",
       remaining: "{remaining} restants jusqu'au {date}",
       packs: "dont {packs} ajoutés ce mois-ci",
@@ -1344,7 +1346,7 @@ const fr = {
     },
     customRoles: "Rôles de l'espace",
     customRolesSaid:
-      "Un rôle de l'espace part de Membre ou d'Admin, ajoute et retire des permissions — retirer l'emporte — et se donne à une personne dont le siège a cette base.",
+      "Un rôle de l'espace part de Membre ou d'Admin, ajoute et retire des permissions (retirer l'emporte) et se donne à une personne dont le siège a cette base.",
     noCustomRole: "Aucun rôle propre à l'espace.",
     onBase: "sur {base}",
     holders: "{count} {count|personne|personnes}",
@@ -1532,7 +1534,7 @@ const fr = {
       kind: "Type",
       purposes: "Travaux concernés",
       purposesHint:
-        "Séparés par des virgules, ex. agent:*, intention.* — vide : tout.",
+        "Séparés par des virgules, ex. agent:*, intention.* ; vide : tout.",
       providers: "Fournisseurs autorisés",
       owners: "Comptes autorisés",
       ownersSaid: { leka: "Compte de LEKA", workspace: "Compte de l'espace" },
@@ -1773,7 +1775,7 @@ const fr = {
   agentRuns: {
     design: {
       title: "Le design",
-      lead: "L'écran tel que son code le dessine aujourd'hui, puis ce que le designer propose — dessinés par LEKA d'après sa revue et le code qu'il a lu.",
+      lead: "L'écran tel que son code le dessine aujourd'hui, puis ce que le designer propose : dessinés par LEKA d'après sa revue et le code qu'il a lu.",
       before: "Aujourd'hui",
       after: "Proposition",
       compare: "Côte à côte",
@@ -1800,13 +1802,13 @@ const fr = {
       correct: "Corriger cette maquette",
       correctionCancel: "Annuler",
       correcting: "LEKA corrige « {name} » : la maquette s'actualisera ici dans quelques minutes.",
-      corrected: "Corrigée — {name} : « {note} »",
+      corrected: "Corrigée · {name} : « {note} »",
       correctionFailed: "La correction n'a pas pu être demandée.",
       correctionFailedWhy: "La dernière correction n'a pas pu être dessinée : {why}.",
       reconstruction: "Redessiné à partir du code : à confirmer sur l'écran réel.",
       loading: "Le design se charge…",
       error: "Le design n'a pas pu être chargé.",
-      frame: "{name} — maquette de « {screen} »",
+      frame: "{name} : maquette de « {screen} »",
     },
     run: "Lancer l'agent",
     runNamed: "Lancer « {title} »",
@@ -1938,7 +1940,7 @@ const fr = {
     before: "Avant",
     after: "Après · proposition de LEKA",
     modifications:
-      "Ce que LEKA change : {count} {count|modification|modifications} dans {files} {files|fichier|fichiers} (+{added} −{removed}) — rien d'autre.",
+      "Ce que LEKA change : {count} {count|modification|modifications} dans {files} {files|fichier|fichiers} (+{added} −{removed}), rien d'autre.",
     modification: "Modification {n}",
     line: "ligne {from}",
     lines: "lignes {from}–{to}",
@@ -1948,7 +1950,7 @@ const fr = {
     reject: "Refuser",
     opened: "Pull request ouverte",
     openedHint:
-      "LEKA a ouvert la pull request #{number} : dès que sa CI est verte, fusionnez-la sur GitHub — le CD la déploie, LEKA vous le montre ici.",
+      "LEKA a ouvert la pull request #{number} : dès que sa CI est verte, fusionnez-la sur GitHub : le CD la déploie, LEKA vous le montre ici.",
     rewrite: "Réécrire sur la branche actuelle",
     rewriting: "LEKA réécrit le changement sur la branche telle qu'elle est maintenant.",
     follow: {
@@ -1963,8 +1965,8 @@ const fr = {
       checks: {
         waiting: "En attente du démarrage de la CI…",
         running:
-          "En cours — {passed} sur {total} {total|vérification passée|vérifications passées}",
-        success: "Verte — {total} {total|vérification|vérifications}",
+          "En cours, {passed} sur {total} {total|vérification passée|vérifications passées}",
+        success: "Verte, {total} {total|vérification|vérifications}",
         passed: "Passée",
         failure: "Rouge : {names}",
         seeFailure: "Voir l'échec",
@@ -1997,7 +1999,7 @@ const fr = {
     repair: {
       title: "Réparer le problème",
       intro:
-        "LEKA lit ce qui a échoué sur GitHub — le test, l'erreur, la fin du journal —, écrit la correction et l'ajoute à la branche de la pull request. La CI repasse ; rien n'est fusionné sans vous.",
+        "LEKA lit ce qui a échoué sur GitHub (le test, l'erreur, la fin du journal), écrit la correction et l'ajoute à la branche de la pull request. La CI repasse ; rien n'est fusionné sans vous.",
       introClosed:
         "La pull request a été fermée avec sa CI en rouge. LEKA la rouvre, lit ce qui a échoué, ajoute la correction à sa branche, et la CI repasse.",
       start: "Réparer le problème",
@@ -2005,7 +2007,7 @@ const fr = {
       askApprover: "Une personne qui peut approuver lance la réparation.",
       tooMany: "LEKA a déjà réparé cette pull request {count} fois : regardez l'échec sur GitHub avant d'aller plus loin.",
       asked: "Réparation lancée : LEKA lit l'échec.",
-      running: "LEKA lit l'échec de la CI et écrit la correction — quelques minutes.",
+      running: "LEKA lit l'échec de la CI et écrit la correction : quelques minutes.",
       n: "Réparation {n}",
       by: "par {model}",
       states: {
@@ -2399,7 +2401,7 @@ const fr = {
     /** The architect on a Confluence space (2026-10-25): its perimeter, chosen. */
     architectLaunch: {
       title: "Architecte applicatif",
-      lead: "Choisissez le périmètre Confluence : un espace entier, ou une page et ses descendantes. LEKA produit le dossier d'architecture structuré ArchiMate — PDF, Word, Markdown —, chaque section citant ses pages.",
+      lead: "Choisissez le périmètre Confluence : un espace entier, ou une page et ses descendantes. LEKA produit le dossier d'architecture structuré ArchiMate (PDF, Word, Markdown), chaque section citant ses pages.",
       noSource: "Aucun Confluence n'est connecté : connectez-le, LEKA synchronisera ses espaces.",
       connect: "Connecter Confluence",
       source: "Source Confluence",
@@ -2414,7 +2416,7 @@ const fr = {
       launch: "Lancer l'Architecte",
       launching: "Lancement…",
       readOnly: "Lecture seule : rien n'est écrit dans Confluence.",
-      asked: "/architecte Dossier d'architecture — {subject} — espace {space}{root}",
+      asked: "/architecte Dossier d'architecture : {subject}, espace {space}{root}",
       rootSaid: ", page « {title} »",
       perimeterSaid: "Espace {space}",
     },
@@ -2711,7 +2713,7 @@ const fr = {
         needs: "De quoi a-t-il besoin pour fonctionner ?",
         needsSome: "D'au moins une de ces sources, connectée à LEKA : {sources}.",
         needsModel:
-          "De sources connectées à LEKA : il lit le modèle de votre environnement que LEKA en construit — plus vos sources sont nombreuses, plus il voit.",
+          "De sources connectées à LEKA : il lit le modèle de votre environnement que LEKA en construit : plus vos sources sont nombreuses, plus il voit.",
         changes: "Peut-il modifier mes systèmes ?",
         changesNo: "Non. Il travaille en lecture seule et ne déclenche rien.",
         changesPropose: "Il ne modifie rien de lui-même : il propose, et rien ne s'applique sans la décision d'une personne.",
@@ -2870,15 +2872,15 @@ const fr = {
       "code-change":
         "Modifie le code d'un dépôt : un diff proposé, relu par une personne, puis la pull request.",
       "build-fixer":
-        "Pourquoi un build casse, et une correction proposée — jamais appliquée sans vous.",
+        "Pourquoi un build casse, et une correction proposée : jamais appliquée sans vous.",
       "debug-assistant":
         "Les causes probables d'un service qui dysfonctionne, classées : ce qui a changé, ce dont il dépend.",
       "ui-quality-review":
         "Les écrans d'une application sont-ils finis : chargement, vide, erreur, téléphone, textes longs.",
       "accessibility-audit":
-        "L'accessibilité d'une application au clavier, aux lecteurs d'écran, en contraste — selon le WCAG 2.2 et le RGAA.",
+        "L'accessibilité d'une application au clavier, aux lecteurs d'écran, en contraste : selon le WCAG 2.2 et le RGAA.",
       "design-review":
-        "L'interface relue comme par un design engineer : design system, animations, téléphone, données réelles — avant, après, pourquoi.",
+        "L'interface relue comme par un design engineer : design system, animations, téléphone, données réelles ; avant, après, pourquoi.",
       "motion-review":
         "Les animations d'une application : utiles ou non, leur durée, le mouvement réduit respecté, leur fluidité.",
       "codebase-explorer":
@@ -2886,9 +2888,9 @@ const fr = {
       "test-generation":
         "Les tests qui manquent, écrits par LEKA : un diff relu par une personne, puis la pull request.",
       "qa-acceptance":
-        "Une pull request recettée : chaque critère attendu, son statut et sa preuve — le code, le test, la CI.",
+        "Une pull request recettée : chaque critère attendu, son statut et sa preuve (le code, le test, la CI).",
       "api-design-review":
-        "Une API relue : ce qu'un changement casse pour ceux qui l'appellent, et sa cohérence — erreurs, pagination, ce qu'elle expose.",
+        "Une API relue : ce qu'un changement casse pour ceux qui l'appellent, et sa cohérence (erreurs, pagination, ce qu'elle expose).",
       "reliability-analysis":
         "Ce qui rend un service fragile : ses points de défaillance, ce qui se passe quand une dépendance tombe, les pannes qui se cachent, les incidents qui reviennent.",
       "dependency-analysis":
@@ -3241,9 +3243,9 @@ const fr = {
       title: "Ce que LEKA conserve",
       items: [
         "Les identifiants de vos sources, chiffrés : jamais affichés, jamais écrits dans les journaux.",
-        "Ce que LEKA lit de vos sources — applications, pages, tickets, dépôts — dans votre organisation seulement, isolé des autres organisations.",
+        "Ce que LEKA lit de vos sources (applications, pages, tickets, dépôts) dans votre organisation seulement, isolé des autres organisations.",
         "Vos demandes, les analyses et les livrables des agents, et les fichiers que vous joignez, chiffrés au repos.",
-        "Pour chaque appel au modèle de langage : son objet, le modèle, sa taille et sa durée — jamais son contenu.",
+        "Pour chaque appel au modèle de langage : son objet, le modèle, sa taille et sa durée, jamais son contenu.",
         "Le journal d'audit : qui a fait quoi, et quand, pendant la durée de conservation choisie.",
       ],
       more: "Le détail du chiffrement et de l'isolation est dans l'onglet Données.",
@@ -3314,7 +3316,7 @@ const fr = {
       personal: "Données personnelles",
     },
     scannedOf: "{scanned} / {records}",
-    none: "—",
+    none: "-",
     noSource: "Aucune donnée collectée pour l'instant.",
     kinds: {
       private_key: "clé privée",
@@ -3347,7 +3349,7 @@ const fr = {
     },
     policy: "Politique de conservation",
     policySaid:
-      "Le fichier d'origine dans lequel un secret ou un numéro d'identité a été trouvé est gardé au plus ce nombre de jours, puis supprimé — jamais plus longtemps que la règle de sa source.",
+      "Le fichier d'origine dans lequel un secret ou un numéro d'identité a été trouvé est gardé au plus ce nombre de jours, puis supprimé : jamais plus longtemps que la règle de sa source.",
     days: "Jours",
     save: "Enregistrer",
     saved: "Politique enregistrée.",
@@ -3435,9 +3437,9 @@ const fr = {
     },
     grounding: {
       blocked:
-        "Action risquée sans les preuves nécessaires — manquant : {missing}. Elle ne peut pas être validée tant que l'intention n'a pas été analysée à nouveau",
+        "Action risquée sans les preuves nécessaires (manquant : {missing}). Elle ne peut pas être validée tant que l'intention n'a pas été analysée à nouveau",
       validation:
-        "Preuves incomplètes — manquant : {missing}. Une validation supplémentaire est demandée avant d'agir",
+        "Preuves incomplètes (manquant : {missing}). Une validation supplémentaire est demandée avant d'agir",
       evidence: {
         standing: "l'état de ce qui est visé",
         action: "ce que l'action touche",
@@ -3706,7 +3708,7 @@ const fr = {
     none: "Aucune proposition dans cet état.",
     empty: {
       title: "Rien à valider pour le moment.",
-      body: "Quand LEKA déduit de vos sources ce qu'elles ne disent pas clairement — qui est responsable d'un service, de quelle application il fait partie, s'il est critique — il vous le soumet ici avant de s'en servir.",
+      body: "Quand LEKA déduit de vos sources ce qu'elles ne disent pas clairement (qui est responsable d'un service, de quelle application il fait partie, s'il est critique), il vous le soumet ici avant de s'en servir.",
     },
     /** How sure LEKA is, in words (2026-10-14). */
     sure: {
@@ -4111,7 +4113,7 @@ const fr = {
         not_covered:
           "Aucune source connectée ne peut le dire : connectez un outil de supervision.",
         operational:
-          "Un outil le mesure, son fournisseur le dit en marche, ou LEKA le déduit — c'est précisé.",
+          "Un outil le mesure, son fournisseur le dit en marche, ou LEKA le déduit : c'est précisé.",
       },
       basis: {
         measured: "mesuré",
@@ -4142,7 +4144,7 @@ const fr = {
       freshness: {
         read: "Lu {ago}",
         never: "Jamais lu",
-        every: "Sources lues toutes les {minutes} min — pas en temps réel",
+        every: "Sources lues toutes les {minutes} min : pas en temps réel",
         webhooks: "certaines envoient leurs événements dès qu'ils arrivent",
         late: "En retard : aucune lecture depuis plus de 2 h",
       },
@@ -4243,7 +4245,7 @@ const fr = {
           test: "Tester",
           tested: "Test envoyé : voyez le résultat de chaque canal sous la règle.",
           lastSent: "Dernier envoi : {channel} · {ago}",
-          lastFailed: "Échec d'envoi : {channel} · {ago} — {error}",
+          lastFailed: "Échec d'envoi : {channel} · {ago} · {error}",
           never: "Jamais déclenchée",
           saved: "Règle enregistrée.",
           removed: "Règle supprimée.",
@@ -4321,7 +4323,7 @@ const fr = {
         takenMember: "par un membre",
         capacity: {
           title: "Capacité IA",
-          used: "{percent} % des crédits IA du mois utilisés (mesuré) — renouvelés le {date}.",
+          used: "{percent} % des crédits IA du mois utilisés (mesuré) : renouvelés le {date}.",
           passed: "Seuil de {threshold} % franchi {ago}.",
           spentEnforced:
             "Capacité épuisée : les analyses de LEKA sont suspendues jusqu'au {date}. Aucun dépassement n'est facturé.",
@@ -4765,18 +4767,18 @@ const fr = {
         scope:
           "Périmètre : {repositories} {repositories|dépôt|dépôts} · {modules} {modules|module|modules} de code · {services} {services|service|services} · {stores} {stores|base|bases} et {stores|stockage|stockages} · {cloud} {cloud|ressource|ressources} cloud · {external} {external|service|services} {external|externe|externes}",
         layersLine:
-          "Couches : code, applicatif, données, technologie, externe — tout est lu dans vos sources ; ce que LEKA a déduit, et ce qui reste à confirmer, est en orange.",
+          "Couches : code, applicatif, données, technologie, externe. Tout est lu dans vos sources ; ce que LEKA a déduit, et ce qui reste à confirmer, est en orange.",
         contents: "Sommaire",
         sections: {
           layers: {
             title: "L'architecture en couches",
             subtitle:
-              "Chaque brique et chacun de ses liens, nommés — choisissez une brique pour voir son détail.",
+              "Chaque brique et chacun de ses liens, nommés : choisissez une brique pour voir son détail.",
           },
           flows: {
             title: "Les flux",
             subtitle:
-              "Ce que traverse une requête ou un traitement, étape par étape — d'après les liens lus ou déduits (déduits en orange).",
+              "Ce que traverse une requête ou un traitement, étape par étape : d'après les liens lus ou déduits (déduits en orange).",
           },
           responsibilities: {
             title: "Contacts et responsabilités",
@@ -4804,8 +4806,8 @@ const fr = {
         layerCount: "{count} {count|élément|éléments}",
         noFlows:
           "Aucun flux connu : il faut qu'un service en appelle ou en route un autre, ou garde ses données quelque part.",
-        flowOne: "Flux {index} — depuis {names}",
-        flowMany: "Flux {index} — depuis {names} (mêmes étapes)",
+        flowOne: "Flux {index} : depuis {names}",
+        flowMany: "Flux {index} : depuis {names} (mêmes étapes)",
         raci: {
           columns: [
             "Élément",
@@ -4835,7 +4837,7 @@ const fr = {
           attention: "{name} demande de l'attention.",
           deduced: "L'état de {name} est déduit de ce qui le fait tourner.",
           deducedFrom: "L'état de {name} est déduit de {other} ({kind}).",
-          inferred: "{name} {role} {other} — déduit : {rule} ({confidence} %).",
+          inferred: "{name} {role} {other} (déduit : {rule}, {confidence} %).",
           unmonitored: "{name} n'est suivi par aucun outil de supervision.",
         },
         sourceColumns: [
@@ -4850,7 +4852,7 @@ const fr = {
         limits: {
           monitoring:
             "Aucun outil de supervision n'est connecté : disponibilité, latence et erreurs ne sont pas mesurées ; les états affichés sont lus sur les ressources ou déduits.",
-          code: "Le code : l'arborescence entière de chaque dépôt et au plus 40 fichiers de configuration sont lus — jamais le code source lui-même.",
+          code: "Le code : l'arborescence entière de chaque dépôt et au plus 40 fichiers de configuration sont lus, jamais le code source lui-même.",
           buckets: "Les buckets : leur liste seulement, jamais leur contenu.",
           databases:
             "Une base n'est détaillée (tables, volumes) que si une source de base de données la lit : une base privée, injoignable, reste sans tables.",
@@ -4949,7 +4951,7 @@ const fr = {
       hintsOf: {
         applications: {
           applications:
-            "Les applications que déclare un catalogue — Backstage, Datadog, une source personnalisée — apparaîtront ici. Vos dépôts sont dans la rangée Code.",
+            "Les applications que déclare un catalogue (Backstage, Datadog, une source personnalisée) apparaîtront ici. Vos dépôts sont dans la rangée Code.",
         },
         domains: {
           applications:
@@ -4969,7 +4971,7 @@ const fr = {
       resources: "{count} {count|ressource|ressources}",
       emptyTitle: "Votre environnement n'est pas encore cartographié",
       emptyBody:
-        "Connectez vos outils : LEKA relie ce qu'ils disent — dépôts, services, bases, ressources cloud — et le montre ici.",
+        "Connectez vos outils : LEKA relie ce qu'ils disent (dépôts, services, bases, ressources cloud) et le montre ici.",
     },
     list: {
       caption: "Les éléments de votre environnement",
@@ -5003,7 +5005,7 @@ const fr = {
     insights: {
       title: "Insights LEKA",
       empty:
-        "Les analyses de LEKA — causes probables, risques, économies possibles — apparaîtront ici avec son moteur d'analyse.",
+        "Les analyses de LEKA (causes probables, risques, économies possibles) apparaîtront ici avec son moteur d'analyse.",
       action: "Lancer une analyse",
     },
     events: {
@@ -5094,7 +5096,7 @@ const fr = {
       },
       overview: "Toute l'architecture",
       overviewBody:
-        "Chaque élément et chacun de ses liens, nommés. Choisissez-en un pour voir ses relations, ou cherchez-le ci-dessus pour explorer autour de lui — une base, jusqu'à ses tables.",
+        "Chaque élément et chacun de ses liens, nommés. Choisissez-en un pour voir ses relations, ou cherchez-le ci-dessus pour explorer autour de lui : une base, jusqu'à ses tables.",
       emptyTitle: "Aucune dépendance connue pour l'instant",
       emptyBody:
         "Connectez un catalogue de services ou vos bases de données : LEKA dessinera ici ce dont chaque élément dépend.",
@@ -5203,7 +5205,7 @@ const fr = {
       analysis: {
         title: "Analyse de LEKA",
         incident:
-          "Ce que le modèle de l'entreprise sait de cet incident : ce qui l'a causé, ce qu'il touche et jusqu'où — chaque affirmation avec ses preuves.",
+          "Ce que le modèle de l'entreprise sait de cet incident : ce qui l'a causé, ce qu'il touche et jusqu'où, chaque affirmation avec ses preuves.",
         full: "Voir l'analyse complète",
         hide: "Masquer l'analyse",
       },
@@ -5298,7 +5300,7 @@ const fr = {
         },
         createdDetail: "Première version connue de LEKA",
         fields: { name: "nom", lifecycle: "cycle de vie" },
-        nothing: "—",
+        nothing: "-",
         empty: "Aucun historique pour l'instant.",
         failed: "L'historique n'a pas pu être lu.",
         at: "Voir à cette date",
@@ -5365,7 +5367,7 @@ const fr = {
       context: {
         title: "Contexte de LEKA",
         intro:
-          "Ce que LEKA rassemble pour comprendre une demande — trouvé par le graphe, par les mots de la question, dans le texte des documents et dans la chronologie — chaque élément avec ses sources, sa pertinence et la raison de sa présence, gardé version après version.",
+          "Ce que LEKA rassemble pour comprendre une demande (trouvé par le graphe, par les mots de la question, dans le texte des documents et dans la chronologie) : chaque élément avec ses sources, sa pertinence et la raison de sa présence, gardé version après version.",
         emptyTitle: "Aucun contexte assemblé",
         emptyBody:
           "Assemblez-en un : LEKA lit le modèle de l'entreprise autour de cet élément et garde ce qu'il y trouve, tel qu'il le trouve.",
@@ -6015,7 +6017,7 @@ const fr = {
     reception: {
       title: "Réception",
       intro:
-        "Le système envoie ses changements à cette adresse, signés avec le secret de la source. LEKA les garde, puis les enregistre à la passe suivante — en quelques secondes.",
+        "Le système envoie ses changements à cette adresse, signés avec le secret de la source. LEKA les garde, puis les enregistre à la passe suivante : en quelques secondes.",
       address: "Adresse",
       signature: "Signature",
       signatures: {
@@ -6125,7 +6127,7 @@ const fr = {
       reconnect: "Reconnecter",
       reconnectTitle: "Reconnecter la source",
       reconnectHint:
-        "Remplacez le secret — ou corrigez ce qui a changé — puis testez : la source repart une fois réactivée.",
+        "Remplacez le secret (ou corrigez ce qui a changé) puis testez : la source repart une fois réactivée.",
       delete: "Supprimer",
       deleteTitle: "Supprimer {name} ?",
       deleteBody:
@@ -6145,11 +6147,11 @@ const fr = {
       open: "Connecteur sur mesure",
       badge: "Sur mesure",
       badgeHelp:
-        "Connectée par un connecteur sur mesure, décrit par votre équipe — pas par un connecteur natif de LEKA.",
+        "Connectée par un connecteur sur mesure, décrit par votre équipe : pas par un connecteur natif de LEKA.",
       step: "Méthode",
       title: "Comment LEKA rejoint-il votre outil ?",
       intro:
-        "Pour un outil que LEKA ne connaît pas encore : vous décrivez son API, et LEKA la traite comme une source native — test, périmètre, synchronisation, santé, historique.",
+        "Pour un outil que LEKA ne connaît pas encore : vous décrivez son API, et LEKA la traite comme une source native (test, périmètre, synchronisation, santé, historique).",
       needs: "Il vous faut : {needs}",
       methods: {
         custom_rest: {
@@ -6171,7 +6173,7 @@ const fr = {
       },
       unsupportedTitle: "Pas pris en charge aujourd'hui",
       unsupported: [
-        "La connexion par navigateur : OAuth, SSO, SAML — il faut un token ou une clé d'API.",
+        "La connexion par navigateur (OAuth, SSO, SAML) : il faut un token ou une clé d'API.",
         "Les réponses autres que JSON : XML, SOAP, CSV, fichiers.",
         "Un outil sur votre réseau interne, en http ou à une adresse privée : LEKA ne joint que des adresses publiques en https.",
         "Les certificats auto-signés ou d'une autorité interne, et les certificats client (TLS mutuel).",
@@ -6274,7 +6276,7 @@ const fr = {
       saved: "{name} est enregistrée, à activer quand vous voudrez",
       missingTitle: "Un outil manquant ?",
       missingBody:
-        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, Splunk, Kibana, PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, Supabase et MongoDB — et, sur mesure, à toute API REST ou GraphQL, ou par webhook.",
+        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, Splunk, Kibana, PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, Supabase et MongoDB : et, sur mesure, à toute API REST ou GraphQL, ou par webhook.",
       steps: {
         connector: "Outil",
         settings: "Connexion",
@@ -6371,13 +6373,13 @@ const fr = {
       github: {
         pull_requests: {
           label: "Ouvrir les pull requests acceptées",
-          help: "LEKA ouvre une pull request — une nouvelle branche, un commit, jamais une fusion — pour un changement de code qu'une personne a accepté. La clé doit avoir Contents et Pull requests en écriture.",
+          help: "LEKA ouvre une pull request (une nouvelle branche, un commit, jamais une fusion) pour un changement de code qu'une personne a accepté. La clé doit avoir Contents et Pull requests en écriture.",
         },
       },
       splunk: {
         base_url: {
           label: "Adresse de l'API Splunk",
-          help: "Sur le port de gestion : https://acme.splunkcloud.com:8089, ou celle de votre Splunk — en https, avec un certificat reconnu, accessible depuis Internet.",
+          help: "Sur le port de gestion : https://acme.splunkcloud.com:8089, ou celle de votre Splunk, en https, avec un certificat reconnu, accessible depuis Internet.",
         },
         token: {
           label: "Token d'authentification",
@@ -6387,7 +6389,7 @@ const fr = {
       kibana: {
         base_url: {
           label: "Adresse du Kibana",
-          help: "https://acme.kb.europe-west1.gcp.cloud.es.io, ou celle de votre Kibana — en https, accessible depuis Internet.",
+          help: "https://acme.kb.europe-west1.gcp.cloud.es.io, ou celle de votre Kibana : en https, accessible depuis Internet.",
         },
         api_key: {
           label: "Clé d'API Elastic",
@@ -6397,7 +6399,7 @@ const fr = {
       grafana: {
         base_url: {
           label: "Adresse du Grafana",
-          help: "https://acme.grafana.net, ou celle de votre Grafana — en https, accessible depuis Internet.",
+          help: "https://acme.grafana.net, ou celle de votre Grafana : en https, accessible depuis Internet.",
         },
         token: {
           label: "Token de compte de service",
@@ -6439,7 +6441,7 @@ const fr = {
         },
         issues: {
           label: "Créer les tickets acceptés",
-          help: "LEKA crée dans Jira les tickets qu'une personne a acceptés dans un livrable — de nouveaux tickets, dans les projets lus par cette source, jamais une modification. Le compte doit pouvoir créer des tickets dans ces projets.",
+          help: "LEKA crée dans Jira les tickets qu'une personne a acceptés dans un livrable : de nouveaux tickets, dans les projets lus par cette source, jamais une modification. Le compte doit pouvoir créer des tickets dans ces projets.",
         },
       },
       confluence: {
@@ -6449,7 +6451,7 @@ const fr = {
         },
         pages: {
           label: "Publier les pages acceptées",
-          help: "LEKA publie dans Confluence les pages qu'une personne a acceptées dans un livrable — de nouvelles pages, dans les espaces lus par cette source, jamais une modification. Le compte doit pouvoir ajouter des pages dans ces espaces.",
+          help: "LEKA publie dans Confluence les pages qu'une personne a acceptées dans un livrable : de nouvelles pages, dans les espaces lus par cette source, jamais une modification. Le compte doit pouvoir ajouter des pages dans ces espaces.",
         },
       },
       linear: {
@@ -6509,7 +6511,7 @@ const fr = {
         },
         subject: {
           label: "Utilisateur délégué",
-          help: "Le compte, dédié et en lecture, pour lequel le compte de service agit — par la délégation au niveau du domaine, avec le scope drive.readonly. Vide : le compte de service lui-même, qui ne voit que ce qui est partagé avec son adresse.",
+          help: "Le compte, dédié et en lecture, pour lequel le compte de service agit : par la délégation au niveau du domaine, avec le scope drive.readonly. Vide : le compte de service lui-même, qui ne voit que ce qui est partagé avec son adresse.",
         },
       },
       microsoft_365: {
@@ -6533,7 +6535,7 @@ const fr = {
         },
         database: {
           label: "Base",
-          help: "La base à décrire. LEKA en lit le catalogue — schémas, tables, colonnes, clés — jamais les lignes.",
+          help: "La base à décrire. LEKA en lit le catalogue (schémas, tables, colonnes, clés), jamais les lignes.",
         },
         username: {
           label: "Rôle",
@@ -6591,7 +6593,7 @@ const fr = {
         },
         database: {
           label: "Base",
-          help: "La base à décrire. LEKA en lit le catalogue — schémas, tables, colonnes, clés — jamais les lignes.",
+          help: "La base à décrire. LEKA en lit le catalogue (schémas, tables, colonnes, clés), jamais les lignes.",
         },
         username: {
           label: "Connexion",
@@ -6691,7 +6693,7 @@ const fr = {
         },
         secret: {
           label: "Secret",
-          help: "Le même des deux côtés, 16 caractères au moins — pour Standard Webhooks, le whsec_… que donne le système. Chiffré, et plus jamais affiché.",
+          help: "Le même des deux côtés, 16 caractères au moins : pour Standard Webhooks, le whsec_… que donne le système. Chiffré, et plus jamais affiché.",
         },
       },
       supabase: {
@@ -7230,7 +7232,7 @@ const fr = {
       covered: "Votre formule {plan} et vos agents couvrent cette demande : vous pouvez lancer l'analyse.",
       answered: "LEKA a répondu à votre demande : sa réponse est dans « Aperçu du résultat ».",
       blocked:
-        "La capacité IA de votre formule {plan} est épuisée ce mois-ci : LEKA ne lance rien de plus. Une formule supérieure offre davantage de capacité — rien n'est facturé en dépassement.",
+        "La capacité IA de votre formule {plan} est épuisée ce mois-ci : LEKA ne lance rien de plus. Une formule supérieure offre davantage de capacité : rien n'est facturé en dépassement.",
       understanding: "Compréhension de votre demande",
       objective: "Objectif",
       sources: "Sources concernées",
@@ -7300,8 +7302,8 @@ const fr = {
       secure: "Paiement sécurisé par Stripe · Résiliation possible à tout moment",
       provisional: "Tarifs à valider",
       confirmTitle: "Activer cette configuration ?",
-      confirmPlan: "Étape 1 : l'abonnement {plan} — {price} / mois HT.",
-      confirmAgents: "{step} : {count} {count|agent|agents} — {price} / mois HT.",
+      confirmPlan: "Étape 1 : l'abonnement {plan}, {price} / mois HT.",
+      confirmAgents: "{step} : {count} {count|agent|agents}, {price} / mois HT.",
       confirmStep2: "Étape 2",
       confirmStep1: "Étape 1",
       confirmBody:
@@ -7413,7 +7415,7 @@ const fr = {
         intro: "Ce que LEKA fait à partir de ce livrable. Rien ne part sur GitHub, Jira ou Confluence avant que tu l'acceptes.",
         focus: "Ce que LEKA doit faire",
         depot: "Dépôt GitHub",
-        depotHint: "En nom complet, ex. acme/web — cherché sinon.",
+        depotHint: "En nom complet, ex. acme/web : cherché sinon.",
         start: "Lancer",
         hint: "LEKA lit ce livrable et le code, puis te montre le changement avant / après : rien n'est appliqué sur GitHub avant que tu l'acceptes.",
         failed: "L'action n'a pas pu démarrer.",
@@ -7645,7 +7647,7 @@ const fr = {
       previous: "Page précédente",
       next: "Page suivante",
       page: "Page {n}",
-      none: "—",
+      none: "-",
     },
     failed: "Les intentions n'ont pas pu être lues.",
     retry: "Réessayer",
@@ -8093,7 +8095,7 @@ const fr = {
       },
       offers: {
         included: "Inclus",
-        beta: "Bêta — inclus pour l'instant, deviendra une option",
+        beta: "Bêta : inclus pour l'instant, deviendra une option",
         add_on: "Option payante",
         planned: "Prévu",
       },
@@ -8443,11 +8445,11 @@ const fr = {
           sources:
             "Les sources distinctes d'où viennent les preuves de ses constats et de ses causes.",
           correlated_events:
-            "Les changements liés à un incident par le temps ou par une déduction de LEKA — aucun n'est confirmé par une source comme sa cause.",
+            "Les changements liés à un incident par le temps ou par une déduction de LEKA : aucun n'est confirmé par une source comme sa cause.",
           contradictions:
             "Ce sur quoi les sources de son contexte se contredisent, à propos de ce qui est demandé.",
           impacted_users:
-            "Le nombre de personnes touchées, tel qu'une source le déclare — jamais estimé.",
+            "Le nombre de personnes touchées, tel qu'une source le déclare : jamais estimé.",
         },
         states: {
           read: "Synchronisée le {at}.",
@@ -8745,7 +8747,7 @@ const fr = {
         analysis_inconclusive: "Analyse sans conclusion",
         analysis_failed: "Analyse en échec",
         analysis_blocked: "Analyse bloquée",
-        analysis_stopped: "Analyse arrêtée — ce qu'elle a trouvé est gardé",
+        analysis_stopped: "Analyse arrêtée : ce qu'elle a trouvé est gardé",
         decision_opened: "Décision soumise à validation",
         vote_approve: "Validée",
         vote_reject: "Refusée",
@@ -9287,8 +9289,10 @@ const en: Dictionary = {
     capabilities: "Your technology team, on demand.",
   },
   shell: {
+    /** A label, then its value: « Pull request: #439 ». */
+    colon: ": ",
     tagline: "Understand. Decide. Act.",
-    home: "LEKA — home",
+    home: "LEKA, home",
     backHome: "Back to home",
     plan: "Plan",
     /** Under an Enterprise contract (2026-10-25): its badge, its page. */
@@ -9326,7 +9330,7 @@ const en: Dictionary = {
     noWorkspace: "No workspace yet",
     firstWorkspace: {
       title: "Create your workspace",
-      body: "It is where LEKA brings your company's tools together — code, projects, documentation — to understand them as one. You can invite your team to it.",
+      body: "It is where LEKA brings your company's tools together (code, projects, documentation) to understand them as one. You can invite your team to it.",
       name: "Workspace name",
       create: "Create the workspace",
       creating: "Creating…",
@@ -9588,7 +9592,7 @@ const en: Dictionary = {
     locked: "Locked",
     connect: "Connect Confluence",
     other: "Another source",
-    refused: "Connect a source first — Confluence, for instance: LEKA answers from it.",
+    refused: "Connect a source first (Confluence, for instance): LEKA answers from it.",
   },
   overview: {
     home: {
@@ -9612,7 +9616,7 @@ const en: Dictionary = {
       incidents: "{count} {count|open incident|open incidents}",
       measured: "State known for {known} of {total} {total|thing|things}",
       troubled: "{count} {count|thing|things} degraded or unavailable",
-      sourcesFailing: "{count} {count|source in error|sources in error} — see the sources",
+      sourcesFailing: "{count} {count|source in error|sources in error}: see the sources",
       lastSync: "Last synchronisation",
       neverSynced: "No source read yet",
       history: "Analyses history",
@@ -9646,7 +9650,7 @@ const en: Dictionary = {
       troubleTitle: "What is wrong",
       troubleNone: "Nothing unavailable or degraded, as the sources read say.",
       silent:
-        "{count} {count|element has|elements have} no signal: their state is not known — that is not « healthy ».",
+        "{count} {count|element has|elements have} no signal: their state is not known, that is not « healthy ».",
       analyse: "Analyse",
       alertsOpen: "{count} {count|open alert|open alerts}.",
       alertsFrom: "Proactive alerts are included from {plan}.",
@@ -9661,7 +9665,7 @@ const en: Dictionary = {
     firstSteps: {
       title: "First steps",
       value:
-        "LEKA reads your tools — code, tickets, cloud, documentation, monitoring — and answers your questions about your environment, citing what says so. Nothing is changed on your side: read-only access is enough.",
+        "LEKA reads your tools (code, tickets, cloud, documentation, monitoring) and answers your questions about your environment, citing what says so. Nothing is changed on your side: read-only access is enough.",
       hide: "Hide first steps",
       done: "(done)",
       step1: "1. Connect a source",
@@ -9770,7 +9774,7 @@ const en: Dictionary = {
       title: "{count} things rely on {name}",
       incident: "In incident",
       attention: "Needs attention",
-      deduced: "Nothing watches it — its state is deduced",
+      deduced: "Nothing watches it: its state is deduced",
       unwatched: "Nothing watches it",
       watched: "Watched",
     },
@@ -10102,10 +10106,10 @@ const en: Dictionary = {
     emptyBody: "Actions run once the decision is approved (overview).",
     questionTitle: "A question calls for no action.",
     questionBody:
-      "LEKA answers it (overview) and never acts on your systems. To act, ask for it — « Restart auth-service in production »: LEKA proposes, a person decides, then the action runs here.",
+      "LEKA answers it (overview) and never acts on your systems. To act, ask for it (« Restart auth-service in production »): LEKA proposes, a person decides, then the action runs here.",
     prepare: "Prepare the run",
     prepareBody:
-      "LEKA prepares the plan of the approved decision: each action, and who runs it — an authorized system, or a person.",
+      "LEKA prepares the plan of the approved decision: each action, and who runs it: an authorized system, or a person.",
     plan: "Plan no. {number}",
     statuses: {
       planned: "Ready",
@@ -10203,15 +10207,15 @@ const en: Dictionary = {
       open: "Open",
     },
     errors: {
-      no_answer: "No answer: the system may or may not have acted — check it",
+      no_answer: "No answer: the system may or may not have acted, check it",
       blocked_address: "Address refused: it is not public",
       reported_failed: "Reported failed",
       no_longer_authorized: "No longer authorized",
       circuit_open:
-        "Not sent: this system has been failing for a few minutes — retry later",
+        "Not sent: this system has been failing for a few minutes, retry later",
       cancelled: "Stopped",
       checks_failed: "Checks did not pass at its time",
-      interrupted: "Interrupted mid-call: what the system did is not known — check it before retrying",
+      interrupted: "Interrupted mid-call: what the system did is not known, check it before retrying",
       http: "The system answered {status}",
     },
     succeededBody: "Every action is done. LEKA now verifies the result.",
@@ -10259,7 +10263,7 @@ const en: Dictionary = {
       title: "Choose your level of understanding and action",
       subtitle: "From discovering your environment to mastering your technology system.",
       monthly: "Monthly",
-      yearly: "Yearly — save {percent}%",
+      yearly: "Yearly: save {percent}%",
       period: "Billing",
       launch:
         "Launch offer: −{percent}% for the first {months} months on monthly. Not combined with the yearly discount.",
@@ -10410,12 +10414,12 @@ const en: Dictionary = {
     versus: "{count} last month",
     invoices: "Invoice history",
     invoicesNone:
-      "No invoice: LEKA issues none yet — your plan is set by your LEKA contact.",
+      "No invoice: LEKA issues none yet; your plan is set by your LEKA contact.",
     invoicesStripe: "Your invoices are issued by Stripe: find them under « Card and invoices », in Your plan.",
     credits: {
       title: "This month's AI credits",
       explain:
-        "Each AI action — reading an intention, analysing it, running an agent — uses credits. Your organisation's own model uses none.",
+        "Each AI action (reading an intention, analysing it, running an agent) uses credits. Your organisation's own model uses none.",
       used: "{used} used of {allowance}",
       remaining: "{remaining} left until {date}",
       packs: "including {packs} added this month",
@@ -10468,7 +10472,7 @@ const en: Dictionary = {
     },
     customRoles: "Workspace roles",
     customRolesSaid:
-      "A workspace role starts from Member or Admin, adds and takes away permissions — taking away wins — and is given to a person whose seat has that base.",
+      "A workspace role starts from Member or Admin, adds and takes away permissions (taking away wins) and is given to a person whose seat has that base.",
     noCustomRole: "No role of the workspace's own.",
     onBase: "on {base}",
     holders: "{count} {count|person|persons}",
@@ -10651,7 +10655,7 @@ const en: Dictionary = {
       kind: "Kind",
       purposes: "Work covered",
       purposesHint:
-        "Comma-separated, e.g. agent:*, intention.* — empty: all of it.",
+        "Comma-separated, e.g. agent:*, intention.*; empty: all of it.",
       providers: "Allowed providers",
       owners: "Allowed accounts",
       ownersSaid: {
@@ -10887,7 +10891,7 @@ const en: Dictionary = {
   agentRuns: {
     design: {
       title: "The design",
-      lead: "The screen as its code draws it today, then what the designer proposes — drawn by LEKA from its review and the code it read.",
+      lead: "The screen as its code draws it today, then what the designer proposes: drawn by LEKA from its review and the code it read.",
       before: "Today",
       after: "Proposal",
       compare: "Side by side",
@@ -10914,13 +10918,13 @@ const en: Dictionary = {
       correct: "Correct this mock-up",
       correctionCancel: "Cancel",
       correcting: "LEKA is correcting « {name} »: the mock-up will update here in a few minutes.",
-      corrected: "Corrected — {name}: « {note} »",
+      corrected: "Corrected · {name}: « {note} »",
       correctionFailed: "The correction could not be asked.",
       correctionFailedWhy: "The last correction could not be drawn: {why}.",
       reconstruction: "Redrawn from the code: to be checked on the real screen.",
       loading: "Loading the design…",
       error: "The design could not be loaded.",
-      frame: "{name} — mock-up of « {screen} »",
+      frame: "{name}: mock-up of « {screen} »",
     },
     run: "Run the agent",
     runNamed: "Run « {title} »",
@@ -11050,7 +11054,7 @@ const en: Dictionary = {
     before: "Before",
     after: "After · LEKA's proposal",
     modifications:
-      "What LEKA changes: {count} {count|modification|modifications} in {files} {files|file|files} (+{added} −{removed}) — nothing else.",
+      "What LEKA changes: {count} {count|modification|modifications} in {files} {files|file|files} (+{added} −{removed}), nothing else.",
     modification: "Modification {n}",
     line: "line {from}",
     lines: "lines {from}–{to}",
@@ -11060,7 +11064,7 @@ const en: Dictionary = {
     reject: "Reject",
     opened: "Pull request opened",
     openedHint:
-      "LEKA opened pull request #{number}: once its CI is green, merge it on GitHub — the CD deploys it, LEKA shows it here.",
+      "LEKA opened pull request #{number}: once its CI is green, merge it on GitHub: the CD deploys it, LEKA shows it here.",
     rewrite: "Write it again on the current branch",
     rewriting: "LEKA writes the change again on the branch as it is now.",
     follow: {
@@ -11074,8 +11078,8 @@ const en: Dictionary = {
       opened: "#{number} opened by LEKA",
       checks: {
         waiting: "Waiting for the CI to start…",
-        running: "Running — {passed} of {total} {total|check|checks} passed",
-        success: "Green — {total} {total|check|checks}",
+        running: "Running, {passed} of {total} {total|check|checks} passed",
+        success: "Green, {total} {total|check|checks}",
         passed: "Passed",
         failure: "Red: {names}",
         seeFailure: "See the failure",
@@ -11108,7 +11112,7 @@ const en: Dictionary = {
     repair: {
       title: "Fix the problem",
       intro:
-        "LEKA reads what failed on GitHub — the test, the error, the end of the log —, writes the fix and adds it to the pull request's branch. The CI runs again; nothing is merged without you.",
+        "LEKA reads what failed on GitHub (the test, the error, the end of the log), writes the fix and adds it to the pull request's branch. The CI runs again; nothing is merged without you.",
       introClosed:
         "The pull request was closed with its CI in red. LEKA reopens it, reads what failed, adds the fix to its branch, and the CI runs again.",
       start: "Fix the problem",
@@ -11116,7 +11120,7 @@ const en: Dictionary = {
       askApprover: "Someone who may approve starts the fix.",
       tooMany: "LEKA already fixed this pull request {count} times: look at the failure on GitHub before going further.",
       asked: "Fix started: LEKA reads the failure.",
-      running: "LEKA reads the CI failure and writes the fix — a few minutes.",
+      running: "LEKA reads the CI failure and writes the fix: a few minutes.",
       n: "Fix {n}",
       by: "by {model}",
       states: {
@@ -11504,7 +11508,7 @@ const en: Dictionary = {
     /** The architect on a Confluence space (2026-10-25): its perimeter, chosen. */
     architectLaunch: {
       title: "Application architect",
-      lead: "Choose the Confluence perimeter: a whole space, or a page and everything under it. LEKA produces the architecture dossier structured as ArchiMate — PDF, Word, Markdown —, each section citing its pages.",
+      lead: "Choose the Confluence perimeter: a whole space, or a page and everything under it. LEKA produces the architecture dossier structured as ArchiMate (PDF, Word, Markdown), each section citing its pages.",
       noSource: "No Confluence is connected: connect it, LEKA will sync its spaces.",
       connect: "Connect Confluence",
       source: "Confluence source",
@@ -11519,7 +11523,7 @@ const en: Dictionary = {
       launch: "Launch the architect",
       launching: "Launching…",
       readOnly: "Read only: nothing is written to Confluence.",
-      asked: "/architecte Architecture dossier — {subject} — space {space}{root}",
+      asked: "/architecte Architecture dossier: {subject}, space {space}{root}",
       rootSaid: ", page « {title} »",
       perimeterSaid: "Space {space}",
     },
@@ -11800,7 +11804,7 @@ const en: Dictionary = {
         needs: "What does it need to work?",
         needsSome: "At least one of these sources, connected to LEKA: {sources}.",
         needsModel:
-          "Sources connected to LEKA: it reads the model of your environment LEKA builds from them — the more sources, the more it sees.",
+          "Sources connected to LEKA: it reads the model of your environment LEKA builds from them: the more sources, the more it sees.",
         changes: "Can it change my systems?",
         changesNo: "No. It works read-only and triggers nothing.",
         changesPropose: "It changes nothing by itself: it proposes, and nothing applies without a person's decision.",
@@ -11954,15 +11958,15 @@ const en: Dictionary = {
       "code-change":
         "Changes a repository's code: a diff proposed, reviewed by a person, then the pull request.",
       "build-fixer":
-        "Why a build breaks, and a fix proposed — never applied without you.",
+        "Why a build breaks, and a fix proposed: never applied without you.",
       "debug-assistant":
         "A misbehaving service's likely causes, ranked: what changed, what it depends on.",
       "ui-quality-review":
         "Whether an application's screens are finished: loading, empty, error, on a phone, with long text.",
       "accessibility-audit":
-        "An application's accessibility to the keyboard, screen readers and in contrast — against WCAG 2.2 and the RGAA.",
+        "An application's accessibility to the keyboard, screen readers and in contrast: against WCAG 2.2 and the RGAA.",
       "design-review":
-        "The interface reviewed as a design engineer would: design system, animations, phone, real-world data — before, after, why.",
+        "The interface reviewed as a design engineer would: design system, animations, phone, real-world data; before, after, why.",
       "motion-review":
         "An application's animations: useful or not, their timing, reduced motion respected, their smoothness.",
       "codebase-explorer":
@@ -11970,9 +11974,9 @@ const en: Dictionary = {
       "test-generation":
         "The missing tests, written by LEKA: a diff a person reviews, then the pull request.",
       "qa-acceptance":
-        "A pull request accepted or not: each expected criterion, its status and its proof — the code, the test, the CI.",
+        "A pull request accepted or not: each expected criterion, its status and its proof (the code, the test, the CI).",
       "api-design-review":
-        "An API reviewed: what a change breaks for those calling it, and its consistency — errors, pagination, what it exposes.",
+        "An API reviewed: what a change breaks for those calling it, and its consistency (errors, pagination, what it exposes).",
       "reliability-analysis":
         "What makes a service fragile: its points of failure, what happens when a dependency falls, the failures that hide, the incidents that recur.",
       "dependency-analysis":
@@ -12313,9 +12317,9 @@ const en: Dictionary = {
       title: "What LEKA keeps",
       items: [
         "Your sources' credentials, encrypted: never shown, never written to the logs.",
-        "What LEKA reads from your sources — applications, pages, tickets, repositories — in your organisation only, isolated from every other.",
+        "What LEKA reads from your sources (applications, pages, tickets, repositories) in your organisation only, isolated from every other.",
         "Your requests, the agents' analyses and deliverables, and the files you attach, encrypted at rest.",
-        "For each call to the language model: what it was for, the model, its size and duration — never its content.",
+        "For each call to the language model: what it was for, the model, its size and duration, never its content.",
         "The audit trail: who did what, and when, for the retention chosen.",
       ],
       more: "How data is encrypted and isolated is in the Data tab.",
@@ -12386,7 +12390,7 @@ const en: Dictionary = {
       personal: "Personal data",
     },
     scannedOf: "{scanned} / {records}",
-    none: "—",
+    none: "-",
     noSource: "Nothing collected yet.",
     kinds: {
       private_key: "private key",
@@ -12419,7 +12423,7 @@ const en: Dictionary = {
     },
     policy: "Retention policy",
     policySaid:
-      "The original file a secret or an identity number was found in is kept at most this many days, then deleted — never longer than its source's rule.",
+      "The original file a secret or an identity number was found in is kept at most this many days, then deleted: never longer than its source's rule.",
     days: "Days",
     save: "Save",
     saved: "Policy saved.",
@@ -12506,9 +12510,9 @@ const en: Dictionary = {
     },
     grounding: {
       blocked:
-        "A risky action without the evidence it needs — missing: {missing}. It cannot be approved until the intention is analysed again",
+        "A risky action without the evidence it needs (missing: {missing}). It cannot be approved until the intention is analysed again",
       validation:
-        "Incomplete evidence — missing: {missing}. One more approval is asked before acting",
+        "Incomplete evidence (missing: {missing}). One more approval is asked before acting",
       evidence: {
         standing: "the state of what it targets",
         action: "what the action reaches",
@@ -12710,7 +12714,7 @@ const en: Dictionary = {
   },
   approvals: {
     subtitle:
-      "LEKA worked these out from your sources, though they do not say it plainly: confirm or reject them — LEKA relies on them only once confirmed. Here too: what your sources contradict each other on, and the decisions waiting for you.",
+      "LEKA worked these out from your sources, though they do not say it plainly: confirm or reject them; LEKA relies on them only once confirmed. Here too: what your sources contradict each other on, and the decisions waiting for you.",
     stats: {
       proposed: "Waiting",
       accepted: "Accepted",
@@ -12768,7 +12772,7 @@ const en: Dictionary = {
     none: "No proposal in this state.",
     empty: {
       title: "Nothing to approve right now.",
-      body: "When LEKA works out from your sources what they do not say plainly — who owns a service, which application it is part of, whether it is critical — it asks you here before relying on it.",
+      body: "When LEKA works out from your sources what they do not say plainly (who owns a service, which application it is part of, whether it is critical), it asks you here before relying on it.",
     },
     /** How sure LEKA is, in words (2026-10-14). */
     sure: {
@@ -13158,7 +13162,7 @@ const en: Dictionary = {
           "A source could say, and says nothing: unknown does not mean healthy.",
         not_covered: "No connected source can say: connect a monitoring tool.",
         operational:
-          "A tool measures it, its provider says it runs, or LEKA deduces it — it is said which.",
+          "A tool measures it, its provider says it runs, or LEKA deduces it: it is said which.",
       },
       basis: {
         measured: "measured",
@@ -13189,7 +13193,7 @@ const en: Dictionary = {
       freshness: {
         read: "Read {ago}",
         never: "Never read",
-        every: "Sources read every {minutes} min — not in real time",
+        every: "Sources read every {minutes} min: not in real time",
         webhooks: "some send their events as they happen",
         late: "Late: no read for over 2 hours",
       },
@@ -13287,7 +13291,7 @@ const en: Dictionary = {
           test: "Test",
           tested: "Test sent: see each channel's result under the rule.",
           lastSent: "Last sent: {channel} · {ago}",
-          lastFailed: "Delivery failed: {channel} · {ago} — {error}",
+          lastFailed: "Delivery failed: {channel} · {ago} · {error}",
           never: "Never triggered",
           saved: "Rule saved.",
           removed: "Rule deleted.",
@@ -13364,7 +13368,7 @@ const en: Dictionary = {
         takenMember: "by a member",
         capacity: {
           title: "AI capacity",
-          used: "{percent}% of this month's AI credits used (measured) — renewed on {date}.",
+          used: "{percent}% of this month's AI credits used (measured): renewed on {date}.",
           passed: "{threshold}% threshold passed {ago}.",
           spentEnforced:
             "Capacity spent: LEKA's analyses are paused until {date}. No overage is ever billed.",
@@ -13796,18 +13800,18 @@ const en: Dictionary = {
         scope:
           "Scope: {repositories} {repositories|repository|repositories} · {modules} code {modules|module|modules} · {services} {services|service|services} · {stores} {stores|database|databases} and {stores|store|stores} · {cloud} cloud {cloud|resource|resources} · {external} outside {external|service|services}",
         layersLine:
-          "Layers: code, applications, data, technology, outside — all read from your sources; what LEKA inferred, and what is left to confirm, is in orange.",
+          "Layers: code, applications, data, technology, outside. All read from your sources; what LEKA inferred, and what is left to confirm, is in orange.",
         contents: "Contents",
         sections: {
           layers: {
             title: "The architecture in layers",
             subtitle:
-              "Every brick and each of its links, named — choose a brick to see its detail.",
+              "Every brick and each of its links, named: choose a brick to see its detail.",
           },
           flows: {
             title: "The flows",
             subtitle:
-              "What a request or a job goes through, step by step — from the links read or inferred (inferred in orange).",
+              "What a request or a job goes through, step by step: from the links read or inferred (inferred in orange).",
           },
           responsibilities: {
             title: "Contacts and responsibilities",
@@ -13835,8 +13839,8 @@ const en: Dictionary = {
         layerCount: "{count} {count|element|elements}",
         noFlows:
           "No known flow: a service must call or route to another, or keep its data somewhere.",
-        flowOne: "Flow {index} — from {names}",
-        flowMany: "Flow {index} — from {names} (same steps)",
+        flowOne: "Flow {index}: from {names}",
+        flowMany: "Flow {index}: from {names} (same steps)",
         raci: {
           columns: [
             "Element",
@@ -13867,7 +13871,7 @@ const en: Dictionary = {
           deduced: "{name}'s state is inferred from what runs it.",
           deducedFrom: "{name}'s state is inferred from {other} ({kind}).",
           inferred:
-            "{name} {role} {other} — inferred: {rule} ({confidence} %).",
+            "{name} {role} {other} (inferred: {rule}, {confidence} %).",
           unmonitored: "{name} is watched by no monitoring tool.",
         },
         sourceColumns: ["Source", "Type", "Status", "Last read", "Elements"],
@@ -13876,7 +13880,7 @@ const en: Dictionary = {
         limits: {
           monitoring:
             "No monitoring tool is connected: uptime, latency and errors are not measured; the states shown are read on the resources or inferred.",
-          code: "The code: each repository's whole tree and at most 40 configuration files are read — never the source code itself.",
+          code: "The code: each repository's whole tree and at most 40 configuration files are read, never the source code itself.",
           buckets: "Buckets: their list only, never their content.",
           databases:
             "A database is detailed (tables, sizes) only if a database source reads it: a private one, out of reach, has no tables.",
@@ -13972,7 +13976,7 @@ const en: Dictionary = {
       hintsOf: {
         applications: {
           applications:
-            "The applications a catalogue declares — Backstage, Datadog, a custom source — will appear here. Your repositories are in the Code row.",
+            "The applications a catalogue declares (Backstage, Datadog, a custom source) will appear here. Your repositories are in the Code row.",
         },
         domains: {
           applications:
@@ -13992,7 +13996,7 @@ const en: Dictionary = {
       resources: "{count} {count|resource|resources}",
       emptyTitle: "Your environment is not mapped yet",
       emptyBody:
-        "Connect your tools: LEKA joins what they say — repositories, services, databases, cloud resources — and shows it here.",
+        "Connect your tools: LEKA joins what they say (repositories, services, databases, cloud resources) and shows it here.",
     },
     list: {
       caption: "The things in your environment",
@@ -14026,7 +14030,7 @@ const en: Dictionary = {
     insights: {
       title: "LEKA insights",
       empty:
-        "LEKA's analyses — probable causes, risks, possible savings — will appear here with its analysis engine.",
+        "LEKA's analyses (probable causes, risks, possible savings) will appear here with its analysis engine.",
       action: "Start an analysis",
     },
     events: {
@@ -14112,7 +14116,7 @@ const en: Dictionary = {
       },
       overview: "The whole architecture",
       overviewBody:
-        "Every element and each of its links, named. Choose one to see its relations, or search it above to explore around it — a database, down to its tables.",
+        "Every element and each of its links, named. Choose one to see its relations, or search it above to explore around it: a database, down to its tables.",
       emptyTitle: "No dependency known yet",
       emptyBody:
         "Connect a service catalogue or your databases: LEKA will draw here what each thing depends on.",
@@ -14219,7 +14223,7 @@ const en: Dictionary = {
       analysis: {
         title: "LEKA's analysis",
         incident:
-          "What the company model knows of this incident: what caused it, what it affects and how far — each statement with its evidence.",
+          "What the company model knows of this incident: what caused it, what it affects and how far, each statement with its evidence.",
         full: "See the full analysis",
         hide: "Hide the analysis",
       },
@@ -14310,7 +14314,7 @@ const en: Dictionary = {
         },
         createdDetail: "The first version LEKA knew",
         fields: { name: "name", lifecycle: "lifecycle" },
-        nothing: "—",
+        nothing: "-",
         empty: "No history yet.",
         failed: "The history could not be read.",
         at: "See at this date",
@@ -14375,7 +14379,7 @@ const en: Dictionary = {
       context: {
         title: "LEKA's context",
         intro:
-          "What LEKA gathers to understand a request — found through the graph, by the question's words, in the documents' text and in the timeline — each element with its sources, its relevance and why it is there, kept version after version.",
+          "What LEKA gathers to understand a request (found through the graph, by the question's words, in the documents' text and in the timeline): each element with its sources, its relevance and why it is there, kept version after version.",
         emptyTitle: "No context assembled",
         emptyBody:
           "Assemble one: LEKA reads the company model around this and keeps what it finds, as it finds it.",
@@ -15003,7 +15007,7 @@ const en: Dictionary = {
     reception: {
       title: "Reception",
       intro:
-        "The system sends its changes to this address, signed with the source's secret. LEKA keeps them, then stores them at the next pass — within seconds.",
+        "The system sends its changes to this address, signed with the source's secret. LEKA keeps them, then stores them at the next pass: within seconds.",
       address: "Address",
       signature: "Signature",
       signatures: {
@@ -15113,7 +15117,7 @@ const en: Dictionary = {
       reconnect: "Reconnect",
       reconnectTitle: "Reconnect the source",
       reconnectHint:
-        "Replace the secret — or correct what changed — then test: the source starts again once reactivated.",
+        "Replace the secret (or correct what changed) then test: the source starts again once reactivated.",
       delete: "Delete",
       deleteTitle: "Delete {name}?",
       deleteBody:
@@ -15133,11 +15137,11 @@ const en: Dictionary = {
       open: "Custom connector",
       badge: "Custom",
       badgeHelp:
-        "Connected by a custom connector, described by your team — not by a native LEKA connector.",
+        "Connected by a custom connector, described by your team: not by a native LEKA connector.",
       step: "Method",
       title: "How does LEKA reach your tool?",
       intro:
-        "For a tool LEKA does not know yet: you describe its API, and LEKA treats it as a native source — test, scope, sync, health, history.",
+        "For a tool LEKA does not know yet: you describe its API, and LEKA treats it as a native source (test, scope, sync, health, history).",
       needs: "You need: {needs}",
       methods: {
         custom_rest: {
@@ -15159,7 +15163,7 @@ const en: Dictionary = {
       },
       unsupportedTitle: "Not supported today",
       unsupported: [
-        "Signing in through a browser: OAuth, SSO, SAML — an API token or key is needed.",
+        "Signing in through a browser (OAuth, SSO, SAML): an API token or key is needed.",
         "Answers other than JSON: XML, SOAP, CSV, files.",
         "A tool on your internal network, over http or at a private address: LEKA only reaches public https addresses.",
         "Self-signed certificates or ones from an internal authority, and client certificates (mutual TLS).",
@@ -15261,7 +15265,7 @@ const en: Dictionary = {
       saved: "{name} is saved, to activate when you want",
       missingTitle: "A tool missing?",
       missingBody:
-        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, Splunk, Kibana, PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, Supabase and MongoDB today — and, custom, to any REST or GraphQL API, or by webhook.",
+        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, Splunk, Kibana, PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, Supabase and MongoDB today: and, custom, to any REST or GraphQL API, or by webhook.",
       steps: {
         connector: "Tool",
         settings: "Connection",
@@ -15353,13 +15357,13 @@ const en: Dictionary = {
       github: {
         pull_requests: {
           label: "Open the accepted pull requests",
-          help: "LEKA opens a pull request — a new branch, one commit, never a merge — for a code change a person accepted. The token needs Contents and Pull requests in write.",
+          help: "LEKA opens a pull request (a new branch, one commit, never a merge) for a code change a person accepted. The token needs Contents and Pull requests in write.",
         },
       },
       splunk: {
         base_url: {
           label: "Splunk API address",
-          help: "On the management port: https://acme.splunkcloud.com:8089, or your own Splunk's — https, with a recognised certificate, reachable from the internet.",
+          help: "On the management port: https://acme.splunkcloud.com:8089, or your own Splunk's, https, with a recognised certificate, reachable from the internet.",
         },
         token: {
           label: "Authentication token",
@@ -15369,7 +15373,7 @@ const en: Dictionary = {
       kibana: {
         base_url: {
           label: "Kibana address",
-          help: "https://acme.kb.europe-west1.gcp.cloud.es.io, or your own Kibana's — https, reachable from the internet.",
+          help: "https://acme.kb.europe-west1.gcp.cloud.es.io, or your own Kibana's: https, reachable from the internet.",
         },
         api_key: {
           label: "Elastic API key",
@@ -15379,7 +15383,7 @@ const en: Dictionary = {
       grafana: {
         base_url: {
           label: "Grafana address",
-          help: "https://acme.grafana.net, or your own Grafana's — https, reachable from the internet.",
+          help: "https://acme.grafana.net, or your own Grafana's: https, reachable from the internet.",
         },
         token: {
           label: "Service account token",
@@ -15421,7 +15425,7 @@ const en: Dictionary = {
         },
         issues: {
           label: "Create the accepted tickets",
-          help: "LEKA creates in Jira the tickets a person accepted in a deliverable — new issues, in the projects this source reads, never an edit. The account must be able to create issues in those projects.",
+          help: "LEKA creates in Jira the tickets a person accepted in a deliverable: new issues, in the projects this source reads, never an edit. The account must be able to create issues in those projects.",
         },
       },
       confluence: {
@@ -15431,7 +15435,7 @@ const en: Dictionary = {
         },
         pages: {
           label: "Publish the accepted pages",
-          help: "LEKA publishes in Confluence the pages a person accepted in a deliverable — new pages, in the spaces this source reads, never an edit. The account must be able to add pages in those spaces.",
+          help: "LEKA publishes in Confluence the pages a person accepted in a deliverable: new pages, in the spaces this source reads, never an edit. The account must be able to add pages in those spaces.",
         },
       },
       linear: {
@@ -15491,7 +15495,7 @@ const en: Dictionary = {
         },
         subject: {
           label: "Delegated user",
-          help: "The account, dedicated and read-only, the service account acts as — by domain-wide delegation, with the drive.readonly scope. Empty: the service account itself, which sees only what is shared with its address.",
+          help: "The account, dedicated and read-only, the service account acts as: by domain-wide delegation, with the drive.readonly scope. Empty: the service account itself, which sees only what is shared with its address.",
         },
       },
       microsoft_365: {
@@ -15515,7 +15519,7 @@ const en: Dictionary = {
         },
         database: {
           label: "Database",
-          help: "The database to describe. LEKA reads its catalogue — schemas, tables, columns, keys — never its rows.",
+          help: "The database to describe. LEKA reads its catalogue (schemas, tables, columns, keys), never its rows.",
         },
         username: {
           label: "Role",
@@ -15573,7 +15577,7 @@ const en: Dictionary = {
         },
         database: {
           label: "Database",
-          help: "The database to describe. LEKA reads its catalogue — schemas, tables, columns, keys — never its rows.",
+          help: "The database to describe. LEKA reads its catalogue (schemas, tables, columns, keys), never its rows.",
         },
         username: {
           label: "Login",
@@ -15647,7 +15651,7 @@ const en: Dictionary = {
         },
         secret: {
           label: "Secret",
-          help: "The same on both sides, 16 characters at least — for Standard Webhooks, the whsec_… the system gives. Encrypted, and never shown again.",
+          help: "The same on both sides, 16 characters at least: for Standard Webhooks, the whsec_… the system gives. Encrypted, and never shown again.",
         },
       },
       custom_rest: {
@@ -16191,7 +16195,7 @@ const en: Dictionary = {
       covered: "Your {plan} plan and your agents cover this request: you can launch the analysis.",
       answered: "LEKA answered your request: its answer is in « Result preview ».",
       blocked:
-        "Your {plan} plan's AI capacity is spent this month: LEKA launches nothing more. A higher plan holds more capacity — nothing is billed as overage.",
+        "Your {plan} plan's AI capacity is spent this month: LEKA launches nothing more. A higher plan holds more capacity: nothing is billed as overage.",
       understanding: "Understanding your request",
       objective: "Objective",
       sources: "Sources involved",
@@ -16259,8 +16263,8 @@ const en: Dictionary = {
       secure: "Secure payment by Stripe · Cancel any time",
       provisional: "Prices to validate",
       confirmTitle: "Activate this setup?",
-      confirmPlan: "Step 1: the {plan} subscription — {price} / month excl. VAT.",
-      confirmAgents: "{step}: {count} {count|agent|agents} — {price} / month excl. VAT.",
+      confirmPlan: "Step 1: the {plan} subscription, {price} / month excl. VAT.",
+      confirmAgents: "{step}: {count} {count|agent|agents}, {price} / month excl. VAT.",
       confirmStep2: "Step 2",
       confirmStep1: "Step 1",
       confirmBody:
@@ -16367,7 +16371,7 @@ const en: Dictionary = {
         intro: "What LEKA does from this deliverable. Nothing goes to GitHub, Jira or Confluence before you accept it.",
         focus: "What LEKA should do",
         depot: "GitHub repository",
-        depotHint: "Full name, e.g. acme/web — looked up otherwise.",
+        depotHint: "Full name, e.g. acme/web: looked up otherwise.",
         start: "Start",
         hint: "LEKA reads this deliverable and the code, then shows you the change before / after: nothing is applied on GitHub before you accept it.",
         failed: "The action could not start.",
@@ -16594,7 +16598,7 @@ const en: Dictionary = {
       previous: "Previous page",
       next: "Next page",
       page: "Page {n}",
-      none: "—",
+      none: "-",
     },
     failed: "Intentions could not be read.",
     retry: "Retry",
@@ -17028,7 +17032,7 @@ const en: Dictionary = {
       },
       offers: {
         included: "Included",
-        beta: "Beta — included for now, will become an add-on",
+        beta: "Beta: included for now, will become an add-on",
         add_on: "Paid add-on",
         planned: "Planned",
       },
@@ -17366,11 +17370,11 @@ const en: Dictionary = {
           sources:
             "The distinct sources the evidence of its findings and causes was read from.",
           correlated_events:
-            "Changes tied to an incident by time or by LEKA's inference — none confirmed by a source as its cause.",
+            "Changes tied to an incident by time or by LEKA's inference: none confirmed by a source as its cause.",
           contradictions:
             "What the sources of its context disagree on, about what is asked.",
           impacted_users:
-            "The people reached, as a source states them — never estimated.",
+            "The people reached, as a source states them: never estimated.",
         },
         states: {
           read: "Synced on {at}.",
@@ -17646,7 +17650,7 @@ const en: Dictionary = {
         analysis_inconclusive: "Analysis inconclusive",
         analysis_failed: "Analysis failed",
         analysis_blocked: "Analysis blocked",
-        analysis_stopped: "Analysis stopped — what it found is kept",
+        analysis_stopped: "Analysis stopped: what it found is kept",
         decision_opened: "Decision put to approval",
         vote_approve: "Approved",
         vote_reject: "Rejected",
@@ -18017,7 +18021,7 @@ const en: Dictionary = {
     linkIncompleteTitle: "Link incomplete",
     linkIncompleteDescription: "This page needs the link from your email.",
     linkIncompleteBody:
-      "Open the link exactly as it appears in the message — some email clients cut long links in half.",
+      "Open the link exactly as it appears in the message: some email clients cut long links in half.",
     askNewLink: "Ask for a new link",
     resetTitle: "Choose a new password",
     resetDescription: "Every other signed-in device will be signed out.",
@@ -18036,7 +18040,7 @@ const en: Dictionary = {
     errors: {
       invalidCredentials: "Invalid email or password.",
       accountUnverified:
-        "Confirm your email address before signing in. Check your inbox — we can send another link.",
+        "Confirm your email address before signing in. Check your inbox: we can send another link.",
       rateLimited: "Too many attempts. Wait a few minutes before trying again.",
       rateLimitedFor:
         "Too many attempts from this network. Try again in {minutes} min.",

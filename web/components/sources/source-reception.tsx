@@ -71,7 +71,7 @@ function Reception({ source }: { source: Source }) {
         />
       ),
     },
-    { id: "resource", header: w.resource, cell: (delivery) => delivery.resource ?? "—" },
+    { id: "resource", header: w.resource, cell: (delivery) => delivery.resource ?? "-" },
     {
       id: "records",
       header: w.records,

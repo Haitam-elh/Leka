@@ -146,7 +146,7 @@ export function EnvironmentCard() {
             />
           </svg>
           <span className="absolute inset-0 flex items-center justify-center text-[0.8125rem] font-bold tabular-nums text-brand-navy">
-            {percent === null ? "—" : `${percent} %`}
+            {percent === null ? "-" : `${percent} %`}
           </span>
         </div>
         <div className="min-w-0 space-y-1.5">

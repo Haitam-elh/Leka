@@ -635,7 +635,10 @@ in one or two plain sentences, from ITS FACTS ONLY — never a name, a purpose, 
 a user or a technology the facts do not say. Write in the language you are \
 told to write in. Say how sure you are, 0 to 1: low \
 when the facts say little. Cite the ids of the facts each description rests \
-on. A thing the facts say too little about: leave it out."""
+on. A thing the facts say too little about: leave it out.
+
+Never write the em dash « — »: a colon, a comma, a semicolon or \
+parentheses, as the sentence needs."""
 
 
 class Described(BaseModel):

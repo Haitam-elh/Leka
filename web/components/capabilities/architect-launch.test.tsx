@@ -111,7 +111,7 @@ describe("« Lancer » the architect", () => {
     await waitFor(() => expect(push).toHaveBeenCalledWith("/intentions/i1/deliverable?run=r1"));
     const [, asked] = fetched.mock.calls.find(([path, init]) => path === "/intentions" && init?.method === "POST")!;
     expect(JSON.parse(asked.body).text).toBe(
-      "/architecte Dossier d'architecture — Facturation — espace ARCHI, page « Applications »",
+      "/architecte Dossier d'architecture : Facturation, espace ARCHI, page « Applications »",
     );
     const [, started] = fetched.mock.calls.find(([path]) => path === "/agent-runs")!;
     expect(JSON.parse(started.body)).toEqual({

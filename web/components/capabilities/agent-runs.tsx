@@ -197,7 +197,7 @@ export function RunAgent({
                       value={String(values[field.name] ?? "")}
                       onChange={(e) => setValues((was) => ({ ...was, [field.name]: e.target.value }))}
                     >
-                      <option value="">—</option>
+                      <option value="">-</option>
                       {field.choices.map((choice) => (
                         <option key={choice} value={choice}>
                           {choice}

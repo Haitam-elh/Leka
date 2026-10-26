@@ -604,14 +604,14 @@ class SQLServerConnector(Connector[SQLServerConfig, SQLServerCredentials]):
             return diagnose(
                 DiagnosticCode.AUTH_INVALID,
                 message="SQL Server refuse cette connexion : le compte, son mot de passe, ou la "
-                "base — qui doit exister et avoir un utilisateur pour ce compte.",
+                "base, qui doit exister et avoir un utilisateur pour ce compte.",
                 detail=detail,
                 secrets=secrets,
             )
         if CONNECTION_FAILED in codes:
             return diagnose(
                 DiagnosticCode.CONFIG_INVALID,
-                message="Le serveur n'accepte pas de connexion chiffrée (TLS), que LEKA exige — "
+                message="Le serveur n'accepte pas de connexion chiffrée (TLS), que LEKA exige : "
                 "ou ce n'est pas un SQL Server.",
                 detail=detail,
                 secrets=secrets,

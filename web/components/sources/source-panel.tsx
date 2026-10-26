@@ -171,7 +171,7 @@ function LastError({ diagnostic }: { diagnostic: Diagnostic }) {
       <TriangleAlert className="mt-0.5 size-4 shrink-0 text-state-danger" aria-hidden="true" />
       <div>
         <p className="font-medium text-brand-navy">
-          {t.sources.panel.lastError} — {diagnostic.message}
+          {t.sources.panel.lastError}{t.shell.colon}{diagnostic.message}
         </p>
         <p className="mt-1 text-shell-muted">{diagnostic.remediation}</p>
       </div>

@@ -693,7 +693,7 @@ function markdownOf(
     ...(intention.summary ? [intention.summary, ""] : []),
     ...proposal.steps.map(
       (s, i) =>
-        `${i + 1}. **${s.title}**${s.detail ? ` — ${s.detail}` : ""} (${
+        `${i + 1}. **${s.title}**${s.detail ? `${t.shell.colon}${s.detail}` : ""} (${
           s.agent ? (titles.get(s.agent) ?? s.agent) : byYou
         })`,
     ),

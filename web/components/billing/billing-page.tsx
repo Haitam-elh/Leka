@@ -58,7 +58,7 @@ export function BillingScreen() {
                 key: "plan",
                 icon: ReceiptText,
                 tone: "violet" as const,
-                value: credits ? w.plans[credits.plan] : "—",
+                value: credits ? w.plans[credits.plan] : "-",
                 label: w.plan,
                 foot: credits ? (credits.plan_since ? fill(w.planSince, { date: day(credits.plan_since) }) : w.planDefault) : null,
               },
