@@ -32,8 +32,8 @@ ENGINEERING = {
 VERSIONS = {
     "codebase-explorer": "1.1.0",
     "test-generation": "1.1.0",
+    "change-impact-analysis": "1.2.0",
     "regression-analysis": "1.2.0",
-    "change-impact-analysis": "1.1.0",
 }
 
 
