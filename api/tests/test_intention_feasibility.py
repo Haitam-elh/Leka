@@ -110,10 +110,13 @@ def test_past_the_credits_a_plan_never_a_pack() -> None:
 
 def test_every_agent_is_on_sale_free_runs_none_owned_is_never_sold_again() -> None:
     # 2026-10-14: on sale, from Starter.
-    for key in ("security-review", "application-architecture"):
+    for key in ("security-review", "incident-investigation"):
         found = find(key)
         assert found is not None
         assert offer_of(found, sold_now()) == "add_on"
+    # A dedicated agent is never on sale (2026-10-25).
+    architect = find("application-architecture")
+    assert architect is not None and offer_of(architect, sold_now()) != "add_on"
     # On Free: the plan that runs agents first, then the agent.
     free = need(
         "security-review", offer="add_on", available=False, reasons=({"code": "plan_required"},)

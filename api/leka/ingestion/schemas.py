@@ -717,3 +717,36 @@ class EntitySheetRead(BaseModel):
     documents: list[EntityRef]
     attention: list[AttentionPointRead]
     source_kinds: list[str]
+
+
+class TreeNodeRead(BaseModel):
+    """A Confluence page in its space's tree (2026-10-25)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    title: str
+    url: str | None = None
+    updated_at: str | None = None
+    children: list[TreeNodeRead] = Field(default_factory=list)
+
+
+class TreeSpaceRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    key: str
+    name: str
+    url: str | None = None
+    pages: int = Field(description="Its current pages, synced.")
+    depth: int = Field(description="How deep its tree goes: 1 for pages without children.")
+    nodes: list[TreeNodeRead]
+
+
+class SourceTreeRead(BaseModel):
+    """« Arborescence »: what a Confluence source synced, space by space —
+    to check every page came up, at every depth."""
+
+    model_config = ConfigDict(frozen=True)
+
+    source_id: uuid.UUID
+    spaces: list[TreeSpaceRead]

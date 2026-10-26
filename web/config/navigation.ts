@@ -1,6 +1,8 @@
 /**
- * The sidebar, as LEKA-428 draws it: what a customer can do with LEKA, at a
- * glance.
+ * The tree of pages (LEKA-428) — no longer drawn as a sidebar: there is
+ * none since LEKA-494. The screen shows the header's main pages
+ * (components/shell/main-nav.tsx) and the profile menu; this tree is what
+ * ⌘K and those menus offer. What a customer can do with LEKA, at a glance:
  *
  *   Mon Dashboard                  the way home
  *   Intentions                     Dites à LEKA ce que vous voulez accomplir.
@@ -29,7 +31,7 @@
  * opens — Mon environnement's overview, its views chosen on the page.
  *
  * No component names an entry, a label or a path: lib/navigation/tree.ts
- * reads this, the sidebar and the palette draw it.
+ * reads this, the palette and the menus draw it.
  */
 
 import { Home, Layers, type LucideIcon, SlidersHorizontal } from "lucide-react";

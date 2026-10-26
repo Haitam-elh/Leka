@@ -211,6 +211,11 @@ export function IntentionForm({
         setAssembled(made.context);
         notify.success({ title: t.composer.submit });
       } catch (caught) {
+        // Under a contract, nothing connected (2026-10-25): said, the words kept.
+        if (caught instanceof ApiError && caught.code === "source_required") {
+          form.setError("root", { type: "server", message: t.sourceLock.refused });
+          return;
+        }
         // Nothing to start from: said in the words of the form, not the API's.
         if (caught instanceof ApiError && caught.status === 422) {
           form.setError("root", {

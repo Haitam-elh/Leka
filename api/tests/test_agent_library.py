@@ -40,7 +40,7 @@ VERSIONS = {
     "infrastructure-analysis": "1.3.0",
     "release-analysis": "1.3.0",
     "security-review": "1.4.1",
-    "test-analysis": "1.3.0",
+    "test-analysis": "1.4.0",
 }
 # The code an agent may read, beside the runtime's tools: the code review its
 # pull requests, the documentation assistant its files (2026-10-18).
@@ -49,6 +49,7 @@ CODE_READ = {
     "documentation-assistant": {"list_files", "read_file"},
     "build-fixer": {"list_pull_requests", "read_pull_request", "read_file"},
     "debug-assistant": {"list_files", "read_file"},
+    "test-analysis": {"list_pull_requests", "read_pull_request"},
 }
 NOTICES = (settings.agents_dir.parent / "THIRD_PARTY_LICENSES.md").read_text(encoding="utf-8")
 
@@ -523,6 +524,10 @@ def test_the_test_analysis_plans_by_behaviour() -> None:
     assert "ne dis jamais qu'un test manque" in said
     # 2026-10-18: what a defect would cost, and a flaky test diagnosed.
     assert "Le coût d'un défaut qui passe" in said and "Ce qui clignote" in said
+    # 2026-10-24, tested on leka-core: the PR named was never read — its
+    # diff « not provided » —, a plan made from its title, a commit taken
+    # for a risk zone by its words.
+    assert "**La pull request nommée se lit**" in said and "jamais sur un titre" in said
     assert credited(
         "test-analysis", "affaan-m/ECC", "garrytan/gstack", "msitarzewski/agency-agents"
     )
@@ -711,7 +716,7 @@ def test_the_code_change_proposes_the_smallest_change_and_says_the_rest() -> Non
     # literally, the fewest files, nothing changed on the way, every line
     # justified; what it saw beyond, said and left alone.
     change = {d.key: d for d in catalogue()}["code-change"]
-    assert change.version == "2.0.0"
+    assert change.version == "2.1.0"
     said = change.instructions or ""
     assert "## Sa méthode" in said
     for step in (
@@ -724,6 +729,23 @@ def test_the_code_change_proposes_the_smallest_change_and_says_the_rest() -> Non
         assert step in said, step
     assert "**Ce qui n'est pas fait ici**" in said
     assert credited("code-change", "msitarzewski/agency-agents")
+
+
+def test_the_code_change_applies_a_mock_up_whole_never_by_halves() -> None:
+    # 2026-10-24: « Implémenter le design » changed four classes of the home
+    # page and left the rest « for a later step » — the smallest change read
+    # as a fraction of the mock-up.
+    change = {d.key: d for d in catalogue()}["code-change"]
+    assert "livrable" in {i.name for i in change.contract.inputs}
+    said = " ".join((change.instructions or "").split())
+    assert "## Quand il applique une maquette" in said
+    for rule in (
+        "La maquette est la demande",
+        "Toute la direction, maintenant",
+        "jamais « une étape suivante »",
+        "Dans le code du dépôt",
+    ):
+        assert rule in said, rule
 
 
 def test_the_acceptance_holds_a_change_to_its_criteria_with_proof() -> None:

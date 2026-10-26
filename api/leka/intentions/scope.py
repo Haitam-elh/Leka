@@ -265,10 +265,12 @@ def scope_of(
             )
         )
     if migrating and not target:
+        # Only a migration done waits for where to: a plan weighs the
+        # options, and says the one it advises.
         missing.append(
             AmbiguityRead(
                 kind="missing_target",
-                blocking=True,
+                blocking=acting,
                 said="A migration, and not where to: to what?",
             )
         )

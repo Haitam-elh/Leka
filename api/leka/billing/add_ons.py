@@ -44,6 +44,7 @@ from leka.billing.subscriptions import (
     _customer,
     _period_end,
     account_of,
+    under_contract,
 )
 from leka.billing.sync import ensure_add_on_price, sold_add_ons
 from leka.core.config import settings
@@ -123,7 +124,8 @@ async def checkout_add_on(
     locale: str = "auto",
 ) -> str:
     """A Checkout for an agent or a bundle — its URL. CheckoutRefusedError
-    when it cannot be bought here."""
+    when it cannot be bought here — under an Enterprise contract, never."""
+    await under_contract(session, workspace_id)
     sold = catalogue().add_ons
     found = add_on(kind, key)
     if not sold.available or found is None:
@@ -300,6 +302,7 @@ async def add_on_renewal(
     """Renewed at its period's end, or not — what it grants kept until then
     either way. CheckoutRefusedError when this workspace bought nothing with
     it: the plan's subscription, or another workspace's, is never touched."""
+    await under_contract(session, workspace_id)
     rows = await _bought(session, workspace_id, subscription)
     if not rows:
         raise CheckoutRefusedError("not_subscribed", "No agent or bundle bought with it here.")

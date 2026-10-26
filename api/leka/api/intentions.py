@@ -62,6 +62,7 @@ from pydantic import BaseModel
 from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
 from leka.api.pagination import PageEnvelope, PageParams, SortCatalogue, serve_page
+from leka.billing import is_enterprise
 from leka.capabilities import CapabilityRouter, RoutingRead, routing_read
 from leka.connectors import SourceRepository
 from leka.context import (
@@ -129,6 +130,7 @@ from leka.intentions.attachments import read as read_attachment
 from leka.intentions.brief import brief_of, tidy
 from leka.intentions.feasibility import Feasibility, feasibility_of
 from leka.intentions.offer import offer_for
+from leka.intentions.usage import CONNECTED
 from leka.knowledge import GraphRepository, GraphService
 from leka.platform.storage import ObjectNotFoundError, ObjectStoreError, ObjectTooLargeError
 
@@ -359,6 +361,7 @@ async def create(
                 return IntentionCreated(
                     intention=await service.detail_now(replayed[0]), context=replayed[1]
                 )
+        await _source_first(session, principal.workspace_id)
         intention, context = await service.create(
             body, by=principal.user_id, request_key=request_key or None
         )
@@ -367,6 +370,22 @@ async def create(
     created = IntentionCreated(intention=await service.detail_now(intention), context=context)
     await _analyse(session, principal, intention, trigger="created")
     return created
+
+
+async def _source_first(session: SessionDep, workspace_id: uuid.UUID) -> None:
+    """An Enterprise organisation asks once a source is connected (2026-10-25):
+    LEKA answers from its own documentation — with nothing connected, there is
+    nothing to answer from, and an answer would be invented. 409
+    `source_required`, nothing kept; the screens lock the question before."""
+    if not await is_enterprise(session, workspace_id):
+        return
+    rows = await session.scalars(SourceRepository(session, workspace_id).list_statement())
+    if not any(source.status in CONNECTED for source in rows.all()):
+        raise ApiError(
+            status.HTTP_409_CONFLICT,
+            ErrorCode.SOURCE_REQUIRED,
+            "Connect a source first — Confluence, for instance: LEKA answers from it.",
+        )
 
 
 async def _analyse(

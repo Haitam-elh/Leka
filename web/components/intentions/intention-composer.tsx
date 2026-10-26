@@ -221,10 +221,10 @@ export function IntentionComposer({
       <section aria-labelledby="compact-composer-title" className={cn("text-center", className)}>
         <h1
           id="compact-composer-title"
-          className="text-[1.75rem] leading-tight font-bold tracking-[-0.02em] text-brand-navy md:text-[2.375rem]"
+          className="text-[2rem] leading-tight font-bold tracking-[-0.02em] text-brand-navy md:text-[2.5rem]"
         >
           {t.composer.compactTitle}{" "}
-          <span className="bg-gradient-to-r from-brand-violet to-[#3b82f6] bg-clip-text text-transparent">
+          <span className="bg-gradient-to-r from-brand-navy to-brand-violet bg-clip-text text-transparent">
             {t.composer.compactTitleHighlight}
           </span>
         </h1>
@@ -251,7 +251,7 @@ export function IntentionComposer({
               placeholder={t.composer.compactPlaceholder}
               rows={1}
               data-testid="intention-input"
-              className="min-h-[46px] flex-1 resize-none border-0 bg-transparent px-1 py-3 text-[0.9375rem] shadow-none placeholder:text-shell-muted focus-visible:ring-0"
+              className="min-h-[52px] flex-1 resize-none border-0 bg-transparent px-1 py-3 text-base shadow-none placeholder:text-shell-muted focus-visible:ring-0"
             />
             {files ? <AttachmentPicker files={files} compact /> : null}
             <Button
@@ -261,7 +261,7 @@ export function IntentionComposer({
               aria-label={t.composer.submit}
               aria-busy={submitting || undefined}
               data-testid="intention-submit"
-              className="size-11 shrink-0 rounded-full bg-brand-violet p-0 text-white hover:bg-brand-violet/90 disabled:cursor-not-allowed disabled:opacity-60"
+              className="size-11 shrink-0 rounded-full bg-brand-violet p-0 text-white transition-transform duration-150 ease-out hover:bg-brand-violet/90 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {submitting ? (
                 <Loader2 className="size-5 animate-spin" aria-hidden="true" />

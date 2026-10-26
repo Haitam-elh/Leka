@@ -41,6 +41,7 @@ const fr = {
     welcome: "Bienvenue",
     capabilities: "Compétences",
     capabilityDetail: "Compétence",
+    architect: "Architecte applicatif",
     governance: "Sécurité",
     team: "Équipe",
     billing: "Facturation",
@@ -74,6 +75,9 @@ const fr = {
     home: "LEKA — accueil",
     backHome: "Retour à l'accueil",
     plan: "Formule",
+    /** Under an Enterprise contract (2026-10-25): its badge, its page. */
+    enterprise: "Entreprise",
+    contract: "Contrat",
     mainNavigation: "Navigation principale",
     main: {
       home: "Accueil",
@@ -401,6 +405,18 @@ const fr = {
    * yet (service health, incidents, insights), the card says so rather
    * than showing the mockup's number (decided 2026-09-25).
    */
+  /** Locked until a source is connected (2026-10-25): an Enterprise organisation's questions and environment. */
+  sourceLock: {
+    title: {
+      ask: "Connectez une source pour poser vos questions",
+      environment: "Connectez une source pour voir votre environnement",
+    },
+    body: "LEKA répond à partir de votre documentation. Tant qu'aucune source n'est connectée, il n'a rien à lire : commencez par Confluence.",
+    locked: "Verrouillé",
+    connect: "Connecter Confluence",
+    other: "Une autre source",
+    refused: "Connectez d'abord une source — Confluence, par exemple : LEKA répond à partir d'elle.",
+  },
   overview: {
     /** The home's blocks of the sprint's mockup (LEKA-456). */
     home: {
@@ -412,6 +428,8 @@ const fr = {
         partial: "Partiellement vérifié",
         stable: "Stable",
       },
+      /** Nothing connected (2026-10-25): said neutral, in grey. */
+      noSource: "Aucune source connectée",
       healthHint: {
         unknown: "Aucune source ne dit encore l'état de vos services.",
         stale: "Vos sources n'ont pas été lues récemment.",
@@ -429,11 +447,23 @@ const fr = {
       agents: "Agents recommandés",
       agentsBody:
         "Choisis pour votre environnement : d'abord ceux qui fonctionnent avec vos sources connectées, puis ceux inclus dans votre formule.",
+      agentsBodyContract:
+        "Choisis pour votre environnement : d'abord ceux qui fonctionnent avec vos sources connectées. Tous sont inclus dans votre contrat.",
+      /** Made for this organisation (2026-10-25): first on its home. */
+      dedicated: {
+        title: "Agents dédiés",
+        lead: "Conçus pour {organisation}",
+        launch: "Lancer",
+        sources: "Sources compatibles : {sources}",
+        seeAll: "Voir tous les agents dédiés",
+      },
       fit: {
         connected: "Fonctionne avec vos sources connectées",
         to_connect: "Une source à connecter",
       },
       allAgents: "Voir tous les agents et bundles",
+      /** Under an Enterprise contract (2026-10-25): no bundle to see. */
+      allAgentsOnly: "Voir tous les agents",
       latest: "Dernières analyses",
       latestBody: "Vos demandes et analyses récentes.",
       allHistory: "Voir tout l'historique",
@@ -466,7 +496,7 @@ const fr = {
       step1: "1. Connecter une source",
       step2: "2. Poser une première question",
       stages: {
-        empty: "Aucune source n'est connectée : LEKA n'a encore rien à lire.",
+        empty: "Connectez votre première source pour commencer : LEKA n'a encore rien à lire.",
         connected:
           "Source connectée, pas encore lue : la première lecture va démarrer.",
         syncing:
@@ -477,11 +507,14 @@ const fr = {
       failedUnknown:
         "Cause inconnue : ouvrez la source pour la tester à nouveau.",
       connect: "Connecter une source",
+      /** Confluence first (2026-10-25): the documentation an architect reads. */
+      connectConfluence: "Connecter Confluence",
+      otherSource: "Une autre source",
       fix: "Corriger la source",
       seeSources: "Voir mes sources",
-      ask: "Écrivez-la dans la barre ci-dessous, avec vos mots : LEKA l'analyse sur ce qu'il lit de vos sources.",
+      ask: "Écrivez-la dans la barre ci-dessus, avec vos mots : LEKA l'analyse sur ce qu'il lit de vos sources.",
       askFirst:
-        "Écrivez-la dans la barre ci-dessous, avec vos mots. LEKA pourra y répondre une fois une source lue.",
+        "Écrivez-la dans la barre ci-dessus, avec vos mots. LEKA pourra y répondre une fois une source lue.",
     },
     greeting: "Bonjour {name},",
     statusNoSources: "Connectez une première source pour commencer.",
@@ -537,6 +570,7 @@ const fr = {
       activated: "Source activée",
       reconfigured: "Source reconfigurée",
       credentials_rotated: "Identifiants renouvelés",
+      credentials_revoked: "Accès révoqué : identifiants effacés",
       health_changed: "État de santé modifié",
       disabled: "Source désactivée",
       deleted: "Source supprimée",
@@ -1056,6 +1090,39 @@ const fr = {
   },
   /** Facturation (mockup 16): the consumption, counted. */
   billing: {
+    /** An Enterprise contract (2026-10-25): « Facturation » becomes « Contrat ». */
+    contract: {
+      title: "Contrat",
+      subtitle: "Votre contrat Entreprise avec LEKA : ce qu'il comprend, et qui vous accompagne.",
+      type: "Type de contrat",
+      enterprise: "Entreprise",
+      since: "Depuis le {date}",
+      organisation: "Organisation",
+      members: "Membres",
+      membersFoot: "Invitez-les depuis Équipe",
+      contact: "Contact dédié",
+      noContact: "Votre interlocuteur LEKA sera indiqué ici.",
+      includesTitle: "Ce que comprend votre contrat",
+      includes: [
+        "Tous les agents standards, sans option à acheter",
+        "Des sources sans limite",
+        "L'usage des agents suivi en nombre d'exécutions, jamais facturé à l'acte",
+      ],
+      dedicated: "Vos agents dédiés : {names}",
+      logoTitle: "Logo de l'organisation",
+      logoLead:
+        "Par défaut, le nom de votre organisation s'affiche dans l'en-tête. Vous pouvez le remplacer par votre logo : PNG, JPEG ou WebP, 512 Ko au plus.",
+      logoGive: "Choisir une image",
+      logoReplace: "Remplacer le logo",
+      logoRemove: "Retirer le logo",
+      logoGiven: "Logo enregistré",
+      logoRemoved: "Logo retiré : le nom de l'organisation s'affiche à nouveau",
+      logoTooLarge: "Image trop lourde : 512 Ko au plus.",
+      logoType: "Format non pris en charge : PNG, JPEG ou WebP.",
+      logoAdminOnly: "Seul un administrateur de l'organisation peut changer le logo.",
+      logoAlt: "Logo de {name}",
+      logoNone: "Aucun logo : le nom de l'organisation s'affiche.",
+    },
     // The plans compared (LEKA-466), as Karim's « LEKA CORE SaaS Pricing Plans ».
     compare: {
       title: "Choisissez votre niveau de compréhension et d'action",
@@ -1807,6 +1874,11 @@ const fr = {
     downloadPdf: "Télécharger le PDF",
     downloadPptx: "Télécharger le PowerPoint",
     slides: "{count} slides",
+    /** The architect's dossier on a Confluence space (2026-10-25). */
+    downloadMd: "Markdown",
+    downloadDocx: "Word",
+    downloadJson: "JSON",
+    dossierSaid: "Dossier ArchiMate : chaque section cite ses pages Confluence.",
     drawing:
       "En cours : l'agent lit vos sources connectées, puis LEKA dessine le PowerPoint et le PDF.",
     pending: "{formats} : pas encore générés, à partir de ce livrable.",
@@ -1821,6 +1893,8 @@ const fr = {
       answered: "Réponse du modèle {model}",
       rendered: "Deck dessiné : {formats}, {slides} slides",
       render_failed: "Le deck n'a pas pu être dessiné : {code}{said}",
+      render_retried: "Pas livré du premier coup ({code}) : LEKA le refait aussitôt",
+      repository_found: "Dépôt retenu : {repository}",
       reviewed: "Revue posée sur le diff : {comments} {comments|commentaire|commentaires}, {dropped} {dropped|écarté|écartés}",
       succeeded: "Terminée",
       failed: "Échouée : {code}",
@@ -1919,6 +1993,34 @@ const fr = {
         rolledBack: "Retiré de la production : la version précédente a été redéployée.",
         rollbackFailed: "Le retour à la version précédente a échoué : voyez son exécution.",
       },
+    },
+    repair: {
+      title: "Réparer le problème",
+      intro:
+        "LEKA lit ce qui a échoué sur GitHub — le test, l'erreur, la fin du journal —, écrit la correction et l'ajoute à la branche de la pull request. La CI repasse ; rien n'est fusionné sans vous.",
+      introClosed:
+        "La pull request a été fermée avec sa CI en rouge. LEKA la rouvre, lit ce qui a échoué, ajoute la correction à sa branche, et la CI repasse.",
+      start: "Réparer le problème",
+      startReopen: "Réparer et rouvrir la pull request",
+      askApprover: "Une personne qui peut approuver lance la réparation.",
+      tooMany: "LEKA a déjà réparé cette pull request {count} fois : regardez l'échec sur GitHub avant d'aller plus loin.",
+      asked: "Réparation lancée : LEKA lit l'échec.",
+      running: "LEKA lit l'échec de la CI et écrit la correction — quelques minutes.",
+      n: "Réparation {n}",
+      by: "par {model}",
+      states: {
+        running: "en cours",
+        pushed: "envoyée sur la branche",
+        failed: "n'a pas abouti",
+        outside: "rien à corriger dans le code",
+        unneeded: "rien à réparer",
+      },
+      failed: "En échec : {names}",
+      cause: "Cause :",
+      fix: "Correction :",
+      commit: "commit {sha}",
+      reopened: "La pull request a été rouverte.",
+      checksAgain: "La CI repasse sur cette correction.",
     },
     goBack: {
       title: "Revenir en arrière",
@@ -2152,6 +2254,188 @@ const fr = {
       "Chaque agent peut être acheté individuellement. Les prix sont mensuels, en euros, hors TVA.",
     compare: "Voir la comparaison des offres",
     allTiers: "Tous les niveaux",
+    /** « Installer dans votre environnement » (2026-10-25): the architect on one's own machines. */
+    install: {
+      open: "Installer dans votre environnement",
+      title: "Installer l'Architecte sur votre poste",
+      lead: "Sur votre machine, avec votre Confluence et votre modèle : rien ne passe par LEKA. Trois étapes, une dizaine de minutes, sans droits d'administrateur.",
+      system: "Votre système",
+      systems: { windows: "Windows", macos: "macOS", linux: "Linux" },
+      copy: "Copier",
+      copied: "Copié",
+      private: "Le paquet ne contient aucun secret. Téléchargement réservé à votre organisation.",
+      step1: "Vos informations",
+      step1Lead: "Facultatif : vous pourrez aussi les écrire plus tard, dans le fichier .env.",
+      stay: "Elles restent dans ce navigateur : LEKA ne les reçoit pas. Elles sont écrites dans votre installateur, qui s'efface après usage.",
+      confluence: "Votre Confluence",
+      url: "Adresse",
+      urlPlaceholder: "https://votre-entreprise.atlassian.net",
+      email: "E-mail du compte",
+      emailPlaceholder: "prenom.nom@entreprise.com",
+      token: "Token",
+      urlHow: {
+        title: "Où trouver l'adresse ?",
+        steps: [
+          "Ouvrez votre Confluence dans le navigateur.",
+          "Copiez le début de l'adresse : jusqu'à « .atlassian.net » (Confluence Cloud), ou l'adresse du serveur de votre entreprise (Confluence Data Center).",
+          "Confluence Data Center : laissez l'e-mail vide.",
+        ],
+      },
+      tokenHow: {
+        title: "Créer mon token Confluence",
+        steps: [
+          "Confluence Cloud : ouvrez https://id.atlassian.com/manage-profile/security/api-tokens (connecté avec le même compte).",
+          "Cliquez sur « Créer un token d'API », nommez-le « Architecte », choisissez une expiration, puis « Créer ».",
+          "Cliquez sur « Copier », puis collez-le dans le champ Token.",
+          "Confluence Data Center : votre avatar en haut à droite → Profil → Jetons d'accès personnels → Créer un jeton.",
+        ],
+      },
+      model: "Le modèle qui réfléchit",
+      models: {
+        copilot: "Copilot ou Claude, dans VS Code (aucune clé)",
+        azure: "Azure OpenAI",
+        anthropic: "Claude (Anthropic)",
+        gemini: "Gemini (Google)",
+        mistral: "Mistral",
+        openai: "OpenAI",
+        other: "Autre (API compatible OpenAI)",
+      },
+      copilotSaid: "Rien à renseigner : c'est le modèle de Copilot, ou de Claude, qui réfléchit dans VS Code. L'installateur y prépare tout.",
+      modelName: "Modèle",
+      modelNameAzure: "Nom du déploiement",
+      modelKey: "Clé",
+      modelUrl: "Adresse de l'API",
+      modelUrlAzure: "Point de terminaison",
+      keyHow: {
+        title: "Où trouver ma clé ?",
+        azure: [
+          "En général, votre informatique vous donne ces trois informations.",
+          "Sinon : https://portal.azure.com → votre ressource Azure OpenAI → « Clés et point de terminaison » : copiez la « Clé 1 » et le « Point de terminaison ».",
+          "Le nom du déploiement : Azure AI Foundry → Déploiements (par exemple gpt-4.1).",
+        ],
+        anthropic: ["Ouvrez https://console.anthropic.com/settings/keys.", "« Create Key », nommez-la, puis copiez-la."],
+        gemini: ["Ouvrez https://aistudio.google.com/apikey avec votre compte Google.", "« Create API key », puis copiez-la."],
+        mistral: ["Ouvrez https://console.mistral.ai/api-keys.", "« Create new key », puis copiez-la."],
+        openai: ["Ouvrez https://platform.openai.com/api-keys.", "« Create new secret key », puis copiez-la."],
+        other: [
+          "Toute API compatible OpenAI (un LLM interne, Ollama, vLLM…) : son adresse (qui finit souvent par /v1), le nom du modèle et sa clé, donnés par qui l'héberge.",
+        ],
+      },
+      step2: "Télécharger",
+      step2Lead: "Les deux fichiers arrivent dans votre dossier Téléchargements.",
+      downloadAgent: "1. Télécharger l'agent",
+      downloadInstaller: "2. Télécharger mon installateur",
+      filesHow: {
+        title: "Que contiennent ces fichiers ?",
+        steps: [
+          "L'agent (leka-architect-….zip) : son code, ses consignes, le dessin du PowerPoint et du PDF. Aucun secret.",
+          "L'installateur (installer-architecte.sh, ou .ps1 sous Windows) : les commandes d'installation et vos informations. Fabriqué par ce navigateur, il s'efface à la fin de l'installation.",
+        ],
+      },
+      step3: "Installer, puis lancer",
+      step3Lead: "Ouvrez le {terminal}, collez cette commande, puis Entrée : 2 à 3 minutes.",
+      terminals: { windows: "PowerShell", macos: "Terminal", linux: "terminal" },
+      openHow: {
+        title: "Ouvrir le {terminal}",
+        windows: [
+          "Appuyez sur la touche Windows, tapez « PowerShell », puis Entrée. Pas besoin des droits d'administrateur.",
+          "Clic droit dans la fenêtre pour coller la commande, puis Entrée.",
+        ],
+        macos: [
+          "Appuyez sur Cmd + Espace, tapez « Terminal », puis Entrée.",
+          "Cmd + V pour coller la commande, puis Entrée.",
+          "Si macOS demande l'accès au dossier Téléchargements : « OK ».",
+        ],
+        linux: [
+          "Ctrl + Alt + T, ou cherchez « Terminal » dans vos applications.",
+          "Ctrl + Maj + V pour coller la commande, puis Entrée.",
+        ],
+      },
+      does: [
+        "Il vérifie Python (3.10 ou plus) ; sinon, il dit où l'installer.",
+        "Il dézippe l'agent dans le dossier « architecte » de votre compte et l'installe.",
+        "Il écrit vos informations dans architecte/.env et prépare Copilot dans VS Code.",
+        "Il crée le bouton « Lancer l'architecte », vérifie qu'il lit vos espaces Confluence, puis ouvre le dossier.",
+      ],
+      launch: "Pour lancer : double-cliquez sur « Lancer l'architecte » dans le dossier architecte. Il affiche vos espaces, vous demande l'espace, le parcours et le périmètre, puis ouvre le PowerPoint et le PDF (3 à 5 minutes).",
+      copilotHow: {
+        title: "Avec Copilot dans VS Code",
+        steps: [
+          "Ouvrez VS Code → Fichier → Ouvrir le dossier… → choisissez « architecte », dans votre dossier personnel.",
+          "Si VS Code demande de faire confiance au dossier, ou de démarrer le serveur MCP « leka-architect » : acceptez.",
+          "Ouvrez le chat Copilot et choisissez le mode « Agent ».",
+          "Tapez : /architecte-applicatif Construis l'architecture du parcours Paiement CB sur le périmètre Digital",
+          "Copilot lit votre Confluence avec les outils de l'architecte, puis écrit le PowerPoint et le PDF dans le dossier rapport-architecture.",
+        ],
+      },
+      laterHow: {
+        title: "Changer mes informations plus tard",
+        steps: [
+          "Ouvrez le fichier .env du dossier architecte (TextEdit, Bloc-notes…).",
+          "CONFLUENCE_URL, CONFLUENCE_EMAIL, CONFLUENCE_TOKEN : votre Confluence.",
+          "Les lignes ARCHITECT_LLM_… : le modèle. Supprimez-les pour réfléchir avec Copilot.",
+          "Enregistrez : le prochain lancement en tient compte.",
+        ],
+      },
+      manualHow: {
+        title: "Si votre poste refuse les scripts : à la main",
+        lead: "Copiez ces blocs dans le {terminal}, l'un après l'autre.",
+      },
+      manualInstall: "Installer",
+      manualEnv: "Dans le fichier .env qui s'ouvre : vos informations, puis enregistrez",
+      manualCheck: "Vérifier : vos espaces s'affichent, leur clé à gauche",
+      manualRun: "Lancer : remplacez MO par la clé de votre espace, puis le parcours et le périmètre",
+      problemsHow: {
+        title: "Un message d'erreur ?",
+        steps: [
+          "« Il faut Python 3.10 ou plus » : installez-le (le lien est dans le message), puis relancez la même commande.",
+          "« L'agent n'est pas dans Téléchargements » : cliquez d'abord sur « Télécharger l'agent ».",
+          "« L'installation a échoué » : il faut Internet ; derrière un proxy d'entreprise, voyez avec votre informatique.",
+          "« Le token Confluence est vide », ou refusé : vérifiez le token dans architecte/.env.",
+          "« L'espace … est introuvable » : prenez une clé affichée à gauche de la liste des espaces.",
+        ],
+      },
+    },
+    /** The architect on a Confluence space (2026-10-25): its perimeter, chosen. */
+    architectLaunch: {
+      title: "Architecte applicatif",
+      lead: "Choisissez le périmètre Confluence : un espace entier, ou une page et ses descendantes. LEKA produit le dossier d'architecture structuré ArchiMate — PDF, Word, Markdown —, chaque section citant ses pages.",
+      noSource: "Aucun Confluence n'est connecté : connectez-le, LEKA synchronisera ses espaces.",
+      connect: "Connecter Confluence",
+      source: "Source Confluence",
+      space: "Espace",
+      pages: "{count} {count|page|pages} · profondeur {depth}",
+      noSpace: "Aucun espace synchronisé pour l'instant : attendez la fin de la première synchronisation.",
+      root: "Page racine",
+      rootAll: "Tout l'espace",
+      subject: "Sujet ou parcours à documenter",
+      subjectHint: "Ex. « Facturation » : l'Architecte le documente en priorité.",
+      perimeter: "Périmètre",
+      launch: "Lancer l'Architecte",
+      launching: "Lancement…",
+      readOnly: "Lecture seule : rien n'est écrit dans Confluence.",
+      asked: "/architecte Dossier d'architecture — {subject} — espace {space}{root}",
+      rootSaid: ", page « {title} »",
+      perimeterSaid: "Espace {space}",
+    },
+    /** Made for one organisation (2026-10-25): seen by it alone, never sold. */
+    dedicated: {
+      title: "Agents dédiés",
+      lead: "Conçus pour {organisation}",
+      made: "Conçu pour {organisation}",
+      contract: "Conçu pour {organisation} et inclus dans votre contrat : il n'est pas vendu.",
+    },
+    /** An Enterprise contract (2026-10-25): every agent its own, never priced. */
+    enterprise: {
+      agents: "Agents disponibles",
+      agentsLead: "Inclus dans votre contrat Entreprise, présentés par domaine.",
+      contract: "Inclus dans votre contrat Entreprise.",
+      title: "Agents LEKA",
+      subtitleMore: "Vos agents dédiés d'abord, puis tous les agents standards, inclus dans votre contrat.",
+      skillsTitle: "Compétences LEKA, incluses",
+      skillsLead:
+        "Ce que LEKA sait faire lui-même pour comprendre et analyser vos demandes : des capacités réutilisables, mobilisées dans vos analyses.",
+    },
     /** Said once, above the list: what keeps many from running here. */
     wide: {
       no_model:
@@ -2180,6 +2464,9 @@ const fr = {
     agentsTitle: "Agents",
     ownTitle: "Compétences LEKA",
     agentsCount: "{count} {count|agent|agents}",
+    /** A domain's box opened whole, and closed again (2026-10-25). */
+    domainAll: "Tout voir ({count})",
+    domainLess: "Réduire",
     ownCount: "{count} {count|compétence|compétences}",
     show: "Afficher",
     shows: { all: "Tout", agents: "Agents", capabilities: "Compétences LEKA" },
@@ -2322,6 +2609,8 @@ const fr = {
         option: "Option payante",
         upgrade: "Upgrade requis",
         unavailable: "Indisponible",
+        dedicated: "Dédié à votre organisation",
+        contract: "Inclus dans votre contrat",
       },
       bundlesTitle: "Bundles LEKA",
       bundlesLead:
@@ -2438,6 +2727,9 @@ const fr = {
           "Il le dit : ce que vos sources ne donnent pas est signalé comme manquant, jamais inventé, et chaque affirmation cite ce sur quoi elle repose.",
         who: "Qui peut le lancer, et qui peut l'acheter ?",
         whoAnswer: "Le lancer : {run}. L'acheter : un propriétaire ou un administrateur de l'espace.",
+        /** Dedicated, or under a contract (2026-10-25): nothing to buy. */
+        whoContract: "Qui peut le lancer ?",
+        whoAnswerContract: "Le lancer : {run}.",
         member: "tout membre de l'espace",
       },
       similar: "Agents similaires",
@@ -2550,7 +2842,7 @@ const fr = {
       "release-readiness":
         "Si un service est prêt pour sa prochaine release : comment il est livré, ses incidents récents, jusqu'où irait une panne.",
       "application-architecture":
-        "Le deck d'architecture d'un parcours : couche métier ArchiMate, séquences applicatives, règles, RACI — en PDF et PowerPoint.",
+        "Génère la documentation d'architecture applicative structurée ArchiMate à partir de votre Confluence.",
       "architecture-analysis":
         "L'architecture d'une application expliquée : ses composants, ses dépendances, ses points faibles.",
       "detect-undocumented-dependency":
@@ -2918,6 +3210,77 @@ const fr = {
     },
     failedToLoad: "Le modèle de langage n'a pas pu être lu.",
   },
+  security: {
+    sessions: {
+      title: "Vos appareils connectés",
+      intro: "Les navigateurs où votre compte est ouvert. Déconnectez ceux que vous ne reconnaissez pas.",
+      current: "Cet appareil",
+      unknownDevice: "Navigateur inconnu",
+      seen: "Dernière activité {when}",
+      since: "Connecté le {date}",
+      from: "depuis {ip}",
+      signOut: "Déconnecter",
+      signOutOthers: "Déconnecter les autres appareils",
+      signedOut: "Appareil déconnecté.",
+      none: "Aucun autre appareil connecté.",
+    },
+    sources: {
+      title: "Accès de LEKA à vos sources",
+      intro: "Révoquer l'accès efface les identifiants enregistrés : LEKA ne lit plus la source. Ce qu'il a déjà lu est conservé ; pour la reconnecter, saisissez de nouveaux identifiants.",
+      revoke: "Révoquer l'accès",
+      confirmTitle: "Révoquer l'accès à « {name} » ?",
+      confirmBody: "Les identifiants de cette source seront effacés et LEKA ne pourra plus la lire. Ce qui a déjà été lu reste disponible.",
+      confirm: "Révoquer",
+      revoked: "Accès révoqué.",
+      noCredentials: "Aucun identifiant enregistré",
+      credentials: "Identifiants enregistrés : {hint}",
+      none: "Aucune source connectée.",
+      managersOnly: "Seuls les administrateurs des sources peuvent révoquer un accès.",
+    },
+    stored: {
+      title: "Ce que LEKA conserve",
+      items: [
+        "Les identifiants de vos sources, chiffrés : jamais affichés, jamais écrits dans les journaux.",
+        "Ce que LEKA lit de vos sources — applications, pages, tickets, dépôts — dans votre organisation seulement, isolé des autres organisations.",
+        "Vos demandes, les analyses et les livrables des agents, et les fichiers que vous joignez, chiffrés au repos.",
+        "Pour chaque appel au modèle de langage : son objet, le modèle, sa taille et sa durée — jamais son contenu.",
+        "Le journal d'audit : qui a fait quoi, et quand, pendant la durée de conservation choisie.",
+      ],
+      more: "Le détail du chiffrement et de l'isolation est dans l'onglet Données.",
+    },
+    usage: {
+      title: "Usage des agents",
+      intro: "Le nombre d'exécutions de chaque agent sur la période.",
+      days: "{count} derniers jours",
+      agent: "Agent",
+      runs: "Exécutions",
+      succeeded: "Réussies",
+      failed: "En échec",
+      last: "Dernière",
+      none: "Aucun agent n'a été lancé sur cette période.",
+    },
+    journal: {
+      title: "Journal des agents",
+      intro: "Qui a lancé quel agent, sur quoi, quand, et avec quel résultat.",
+      when: "Quand",
+      who: "Qui",
+      agent: "Agent",
+      on: "Sur",
+      result: "Résultat",
+      allSources: "Toutes les sources connectées",
+      someone: "Une personne de l'organisation",
+      more: "Voir plus",
+      none: "Aucun agent n'a encore été lancé.",
+      states: {
+        awaiting_approval: "En attente d'approbation",
+        queued: "En file",
+        running: "En cours",
+        succeeded: "Réussi",
+        failed: "Échoué",
+        cancelled: "Annulé",
+      },
+    },
+  },
   protection: {
     tab: "Données",
     platform: "Protections de la plateforme",
@@ -3153,6 +3516,8 @@ const fr = {
         ai: "IA",
         journal: "Journal",
         approvals: "Approbations",
+        security: "Sessions et accès",
+        agents: "Usage des agents",
       },
       policy: "Politique d'approbation",
       policySaid:
@@ -5349,6 +5714,16 @@ const fr = {
   },
   /** The sources screen (LEKA-345), docs/product/mockups/12-sources.jpeg. */
   sources: {
+    /** « Arborescence » (2026-10-25): what a Confluence source synced. */
+    tree: {
+      title: "Arborescence",
+      lead: "Les pages synchronisées, espace par espace, rangées comme dans Confluence : vérifiez que tout est remonté.",
+      pages: "{count} {count|page|pages}",
+      depth: "profondeur {depth}",
+      none: "Aucune page synchronisée pour l'instant : la première synchronisation les remontera.",
+      open: "Ouvrir dans Confluence",
+      document: "Documenter cet espace",
+    },
     title: "Sources connectées",
     subtitle:
       "Connectez vos outils pour donner à LEKA une vision complète de votre environnement.",
@@ -6364,6 +6739,7 @@ const fr = {
       activated: "Source activée",
       reconfigured: "Configuration modifiée",
       credentials_rotated: "Identifiants remplacés",
+      credentials_revoked: "Accès révoqué : identifiants effacés",
       health_changed: "Santé : {previous} → {current}",
       disabled: "Source désactivée",
       deleted: "Source supprimée",
@@ -7382,6 +7758,7 @@ const fr = {
       /** What comes next. */
       next: {
         answer: "Répondez aux questions de LEKA.",
+        clarify: "Précisez votre demande : nommez ce sur quoi elle porte.",
         wait: "LEKA s'en charge : cette page se met à jour toute seule.",
         resume: "Relancez l'analyse quand vous voulez.",
         analyse_again: "Relancez l'analyse.",
@@ -7413,6 +7790,7 @@ const fr = {
         resume: "Reprendre l'analyse",
         analyse_again: "Relancer l'analyse",
         answer: "Répondre",
+        clarify: "Préciser ma demande",
         decide: "Décider",
         modify_decision: "Modifier la décision",
         start_actions: "Lancer les actions",
@@ -8881,6 +9259,7 @@ const en: Dictionary = {
     welcome: "Welcome",
     capabilities: "Skills",
     capabilityDetail: "Skill",
+    architect: "Application architect",
     governance: "Security",
     team: "Team",
     billing: "Billing",
@@ -8912,6 +9291,9 @@ const en: Dictionary = {
     home: "LEKA — home",
     backHome: "Back to home",
     plan: "Plan",
+    /** Under an Enterprise contract (2026-10-25): its badge, its page. */
+    enterprise: "Enterprise",
+    contract: "Contract",
     mainNavigation: "Main navigation",
     main: {
       home: "Home",
@@ -9196,6 +9578,18 @@ const en: Dictionary = {
       "{count} connected {count|source is|sources are} in error: LEKA cannot read anything to answer you.",
     connectSource: "Connect a source",
   },
+  /** Locked until a source is connected (2026-10-25): an Enterprise organisation's questions and environment. */
+  sourceLock: {
+    title: {
+      ask: "Connect a source to ask your questions",
+      environment: "Connect a source to see your environment",
+    },
+    body: "LEKA answers from your documentation. Until a source is connected, it has nothing to read: start with Confluence.",
+    locked: "Locked",
+    connect: "Connect Confluence",
+    other: "Another source",
+    refused: "Connect a source first — Confluence, for instance: LEKA answers from it.",
+  },
   overview: {
     home: {
       environment: "My environment",
@@ -9206,6 +9600,8 @@ const en: Dictionary = {
         partial: "Partly verified",
         stable: "Stable",
       },
+      /** Nothing connected (2026-10-25): said neutral, in grey. */
+      noSource: "No source connected",
       healthHint: {
         unknown: "No source says the state of your services yet.",
         stale: "Your sources have not been read recently.",
@@ -9223,11 +9619,23 @@ const en: Dictionary = {
       agents: "Recommended agents",
       agentsBody:
         "Chosen for your environment: first those that work with your connected sources, then those your plan includes.",
+      agentsBodyContract:
+        "Chosen for your environment: first those that work with your connected sources. All are included in your contract.",
+      /** Made for this organisation (2026-10-25): first on its home. */
+      dedicated: {
+        title: "Dedicated agents",
+        lead: "Built for {organisation}",
+        launch: "Launch",
+        sources: "Compatible sources: {sources}",
+        seeAll: "See all dedicated agents",
+      },
       fit: {
         connected: "Works with your connected sources",
         to_connect: "A source to connect",
       },
       allAgents: "See all agents and bundles",
+      /** Under an Enterprise contract (2026-10-25): no bundle to see. */
+      allAgentsOnly: "See all agents",
       latest: "Latest analyses",
       latestBody: "Your recent requests and analyses.",
       allHistory: "See the whole history",
@@ -9259,7 +9667,7 @@ const en: Dictionary = {
       step1: "1. Connect a source",
       step2: "2. Ask a first question",
       stages: {
-        empty: "No source is connected: LEKA has nothing to read yet.",
+        empty: "Connect your first source to get started: LEKA has nothing to read yet.",
         connected:
           "Source connected, not read yet: the first read is about to start.",
         syncing: "First read under way: answers will come once it is done.",
@@ -9268,11 +9676,14 @@ const en: Dictionary = {
       },
       failedUnknown: "Cause unknown: open the source to test it again.",
       connect: "Connect a source",
+      /** Confluence first (2026-10-25): the documentation an architect reads. */
+      connectConfluence: "Connect Confluence",
+      otherSource: "Another source",
       fix: "Fix the source",
       seeSources: "See my sources",
-      ask: "Write it in the bar below, in your own words: LEKA analyses it on what it reads of your sources.",
+      ask: "Write it in the bar above, in your own words: LEKA analyses it on what it reads of your sources.",
       askFirst:
-        "Write it in the bar below, in your own words. LEKA can answer it once a source is read.",
+        "Write it in the bar above, in your own words. LEKA can answer it once a source is read.",
     },
     greeting: "Hello {name},",
     statusNoSources: "Connect a first source to get started.",
@@ -9328,6 +9739,7 @@ const en: Dictionary = {
       activated: "Source switched on",
       reconfigured: "Source reconfigured",
       credentials_rotated: "Credentials rotated",
+      credentials_revoked: "Access revoked: credentials erased",
       health_changed: "Health changed",
       disabled: "Source disabled",
       deleted: "Source deleted",
@@ -9810,6 +10222,39 @@ const en: Dictionary = {
     waitingDecision: "The run is prepared once the decision is approved.",
   },
   billing: {
+    /** An Enterprise contract (2026-10-25): « Facturation » becomes « Contrat ». */
+    contract: {
+      title: "Contract",
+      subtitle: "Your Enterprise contract with LEKA: what it includes, and who supports you.",
+      type: "Contract type",
+      enterprise: "Enterprise",
+      since: "Since {date}",
+      organisation: "Organisation",
+      members: "Members",
+      membersFoot: "Invite them from Team",
+      contact: "Dedicated contact",
+      noContact: "Your LEKA contact will be shown here.",
+      includesTitle: "What your contract includes",
+      includes: [
+        "Every standard agent, no option to buy",
+        "Unlimited sources",
+        "Agent usage counted in runs, never billed per use",
+      ],
+      dedicated: "Your dedicated agents: {names}",
+      logoTitle: "Organisation logo",
+      logoLead:
+        "By default, your organisation's name is shown in the header. You can replace it with your logo: PNG, JPEG or WebP, 512 KB at most.",
+      logoGive: "Choose an image",
+      logoReplace: "Replace the logo",
+      logoRemove: "Remove the logo",
+      logoGiven: "Logo saved",
+      logoRemoved: "Logo removed: the organisation's name is shown again",
+      logoTooLarge: "Image too large: 512 KB at most.",
+      logoType: "Unsupported format: PNG, JPEG or WebP.",
+      logoAdminOnly: "Only an administrator of the organisation can change the logo.",
+      logoAlt: "{name} logo",
+      logoNone: "No logo: the organisation's name is shown.",
+    },
     compare: {
       title: "Choose your level of understanding and action",
       subtitle: "From discovering your environment to mastering your technology system.",
@@ -10542,6 +10987,11 @@ const en: Dictionary = {
     downloadPdf: "Download the PDF",
     downloadPptx: "Download the PowerPoint",
     slides: "{count} slides",
+    /** The architect's dossier on a Confluence space (2026-10-25). */
+    downloadMd: "Markdown",
+    downloadDocx: "Word",
+    downloadJson: "JSON",
+    dossierSaid: "ArchiMate dossier: each section cites its Confluence pages.",
     drawing:
       "Running: the agent reads your connected sources, then LEKA draws the PowerPoint and the PDF.",
     pending: "{formats}: not generated yet, from this deliverable.",
@@ -10556,6 +11006,8 @@ const en: Dictionary = {
       answered: "Answer from {model}",
       rendered: "Deck drawn: {formats}, {slides} slides",
       render_failed: "The deck could not be drawn: {code}{said}",
+      render_retried: "Not delivered the first time ({code}): LEKA does it again at once",
+      repository_found: "Repository used: {repository}",
       reviewed: "Review set on the diff: {comments} {comments|comment|comments}, {dropped} dropped",
       succeeded: "Done",
       failed: "Failed: {code}",
@@ -10652,6 +11104,34 @@ const en: Dictionary = {
         rolledBack: "Out of production: the previous version was deployed again.",
         rollbackFailed: "Going back to the previous version failed: see its run.",
       },
+    },
+    repair: {
+      title: "Fix the problem",
+      intro:
+        "LEKA reads what failed on GitHub — the test, the error, the end of the log —, writes the fix and adds it to the pull request's branch. The CI runs again; nothing is merged without you.",
+      introClosed:
+        "The pull request was closed with its CI in red. LEKA reopens it, reads what failed, adds the fix to its branch, and the CI runs again.",
+      start: "Fix the problem",
+      startReopen: "Fix and reopen the pull request",
+      askApprover: "Someone who may approve starts the fix.",
+      tooMany: "LEKA already fixed this pull request {count} times: look at the failure on GitHub before going further.",
+      asked: "Fix started: LEKA reads the failure.",
+      running: "LEKA reads the CI failure and writes the fix — a few minutes.",
+      n: "Fix {n}",
+      by: "by {model}",
+      states: {
+        running: "running",
+        pushed: "pushed to the branch",
+        failed: "did not go through",
+        outside: "nothing to fix in the code",
+        unneeded: "nothing to fix",
+      },
+      failed: "Failed: {names}",
+      cause: "Cause:",
+      fix: "Fix:",
+      commit: "commit {sha}",
+      reopened: "The pull request was reopened.",
+      checksAgain: "The CI runs again on this fix.",
     },
     goBack: {
       title: "Going back",
@@ -10879,6 +11359,188 @@ const en: Dictionary = {
     allAgentsLead: "Each agent can be bought on its own. Prices are monthly, in euros, excluding VAT.",
     compare: "Compare the plans",
     allTiers: "All levels",
+    /** « Installer dans votre environnement » (2026-10-25): the architect on one's own machines. */
+    install: {
+      open: "Install in your environment",
+      title: "Install the architect on your computer",
+      lead: "On your machine, with your Confluence and your model: nothing goes through LEKA. Three steps, about ten minutes, no administrator rights.",
+      system: "Your system",
+      systems: { windows: "Windows", macos: "macOS", linux: "Linux" },
+      copy: "Copy",
+      copied: "Copied",
+      private: "The package holds no secret. Download reserved to your organisation.",
+      step1: "Your details",
+      step1Lead: "Optional: you can also write them later, in the .env file.",
+      stay: "They stay in this browser: LEKA never receives them. They are written into your installer, which deletes itself once used.",
+      confluence: "Your Confluence",
+      url: "Address",
+      urlPlaceholder: "https://your-company.atlassian.net",
+      email: "Account e-mail",
+      emailPlaceholder: "first.last@company.com",
+      token: "Token",
+      urlHow: {
+        title: "Where is the address?",
+        steps: [
+          "Open your Confluence in the browser.",
+          "Copy the start of the address: up to « .atlassian.net » (Confluence Cloud), or your company server's address (Confluence Data Center).",
+          "Confluence Data Center: leave the e-mail empty.",
+        ],
+      },
+      tokenHow: {
+        title: "Create my Confluence token",
+        steps: [
+          "Confluence Cloud: open https://id.atlassian.com/manage-profile/security/api-tokens (signed in with the same account).",
+          "Click « Create API token », name it « Architect », pick an expiry, then « Create ».",
+          "Click « Copy », then paste it in the Token field.",
+          "Confluence Data Center: your avatar top right → Profile → Personal access tokens → Create token.",
+        ],
+      },
+      model: "The model that thinks",
+      models: {
+        copilot: "Copilot or Claude, in VS Code (no key)",
+        azure: "Azure OpenAI",
+        anthropic: "Claude (Anthropic)",
+        gemini: "Gemini (Google)",
+        mistral: "Mistral",
+        openai: "OpenAI",
+        other: "Other (OpenAI-compatible API)",
+      },
+      copilotSaid: "Nothing to fill in: Copilot's model, or Claude's, thinks in VS Code. The installer sets everything up there.",
+      modelName: "Model",
+      modelNameAzure: "Deployment name",
+      modelKey: "Key",
+      modelUrl: "API address",
+      modelUrlAzure: "Endpoint",
+      keyHow: {
+        title: "Where is my key?",
+        azure: [
+          "Usually, your IT gives you these three details.",
+          "Otherwise: https://portal.azure.com → your Azure OpenAI resource → « Keys and Endpoint »: copy « Key 1 » and the « Endpoint ».",
+          "The deployment name: Azure AI Foundry → Deployments (e.g. gpt-4.1).",
+        ],
+        anthropic: ["Open https://console.anthropic.com/settings/keys.", "« Create Key », name it, then copy it."],
+        gemini: ["Open https://aistudio.google.com/apikey with your Google account.", "« Create API key », then copy it."],
+        mistral: ["Open https://console.mistral.ai/api-keys.", "« Create new key », then copy it."],
+        openai: ["Open https://platform.openai.com/api-keys.", "« Create new secret key », then copy it."],
+        other: [
+          "Any OpenAI-compatible API (an internal LLM, Ollama, vLLM…): its address (often ending in /v1), the model's name and its key, given by whoever hosts it.",
+        ],
+      },
+      step2: "Download",
+      step2Lead: "Both files land in your Downloads folder.",
+      downloadAgent: "1. Download the agent",
+      downloadInstaller: "2. Download my installer",
+      filesHow: {
+        title: "What is in these files?",
+        steps: [
+          "The agent (leka-architect-….zip): its code, its instructions, the drawing of the PowerPoint and the PDF. No secret.",
+          "The installer (installer-architecte.sh, or .ps1 on Windows): the install commands and your details. Made by this browser, it deletes itself at the end of the install.",
+        ],
+      },
+      step3: "Install, then launch",
+      step3Lead: "Open the {terminal}, paste this command, then Enter: 2 to 3 minutes.",
+      terminals: { windows: "PowerShell", macos: "Terminal", linux: "terminal" },
+      openHow: {
+        title: "Open the {terminal}",
+        windows: [
+          "Press the Windows key, type « PowerShell », then Enter. No administrator rights needed.",
+          "Right-click in the window to paste the command, then Enter.",
+        ],
+        macos: [
+          "Press Cmd + Space, type « Terminal », then Enter.",
+          "Cmd + V to paste the command, then Enter.",
+          "If macOS asks for access to the Downloads folder: « OK ».",
+        ],
+        linux: [
+          "Ctrl + Alt + T, or look for « Terminal » in your applications.",
+          "Ctrl + Shift + V to paste the command, then Enter.",
+        ],
+      },
+      does: [
+        "It checks Python (3.10 or later); otherwise it says where to get it.",
+        "It unzips the agent into the « architecte » folder of your account and installs it.",
+        "It writes your details into architecte/.env and sets up Copilot in VS Code.",
+        "It creates the « Lancer l'architecte » button, checks it reads your Confluence spaces, then opens the folder.",
+      ],
+      launch: "To launch: double-click « Lancer l'architecte » in the architecte folder. It lists your spaces, asks for the space, the journey and the perimeter, then opens the PowerPoint and the PDF (3 to 5 minutes).",
+      copilotHow: {
+        title: "With Copilot in VS Code",
+        steps: [
+          "Open VS Code → File → Open Folder… → pick « architecte », in your home folder.",
+          "If VS Code asks to trust the folder, or to start the « leka-architect » MCP server: accept.",
+          "Open Copilot's chat and pick the « Agent » mode.",
+          "Type: /architecte-applicatif Construis l'architecture du parcours Paiement CB sur le périmètre Digital",
+          "Copilot reads your Confluence with the architect's tools, then writes the PowerPoint and the PDF into the rapport-architecture folder.",
+        ],
+      },
+      laterHow: {
+        title: "Change my details later",
+        steps: [
+          "Open the .env file of the architecte folder (TextEdit, Notepad…).",
+          "CONFLUENCE_URL, CONFLUENCE_EMAIL, CONFLUENCE_TOKEN: your Confluence.",
+          "The ARCHITECT_LLM_… lines: the model. Delete them to think with Copilot.",
+          "Save: the next launch uses them.",
+        ],
+      },
+      manualHow: {
+        title: "If your computer refuses scripts: by hand",
+        lead: "Copy these blocks into the {terminal}, one after the other.",
+      },
+      manualInstall: "Install",
+      manualEnv: "In the .env file that opens: your details, then save",
+      manualCheck: "Check: your spaces are listed, their key on the left",
+      manualRun: "Launch: replace MO with your space's key, then the journey and the perimeter",
+      problemsHow: {
+        title: "An error message?",
+        steps: [
+          "« Il faut Python 3.10 ou plus »: install it (the link is in the message), then run the same command again.",
+          "« L'agent n'est pas dans Téléchargements »: first click « Download the agent ».",
+          "« L'installation a échoué »: Internet is needed; behind a company proxy, see your IT.",
+          "« Le token Confluence est vide », or refused: check the token in architecte/.env.",
+          "« L'espace … est introuvable »: take a key shown on the left of the spaces list.",
+        ],
+      },
+    },
+    /** The architect on a Confluence space (2026-10-25): its perimeter, chosen. */
+    architectLaunch: {
+      title: "Application architect",
+      lead: "Choose the Confluence perimeter: a whole space, or a page and everything under it. LEKA produces the architecture dossier structured as ArchiMate — PDF, Word, Markdown —, each section citing its pages.",
+      noSource: "No Confluence is connected: connect it, LEKA will sync its spaces.",
+      connect: "Connect Confluence",
+      source: "Confluence source",
+      space: "Space",
+      pages: "{count} {count|page|pages} · depth {depth}",
+      noSpace: "No space synced yet: wait for the first sync to finish.",
+      root: "Root page",
+      rootAll: "The whole space",
+      subject: "Subject or journey to document",
+      subjectHint: "E.g. « Billing »: the architect documents it first.",
+      perimeter: "Perimeter",
+      launch: "Launch the architect",
+      launching: "Launching…",
+      readOnly: "Read only: nothing is written to Confluence.",
+      asked: "/architecte Architecture dossier — {subject} — space {space}{root}",
+      rootSaid: ", page « {title} »",
+      perimeterSaid: "Space {space}",
+    },
+    /** Made for one organisation (2026-10-25): seen by it alone, never sold. */
+    dedicated: {
+      title: "Dedicated agents",
+      lead: "Built for {organisation}",
+      made: "Built for {organisation}",
+      contract: "Built for {organisation} and included in your contract: it is not sold.",
+    },
+    /** An Enterprise contract (2026-10-25): every agent its own, never priced. */
+    enterprise: {
+      agents: "Available agents",
+      agentsLead: "Included in your Enterprise contract, by domain.",
+      contract: "Included in your Enterprise contract.",
+      title: "LEKA agents",
+      subtitleMore: "Your dedicated agents first, then every standard agent, included in your contract.",
+      skillsTitle: "LEKA's skills, included",
+      skillsLead:
+        "What LEKA does itself to understand and analyse your requests: reusable capabilities, used in your analyses.",
+    },
     /** Said once, above the list: what keeps many from running here. */
     wide: {
       no_model:
@@ -10905,6 +11567,9 @@ const en: Dictionary = {
     agentsTitle: "Agents",
     ownTitle: "LEKA skills",
     agentsCount: "{count} {count|agent|agents}",
+    /** A domain's box opened whole, and closed again (2026-10-25). */
+    domainAll: "See all ({count})",
+    domainLess: "Show less",
     ownCount: "{count} {count|skill|skills}",
     show: "Show",
     shows: { all: "All", agents: "Agents", capabilities: "LEKA skills" },
@@ -11036,6 +11701,8 @@ const en: Dictionary = {
         option: "Paid option",
         upgrade: "Upgrade required",
         unavailable: "Unavailable",
+        dedicated: "Dedicated to your organisation",
+        contract: "Included in your contract",
       },
       askAdmin: "Ask an administrator of your workspace to buy it.",
       bundlesTitle: "LEKA bundles",
@@ -11149,6 +11816,9 @@ const en: Dictionary = {
           "It says so: what your sources do not give is reported as missing, never made up, and every statement cites what it rests on.",
         who: "Who can run it, and who can buy it?",
         whoAnswer: "Run it: {run}. Buy it: an owner or an admin of the workspace.",
+        /** Dedicated, or under a contract (2026-10-25): nothing to buy. */
+        whoContract: "Who can run it?",
+        whoAnswerContract: "Run it: {run}.",
         member: "any member of the workspace",
       },
       similar: "Similar agents",
@@ -11256,7 +11926,7 @@ const en: Dictionary = {
       "release-readiness":
         "Whether a service is ready for its next release: how it ships, its recent incidents, how far a failure would reach.",
       "application-architecture":
-        "A journey's architecture deck: ArchiMate business layer, application sequences, rules, RACI — as PDF and PowerPoint.",
+        "Generates your application architecture documentation, structured as ArchiMate, from your Confluence.",
       "architecture-analysis":
         "An application's architecture explained: its parts, its dependencies, its weak points.",
       "detect-undocumented-dependency":
@@ -11612,6 +12282,77 @@ const en: Dictionary = {
     },
     failedToLoad: "The language model could not be read.",
   },
+  security: {
+    sessions: {
+      title: "Your signed-in devices",
+      intro: "The browsers where your account is open. Sign out the ones you do not recognise.",
+      current: "This device",
+      unknownDevice: "Unknown browser",
+      seen: "Last active {when}",
+      since: "Signed in on {date}",
+      from: "from {ip}",
+      signOut: "Sign out",
+      signOutOthers: "Sign out the other devices",
+      signedOut: "Device signed out.",
+      none: "No other device signed in.",
+    },
+    sources: {
+      title: "LEKA's access to your sources",
+      intro: "Revoking access erases the stored credentials: LEKA no longer reads the source. What it already read is kept; to connect it again, enter new credentials.",
+      revoke: "Revoke access",
+      confirmTitle: "Revoke access to « {name} »?",
+      confirmBody: "This source's credentials will be erased and LEKA will no longer read it. What was already read stays available.",
+      confirm: "Revoke",
+      revoked: "Access revoked.",
+      noCredentials: "No credentials stored",
+      credentials: "Stored credentials: {hint}",
+      none: "No source connected.",
+      managersOnly: "Only who manages sources may revoke an access.",
+    },
+    stored: {
+      title: "What LEKA keeps",
+      items: [
+        "Your sources' credentials, encrypted: never shown, never written to the logs.",
+        "What LEKA reads from your sources — applications, pages, tickets, repositories — in your organisation only, isolated from every other.",
+        "Your requests, the agents' analyses and deliverables, and the files you attach, encrypted at rest.",
+        "For each call to the language model: what it was for, the model, its size and duration — never its content.",
+        "The audit trail: who did what, and when, for the retention chosen.",
+      ],
+      more: "How data is encrypted and isolated is in the Data tab.",
+    },
+    usage: {
+      title: "Agent usage",
+      intro: "How many times each agent ran over the period.",
+      days: "Last {count} days",
+      agent: "Agent",
+      runs: "Runs",
+      succeeded: "Succeeded",
+      failed: "Failed",
+      last: "Latest",
+      none: "No agent ran over this period.",
+    },
+    journal: {
+      title: "Agent log",
+      intro: "Who ran which agent, on what, when, and how it ended.",
+      when: "When",
+      who: "Who",
+      agent: "Agent",
+      on: "On",
+      result: "Result",
+      allSources: "Every connected source",
+      someone: "Someone in the organisation",
+      more: "Show more",
+      none: "No agent has run yet.",
+      states: {
+        awaiting_approval: "Awaiting approval",
+        queued: "Queued",
+        running: "Running",
+        succeeded: "Succeeded",
+        failed: "Failed",
+        cancelled: "Cancelled",
+      },
+    },
+  },
   protection: {
     tab: "Data",
     platform: "Platform protections",
@@ -11838,6 +12579,8 @@ const en: Dictionary = {
         ai: "AI",
         journal: "Log",
         approvals: "Approvals",
+        security: "Sessions & access",
+        agents: "Agent usage",
       },
       policy: "Approval policy",
       policySaid:
@@ -13975,6 +14718,16 @@ const en: Dictionary = {
     },
   },
   sources: {
+    /** « Arborescence » (2026-10-25): what a Confluence source synced. */
+    tree: {
+      title: "Tree",
+      lead: "The synced pages, space by space, ordered as in Confluence: check that everything came up.",
+      pages: "{count} {count|page|pages}",
+      depth: "depth {depth}",
+      none: "No page synced yet: the first sync will bring them up.",
+      open: "Open in Confluence",
+      document: "Document this space",
+    },
     title: "Connected sources",
     subtitle:
       "Connect your tools to give LEKA a complete view of your environment.",
@@ -14968,6 +15721,7 @@ const en: Dictionary = {
       activated: "Source activated",
       reconfigured: "Settings changed",
       credentials_rotated: "Credentials replaced",
+      credentials_revoked: "Access revoked: credentials erased",
       health_changed: "Health: {previous} → {current}",
       disabled: "Source disabled",
       deleted: "Source deleted",
@@ -15948,6 +16702,7 @@ const en: Dictionary = {
       },
       next: {
         answer: "Answer LEKA's questions.",
+        clarify: "Make your request precise: name what it is about.",
         wait: "LEKA is on it: this page updates by itself.",
         resume: "Start the analysis again whenever you want.",
         analyse_again: "Run the analysis again.",
@@ -15979,6 +16734,7 @@ const en: Dictionary = {
         resume: "Resume the analysis",
         analyse_again: "Run the analysis again",
         answer: "Answer",
+        clarify: "Clarify my request",
         decide: "Decide",
         modify_decision: "Change the decision",
         start_actions: "Start the actions",

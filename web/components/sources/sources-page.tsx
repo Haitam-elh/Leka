@@ -40,6 +40,7 @@ import {
   KIND_CATEGORY,
   lastSeen,
   type Source,
+  type SourceKind,
   sourceTone,
 } from "@/lib/sources";
 import { useSources, useSyncSummaries } from "@/lib/sources-queries";
@@ -96,6 +97,18 @@ export function SourcesPage({ embedded = false }: { embedded?: boolean } = {}) {
   const recordsOf = (source: Source) => summaries.data?.get(source.id)?.records_total;
   const canManage = usePermissions()?.includes("source:manage") ?? false;
   const [adding, setAdding] = useState<"native" | "custom" | null>(null);
+  // A tool asked for by the address — /sources?connect=confluence, from the
+  // home's first steps (2026-10-25): its connection opened at once, for who
+  // may connect one; the address cleaned after.
+  const [tool, setTool] = useState<SourceKind | undefined>(undefined);
+  useEffect(() => {
+    if (embedded || !canManage) return;
+    const asked = new URLSearchParams(window.location.search).get("connect");
+    if (!asked || !(asked in KIND_CATEGORY)) return;
+    setTool(asked as SourceKind);
+    setAdding("native");
+    window.history.replaceState(null, "", routes.sources());
+  }, [embedded, canManage]);
   // Two ways in: a tool LEKA knows, or one it does not — a custom
   // connector (LEKA-426), from here rather than at the bottom of a list.
   const addButton = canManage ? (
@@ -130,10 +143,16 @@ export function SourcesPage({ embedded = false }: { embedded?: boolean } = {}) {
         />
       )}
       <AddSourceDialog
+        // A tool asked for: the dialog drawn again, on its connection.
+        key={tool ?? "any"}
         open={adding !== null}
         start={adding ?? "native"}
+        tool={tool}
         onOpenChange={(open) => {
-          if (!open) setAdding(null);
+          if (!open) {
+            setAdding(null);
+            setTool(undefined);
+          }
         }}
         onDone={(done) => setSelectedId(done.id)}
       />
