@@ -39,7 +39,7 @@ VERSIONS = {
     "incident-investigation": "1.4.0",
     "infrastructure-analysis": "1.4.0",
     "release-analysis": "1.3.0",
-    "security-review": "1.4.1",
+    "security-review": "1.5.0",
     "test-analysis": "1.4.0",
 }
 # The code an agent may read, beside the runtime's tools: the code review its
@@ -48,6 +48,7 @@ CODE_READ = {
     "code-review": {"list_pull_requests", "read_pull_request"},
     "documentation-assistant": {"list_files", "read_file"},
     "build-fixer": {"list_pull_requests", "read_pull_request", "read_file"},
+    "security-review": {"list_files", "read_file"},
     "test-analysis": {"list_pull_requests", "read_pull_request"},
 }
 NOTICES = (settings.agents_dir.parent / "THIRD_PARTY_LICENSES.md").read_text(encoding="utf-8")
@@ -716,6 +717,14 @@ def test_the_security_review_names_what_it_found_not_how_it_searched() -> None:
     # 2026-10-20, relaunched: whole and plain, but « (owned: false) »,
     # « (restricted) » — a field's raw value in brackets.
     assert "jamais sa valeur brute" in said
+    # 2026-10-23, tested on leka-core: asked to review authentication and
+    # sessions, it read no code — it had no tool to — and gave a public
+    # repository, public on purpose, as its first finding.
+    review = {d.key: d for d in catalogue()}["security-review"]
+    assert {"list_files", "read_file"} <= set(review.tools)
+    assert "**le jeton de session**" in said and "**la protection CSRF**" in said
+    assert "Une protection n'est pas un défaut" in said
+    assert "Un dépôt public n'est jamais un constat en soi" in said
 
 
 def test_the_code_change_proposes_the_smallest_change_and_says_the_rest() -> None:
