@@ -131,7 +131,7 @@ function Facts({ source }: { source: Source }) {
 function useOwner(source: Source): string {
   const t = useDictionary();
   const me = useCurrentUser();
-  if (source.created_by === null) return "—";
+  if (source.created_by === null) return "-";
   return source.created_by === me?.id ? t.sources.owner.you : t.sources.owner.member;
 }
 

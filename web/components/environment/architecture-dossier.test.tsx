@@ -70,7 +70,7 @@ describe("the dossier", () => {
     mount();
 
     const flow = screen.getByTestId("dossier-flow");
-    expect(within(flow).getByText("Flux 1 — depuis Leka Caddy")).toBeInTheDocument();
+    expect(within(flow).getByText("Flux 1 : depuis Leka Caddy")).toBeInTheDocument();
     expect(within(flow).getByText("1. Appelle")).toBeInTheDocument();
     expect(within(flow).getByText("2. Stocke")).toBeInTheDocument();
     expect(within(flow).getByRole("img")).toHaveAccessibleName(
@@ -100,7 +100,7 @@ describe("the dossier", () => {
     ).toBeInTheDocument();
     expect(
       checks.getByText(
-        "Leka API est déployé sur leka-prod — déduit : même adresse publique (90 %).",
+        "Leka API est déployé sur leka-prod (déduit : même adresse publique, 90 %).",
       ),
     ).toBeInTheDocument();
     // What has no team, together.

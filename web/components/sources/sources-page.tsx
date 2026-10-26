@@ -215,7 +215,7 @@ function useOwnerOf(): (source: Source) => string {
   const t = useDictionary();
   const me = useCurrentUser();
   return (source) => {
-    if (source.created_by === null) return "—";
+    if (source.created_by === null) return "-";
     return source.created_by === me?.id ? t.sources.owner.you : t.sources.owner.member;
   };
 }
@@ -459,7 +459,7 @@ function SourcesTable({
         const records = recordsOf(source);
         return records === undefined ? (
           <span title={t.sources.notCounted} aria-label={t.sources.notCounted}>
-            —
+            -
           </span>
         ) : (
           number(records)
@@ -473,7 +473,7 @@ function SourcesTable({
   const columns = all.filter(
     (column) =>
       (column.id !== "items" || sources.some((source) => recordsOf(source) !== undefined)) &&
-      (column.id !== "owner" || sources.some((source) => ownerOf(source) !== "—")),
+      (column.id !== "owner" || sources.some((source) => ownerOf(source) !== "-")),
   );
 
   return (

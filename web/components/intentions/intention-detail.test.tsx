@@ -262,7 +262,7 @@ describe("an intention's page", () => {
     // LEKA-464: no price, no total, no checkout — said covered, launched.
     const covered = screen.getByTestId("detail-covered");
     expect(covered).toHaveTextContent("Votre formule Growth et vos agents couvrent cette demande");
-    expect(covered).toHaveTextContent(/Revue de code\s*— votre option active/);
+    expect(covered).toHaveTextContent(/Revue de code\s*· votre option active/);
     expect(screen.queryByTestId("detail-offer")).not.toBeInTheDocument();
     expect(screen.queryByTestId("detail-total")).not.toBeInTheDocument();
     expect(screen.queryByTestId("detail-activate")).not.toBeInTheDocument();
@@ -286,7 +286,7 @@ describe("an intention's page", () => {
       agents: [{ ...offer().agents[0], status: "included" }],
     });
     show();
-    expect(screen.getByTestId("detail-covered")).toHaveTextContent(/Revue de code\s*— inclus dans votre formule/);
+    expect(screen.getByTestId("detail-covered")).toHaveTextContent(/Revue de code\s*· inclus dans votre formule/);
     expect(screen.queryByTestId("detail-line")).not.toBeInTheDocument();
   });
 

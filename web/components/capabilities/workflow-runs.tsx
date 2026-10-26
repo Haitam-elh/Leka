@@ -158,7 +158,7 @@ export function RunWorkflow({
               value={chosen}
               onChange={(e) => setChosen(e.target.value)}
             >
-              <option value="">—</option>
+              <option value="">-</option>
               {(recent.data?.data ?? []).map((intention) => (
                 <option key={intention.id} value={intention.id}>
                   {intention.title}

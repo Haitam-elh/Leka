@@ -32,7 +32,7 @@ export function SourceQualitySection({ source }: { source: Source }) {
   const validation = useSourceValidation(source.id);
   const number = new Intl.NumberFormat(locale);
   const percent = (value: number | null | undefined) =>
-    value === null || value === undefined ? "—" : `${Math.round(value * 100)} %`;
+    value === null || value === undefined ? "-" : `${Math.round(value * 100)} %`;
   const read = validation.data;
   const counted = read ? read.valid + read.warning + read.quarantined : 0;
 
@@ -70,7 +70,7 @@ export function SourceQualitySection({ source }: { source: Source }) {
       id: "element",
       header: w.element,
       cell: (row) => (
-        <code className="text-xs break-all text-brand-navy">{row.entity_key ?? "—"}</code>
+        <code className="text-xs break-all text-brand-navy">{row.entity_key ?? "-"}</code>
       ),
     },
     {
@@ -82,7 +82,8 @@ export function SourceQualitySection({ source }: { source: Source }) {
             .filter((issue) => issue.severity === "error")
             .map((issue) => (
               <li key={`${String(issue.code)}-${String(issue.field)}`}>
-                {(w.codes as Record<string, string>)[String(issue.code)] ?? String(issue.code)} —{" "}
+                {(w.codes as Record<string, string>)[String(issue.code)] ?? String(issue.code)}
+                {t.shell.colon}
                 {String(issue.message)}
               </li>
             ))}

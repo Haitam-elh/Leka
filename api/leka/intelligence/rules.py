@@ -133,7 +133,7 @@ def dependency_concentration(material: Material) -> list[Draft]:
             if state == "incident"
             else "it needs attention"
             if state == "attention"
-            else "nothing watches it — its state is deduced"
+            else "nothing watches it: its state is deduced"
             if card.deduced
             else "nothing watches it"
             if not watched

@@ -61,9 +61,9 @@ const STATUS_TONE: Record<Operation["status"], string> = {
   undone: "bg-shell-canvas text-shell-muted",
 };
 
-/** A value as the reader reads it: "—" for none, JSON for what is not
+/** A value as the reader reads it: "-" for none, JSON for what is not
  * text. */
-export function shown(value: unknown, nothing = "—"): string {
+export function shown(value: unknown, nothing = "-"): string {
   if (value === null || value === undefined || value === "") return nothing;
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
     return String(value);
@@ -188,7 +188,7 @@ export function EntityHistory({ entityId, name }: { entityId: string; name: stri
 }
 
 function End({ entity }: { entity: EntityChange["entity"] }) {
-  if (!entity) return <span>—</span>;
+  if (!entity) return <span>-</span>;
   return (
     <Link
       href={entityHref(entity)}
@@ -460,7 +460,7 @@ function AtPanel({
                   {data.relationships.map((tie) => {
                     const verb =
                       (t.knowledge.relationships as Record<string, string>)[tie.type] ?? tie.type;
-                    const other = tie.other?.name ?? "—";
+                    const other = tie.other?.name ?? "-";
                     return (
                       <li key={`${tie.type}-${tie.direction}-${tie.other?.id ?? other}`} className="text-brand-navy">
                         {tie.direction === "outgoing" ? `${name} ${verb} ${other}` : `${other} ${verb} ${name}`}

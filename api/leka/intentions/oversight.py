@@ -56,7 +56,7 @@ _ESCALATION: dict[str, dict[str, str]] = {
     "fr": {
         "untitled": "une intention",
         "nameless": "votre espace",
-        "subject": "LEKA — une décision attend : {title}",
+        "subject": "LEKA · Une décision attend : {title}",
         "body": (
             "La décision sur « {title} » ({workspace}) attend toujours, au risque {risk}. "
             "Elle est escaladée : ouvrez À valider dans LEKA pour la trancher."
@@ -65,7 +65,7 @@ _ESCALATION: dict[str, dict[str, str]] = {
     "en": {
         "untitled": "an intention",
         "nameless": "your workspace",
-        "subject": "LEKA — a decision is waiting: {title}",
+        "subject": "LEKA · A decision is waiting: {title}",
         "body": (
             "The decision on “{title}” ({workspace}) is still waiting, at risk {risk}. "
             "It is escalated: open To approve in LEKA to settle it."

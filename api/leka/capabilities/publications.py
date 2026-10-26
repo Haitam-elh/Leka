@@ -121,7 +121,10 @@ highest or high; medium; low or polish: low);
 - labels: a few lowercase words, no spaces;
 - title and summary of the whole set;
 - in the language of the deliverable. Never invent a file, a person, a date \
-or a figure the deliverable does not hold. Answer with the JSON object only."""
+or a figure the deliverable does not hold. Answer with the JSON object only.
+
+Never write the em dash « — »: a colon, a comma, a semicolon or \
+parentheses, as the sentence needs."""
 
 PAGES_RULES = """You are LEKA's documentation writer. From the deliverable \
 of the agent below — and from nothing else — write the Confluence pages a \
@@ -134,7 +137,10 @@ deliverable says them; at most ten pages, one when one is enough;
 of the whole set;
 - in the language of the deliverable. Never invent a file, a person, a date \
 or a figure the deliverable does not hold; what it lacks is said as a point \
-to complete. Answer with the JSON object only."""
+to complete. Answer with the JSON object only.
+
+Never write the em dash « — »: a colon, a comma, a semicolon or \
+parentheses, as the sentence needs."""
 
 
 class PublicationNotFoundError(LookupError):

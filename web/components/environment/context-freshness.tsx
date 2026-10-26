@@ -52,7 +52,7 @@ function fieldName(t: Dictionary, name: string): string {
 /** A request's or an intention's value, in words. */
 function valueSaid(t: Dictionary, locale: string, field: string, value: unknown): string {
   const w = t.environment.sheet.context.change;
-  if (value === null || value === undefined || value === "") return "—";
+  if (value === null || value === undefined || value === "") return "-";
   if ((field === "roots" || field === "sources") && Array.isArray(value)) {
     return fill(w.count, { count: value.length });
   }
@@ -64,10 +64,10 @@ function valueSaid(t: Dictionary, locale: string, field: string, value: unknown)
   if (field === "until" && typeof value === "string") return exactDate(locale, value);
   if (field === "period" && typeof value === "object") {
     const { since, until } = value as { since?: string; until?: string };
-    return since && until ? `${exactDate(locale, since)} – ${exactDate(locale, until)}` : "—";
+    return since && until ? `${exactDate(locale, since)} – ${exactDate(locale, until)}` : "-";
   }
-  if (Array.isArray(value)) return value.length ? value.map(String).join(", ") : "—";
-  if (typeof value === "object") return Object.keys(value).length ? JSON.stringify(value) : "—";
+  if (Array.isArray(value)) return value.length ? value.map(String).join(", ") : "-";
+  if (typeof value === "object") return Object.keys(value).length ? JSON.stringify(value) : "-";
   return String(value);
 }
 
@@ -81,7 +81,7 @@ export function changeSaid(t: Dictionary, locale: string, change: ContextChange)
       ? ` (${changed.map((name) => fieldName(t, name)).join(", ")})`
       : "";
     const what = change.type ? `${typeLabel(t, change.type)} ` : "";
-    return `${what}${change.name ?? ""} — ${w.entity[how]}${fields}${
+    return `${what}${change.name ?? ""} · ${w.entity[how]}${fields}${
       change.touches === "words" ? ` · ${w.words}` : ""
     }`;
   }
@@ -89,7 +89,7 @@ export function changeSaid(t: Dictionary, locale: string, change: ContextChange)
     const verb =
       (t.knowledge.relationships as Record<string, string>)[change.type ?? ""] ?? change.type;
     const [from, to] = (change.name ?? "").split(" → ");
-    return `${from} ${verb} ${to ?? ""} — ${w.relationship[how]}`;
+    return `${from} ${verb} ${to ?? ""} · ${w.relationship[how]}`;
   }
   if (change.kind === "model") return w.model;
   const labels = (change.kind === "request" ? w.request : w.intent) as Record<string, string>;

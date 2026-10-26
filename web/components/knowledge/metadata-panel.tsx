@@ -10,7 +10,7 @@ import { useDictionary } from "@/lib/i18n/locale-provider";
 
 export interface MetadataItem {
   label: string;
-  /** Anything: a word, a link, a badge. Empty shows "—". */
+  /** Anything: a word, a link, a badge. Empty shows "-". */
   value: React.ReactNode;
   /** Makes the value copyable: this string is what lands in the clipboard. */
   copyValue?: string;
@@ -109,7 +109,7 @@ export function MetadataPanel({
                   <dt className="truncate text-[0.8125rem] text-shell-muted">{item.label}</dt>
                   <dd className="flex min-w-0 items-center gap-1.5 text-[0.8125rem] text-brand-navy">
                     {isEmpty(item.value) ? (
-                      <span className="text-shell-muted">—</span>
+                      <span className="text-shell-muted">-</span>
                     ) : (
                       <span className="min-w-0 break-words">{item.value}</span>
                     )}

@@ -582,7 +582,7 @@ function ScopePanel({ options }: { options: ScopeOptions }) {
   if (!editing) {
     const environment =
       options.environments.find((option) => option.value === values.environment)
-        ?.label ?? "—";
+        ?.label ?? "-";
     const period =
       values.period.preset === "24h"
         ? t.forms.period24h

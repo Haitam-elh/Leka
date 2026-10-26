@@ -330,7 +330,7 @@ function AlertRuleDialog({
   );
 }
 
-const capital = (word: string | undefined) => (word ? word.charAt(0).toUpperCase() + word.slice(1) : "—");
+const capital = (word: string | undefined) => (word ? word.charAt(0).toUpperCase() + word.slice(1) : "-");
 
 function Choice({
   label,

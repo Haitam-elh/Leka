@@ -159,7 +159,7 @@ describe("Historique", () => {
     expect(latest).toHaveTextContent("Actuelle");
     expect(latest).toHaveTextContent("version2.8.3 → 2.8.4");
     const second = screen.getByTestId("history-version-2");
-    expect(second).toHaveTextContent("team— → payments");
+    expect(second).toHaveTextContent("team- → payments");
     expect(screen.getByTestId("history-version-1")).toHaveTextContent(
       "Première version connue de LEKA",
     );

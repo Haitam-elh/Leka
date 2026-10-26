@@ -7,14 +7,14 @@ key: release-readiness
 title: Préparation de release
 summary: Use when someone asks whether a service is ready for its next release — how it ships, its recent incidents, how far a failure of it would reach.
 category: operations
-version: 1.0.0
+version: 1.0.1
 lifecycle: active
 goals: [assess_impact, find_change]
 kinds: [change]
 entity_types: [service, deployment, incident]
 inputs:
   - {name: service, type: entity, required: true, entity_types: [service], description: Le service à livrer.}
-  - {name: environment, type: text, required: false, description: L'environnement visé — la production si rien n'est dit.}
+  - {name: environment, type: text, required: false, description: "L'environnement visé : la production si rien n'est dit."}
 examples:
   - Est-ce que payment-api est prête pour sa prochaine release ?
 steps:

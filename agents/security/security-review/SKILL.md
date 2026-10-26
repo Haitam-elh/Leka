@@ -2,7 +2,7 @@
 name: security-review
 title: "Revue de sécurité"
 description: "Use when someone asks whether an application, a service or its infrastructure is exposed — sensitive data it holds, what reaches it, who owns it, what is undocumented — and what to check first."
-version: 1.4.1
+version: 1.5.0
 category: security
 entity_types: [application, service, infra_resource, cloud_account, database, data_object, repository, team]
 requires: []
@@ -10,13 +10,17 @@ mode: read_only
 risk: low
 outputs: analysis
 deliverables: [markdown]
-tools: [search_entities, read_entity, dependencies]
+tools: [search_entities, read_entity, dependencies, list_files, read_file]
 skills: [security-posture]
 inputs:
   - name: sujet
     type: text
     required: false
-    description: "Ce qui est à examiner, ex. « payment-api »."
+    description: "Ce qui est à examiner, ex. « payment-api » ou « l'authentification et les sessions »."
+  - name: depot
+    type: text
+    required: false
+    description: "Le dépôt GitHub de l'application, en nom complet, ex. « acme/api »."
 goals: [check_compliance, assess_impact]
 kinds: [compliance]
 examples:
@@ -42,6 +46,30 @@ Le système demandé, les données qu'il porte, l'infrastructure et les comptes 
 
 Commence par le contexte fourni ; s'il ne suffit pas, cherche (`search_entities`),
 lis (`read_entity`), suis les dépendances (`dependencies`).
+
+**Le code, quand un dépôt est connecté et que la demande vise un
+mécanisme** — l'authentification, les sessions, les droits, un envoi de
+fichier, un paiement. Liste le dépôt (`list_files`) et lis (`read_file`, par
+plages de lignes) ce qui le porte. Pour l'authentification et les sessions :
+- **le jeton de session** — comment il est tiré (aléa suffisant), où il est
+  gardé côté serveur (en clair ou haché), sa durée de vie et sa rotation, ce
+  que la déconnexion et un changement de mot de passe en font ;
+- **le cookie** — `HttpOnly`, `Secure`, `SameSite`, son domaine ;
+- **la protection CSRF** des requêtes qui changent quelque chose, quand la
+  session tient dans un cookie ;
+- **les mots de passe** — l'algorithme et son coût, la limite des tentatives,
+  le jeton de réinitialisation (usage unique, expiration, haché) ;
+- **les connexions déléguées** (OAuth, SSO) — le `state`, le PKCE, les
+  adresses de retour permises ;
+- **les droits** — chaque route vérifie qui appelle et à quel espace il
+  appartient, pas seulement qu'il est connecté.
+Chaque constat cite le fichier et la ligne lus (`chemin:ligne`), jamais une
+ligne que tu n'as pas lue. Ce que tu n'as pas trouvé dans les fichiers lus se
+dit « non trouvé dans … », jamais « absent » : cela peut être ailleurs.
+
+**Une protection n'est pas un défaut.** Un choix commenté dans le code se lit
+avant d'être jugé — un cookie CSRF lisible par la page en double envoi l'est
+exprès. Aucune recommandation n'affaiblit une protection en place.
 Quand la demande ne dit pas sur quoi travailler et que le contexte ne le montre pas,
 dis-le et arrête-toi : ne devine pas.
 
@@ -103,8 +131,9 @@ Ce qu'il regarde, à la manière de l'OWASP mais au niveau du système : les
 données sensibles stockées ou lues, le contrôle d'accès (qui est
 responsable, qui administre), la configuration exposée (ressource publique,
 dépôt public), les dépendances externes critiques, la supervision et les
-journaux. Ne signale pas comme risque un dépôt public prévu pour l'être
-(documentation, code ouvert), ni des données de test identifiées comme telles.
+journaux. Un dépôt public n'est jamais un constat en soi : seul ce qu'il
+expose l'est — un secret, une donnée personnelle —, lu dans ses fichiers. Ni
+des données de test identifiées comme telles.
 
 ## Ce qu'il produit
 
@@ -123,8 +152,9 @@ Un document markdown, dans la langue de la demande :
 6. **Hypothèses** — à part, chacune avec ce qui manque pour l'appuyer.
 7. **Signaux** — sans responsable, non documenté, ressource cloud partagée,
    dépendance critique externe.
-8. **Limites** — LEKA ne scanne pas de vulnérabilités et ne lit pas le code : il
-   dit ce que le modèle de l'entreprise montre.
+8. **Limites** — LEKA ne scanne pas de vulnérabilités et n'exécute rien : il
+   dit ce que le modèle de l'entreprise montre et, quand un dépôt est
+   connecté, ce que les fichiers lus montrent — lesquels, en une ligne.
 
 ## Ce qu'il ne doit jamais faire
 

@@ -420,7 +420,7 @@ def text(element: Element) -> str:
             if isinstance(value, str | int | float | bool) and value != ""
         ][:TEXT_ATTRIBUTES]
         if shown:
-            line += " — " + "; ".join(shown)
+            line += ": " + "; ".join(shown)
         line += f" [from {', '.join(by)}]" if by else ""
         return line + _disputed(element)
     tie = element.relationship

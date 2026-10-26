@@ -157,7 +157,7 @@ export function SubscriptionSection() {
                 variant="outline"
                 disabled={renewal.isPending}
                 onClick={async () => {
-                  const end = said.current_period_end ? day(said.current_period_end) : "—";
+                  const end = said.current_period_end ? day(said.current_period_end) : "-";
                   const ok = await confirm({
                     title: w.stopTitle,
                     description: fill(w.stopBody, { date: end }),

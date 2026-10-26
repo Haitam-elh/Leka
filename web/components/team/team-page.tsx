@@ -353,12 +353,12 @@ export function TeamScreen() {
       key: "invitations",
       icon: Clock,
       tone: "warning" as const,
-      value: canInvite ? (invitations.data ? String(invitations.data.filter((i) => !i.expired).length) : "…") : "—",
+      value: canInvite ? (invitations.data ? String(invitations.data.filter((i) => !i.expired).length) : "…") : "-",
       label: w.stats.invitations,
       foot: w.stats.invitationsFoot,
     },
     // A 0 that calls for nothing is not said (LEKA-438); how many people is the tab's.
-  ].filter((tile) => tile.value !== "0" && tile.value !== "—");
+  ].filter((tile) => tile.value !== "0" && tile.value !== "-");
 
   return (
     <PageContainer>

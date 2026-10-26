@@ -801,7 +801,7 @@ function NodeList({ nodes }: { nodes: readonly ViewNode[] }) {
           <span className="text-xs text-shell-muted">{w.noStatus}</span>
         ),
     },
-    { id: "team", header: w.list.team, cell: (node) => node.team?.name ?? "—" },
+    { id: "team", header: w.list.team, cell: (node) => node.team?.name ?? "-" },
   ];
   return (
     <KnowledgeTable

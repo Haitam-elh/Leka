@@ -299,7 +299,7 @@ function PullRequestFollow({
       "done",
       fill(w.deploy.deployed, {
         environment,
-        date: follow?.deployment?.at ? exactDate(locale, follow.deployment.at) : "—",
+        date: follow?.deployment?.at ? exactDate(locale, follow.deployment.at) : "-",
       }),
     ];
   } else if (stage === "deploy_failed") deployStep = ["failed", fill(w.deploy.failed, { environment })];
@@ -370,7 +370,7 @@ function PullRequestFollow({
             <span className="mt-0.5 shrink-0">{STEP_ICON[step.state]}</span>
             <p className="min-w-0 flex-1 text-[0.8125rem] text-brand-navy">
               <span className="font-medium">{step.title}</span>
-              <span className="text-shell-muted"> — </span>
+              <span className="text-shell-muted">{t.shell.colon}</span>
               {step.text}
               {step.href ? (
                 <>
@@ -553,7 +553,7 @@ function RepairLine({ repair, n }: { repair: CodeChangeRepair; n: number }) {
   );
 }
 
-const short = (sha: string | null | undefined) => (sha ? sha.slice(0, 7) : "—");
+const short = (sha: string | null | undefined) => (sha ? sha.slice(0, 7) : "-");
 
 /**
  * Going back (2026-10-20): the versions kept — before it, with it, each
@@ -610,7 +610,7 @@ function GoBack({
                 {short(follow.before_sha)}
               </a>
             ) : (
-              "—"
+              "-"
             )}
           </li>
           <li>
@@ -620,14 +620,14 @@ function GoBack({
                 {short(follow.merge_sha)}
               </a>
             ) : (
-              "—"
+              "-"
             )}
             {follow?.merged_at ? ` · ${fill(w.mergedOn, { date: exactDate(locale, follow.merged_at) })}` : null}
           </li>
           {rollbacks.map((each) => (
             <li key={each.asked_at} data-testid="code-change-rollback">
               <span className="text-shell-muted">{fill(w.wentBack, { date: exactDate(locale, each.asked_at) })} </span>
-              <span className="font-mono">{short(each.sha)}</span> — {w.runStates[each.state]}
+              <span className="font-mono">{short(each.sha)}</span> · {w.runStates[each.state]}
               {each.url ? (
                 <>
                   {" "}

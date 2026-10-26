@@ -70,7 +70,7 @@ const KIND_ICONS: Record<Expectation["kind"], typeof Check> = {
 };
 
 function said(value: unknown): string {
-  return value === null || value === undefined ? "—" : String(value);
+  return value === null || value === undefined ? "-" : String(value);
 }
 
 /** One expectation, in words. */

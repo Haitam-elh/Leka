@@ -59,7 +59,10 @@ points, each one sentence.
 - When LEKA proposes agents for this request (`proposed`), end with them: \
 which (their titles) and what they would deliver, to be launched at the \
 next step by the person — never say they are at work, nor that any file \
-exists. Never say LEKA cannot produce a document or a file: its agents do."""
+exists. Never say LEKA cannot produce a document or a file: its agents do.
+
+Never write the em dash « — »: a colon, a comma, a semicolon or \
+parentheses, as the sentence needs."""
 
 
 class WrittenPoint(BaseModel):

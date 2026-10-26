@@ -121,8 +121,8 @@ export const RUN: Record<string, AgentProduct> = {
 
   "change-impact-analysis": {
     promise: w(
-      "Mesurez la portée d'un changement avant de le lancer : services, données, équipes et processus métier touchés — et qui prévenir.",
-      "Measure a change's reach before launching it: the services, data, teams and business processes it touches — and whom to warn.",
+      "Mesurez la portée d'un changement avant de le lancer : services, données, équipes et processus métier touchés, et qui prévenir.",
+      "Measure a change's reach before launching it: the services, data, teams and business processes it touches, and whom to warn.",
     ),
     problem: w(
       "Un changement anodin peut toucher un processus métier critique trois dépendances plus loin ; les bonnes personnes l'apprennent trop tard.",
@@ -149,8 +149,8 @@ export const RUN: Record<string, AgentProduct> = {
       },
     ],
     does: w(
-      "Il part du changement — prévu ou livré —, identifie ce qu'il touche directement, suit ses dépendances dans votre environnement jusqu'aux processus métier, et dit qui prévenir et ce qui se passe déjà sur la zone.",
-      "It starts from the change — planned or shipped —, finds what it touches directly, follows its dependencies in your environment up to the business processes, and says whom to warn and what is already happening in the area.",
+      "Il part du changement (prévu ou livré), identifie ce qu'il touche directement, suit ses dépendances dans votre environnement jusqu'aux processus métier, et dit qui prévenir et ce qui se passe déjà sur la zone.",
+      "It starts from the change (planned or shipped), finds what it touches directly, follows its dependencies in your environment up to the business processes, and says whom to warn and what is already happening in the area.",
     ),
     features: [
       w("Le changement en une phrase", "The change in a sentence"),
@@ -216,8 +216,8 @@ export const RUN: Record<string, AgentProduct> = {
         kind: "list",
         title: w("Qui prévenir", "Whom to warn"),
         items: [
-          w("Équipe Paiements — responsable de l'API", "Payments team — owns the API"),
-          w("Équipe Finance — processus d'encaissement", "Finance team — collection process"),
+          w("Équipe Paiements : responsable de l'API", "Payments team: owns the API"),
+          w("Équipe Finance : processus d'encaissement", "Finance team: collection process"),
           w("Astreinte checkout", "Checkout on-call"),
         ],
       },
@@ -232,8 +232,8 @@ export const RUN: Record<string, AgentProduct> = {
 
   "incident-investigation": {
     promise: w(
-      "Reconstituez un incident : chronologie, impact, cause probable — et le brouillon du post-mortem.",
-      "Piece an incident together: timeline, impact, likely cause — and the post-mortem draft.",
+      "Reconstituez un incident : chronologie, impact, cause probable, et le brouillon du post-mortem.",
+      "Piece an incident together: timeline, impact, likely cause, and the post-mortem draft.",
     ),
     problem: w(
       "Pendant et après un incident, reconstituer qui a changé quoi et quand mobilise plusieurs équipes pendant des heures.",
@@ -263,8 +263,8 @@ export const RUN: Record<string, AgentProduct> = {
       },
     ],
     does: w(
-      "Il rassemble ce qui s'est passé autour de l'incident — déploiements, changements, incidents liés —, suit ce qui dépend des services touchés et propose une cause probable, avec un brouillon de post-mortem dont les actions ne sont jamais exécutées.",
-      "It gathers what happened around the incident — deployments, changes, related incidents —, follows what depends on the services hit and proposes a likely cause, with a post-mortem draft whose actions are never carried out.",
+      "Il rassemble ce qui s'est passé autour de l'incident (déploiements, changements, incidents liés), suit ce qui dépend des services touchés et propose une cause probable, avec un brouillon de post-mortem dont les actions ne sont jamais exécutées.",
+      "It gathers what happened around the incident (deployments, changes, related incidents), follows what depends on the services hit and proposes a likely cause, with a post-mortem draft whose actions are never carried out.",
     ),
     features: [
       w("Une chronologie datée et citée", "A dated, cited timeline"),
@@ -322,19 +322,19 @@ export const RUN: Record<string, AgentProduct> = {
         kind: "list",
         title: w("Chronologie", "Timeline"),
         items: [
-          w("09:02 — déploiement de payment-api v2.8.4", "09:02 — payment-api v2.8.4 deployed"),
-          w("09:20 — latence en hausse", "09:20 — latency rising"),
-          w("09:41 — incident ouvert", "09:41 — incident opened"),
-          w("10:15 — retour arrière", "10:15 — rolled back"),
+          w("09:02, déploiement de payment-api v2.8.4", "09:02, payment-api v2.8.4 deployed"),
+          w("09:20, latence en hausse", "09:20, latency rising"),
+          w("09:41, incident ouvert", "09:41, incident opened"),
+          w("10:15, retour arrière", "10:15, rolled back"),
         ],
       },
       {
         kind: "levels",
         title: w("Hypothèses de cause", "Cause hypotheses"),
         items: [
-          { level: "high", text: w("Déploiement de v2.8.4 — appuyé par la chronologie", "v2.8.4 deployment — backed by the timeline") },
+          { level: "high", text: w("Déploiement de v2.8.4 : appuyé par la chronologie", "v2.8.4 deployment: backed by the timeline") },
           { level: "medium", text: w("Base partagée avec auth-service", "Database shared with auth-service") },
-          { level: "low", text: w("Panne réseau — contredite par les sources", "Network outage — contradicted by the sources") },
+          { level: "low", text: w("Panne réseau : contredite par les sources", "Network outage: contradicted by the sources") },
         ],
       },
     ],
@@ -452,8 +452,8 @@ export const RUN: Record<string, AgentProduct> = {
 
   "build-fixer": {
     promise: w(
-      "Votre build est cassé ? Obtenez la cause probable et le plus petit correctif — proposé, jamais appliqué sans vous.",
-      "Your build is broken? Get the likely cause and the smallest fix — proposed, never applied without you.",
+      "Votre build est cassé ? Obtenez la cause probable et le plus petit correctif : proposé, jamais appliqué sans vous.",
+      "Your build is broken? Get the likely cause and the smallest fix: proposed, never applied without you.",
     ),
     problem: w(
       "Un pipeline rouge bloque toute l'équipe ; retrouver le changement fautif parmi les derniers commits prend du temps.",
@@ -480,8 +480,8 @@ export const RUN: Record<string, AgentProduct> = {
       },
     ],
     does: w(
-      "Il regarde ce qui a changé juste avant la casse — derniers commits et pull requests —, désigne le changement probable et propose le plus petit correctif, soumis à votre décision.",
-      "It looks at what changed just before the break — latest commits and pull requests —, points to the likely change and proposes the smallest fix, put to your decision.",
+      "Il regarde ce qui a changé juste avant la casse (derniers commits et pull requests), désigne le changement probable et propose le plus petit correctif, soumis à votre décision.",
+      "It looks at what changed just before the break (latest commits and pull requests), points to the likely change and proposes the smallest fix, put to your decision.",
     ),
     features: [
       w("Ce qui a cassé, et quand", "What broke, and when"),
@@ -495,7 +495,7 @@ export const RUN: Record<string, AgentProduct> = {
         icon: "alert",
         title: w("Pipeline rouge sur main", "Red pipeline on main"),
         body: w("Comprendre pourquoi, et quoi faire.", "Understand why, and what to do."),
-        ask: w("Le build de main est cassé depuis ce matin, pourquoi ?", "The main build has been broken since this morning — why?"),
+        ask: w("Le build de main est cassé depuis ce matin, pourquoi ?", "The main build has been broken since this morning: why?"),
       },
       {
         icon: "git",
@@ -516,7 +516,7 @@ export const RUN: Record<string, AgentProduct> = {
         icon: "rocket",
         title: w("Débloquer une release", "Unblock a release"),
         body: w("Le correctif le plus sûr pour repartir.", "The safest fix to get going again."),
-        ask: w("Le pipeline de release est bloqué, que proposes-tu ?", "The release pipeline is stuck — what do you suggest?"),
+        ask: w("Le pipeline de release est bloqué, que proposes-tu ?", "The release pipeline is stuck: what do you suggest?"),
       },
     ],
     outline: [
@@ -555,12 +555,12 @@ export const RUN: Record<string, AgentProduct> = {
 
   "security-review": {
     promise: w(
-      "Sachez ce qui expose une application : sa surface, ses données sensibles, ce qui l'atteint — et quoi vérifier en premier.",
-      "Know what exposes an application: its surface, its sensitive data, what reaches it — and what to check first.",
+      "Sachez ce qui expose une application : sa surface, ses données sensibles, ce qui l'atteint, et quoi vérifier en premier.",
+      "Know what exposes an application: its surface, its sensitive data, what reaches it, and what to check first.",
     ),
     problem: w(
-      "Savoir si un système est exposé suppose de croiser architecture, données et infrastructure — rarement documentées ensemble.",
-      "Knowing whether a system is exposed means cross-checking architecture, data and infrastructure — rarely documented together.",
+      "Savoir si un système est exposé suppose de croiser architecture, données et infrastructure : rarement documentées ensemble.",
+      "Knowing whether a system is exposed means cross-checking architecture, data and infrastructure: rarely documented together.",
     ),
     benefits: [
       {
@@ -586,8 +586,8 @@ export const RUN: Record<string, AgentProduct> = {
       },
     ],
     does: w(
-      "Il examine ce qu'un système porte et ce qui l'atteint — données, infrastructure, comptes cloud, dépendances, responsables — et rend des constats priorisés, en séparant ce qui est appuyé des hypothèses.",
-      "It examines what a system holds and what reaches it — data, infrastructure, cloud accounts, dependencies, owners — and returns prioritised findings, keeping what is supported apart from hypotheses.",
+      "Il examine ce qu'un système porte et ce qui l'atteint (données, infrastructure, comptes cloud, dépendances, responsables) et rend des constats priorisés, en séparant ce qui est appuyé des hypothèses.",
+      "It examines what a system holds and what reaches it (data, infrastructure, cloud accounts, dependencies, owners) and returns prioritised findings, keeping what is supported apart from hypotheses.",
     ),
     features: [
       w("Un état : complet, partiel ou non évalué", "A state: complete, partial or not assessed"),
@@ -693,8 +693,8 @@ export const RUN: Record<string, AgentProduct> = {
       },
     ],
     does: w(
-      "Il lit les ressources, comptes et groupes de ressources de vos clouds connectés — AWS, Azure, GCP — et les rattache aux services qui y tournent, pour montrer ce qui est partagé et ce qui est fragile.",
-      "It reads the resources, accounts and resource groups of your connected clouds — AWS, Azure, GCP — and ties them to the services running on them, to show what is shared and what is fragile.",
+      "Il lit les ressources, comptes et groupes de ressources de vos clouds connectés (AWS, Azure, GCP) et les rattache aux services qui y tournent, pour montrer ce qui est partagé et ce qui est fragile.",
+      "It reads the resources, accounts and resource groups of your connected clouds (AWS, Azure, GCP) and ties them to the services running on them, to show what is shared and what is fragile.",
     ),
     features: [
       w("Où ça tourne : comptes, régions, environnements", "Where it runs: accounts, regions, environments"),
@@ -796,7 +796,7 @@ export const RUN: Record<string, AgentProduct> = {
       {
         icon: "users",
         title: w("Les responsables", "The owners"),
-        body: w("Qui répond de chaque donnée — et ce qui n'a pas de responsable.", "Who answers for each piece of data — and what has no owner."),
+        body: w("Qui répond de chaque donnée, et ce qui n'a pas de responsable.", "Who answers for each piece of data, and what has no owner."),
       },
     ],
     does: w(
@@ -866,9 +866,9 @@ export const RUN: Record<string, AgentProduct> = {
         kind: "list",
         title: w("Qui utilise la base clients", "Who uses the customer database"),
         items: [
-          w("checkout — lecture et écriture", "checkout — read and write"),
-          w("crm-sync — lecture", "crm-sync — read"),
-          w("facturation — lecture", "billing — read"),
+          w("checkout : lecture et écriture", "checkout: read and write"),
+          w("crm-sync : lecture", "crm-sync: read"),
+          w("facturation : lecture", "billing: read"),
         ],
       },
     ],
@@ -882,8 +882,8 @@ export const RUN: Record<string, AgentProduct> = {
 
   "documentation-assistant": {
     promise: w(
-      "Sachez ce qui est documenté, ce qui manque ou a vieilli — et obtenez le brouillon de la page qui manque le plus.",
-      "Know what is documented, what is missing or out of date — and get a draft of the page most missing.",
+      "Sachez ce qui est documenté, ce qui manque ou a vieilli, et obtenez le brouillon de la page qui manque le plus.",
+      "Know what is documented, what is missing or out of date, and get a draft of the page most missing.",
     ),
     problem: w(
       "La documentation se périme sans que personne ne le voie ; les trous apparaissent au pire moment.",
@@ -977,9 +977,9 @@ export const RUN: Record<string, AgentProduct> = {
         kind: "list",
         title: w("Le brouillon", "The draft"),
         items: [
-          w("Rôle du service — cité", "The service's role — cited"),
-          w("Dépendances — citées", "Dependencies — cited"),
-          w("Procédure de reprise — À compléter", "Recovery procedure — To complete"),
+          w("Rôle du service : cité", "The service's role: cited"),
+          w("Dépendances : citées", "Dependencies: cited"),
+          w("Procédure de reprise : À compléter", "Recovery procedure: To complete"),
         ],
       },
     ],

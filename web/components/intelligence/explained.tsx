@@ -239,7 +239,7 @@ export function AnalysisLimits({
                   <CircleX className="mt-0.5 size-4 shrink-0 text-state-danger" aria-hidden="true" />
                   <span className="min-w-0">
                     <span className="font-medium text-brand-navy">{capability.name}</span>
-                    {" — "}
+                    {t.shell.colon}
                     <span className="text-shell-muted">{capability.leaves}</span>
                   </span>
                 </li>

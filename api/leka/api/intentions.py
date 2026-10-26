@@ -221,7 +221,7 @@ def _refused(error: Exception) -> ApiError:
         return ApiError(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             ErrorCode.VALIDATION_FAILED,
-            "Nothing of that kind and id in this workspace — or the context it is analysed "
+            "Nothing of that kind and id in this workspace, or the context it is analysed "
             "from, which stays linked.",
         )
     return ApiError(status.HTTP_409_CONFLICT, ErrorCode.CONFLICT, str(error))
@@ -384,7 +384,7 @@ async def _source_first(session: SessionDep, workspace_id: uuid.UUID) -> None:
         raise ApiError(
             status.HTTP_409_CONFLICT,
             ErrorCode.SOURCE_REQUIRED,
-            "Connect a source first — Confluence, for instance: LEKA answers from it.",
+            "Connect a source first (Confluence, for instance): LEKA answers from it.",
         )
 
 
