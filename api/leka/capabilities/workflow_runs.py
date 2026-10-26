@@ -49,6 +49,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.background import JobQueue, enqueue_job
 from leka.capabilities.catalogue import CatalogueService, Entry
+from leka.capabilities.dedicated import hidden_from
 from leka.capabilities.definition import Definition, Kind, check_input
 from leka.capabilities.models import (
     AgentRun,
@@ -106,6 +107,8 @@ FORGOTTEN = timedelta(hours=6)
 OUTPUT_KEPT = 4000
 # Failures a retry cannot mend: the person, the workflow itself.
 FINAL = frozenset({"not_permitted", "gone"})
+# A skipped step's reason: its agent dedicated to other organisations.
+NOT_HERE = "not_here"
 # An AI control's refusals of a model call (LEKA-406): final too.
 CONTROLLED = frozenset({"refused", "limited", "blocked"})
 
@@ -419,8 +422,13 @@ class WorkflowService:
         )
         self._session.add(run)
         await self._session.flush()
+        # A step whose agent is dedicated to other organisations (2026-10-25):
+        # one it can do without — else the workflow is not here (composed) —
+        # skipped from the start, never run, never said.
+        hidden = await hidden_from(self._session, self._workspace_id)
         for position, step_id in enumerate(order(workflow)):
             step = workflow.step(step_id)
+            away = step.uses in hidden
             self._session.add(
                 WorkflowRunStep(
                     workspace_id=self._workspace_id,
@@ -429,7 +437,8 @@ class WorkflowService:
                     step=step.id,
                     position=position,
                     uses=step.uses,
-                    status=StepStatus.PENDING.value,
+                    status=(StepStatus.SKIPPED if away else StepStatus.PENDING).value,
+                    reason=NOT_HERE if away else None,
                     attempts=0,
                     output={},
                 )

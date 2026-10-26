@@ -65,7 +65,7 @@ const choose = (page: Page) => page.getByTestId("agent-choose").getByTestId("age
 test.describe("An agent's product page", () => {
   test.use({ viewport: { width: 1536, height: 1024 } });
 
-  test("from the catalogue: its promise, price and state, its sections — used, then given a request", async ({
+  test("from the catalogue: its promise and state, its sections — used, then given a request", async ({
     page,
   }) => {
     await signIn(page);
@@ -78,12 +78,13 @@ test.describe("An agent's product page", () => {
     await expect(page.getByTestId("capability")).toHaveAttribute("data-page", "product");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Architecte applicatif");
     await expect(page.getByTestId("agent-promise")).toContainText("Le dossier d'architecture d'un parcours métier");
-    // The server's facts: its price, the plan that includes it, its state.
+    // The server's facts (2026-10-25): made for this organisation — never
+    // priced, no plan to compare.
     const hero = page.getByTestId("agent-hero");
-    await expect(page.getByTestId("agent-hero-price")).toContainText(/25\s€/);
-    await expect(hero).toContainText("Inclus dès Business");
-    await expect(hero.getByTestId("agent-state")).toHaveText("Inclus dans votre plan");
-    await expect(page.getByTestId("agent-plans")).toContainText("Enterprise");
+    await expect(hero.getByTestId("agent-dedicated")).toHaveText("Conçu pour Acme Corp");
+    await expect(hero.getByTestId("agent-state")).toHaveText("Dédié à votre organisation");
+    await expect(page.getByTestId("agent-hero-price")).toHaveCount(0);
+    await expect(page.getByTestId("agent-plans")).toHaveCount(0);
 
     // Its sections, by their address.
     const faq = page.getByTestId("agent-tabs").getByRole("link", { name: "FAQ" });

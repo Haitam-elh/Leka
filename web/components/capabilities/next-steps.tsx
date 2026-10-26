@@ -182,6 +182,9 @@ function WriteForm({
         inputs: {
           demande: `${focus.trim()}\n\n${intro}\n\n${delivered}`,
           ...(repository.trim() ? { depot: repository.trim() } : {}),
+          // The deliverable it comes from: a design review gives the code
+          // change its mock-up, never its words alone (2026-10-24).
+          ...(writer === "code-change" ? { livrable: run.id } : {}),
         },
         intention_id: intentionId,
       });

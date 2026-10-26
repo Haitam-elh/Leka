@@ -1,6 +1,6 @@
 "use client";
 
-import { Crown, Search } from "lucide-react";
+import { BadgeCheck, Crown, Search } from "lucide-react";
 import Link from "next/link";
 
 import { Wordmark } from "@/components/brand/logo";
@@ -12,6 +12,8 @@ import { UserMenu } from "@/components/shell/user-menu";
 import { WorkspaceSwitcher } from "@/components/shell/workspace-switcher";
 import { routes } from "@/config/routes";
 import { useCredits } from "@/lib/billing-queries";
+import { ENTERPRISE, logoAddress, useLogo } from "@/lib/contract";
+import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 
 interface AppHeaderProps {
@@ -34,7 +36,11 @@ export function AppHeader({ onOpenSearch, searchTriggerRef }: AppHeaderProps) {
   const t = useDictionary();
   // Nothing asked of the API before the session is known: a visitor signed
   // out is sent to sign in by the shell, not bounced by a 401 of the plan's.
-  const ready = useShell().status === "ready";
+  const shell = useShell();
+  const ready = shell.status === "ready";
+  // Under an Enterprise contract (2026-10-25): its badge and its logo, never
+  // a plan to compare; « Contrat » in the menu.
+  const enterprise = useCredits({ enabled: ready }).data?.plan === ENTERPRISE;
 
   return (
     <header className="flex h-header shrink-0 items-center gap-2 border-b border-shell-line bg-white px-4 lg:px-8">
@@ -67,14 +73,44 @@ export function AppHeader({ onOpenSearch, searchTriggerRef }: AppHeaderProps) {
       <div className="hidden sm:block">
         <WorkspaceSwitcher />
       </div>
-      {ready && <PlanBadge />}
-      <UserMenu />
+      {ready ? enterprise ? <EnterpriseBadge name={shell.workspace?.name ?? ""} /> : <PlanBadge /> : null}
+      <UserMenu contract={enterprise} />
     </header>
   );
 }
 
 const BADGE =
   "inline-flex h-9 items-center gap-1.5 rounded-lg bg-brand-violet px-3 text-sm font-medium text-white capitalize outline-none";
+
+/** « Entreprise » and its organisation's logo when its admin gave one —
+ * its name, in the switcher beside it, otherwise; its contract one click
+ * away. */
+function EnterpriseBadge({ name }: { name: string }) {
+  const t = useDictionary();
+  const logo = useLogo();
+  return (
+    <span className="flex items-center gap-2">
+      {logo ? (
+        // eslint-disable-next-line @next/next/no-img-element -- the API serves it, sized by the header
+        <img
+          src={logoAddress(logo)}
+          alt={fill(t.billing.contract.logoAlt, { name })}
+          className="hidden h-8 max-w-28 object-contain md:block"
+          data-testid="header-logo"
+        />
+      ) : null}
+      <Link
+        href={routes.billing()}
+        aria-label={`${t.shell.enterprise} — ${t.shell.contract}`}
+        data-testid="enterprise-badge"
+        className={`${BADGE} hover:bg-brand-violet/90 focus-visible:ring-3 focus-visible:ring-brand-violet/40`}
+      >
+        <BadgeCheck className="size-4" aria-hidden="true" />
+        <span>{t.shell.enterprise}</span>
+      </Link>
+    </span>
+  );
+}
 
 /** The workspace's plan, as metering reads it; the plans compared
  * (LEKA-466) — every member reads them, who pays changes them there.

@@ -15,6 +15,7 @@ import { useState } from "react";
 import { useCurrentWorkspace, useWorkspaces } from "@/components/shell/shell-provider";
 import { Button } from "@/components/ui/button";
 import { routes } from "@/config/routes";
+import { useEnterprise } from "@/lib/contract";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 import { workspace } from "@/lib/workspace";
 
@@ -40,6 +41,9 @@ function useOpenDemo(): { open: (fresh?: boolean) => Promise<void>; busy: boolea
 export function ExploreDemoButton({ variant = "outline" }: { variant?: "default" | "outline" }) {
   const t = useDictionary();
   const { open, busy, failed } = useOpenDemo();
+  // A customer's own organisation (2026-10-25): its data only, no demonstration.
+  const enterprise = useEnterprise();
+  if (enterprise) return null;
   return (
     <span className="inline-flex flex-col gap-1">
       <Button

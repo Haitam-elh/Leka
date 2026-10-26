@@ -29,8 +29,8 @@ ASKED = {"parcours": "De l'intention à l'action", "perimetre": "Plateforme LEKA
 def test_its_parameters_are_filled_never_written_as_is() -> None:
     said = parameters_of(ASKED, "Acme Corp")
     assert (said["ORGANISATION"], said["ENTITE"], said["SERVICE"]) == ("Acme Corp", "", "")
-    engie = parameters_of({**ASKED, "organisation": "ENGIE"}, "Acme Corp")
-    assert engie["ORGANISATION"] == "ENGIE"
+    asked = parameters_of({**ASKED, "organisation": "Globex"}, "Acme Corp")
+    assert asked["ORGANISATION"] == "Globex"
     line = "« {{ORGANISATION}} - {{ENTITE}} - {{SERVICE}} | Couche métier »"
     assert filled(line, said) == "« Acme Corp | Couche métier »"
     assert filled("{{ESPACES_CONFLUENCE}}", said) == "les espaces Confluence connectés à LEKA"

@@ -23,7 +23,8 @@ def test_every_agent_on_sale_is_built_and_every_reference_one_unbuilt_is_never_s
     # acceptance (2026-10-21), the API review, the reliability, dependency
     # and performance analyses, the database review and the migration plan
     # (2026-10-22).
-    assert len(on_sale) == 28
+    # The architect left them (2026-10-25): dedicated, never sold.
+    assert len(on_sale) == 27
     assert all(r.agent is not None and r.lifecycle == "active" for r in on_sale)
     # The reference's price is the catalogue's, where the reference names one.
     assert all(r.price is not None for r in on_sale)

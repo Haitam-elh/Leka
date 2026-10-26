@@ -16,6 +16,7 @@ import { ErrorState } from "@/components/states/error-state";
 import { LoadingState } from "@/components/states/loading-state";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { routes } from "@/config/routes";
+import { useEnterprise } from "@/lib/contract";
 import { isCustom } from "@/lib/custom-connectors";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
@@ -255,6 +256,10 @@ export function WelcomePage() {
 function StartChoice() {
   const t = useDictionary();
   const w = t.demo;
+  // A customer's own organisation (2026-10-25): its own tools, no
+  // demonstration — no choice to make.
+  const enterprise = useEnterprise();
+  if (enterprise) return null;
   return (
     <section aria-labelledby="welcome-start" className="mb-6" data-testid="welcome-start">
       <h2 id="welcome-start" className="mb-2 text-sm font-semibold text-brand-navy">

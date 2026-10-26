@@ -16,6 +16,10 @@ from leka.capabilities.deliverables.report_pdf import report_pdf
 MEDIA_TYPES = {
     "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     "pdf": "application/pdf",
+    # The architect's dossier on a Confluence space (2026-10-25).
+    "md": "text/markdown; charset=utf-8",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "json": "application/json",
 }
 
 

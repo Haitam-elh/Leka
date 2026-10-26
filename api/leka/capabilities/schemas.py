@@ -121,6 +121,11 @@ class AgentFrontMatter(BaseModel):
         description="The library of guides it works by, read while it runs with "
         "read_method: a directory under agents/_library/ (agents/_library/README.md)",
     )
+    dedicated: bool = Field(
+        default=False,
+        description="Made for the organisations it is assigned to (2026-10-25): seen and run "
+        "by them only, never sold — assigned by LEKA (python -m leka.ops.enterprise)",
+    )
 
     @field_validator("method")
     @classmethod
@@ -276,6 +281,10 @@ class CapabilityRead(BaseModel):
     kinds: list[str]
     entity_types: list[str]
     examples: list[str]
+    dedicated: bool = Field(
+        description="Made for this organisation and assigned to it by LEKA (2026-10-25): "
+        "never sold, never priced."
+    )
     always: bool
     available: bool
     reasons: list[CapabilityReason]
@@ -695,10 +704,14 @@ class DeliverableRead(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    format: Literal["pptx", "pdf"]
+    format: Literal["pptx", "pdf", "md", "docx", "json"]
     name: str = Field(description="Its file name.")
     size: int = Field(description="In bytes.")
-    slides: int
+    slides: int = Field(default=0, description="A deck's slides; 0 for a dossier.")
+    kind: Literal["deck", "dossier"] = Field(
+        default="deck",
+        description="The architect's deck, or its dossier on a Confluence space (2026-10-25).",
+    )
 
 
 class DesignCorrectionRead(BaseModel):
@@ -707,6 +720,43 @@ class DesignCorrectionRead(BaseModel):
     target: str
     note: str
     at: datetime
+
+
+class AgentUsageRead(BaseModel):
+    """An agent's use here over a period (2026-10-25): how many runs and how
+    they ended — counted, never priced."""
+
+    model_config = ConfigDict(frozen=True)
+
+    key: str
+    title: str
+    runs: int
+    succeeded: int
+    failed: int
+    last_at: datetime | None = None
+
+
+class AgentJournalRead(BaseModel):
+    """Who ran which agent, on what, when, and how it ended (2026-10-25)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    key: str
+    title: str
+    by: uuid.UUID | None = None
+    by_name: str | None = Field(default=None, description="Who asked it, as their name reads.")
+    sources: list[str] = Field(
+        default_factory=list,
+        description="The sources it was held to, by name — none: every one connected.",
+    )
+    scope: str | None = Field(
+        default=None, description="What it was asked on: a repository, a space, a perimeter."
+    )
+    status: str
+    queued_at: datetime
+    finished_at: datetime | None = None
+    intention_id: uuid.UUID | None = None
 
 
 class AgentRunRead(BaseModel):
@@ -1093,8 +1143,8 @@ class WorkflowRunStepRead(BaseModel):
     status: WorkflowStepStatus
     attempts: int
     reason: str | None = Field(
-        description="skipped: condition_false · not_reached: stopped, cancelled, abandoned · "
-        "failed: its error."
+        description="skipped: condition_false, not_here (its agent dedicated to others) · "
+        "not_reached: stopped, cancelled, abandoned · failed: its error."
     )
     output: dict[str, object] = Field(description="What it found: codes, summary, ref.")
     started_at: datetime | None
@@ -1324,6 +1374,38 @@ class CodeChangeRollback(BaseModel):
     at: datetime | None = None
 
 
+class CodeChangeRepair(BaseModel):
+    """« Réparer le problème » (2026-10-24): its pull request in red, LEKA
+    read what failed and fixed it with one more commit on its branch — the
+    checks run again. Or why not: the cause outside the code, nothing in
+    red any more, a failure said."""
+
+    model_config = ConfigDict(frozen=True)
+
+    state: Literal["running", "pushed", "failed", "outside", "unneeded"] = Field(
+        description="running (LEKA reads and fixes), pushed (its commit on the branch), failed, "
+        "outside (the cause is not in the code: nothing written), unneeded (nothing in red)."
+    )
+    asked_at: datetime
+    by: uuid.UUID | None = None
+    failed: list[str] = Field(default_factory=list, description="The checks in red it read.")
+    cause: str | None = Field(default=None, description="What failed, and why.")
+    summary: str | None = Field(default=None, description="What the repair changes.")
+    files: list[CodeChangeFileRead] = Field(
+        default_factory=list, description="The files it fixed: their diff on the branch."
+    )
+    commit: str | None = Field(default=None, description="The commit it added to the branch.")
+    reopened: bool = Field(default=False, description="Its pull request, closed, reopened.")
+    model: str | None = Field(default=None, description="The model that wrote it.")
+    error: str | None = Field(
+        default=None,
+        description="Why not: no_model, timeout, edits_not_applied, moved, merged, "
+        "cannot_reopen, not_allowed, unavailable, error.",
+    )
+    said: str | None = Field(default=None, description="Why not, in words.")
+    finished_at: datetime | None = None
+
+
 class CodeChangeRead(BaseModel):
     """A code change an agent proposed: its files and their diffs, where it
     stands — proposed, rejected, applied as a pull request, then followed —
@@ -1365,6 +1447,10 @@ class CodeChangeRead(BaseModel):
     )
     rollbacks: list[CodeChangeRollback] = Field(
         default_factory=list, description="Each time a person went back to the version before it."
+    )
+    repairs: list[CodeChangeRepair] = Field(
+        default_factory=list,
+        description="Each time LEKA repaired its pull request in red, asked by a person.",
     )
     deploys_allowed: bool = Field(
         default=False,

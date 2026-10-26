@@ -55,7 +55,7 @@ from leka.billing import (
     plan_runs_agents,
     stripe,
 )
-from leka.capabilities import find
+from leka.capabilities import dedicated_to, find
 from leka.core.errors import ErrorCode
 from leka.governance import Permission, Principal, require_permission
 
@@ -129,6 +129,11 @@ async def read_add_ons(principal: Reader, session: SessionDep) -> AddOnsRead:
         every=has.every,
         agents=agents,
         bundles=bundles,
+        dedicated=[
+            key
+            for key in sorted(await dedicated_to(session, principal.workspace_id))
+            if (definition := find(key)) is not None and definition.dedicated
+        ],
     )
 
 

@@ -284,12 +284,24 @@ function stepSaid(w: Dictionary["agentRuns"], event: AgentRunEvent): string {
 }
 
 /** The files LEKA drew of what a run delivered: downloaded as they are,
- * the PDF first — the template's mandatory deliverable. */
+ * the PDF first — the template's mandatory deliverable. The architect's
+ * dossier on a Confluence space (2026-10-25): its PDF, Word, Markdown and
+ * JSON. */
+const ORDER = ["pdf", "docx", "pptx", "md", "json"];
+
 export function Deliverables({ run }: { run: AgentRun }) {
   const t = useDictionary();
   const w = t.agentRuns;
   if (!run.deliverables.length) return null;
-  const files = [...run.deliverables].sort((a, b) => (a.format === "pdf" ? -1 : b.format === "pdf" ? 1 : 0));
+  const files = [...run.deliverables].sort((a, b) => ORDER.indexOf(a.format) - ORDER.indexOf(b.format));
+  const said: Record<string, string> = {
+    pdf: w.downloadPdf,
+    pptx: w.downloadPptx,
+    md: w.downloadMd,
+    docx: w.downloadDocx,
+    json: w.downloadJson,
+  };
+  const dossier = run.deliverables.some((file) => file.kind === "dossier");
   return (
     <div className="flex flex-wrap items-center gap-2" data-testid="agent-run-deliverables">
       {files.map((file) => (
@@ -301,11 +313,11 @@ export function Deliverables({ run }: { run: AgentRun }) {
           data-format={file.format}
         >
           <Download className="size-3.5" aria-hidden="true" />
-          {file.format === "pdf" ? w.downloadPdf : w.downloadPptx}
+          {said[file.format] ?? file.format}
         </a>
       ))}
       <span className="text-xs text-shell-muted">
-        {fill(w.slides, { count: run.deliverables[0]?.slides ?? 0 })}
+        {dossier ? w.dossierSaid : fill(w.slides, { count: run.deliverables[0]?.slides ?? 0 })}
       </span>
     </div>
   );

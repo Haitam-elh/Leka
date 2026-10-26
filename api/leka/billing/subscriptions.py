@@ -86,6 +86,21 @@ class CheckoutRefusedError(Exception):
         self.code = code
 
 
+ENTERPRISE = "enterprise"
+
+
+async def under_contract(session: AsyncSession, workspace_id: uuid.UUID) -> None:
+    """An Enterprise contract (2026-10-25): its terms are agreed with LEKA,
+    never bought online — no checkout, no portal, no renewal changed here.
+    CheckoutRefusedError (`enterprise_contract`) when it is one."""
+    if (await plan_of(session, workspace_id)).name == ENTERPRISE:
+        raise CheckoutRefusedError(
+            "enterprise_contract",
+            "This organisation is under an Enterprise contract: its terms change with LEKA, "
+            "never online.",
+        )
+
+
 def payments_open() -> bool:
     """Whether Stripe is configured here: plans can be bought."""
     return settings.stripe_secret_key is not None
@@ -205,6 +220,7 @@ async def checkout(
     intention (LEKA-458), Stripe brings the person back to it. Already
     subscribed: Stripe's confirmation of the change to that exact price
     (LEKA-490) — never a second subscription."""
+    await under_contract(session, workspace_id)
     offer = catalogue()
     try:
         plan = offer.plan(plan_key)
@@ -325,6 +341,7 @@ async def portal(
 ) -> str:
     """Stripe's customer portal — `cancel`: opened on ending the
     subscription at its period's end, the way back to Free (LEKA-490)."""
+    await under_contract(session, workspace_id)
     account = await account_of(session, workspace_id)
     if not account.stripe_customer_id:
         raise CheckoutRefusedError("no_customer", "Nothing was ever bought here.")
@@ -354,6 +371,7 @@ async def renewal(
 ) -> BillingAccount:
     """Renewed at its period's end, or not: the subscription kept until then
     either way — what Stripe answers kept at once, its event confirming it."""
+    await under_contract(session, workspace_id)
     account = await account_of(session, workspace_id)
     if not account.stripe_subscription_id or account.status not in PAYING:
         raise CheckoutRefusedError("not_subscribed", "No subscription to renew or not.")

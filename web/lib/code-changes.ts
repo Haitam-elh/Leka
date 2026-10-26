@@ -10,6 +10,10 @@ export type CodeChange = components["schemas"]["CodeChangeRead"];
 export type CodeChangeFile = components["schemas"]["CodeChangeFileRead"];
 export type CodeChangeFollow = components["schemas"]["CodeChangeFollow"];
 export type CodeChangeRollback = components["schemas"]["CodeChangeRollback"];
+export type CodeChangeRepair = components["schemas"]["CodeChangeRepair"];
+
+/** Repairs pushed on one pull request, at most (the API's MAX_REPAIRS). */
+export const MAX_REPAIRS = 3;
 
 export const codeChanges = {
   list: (intentionId: string) =>
@@ -33,6 +37,10 @@ export const codeChanges = {
    * for the version before it. */
   rollback: (id: string) =>
     apiFetch<CodeChange>(`/code-changes/${encodeURIComponent(id)}/rollback`, { method: "POST" }),
+  /** « Réparer le problème »: its pull request in red, LEKA reads what
+   * failed and adds the fix to its branch — a worker does it (2026-10-24). */
+  repair: (id: string) =>
+    apiFetch<CodeChange>(`/code-changes/${encodeURIComponent(id)}/repair`, { method: "POST" }),
   reject: (id: string, note?: string) =>
     apiFetch<CodeChange>(`/code-changes/${encodeURIComponent(id)}/reject`, {
       method: "POST",
