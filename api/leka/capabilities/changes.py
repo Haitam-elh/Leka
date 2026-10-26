@@ -24,6 +24,14 @@
                         person's merge, the deployment that took it, the
                         version before it — until deployed, closed, or quiet
                         (run_follow_sweep)
+    repaired, on asking (2026-10-24) its checks in red: « Réparer le
+                        problème » — what failed read on GitHub (each check,
+                        its annotations, the end of its log), the files it
+                        names read at the pull request's head, the model
+                        asked for the fix (exact edits, checked against those
+                        files), one more commit on its leka/ branch — closed,
+                        the pull request reopened first. The checks run
+                        again; three repairs at most, then a person looks
     undone, on asking   (2026-10-20) not merged: its pull request closed.
                         Merged: « Annuler ce changement » proposes the change
                         that undoes it (`reverts`), each file laid back on its
@@ -56,10 +64,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from leka.background import JobQueue, enqueue_job
 from leka.capabilities.catalogue import needs_of
 from leka.capabilities.definition import Definition
-from leka.capabilities.gateway import Gateway, Message, NoModelError, Request, Tier
+from leka.capabilities.gateway import Gateway, Message, Needs, NoModelError, Request, Tier
 from leka.capabilities.models import AgentRun, CodeChange
+from leka.capabilities.registry import find
 from leka.connectors import (
     CodeRefusedError,
     FileChange,
@@ -345,6 +355,30 @@ Never change a file you were not given: a file the agent did not read is not \
 changed. Answer with the JSON object only."""
 
 
+def change_problems(proposal: ChangeProposal, read: Mapping[str, str]) -> list[str]:
+    """Why a change cannot be applied as written — said to the model, which
+    writes it again (2026-10-25: edits that did not land left the change
+    unwritten until a person asked again). Each edit held to the file as
+    the writer was given it; a change of no file is none."""
+    if not proposal.files:
+        return ["No file is changed: write the edits the analysis proposes."]
+    given = {key.split(":", 1)[-1]: text for key, text in read.items()}
+    problems: list[str] = []
+    for each in proposal.files:
+        # A path outside the repository is left out, never asked again for.
+        path = safe_path(each.path)
+        if path is None or not each.edits or path not in given:
+            continue
+        _after, why = apply_edits(given[path], each.edits)
+        if why is not None:
+            where = "there more than once" if why == "ambiguous" else "not in the file"
+            problems.append(
+                f"{path}: an edit's `find` is {where} as you were given it — copy whole "
+                "lines exactly, enough of them to appear once."
+            )
+    return problems
+
+
 def shown(read: Mapping[str, str]) -> dict[str, str]:
     """The files the agent read, as the writer is shown them: each whole up
     to MOST_SHOWN, all up to MOST_SHOWN_ALL — the last ones read left out
@@ -401,6 +435,53 @@ async def github_sources(session: AsyncSession, workspace_id: uuid.UUID) -> list
         )
     )
     return list(found)
+
+
+# The repositories a workspace's sources list, read when one lists none, at
+# most; a name, as a word of a request.
+MAX_LISTED = 200
+_WORD = re.compile(r"[a-z0-9][a-z0-9._-]*")
+
+
+async def repositories_here(session: AsyncSession, workspace_id: uuid.UUID) -> list[str]:
+    """The repositories the workspace's connected GitHub sources read: the
+    list an admin chose, else what the source sees."""
+    names: list[str] = []
+    service = SourceService(session, workspace_id, actor_user_id=None)
+    for source in await github_sources(session, workspace_id):
+        listed = (source.config or {}).get("repositories")
+        if isinstance(listed, list) and listed:
+            names += [str(name) for name in listed]
+            continue
+        try:
+            scope = await (await service.open_connector(source)).list_scope()
+        except Exception:
+            logger.warning("repositories_not_listed", source=str(source.id), exc_info=True)
+            continue
+        names += [option.key for option in scope.options[:MAX_LISTED]]
+    return list(dict.fromkeys(names))
+
+
+def repository_named(text: str, repositories: Sequence[str]) -> str | None:
+    """The repository a request means (2026-10-25: « propose un design de la
+    page d'accueil de LEKA » drew another screen; « … de Haitam-elh/Leka »,
+    the right one): named in full; else by its own name, a word of the
+    request (« LEKA » is Haitam-elh/Leka), when one only answers to it; else
+    the only one there is. None when it cannot be told."""
+    said = text.casefold()
+    full = [r for r in repositories if r.casefold() in said]
+    if full:
+        return max(full, key=len)
+    words = set(_WORD.findall(said))
+    named = [r for r in repositories if r.rsplit("/", 1)[-1].casefold() in words]
+    if len(named) == 1:
+        return named[0]
+    return repositories[0] if len(repositories) == 1 else None
+
+
+async def repository_for(session: AsyncSession, workspace_id: uuid.UUID, text: str) -> str | None:
+    """The repository a request means, among those the workspace reads."""
+    return repository_named(text, await repositories_here(session, workspace_id))
 
 
 async def code_for(
@@ -564,6 +645,7 @@ async def propose_change(
     *,
     read: Mapping[str, str] | None = None,
     budget: float = CHANGE_BUDGET,
+    target: Mapping[str, object] | None = None,
 ) -> Proposed:
     """The change a run's analysis proposes, applied, diffed and kept:
 
@@ -571,7 +653,10 @@ async def propose_change(
        again — no model asked again;
     2. else the model, given the analysis and the files the agent read — or,
        none kept, the files the analysis names, read again;
-    3. the model failing, what of its own diff did land."""
+    3. the model failing, what of its own diff did land.
+
+    Implementing a design review's direction (`target`, mockups.design_target):
+    the writer is given its mock-up too (2026-10-24)."""
     found = await _repository_of(session, run, analysis)
     from_diff: tuple[list[dict[str, object]], list[dict[str, str]]] = ([], [])
     base = ""
@@ -606,7 +691,12 @@ async def propose_change(
                     read[f"{repository}:{path}"] = text
     request = Request(
         purpose=f"agent:{definition.key}:change"[:100],
-        messages=change_messages(definition, run.inputs, analysis, read),
+        messages=change_messages(
+            definition,
+            {**run.inputs, "maquette": target} if target else run.inputs,
+            analysis,
+            read,
+        ),
         tier=Tier.DEEP,
         max_tokens=CHANGE_TOKENS,
         ref=f"agent_run:{run.id}",
@@ -615,7 +705,10 @@ async def propose_change(
     try:
         answered = await asyncio.wait_for(
             Gateway(session, run.workspace_id).structured(
-                request, ChangeProposal, replace(needs_of(definition), tools=False)
+                request,
+                ChangeProposal,
+                replace(needs_of(definition), tools=False),
+                verify=lambda proposal: change_problems(proposal, read or {}),
             ),
             timeout=budget,
         )
@@ -864,6 +957,12 @@ def before_of(path: str, after: str | None, diff: str) -> tuple[str | None, bool
     return before, before is not None
 
 
+# The ids an analysis cites ([uuid]): LEKA's, never said on GitHub.
+_CITED_ID = re.compile(
+    r"\s*\[[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\]", re.IGNORECASE
+)
+
+
 def body_of(change: CodeChange, *, by: str) -> str:
     files = "\n".join(
         f"- `{f['path']}` ({f['status']}, +{f['additions']} -{f['deletions']})"
@@ -871,7 +970,7 @@ def body_of(change: CodeChange, *, by: str) -> str:
         for f in change.files
     )
     return (
-        f"{change.summary}\n\n### Fichiers\n{files}\n\n---\n"
+        f"{_CITED_ID.sub('', change.summary)}\n\n### Fichiers\n{files}\n\n---\n"
         f"Proposée par LEKA, acceptée par {by}. "
         "LEKA ouvre la pull request ; la relire et la fusionner reste votre décision. "
         "Fusionnée, LEKA suit son déploiement."
@@ -1142,6 +1241,356 @@ class ChangeService:
         logger.info("code_change_rollback_asked", change=str(change.id), version=before)
         return change
 
+    async def repair(
+        self, change_id: uuid.UUID, *, by: uuid.UUID, now: datetime | None = None
+    ) -> CodeChange:
+        """« Réparer le problème » (2026-10-24), asked: kept running for a
+        worker. Refused with no pull request to repair, merged, a repair
+        running, three pushed already, or a source that does not let LEKA
+        write."""
+        moment = now or datetime.now(UTC)
+        change = await self.change(change_id, lock=True)
+        if change.status != "applied" or change.pull_request_number is None or not change.branch:
+            raise ChangeRefusedError(
+                "not_applied", "Ce changement n'a pas de pull request à réparer."
+            )
+        follow = dict(change.follow or {})
+        if follow.get("merged_at") or follow.get("stage") in MERGED_STAGES:
+            raise ChangeRefusedError(
+                "merged",
+                "Sa pull request est fusionnée : ce qui reste à corriger est un nouveau "
+                "changement.",
+            )
+        repairs = list(change.repairs or [])
+        last = repairs[-1] if repairs else None
+        if last is not None and last.get("state") == "running":
+            if moment - datetime.fromisoformat(str(last["asked_at"])) < REPAIR_LOST:
+                raise ChangeRefusedError("repairing", "LEKA répare déjà cette pull request.")
+            repairs[-1] = {
+                **last,
+                "state": "failed",
+                "error": "error",
+                "said": "Interrompue avant la fin.",
+                "finished_at": moment.isoformat(),
+            }
+        if sum(1 for r in repairs if r.get("state") == "pushed") >= MAX_REPAIRS:
+            raise ChangeRefusedError(
+                "too_many_repairs",
+                f"LEKA a déjà réparé cette pull request {MAX_REPAIRS} fois : regardez l'échec sur "
+                "GitHub avant d'aller plus loin.",
+            )
+        if not await self.allowed(change):
+            raise ChangeRefusedError(
+                "pull_requests_off",
+                "Cette source GitHub n'autorise pas LEKA à écrire sur ses pull requests : son "
+                "admin l'active.",
+            )
+        checks = follow.get("checks")
+        failed = (checks.get("failed") if isinstance(checks, dict) else None) or []
+        repairs.append(
+            {
+                "state": "running",
+                "asked_at": moment.isoformat(),
+                "by": str(by),
+                "failed": [str(name) for name in failed],
+            }
+        )
+        change.repairs = repairs
+        await self._session.commit()
+        logger.info("code_change_repair_asked", change=str(change.id))
+        return change
+
+    async def repair_ended(
+        self, change_id: uuid.UUID, state: str, **said: object
+    ) -> dict[str, object]:
+        """Its running repair, ended: how, and what it found."""
+        change = await self.change(change_id, lock=True)
+        await self._session.refresh(change)
+        repairs = list(change.repairs or [])
+        if repairs and repairs[-1].get("state") == "running":
+            repairs[-1] = {
+                **repairs[-1],
+                **{k: v for k, v in said.items() if v is not None},
+                "state": state,
+                "finished_at": datetime.now(UTC).isoformat(),
+            }
+            change.repairs = repairs
+        await self._session.commit()
+        logger.info("code_change_repair_ended", change=str(change_id), state=state)
+        return {"state": state, **{k: v for k, v in said.items() if k in ("error", "commit")}}
+
+    async def _read_for_repair(
+        self,
+        code: GitHubCode,
+        change: CodeChange,
+        head: str,
+        failures: Sequence[Mapping[str, Any]],
+    ) -> dict[str, str]:
+        """The files a repair is written from, as they are at the pull
+        request's head: the change's own, then those what failed names —
+        found as they are named, else under the folders the change's files
+        are in (a test runner names them from its own folder)."""
+        read: dict[str, str] = {}
+        own = [str(f["path"]) for f in change.files if f.get("status") != "deleted"]
+        folders = list(dict.fromkeys(p.split("/")[0] for p in own if "/" in p))
+        for path in own:
+            text = await code.read(change.repository, path, head)
+            if text is not None:
+                read[path] = text
+        for cited in cited_paths(failures):
+            if len(read) >= MAX_FILES:
+                break
+            tried = [cited, *(f"{d}/{cited}" for d in folders if not cited.startswith(f"{d}/"))]
+            for path in tried:
+                if path in read:
+                    break
+                try:
+                    text = await code.read(change.repository, path, head)
+                except CodeRefusedError:
+                    text = None
+                if text is not None:
+                    read[path] = text
+                    break
+        return read
+
+    async def repaired(
+        self, change_id: uuid.UUID, *, budget: float = CHANGE_BUDGET
+    ) -> dict[str, object]:
+        """The repair asked, done: what failed read on GitHub, the files it
+        names and the change's own read at the pull request's head, the
+        model asked for the fix — its edits held to those files, asked
+        again when they do not land — then applied here, one commit pushed
+        on its branch, the pull request reopened first when closed. The
+        change then holds its files as its pull request does."""
+        change = await self.change(change_id)
+        if not change.repairs or change.repairs[-1].get("state") != "running":
+            return {"state": "not_asked"}
+        repository, number, branch = change.repository, change.pull_request_number, change.branch
+        if number is None or branch is None:
+            return await self.repair_ended(change_id, "failed", error="not_applied")
+        try:
+            code = await self._code(change, None)
+            seen = await code.follow(repository, number)
+            if seen["state"] == "merged":
+                return await self.repair_ended(
+                    change_id,
+                    "failed",
+                    error="merged",
+                    said="Sa pull request a été fusionnée entre-temps : rien à réparer sur sa "
+                    "branche.",
+                )
+            head = str(seen.get("head_sha") or "")
+            failures = await code.failures(repository, head)
+            if not failures:
+                return await self.repair_ended(
+                    change_id,
+                    "unneeded",
+                    said="La CI ne signale plus d'échec sur la dernière version de la pull "
+                    "request.",
+                )
+            read = await self._read_for_repair(code, change, head, failures)
+        except (CodeRefusedError, ChangeRefusedError) as refused:
+            return await self.repair_ended(
+                change_id, "failed", error=refused.code, said=str(refused)[:500]
+            )
+        failed = [str(f.get("name") or "") for f in failures]
+        definition = find("code-change")
+        needs = (
+            replace(needs_of(definition), tools=False)
+            if definition is not None
+            else Needs(structured=True, quality=3, task="code")
+        )
+        request = Request(
+            purpose="agent:code-change:repair",
+            messages=repair_messages(change, failures, read),
+            tier=Tier.DEEP,
+            max_tokens=CHANGE_TOKENS,
+            ref=f"code_change:{change.id}",
+        )
+        try:
+            answered = await asyncio.wait_for(
+                Gateway(self._session, self._workspace_id).structured(
+                    request,
+                    RepairProposal,
+                    needs,
+                    verify=lambda proposal: repair_problems(proposal, read),
+                ),
+                timeout=budget,
+            )
+        except NoModelError as error:
+            said = next((a.error for a in reversed(error.attempts) if a.error), None)
+            logger.warning("code_change_repair_not_written", reason=error.reason, said=said)
+            return await self.repair_ended(
+                change_id,
+                "failed",
+                error=NO_MODEL.get(error.reason, "unanswered"),
+                said="Aucun modèle n'est disponible dans cet espace."
+                if error.reason == "none"
+                else "Le modèle n'a pas écrit de correction qui s'applique aux fichiers.",
+                failed=failed,
+            )
+        except TimeoutError:
+            return await self.repair_ended(
+                change_id,
+                "failed",
+                error="timeout",
+                said="Le modèle n'a pas répondu à temps.",
+                failed=failed,
+            )
+        proposal = answered.value
+        model = answered.completion.model
+        found = {
+            "cause": proposal.cause.strip()[:2000],
+            "summary": proposal.summary.strip()[:1000],
+            "model": model,
+            "failed": failed,
+        }
+        if not proposal.files:
+            # The cause is not in the code: said, nothing written.
+            return await self.repair_ended(change_id, "outside", **found)
+        fixes: list[FileChange] = []
+        for each in proposal.files[:MAX_FILES]:
+            path = safe_path(each.path)
+            if path is None or any(f.path == path for f in fixes):
+                continue
+            before = read.get(path)
+            if each.delete:
+                after: str | None = None
+            elif each.edits:
+                after = apply_edits(before, each.edits)[0] if before is not None else None
+                if after is None:
+                    continue
+            elif each.content is not None:
+                after = each.content
+            else:
+                continue
+            if after != before:
+                fixes.append(FileChange(path, after))
+        if not fixes:
+            return await self.repair_ended(
+                change_id,
+                "failed",
+                error="edits_not_applied",
+                said="Les corrections proposées ne s'appliquent pas aux fichiers de la pull "
+                "request.",
+                **found,
+            )
+        reopened = False
+        try:
+            if seen["state"] == "closed":
+                await code.reopen_pull_request(repository, number)
+                reopened = True
+            sha = await code.push_commit(
+                repository,
+                branch=branch,
+                parent=head,
+                changes=fixes,
+                message=_commit_message(proposal, failed, number),
+            )
+        except CodeRefusedError as refused:
+            return await self.repair_ended(
+                change_id,
+                "failed",
+                error=refused.code,
+                said=str(refused)[:500],
+                reopened=reopened,
+                **found,
+            )
+        # Pushed. Its files, said against where its pull request started —
+        # as they were when that cannot be read: the commit is there.
+        base = next((str(r["base"]) for r in change.repairs or [] if r.get("base")), None)
+        files = list(change.files)
+        try:
+            base = base or await code.parent_of(repository, change.commit_sha or head)
+            files = await self._with_repair(code, change, base, fixes, proposal.summary)
+        except CodeRefusedError:
+            logger.warning("code_change_repair_files_not_read", change=str(change_id))
+        repaired_files = []
+        for fix in fixes:
+            diff, added, removed = diff_of(fix.path, read.get(fix.path), fix.content)
+            kind = (
+                "added"
+                if read.get(fix.path) is None
+                else "deleted"
+                if fix.content is None
+                else "modified"
+            )
+            repaired_files.append(
+                {
+                    "path": fix.path,
+                    "status": kind,
+                    "diff": diff,
+                    "additions": added,
+                    "deletions": removed,
+                    "why": "",
+                }
+            )
+        change = await self.change(change_id, lock=True)
+        # Read again, locked: the follow may have moved it meanwhile.
+        await self._session.refresh(change)
+        change.files = files
+        change.commit_sha = sha
+        change.follow = {
+            **(change.follow or {}),
+            "stage": "checks",
+            "done": False,
+            "checks": None,
+            "error": None,
+            "checked_at": None,
+        }
+        await self._session.flush()
+        return await self.repair_ended(
+            change_id,
+            "pushed",
+            commit=sha,
+            base=base,
+            reopened=reopened,
+            files=repaired_files,
+            **found,
+        )
+
+    async def _with_repair(
+        self,
+        code: GitHubCode,
+        change: CodeChange,
+        base: str | None,
+        fixes: Sequence[FileChange],
+        summary: str,
+    ) -> list[dict[str, object]]:
+        """The change's files as its pull request holds them after a repair:
+        each file it fixed said against where the pull request started — the
+        change's own updated, a new one added, one back as it was dropped —
+        so that undoing it undoes the repair too."""
+        files = [dict(f) for f in change.files]
+        for fix in fixes:
+            before = await code.read(change.repository, fix.path, base) if base else None
+            at = next((i for i, f in enumerate(files) if f.get("path") == fix.path), None)
+            if fix.content == before:
+                if at is not None:
+                    files.pop(at)
+                continue
+            diff, added, removed = diff_of(fix.path, before, fix.content)
+            entry: dict[str, object] = {
+                "path": fix.path,
+                "status": "added"
+                if before is None
+                else "deleted"
+                if fix.content is None
+                else "modified",
+                "content": fix.content,
+                "diff": diff,
+                "additions": added,
+                "deletions": removed,
+                "why": str(files[at].get("why") or "")
+                if at is not None
+                else f"réparation : {summary}"[:500],
+            }
+            if at is None:
+                files.append(entry)
+            else:
+                files[at] = entry
+        return files
+
     async def follow(
         self, change_id: uuid.UUID, *, now: datetime | None = None, unless_within: float = 0
     ) -> CodeChange:
@@ -1217,6 +1666,209 @@ class ChangeService:
             logger.info("code_change_followed", change=str(change.id), stage=stage)
 
 
+# ── a pull request in red, repaired on asking (2026-10-24) ──────────────────
+
+# Repairs pushed on one pull request, at most: past that, a person looks.
+MAX_REPAIRS = 3
+# Asked longer ago and not done: lost (a worker gone) — asked again.
+REPAIR_LOST = timedelta(minutes=20)
+REPAIR_JOB = "leka.capabilities.changes.repair_change_job"
+# The files what failed names, read at the pull request's head, at most —
+# beyond the change's own.
+MAX_CITED = 8
+# The change's diff as the repair writer is shown it, at most.
+MOST_DIFF_SHOWN = 40_000
+# After a merge: nothing left to repair on its branch.
+MERGED_STAGES = frozenset(
+    {
+        "merged",
+        "deploying",
+        "deployed",
+        "deploy_failed",
+        "rolling_back",
+        "rolled_back",
+        "rollback_failed",
+    }
+)
+_CITED = re.compile(
+    r"[\w.@/-]+\.(?:tsx?|jsx?|mjs|cjs|py|css|scss|html|json|ya?ml|toml|sql|go|rs|java|kt|"
+    r"rb|php|cs|vue|svelte)\b"
+)
+# Where a runner checks a repository out: /home/runner/work/<repo>/<repo>/.
+_RUNNER = re.compile(r"^.*?/work/[^/]+/[^/]+/")
+_URL = re.compile(r"\b[a-z][a-z0-9+.-]*://\S+", re.IGNORECASE)
+_NOT_OURS = ("node_modules/", "site-packages/", ".venv/", "dist-packages/", "/usr/")
+
+
+class RepairProposal(BaseModel):
+    """What the model proposes to fix a pull request in red."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    cause: str = Field(
+        description="Ce qui a échoué et pourquoi, en une ou deux phrases, pour la personne qui "
+        "décide."
+    )
+    summary: str = Field(default="", description="Ce que la réparation change, en une phrase.")
+    files: list[ProposedFile] = Field(
+        default_factory=list,
+        description="Chaque fichier à corriger, par remplacements ; aucun quand la cause n'est "
+        "pas dans le code (un runner en panne, un secret manquant).",
+    )
+
+
+REPAIR_RULES = """You are LEKA's repair writer. A pull request LEKA opened, \
+for a change a person accepted, failed its checks. You are given the change \
+(its title, its summary, its diff), what failed — each check, its \
+annotations (file, line, message), the end of its log — and the files at \
+the pull request's head. Find why the checks fail and write the smallest fix \
+that makes them pass while keeping what the change was for, as one JSON \
+object:
+- cause: what failed and why, in one or two sentences, in the language of \
+the change's summary.
+- summary: what the fix changes, in one sentence, in that language.
+- files: each file to fix, by edits — each `find` a text copied exactly from \
+that file as you were given it, whole lines, enough of them to appear only \
+once; `replace` what stands there after. A new file gives its whole \
+`content`. Only files you were given, or new ones.
+Rules:
+- Fix the cause, never hide it: never delete, skip or weaken a test, an \
+assertion, a lint rule or a type check to make it pass, and never add an \
+ignore comment (eslint-disable, @ts-ignore, type: ignore, noqa).
+- When the change moved or renamed something a test relies on — an id, a \
+data-testid, a label, an export, a name — keep it in the new code where it \
+still makes sense; when the change meant to change what the test checks, \
+update the test to the new behaviour, as strict as it was.
+- When the failure is not in the code — a runner down, a secret missing, a \
+service that did not start, a network error — give no files, and say so in \
+cause.
+Answer with the JSON object only."""
+
+
+def cited_paths(failures: Sequence[Mapping[str, Any]]) -> list[str]:
+    """The files what failed names — its annotations first, then their
+    messages, its summary, its log — as paths in the repository where they
+    can be told, in order: never a dependency's own."""
+    named: list[str] = []
+
+    def files_in(text: object) -> list[str]:
+        # An address is not a file of the repository.
+        return list(_CITED.findall(_URL.sub(" ", str(text or ""))))
+
+    for failure in failures:
+        for note in failure.get("annotations") or []:
+            named.append(str(note.get("path") or ""))
+            named += files_in(note.get("message"))
+        named += files_in(failure.get("summary"))
+        named += files_in(failure.get("log"))
+    found: list[str] = []
+    for said in named:
+        path = safe_path(_RUNNER.sub("", said).lstrip("/"))
+        if (
+            path is None
+            or "/" not in path
+            or "." not in path.rsplit("/", 1)[-1]
+            or any(part in f"/{path}" for part in _NOT_OURS)
+        ):
+            continue
+        found.append(path)
+    return list(dict.fromkeys(found))[:MAX_CITED]
+
+
+def repair_problems(proposal: RepairProposal, read: Mapping[str, str]) -> list[str]:
+    """Why a repair cannot be applied as written, file by file — each edit
+    held to the file as the writer was given it (2026-10-24: a cheap model
+    is asked again, told why, rather than its fix lost)."""
+    problems: list[str] = []
+    for each in proposal.files:
+        path = safe_path(each.path)
+        if path is None:
+            problems.append(f"{each.path}: not a path in the repository.")
+        elif each.edits and path not in read:
+            problems.append(f"{path}: you were not given this file; edit only those you were.")
+        elif each.edits:
+            _after, why = apply_edits(read[path], each.edits)
+            if why is not None:
+                where = "there more than once" if why == "ambiguous" else "not in the file"
+                problems.append(
+                    f"{path}: an edit's `find` is {where} as you were given it — copy whole "
+                    "lines exactly."
+                )
+    return problems
+
+
+def repair_messages(
+    change: CodeChange, failures: Sequence[Mapping[str, Any]], read: Mapping[str, str]
+) -> list[Message]:
+    diff = "\n".join(str(f.get("diff") or "") for f in change.files)
+    material = {
+        "change": {
+            "repository": change.repository,
+            "title": change.title,
+            "summary": change.summary,
+            "diff": diff[:MOST_DIFF_SHOWN],
+        },
+        "failed": [
+            {
+                "check": f.get("name"),
+                "summary": f.get("summary"),
+                "annotations": f.get("annotations") or [],
+                "log": f.get("log") or "",
+            }
+            for f in failures
+        ],
+        "files": shown(read),
+    }
+    return [
+        Message.system(REPAIR_RULES),
+        Message.user(json.dumps(material, ensure_ascii=False, default=str)),
+    ]
+
+
+def _commit_message(proposal: RepairProposal, failed: Sequence[str], number: int) -> str:
+    first = (proposal.summary or proposal.cause).strip().split("\n")[0][:72] or "Réparer la CI"
+    return (
+        f"{first}\n\n{proposal.cause.strip()}\n\n"
+        f"Réparation par LEKA de la pull request #{number} : {', '.join(failed)} en échec."
+    )
+
+
+async def repair_change(workspace_id: uuid.UUID, change_id: uuid.UUID) -> dict[str, object]:
+    """A repair asked, done by a worker; whatever goes wrong, said in it."""
+    with workspace_scope(workspace_id):
+        async with session_factory() as session:
+            service = ChangeService(session, workspace_id)
+            try:
+                return await service.repaired(change_id)
+            except Exception:
+                logger.exception("code_change_not_repaired", change=str(change_id))
+                await session.rollback()
+                return await service.repair_ended(
+                    change_id,
+                    "failed",
+                    error="error",
+                    said="La réparation s'est arrêtée sur une erreur de LEKA.",
+                )
+
+
+def repair_change_job(workspace_id: str, change_id: str) -> dict[str, object]:
+    """Entry point for the job runner, which is synchronous."""
+    return asyncio.run(repair_change(uuid.UUID(workspace_id), uuid.UUID(change_id)))
+
+
+async def queue_repair(workspace_id: uuid.UUID, change_id: uuid.UUID) -> bool:
+    """Its repair, for a worker: the model takes minutes."""
+    queued = await enqueue_job(
+        REPAIR_JOB,
+        str(workspace_id),
+        str(change_id),
+        for_workspace_id=workspace_id,
+        queue=JobQueue.HIGH,
+        concurrency_key=f"code-change-repair:{change_id}",
+    )
+    return queued is not None
+
+
 async def follow_pull_requests(*, now: datetime | None = None) -> dict[str, int]:
     """Every pull request LEKA opened and still follows, read again."""
     moment = now or datetime.now(UTC)
@@ -1272,6 +1924,7 @@ def files_read(files: Sequence[Mapping[str, object]]) -> list[dict[str, object]]
 
 __all__ = [
     "MAX_FILES",
+    "MAX_REPAIRS",
     "ChangeDecidedError",
     "ChangeNotFoundError",
     "ChangeProposal",
@@ -1280,10 +1933,13 @@ __all__ = [
     "Edit",
     "Proposed",
     "ProposedFile",
+    "RepairProposal",
     "apply_edits",
     "before_of",
     "body_of",
     "branch_of",
+    "change_problems",
+    "cited_paths",
     "code_for",
     "code_of",
     "diff_of",
@@ -1292,6 +1948,13 @@ __all__ = [
     "follow_pull_requests",
     "on_base",
     "propose_change",
+    "queue_repair",
+    "repair_change",
+    "repair_change_job",
+    "repair_problems",
+    "repositories_here",
+    "repository_for",
+    "repository_named",
     "reversed_diff",
     "run_follow_sweep",
     "safe_path",

@@ -218,7 +218,7 @@ describe("the agents it takes, and the decision", () => {
     const [architect, review] = screen.getAllByTestId("proposed-agent");
     expect(architect).toHaveTextContent("Prêt");
     // What it does, in the person's words — never the routing's English.
-    expect(architect).toHaveTextContent("Le deck d'architecture d'un parcours : couche métier ArchiMate");
+    expect(architect).toHaveTextContent("Génère la documentation d'architecture applicative structurée ArchiMate");
     expect(architect).not.toHaveTextContent("Use when");
     expect(architect).toHaveTextContent("Le deck du parcours, en PDF.");
     expect(architect).toHaveTextContent("RapportPowerPointPDF");
@@ -370,7 +370,7 @@ describe("what is done", () => {
         id: "r1",
         key: ARCHITECT.key,
         title: ARCHITECT.title,
-        version: "19.1.0",
+        version: "19.3.0",
         status: "failed",
         inputs: {},
         requested_by: ME,

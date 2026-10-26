@@ -27,6 +27,7 @@ import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import type { Credits } from "@/lib/billing";
 import { useCredits } from "@/lib/billing-queries";
+import { ENTERPRISE } from "@/lib/contract";
 import type { EnvironmentNode } from "@/lib/environment";
 import { useAcknowledge } from "@/lib/environment-queries";
 import {
@@ -565,7 +566,8 @@ export function AlertsCard({ monitoring }: { monitoring: Monitoring | undefined 
         ) : undefined
       }
     >
-      {credits ? <Capacity credits={credits} /> : null}
+      {/* Under an Enterprise contract (2026-10-25): its quota is LEKA's, never shown. */}
+      {credits && credits.plan !== ENTERPRISE ? <Capacity credits={credits} /> : null}
       {entitlement.proactive ? (
         <div data-testid="alerts">
           {monitoring.open.length === 0 ? (

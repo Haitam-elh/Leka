@@ -2,13 +2,12 @@
 
 import {
   Activity,
-  ArrowDown,
   ArrowRight,
-  ArrowUp,
   BadgeCheck,
   BookOpen,
   Bookmark,
   Briefcase,
+  ChevronDown,
   Cloud,
   Code,
   Database,
@@ -36,7 +35,9 @@ import {
   agentStateOf,
   AgentStateSaid,
   Bundles,
+  isEnterprise,
   Owned,
+  useOrganisationName,
 } from "@/components/capabilities/offers";
 
 import { IconTile, type TileTone } from "@/components/environment/parts";
@@ -45,7 +46,7 @@ import { useConfirm } from "@/components/interactions/confirm";
 import { BackHome, PageContainer } from "@/components/shell/page-container";
 import { hasSourceLogo, sourceTitle } from "@/components/sources/source-logo";
 import { usePermissions } from "@/components/shell/shell-provider";
-import { MARKET_ICON, MARKET_OF_CATEGORY, MARKETS, MarketTile, marketOf, marketText } from "@/components/capabilities/market-mark";
+import { hueOf, MARKET_ICON, MARKET_OF_CATEGORY, MARKETS, MarketTile, marketOf } from "@/components/capabilities/market-mark";
 import { SuggestCapability } from "@/components/capabilities/suggestion-dialog";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -60,17 +61,15 @@ import {
   type Capability,
   type CapabilityReason,
   type CatalogueQuery,
-  type CatalogueSummary,
 } from "@/lib/capabilities";
 import {
   useCapabilities,
   useCapabilityChange,
-  useCatalogueSummary,
 } from "@/lib/capabilities-queries";
 import { agentTitle } from "@/lib/agent-title";
 import { useAddOns } from "@/lib/billing-queries";
 import { type Dictionary, fill } from "@/lib/i18n/dictionaries";
-import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
+import { useDictionary } from "@/lib/i18n/locale-provider";
 import { notify } from "@/lib/notify";
 
 /**
@@ -111,48 +110,6 @@ export const CATEGORY_TONE: Record<string, TileTone> = {
   business: "neutral",
   knowledge: "neutral",
 };
-const CATEGORY_FILL: Record<string, string> = {
-  architecture: "fill-shell-nav-active",
-  development: "fill-chart-1",
-  infrastructure: "fill-state-info",
-  operations: "fill-activity-alert",
-  security: "fill-state-success",
-  compliance: "fill-chart-2",
-  data: "fill-chart-3",
-  documentation: "fill-state-warning",
-  project_management: "fill-chart-4",
-  business: "fill-brand-navy",
-  knowledge: "fill-chart-5",
-};
-/** The marketplace's categories (LEKA-467): the reference's, as the
- * mockup lays the agents out — product first, then the code, its tests, its
- * incidents… An agent outside the reference: by its registry's category. */
-const CATEGORY_TEXT: Record<string, string> = {
-  architecture: "text-shell-nav-active",
-  development: "text-blue-600",
-  infrastructure: "text-state-info",
-  operations: "text-activity-alert",
-  security: "text-state-success",
-  compliance: "text-chart-2",
-  data: "text-chart-3",
-  documentation: "text-state-warning",
-  project_management: "text-chart-4",
-  business: "text-brand-navy",
-  knowledge: "text-chart-5",
-};
-const CATEGORY_DOT: Record<string, string> = {
-  architecture: "bg-shell-nav-active",
-  development: "bg-chart-1",
-  infrastructure: "bg-state-info",
-  operations: "bg-activity-alert",
-  security: "bg-state-success",
-  compliance: "bg-chart-2",
-  data: "bg-chart-3",
-  documentation: "bg-state-warning",
-  project_management: "bg-chart-4",
-  business: "bg-brand-navy",
-  knowledge: "bg-chart-5",
-};
 
 function categorySaid(t: Dictionary, category: string): string {
   return (t.catalogue.categories as Record<string, string>)[category] ?? category;
@@ -181,14 +138,20 @@ export function summaryOf(t: Dictionary, c: Pick<Capability, "key" | "summary">)
   return (t.catalogue.summaries as Record<string, string>)[c.key] ?? c.summary;
 }
 
-/** Why it cannot be used here, in words. */
-export function reasonSaid(t: Dictionary, reason: CapabilityReason): string {
+/** Why it cannot be used here, in words. `most`: the sources it would
+ * read named up to that many, the others counted (2026-10-25: twenty-five
+ * of them filled a line of the agents' page). */
+export function reasonSaid(t: Dictionary, reason: CapabilityReason, most?: number): string {
   const w = t.catalogue.reasons as Record<string, string>;
   if (reason.code === "missing_source") {
     const said = reason.detail?.any_of;
     const kinds = Array.isArray(said) ? said.map(String) : [];
     const names = kinds.map((k) => (hasSourceLogo(k) ? sourceTitle(k) : k));
-    return fill(w.missing_source, { sources: names.join(t.catalogue.or) });
+    const shown = most && names.length > most + 1 ? names.slice(0, most) : names;
+    const rest = names.length - shown.length;
+    return fill(w.missing_source, {
+      sources: shown.join(t.catalogue.or) + (rest ? ` +${rest}` : ""),
+    });
   }
   return w[reason.code] ?? w.unknown;
 }
@@ -207,27 +170,6 @@ function useView(): [View, (next: View) => void] {
     });
   }
   return [view, setView];
-}
-
-function Trend({ now, before, goodWhenDown = false }: { now: number; before: number; goodWhenDown?: boolean }) {
-  const t = useDictionary();
-  if (!before) return <span className="text-xs text-shell-muted">{t.catalogue.versus}</span>;
-  const change = Math.round(((now - before) / before) * 100);
-  const up = change >= 0;
-  const good = up !== goodWhenDown;
-  const Arrow = up ? ArrowUp : ArrowDown;
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-0.5 text-xs font-medium",
-        good ? "text-state-success" : "text-state-danger",
-      )}
-    >
-      {up ? "+" : ""}
-      {change} %
-      <Arrow className="size-3" aria-hidden="true" />
-    </span>
-  );
 }
 
 /** Why one cannot run that is the place's, not the capability's. */
@@ -269,8 +211,12 @@ function Availability({ capability }: { capability: Capability }) {
     );
   }
   return (
-    <span className="text-xs text-state-warning" data-testid="capability-reasons">
-      {own.map((reason) => reasonSaid(t, reason)).join(" · ")}
+    <span
+      className="text-xs text-state-warning"
+      title={own.map((reason) => reasonSaid(t, reason)).join(" · ")}
+      data-testid="capability-reasons"
+    >
+      {own.map((reason) => reasonSaid(t, reason, 3)).join(" · ")}
     </span>
   );
 }
@@ -365,6 +311,9 @@ function Row({ capability }: { capability: Capability }) {
   );
 }
 
+/** A box's lines before it scrolls: its height, the same for all. */
+const SHOWN = 4;
+
 /** The domains, in the order a team reads its work: code first. */
 const DOMAINS = [
   "development",
@@ -384,182 +333,94 @@ type Shown = "all" | "agents" | "capabilities";
 type Kind = "agent" | "skill";
 
 /** One box per domain — of one kind only (LEKA-467: agents, sold, and
- * LEKA's skills, included, never in the same box). */
-function Domain({ category, items, kind }: { category: string; items: Capability[]; kind: Kind }) {
+ * LEKA's skills, included, never in the same box). `market`: an agent's box
+ * by the marketplace's categories; else by the registry's domains — an
+ * Enterprise contract's, nothing on sale (2026-10-25).
+ *
+ * Every box the same size, side by side, each its colour (2026-10-25: « pas
+ * un qui fait 3 cm, un qui fait 4 cm »): its list scrolls inside it, and
+ * « Tout voir » opens it whole. */
+function Domain({
+  category,
+  items,
+  kind,
+  market = kind === "agent",
+}: {
+  category: string;
+  items: Capability[];
+  kind: Kind;
+  market?: boolean;
+}) {
   const t = useDictionary();
   const w = t.catalogue;
-  const agents = kind === "agent";
+  const [open, setOpen] = useState(false);
+  const agents = market;
   const Icon = (agents ? MARKET_ICON[category] : CATEGORY_ICON[category]) ?? Lightbulb;
-  const text = agents ? marketText(category) : (CATEGORY_TEXT[category] ?? "text-brand-navy");
+  const hue = hueOf(category, { market: agents });
   const label = agents
     ? ((w.markets as Record<string, string>)[category] ?? categorySaid(t, category))
     : ((w.domains as Record<string, string>)[category] ?? categorySaid(t, category));
+  const more = items.length > SHOWN;
   return (
     <section
-      // In its column, whole, under the one before (2026-10-14: a grid of
-      // rows left a short box's column white down to the next row).
-      className="mb-4 flex break-inside-avoid flex-col overflow-hidden rounded-xl border border-shell-line bg-white"
+      className="flex flex-col overflow-hidden rounded-2xl border border-shell-line bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-shadow hover:shadow-md"
       aria-labelledby={`domain-${kind}-${category}`}
       data-testid="catalogue-domain"
       data-domain={category}
       data-kind={kind}
+      data-open={open ? "true" : undefined}
     >
-      <header className="flex items-center gap-2.5 border-b border-shell-line bg-shell-canvas/60 px-4 py-2.5">
-        <Icon className={cn("size-4.5 shrink-0", text)} aria-hidden="true" />
-        <h3 id={`domain-${kind}-${category}`} className={cn("min-w-0 flex-1 text-[0.9375rem] font-semibold", text)}>
+      <div className={cn("h-1 shrink-0", hue.bar)} aria-hidden="true" />
+      <header className={cn("flex items-center gap-3 bg-gradient-to-br to-white px-4 py-3", hue.band)}>
+        <span className={cn("flex size-10 shrink-0 items-center justify-center rounded-xl", hue.tile)}>
+          <Icon className="size-5" aria-hidden="true" />
+        </span>
+        <h3
+          id={`domain-${kind}-${category}`}
+          className={cn("min-w-0 flex-1 text-[0.9375rem] leading-snug font-semibold text-balance", hue.text)}
+        >
           {label}
         </h3>
-        <span className="text-xs text-shell-muted" data-testid="catalogue-domain-count">
+        <span
+          className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs font-medium text-shell-muted tabular-nums ring-1 ring-shell-line"
+          data-testid="catalogue-domain-count"
+        >
           {fill(kind === "agent" ? w.agentsCount : w.ownCount, { count: items.length })}
         </span>
       </header>
-      <ul className="divide-y divide-shell-line/70 px-4" data-testid={kind === "agent" ? "catalogue-domain-agents" : "catalogue-domain-own"}>
-        {items.map((capability) => (
-          <Row key={capability.key} capability={capability} />
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-const WIDTH = 320;
-const HEIGHT = 140;
-const BOTTOM = 18;
-
-function UsageChart({ summary }: { summary: CatalogueSummary }) {
-  const t = useDictionary();
-  const { format: locale } = useLocale();
-  const used = summary.categories.map((c) => c.category);
-  const totals = summary.days.map((d) => Object.values(d.runs).reduce((a, b) => a + b, 0));
-  const top = Math.max(4, ...totals);
-  const slot = WIDTH / Math.max(1, summary.days.length);
-  const bar = slot * 0.5;
-  const plot = HEIGHT - BOTTOM;
-  const day = new Intl.DateTimeFormat(locale, {
-    day: "numeric",
-    month: "short",
-  });
-  return (
-    <section className="rounded-xl border border-shell-line bg-white p-4" data-testid="catalogue-usage">
-      <h2 className="mb-2 font-semibold text-brand-navy">{t.catalogue.usage}</h2>
-      {summary.runs === 0 ? (
-        <p className="text-[0.8125rem] text-shell-muted">{t.catalogue.usageEmpty}</p>
-      ) : (
-        <>
-          <ul className="mb-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-shell-muted">
-            {used
-              .filter((c) => summary.days.some((d) => d.runs[c]))
-              .map((c) => (
-                <li key={c} className="flex items-center gap-1">
-                  <span className={cn("size-2 rounded-full", CATEGORY_DOT[c] ?? "bg-shell-muted")} />
-                  {categorySaid(t, c)}
-                </li>
-              ))}
-          </ul>
-          <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="h-auto w-full" role="img" aria-label={t.catalogue.usage}>
-            {summary.days.map((d, index) => {
-              let y = plot;
-              return (
-                <g key={d.day}>
-                  {used.map((category) => {
-                    const runs = d.runs[category] ?? 0;
-                    if (!runs) return null;
-                    const height = (runs / top) * (plot - 4);
-                    y -= height;
-                    return (
-                      <rect
-                        key={category}
-                        x={index * slot + (slot - bar) / 2}
-                        y={y}
-                        width={bar}
-                        height={height}
-                        rx={2}
-                        className={CATEGORY_FILL[category] ?? "fill-shell-muted"}
-                      />
-                    );
-                  })}
-                  <text
-                    x={index * slot + slot / 2}
-                    y={HEIGHT - 4}
-                    textAnchor="middle"
-                    className="fill-shell-muted text-[9px]"
-                  >
-                    {day.format(new Date(`${d.day}T12:00:00Z`))}
-                  </text>
-                </g>
-              );
-            })}
-          </svg>
-        </>
-      )}
-    </section>
-  );
-}
-
-function Top({ summary }: { summary: CatalogueSummary }) {
-  const t = useDictionary();
-  return (
-    <section className="rounded-xl border border-shell-line bg-white p-4" data-testid="catalogue-top">
-      <h2 className="mb-2 font-semibold text-brand-navy">{t.catalogue.top}</h2>
-      {summary.top.length ? (
-        <ol className="space-y-2">
-          {summary.top.map((item, index) => {
-            const Icon = CATEGORY_ICON[item.category] ?? Lightbulb;
-            return (
-              <li key={item.key} className="flex items-center gap-2 text-[0.8125rem]">
-                <span className="flex size-5 items-center justify-center rounded-full bg-shell-canvas text-[0.6875rem] text-shell-muted">
-                  {index + 1}
-                </span>
-                <Icon className="size-4 text-shell-nav-active" aria-hidden="true" />
-                <Link href={routes.capability(item.key)} className="min-w-0 flex-1 truncate text-brand-navy hover:underline">
-                  {titleOf(t, { key: item.key, kind: "rules", title: item.title })}
-                </Link>
-                <span className="text-shell-muted tabular-nums">{item.runs}</span>
-                <Trend now={item.runs} before={item.previous} />
-              </li>
-            );
-          })}
-        </ol>
-      ) : (
-        <p className="text-[0.8125rem] text-shell-muted">{t.catalogue.topEmpty}</p>
-      )}
-    </section>
-  );
-}
-
-function Latest({ summary }: { summary: CatalogueSummary }) {
-  const t = useDictionary();
-  const { format: locale } = useLocale();
-  return (
-    <section className="rounded-xl border border-shell-line bg-white p-4" data-testid="catalogue-latest">
-      <h2 className="mb-2 font-semibold text-brand-navy">{t.catalogue.latest}</h2>
-      {summary.latest.length ? (
-        <ul className="space-y-3">
-          {summary.latest.map((item) => {
-            const Icon = CATEGORY_ICON[item.category] ?? Lightbulb;
-            return (
-              <li key={item.key} className="flex items-start gap-2 text-[0.8125rem]">
-                <Icon className="mt-0.5 size-4 text-shell-nav-active" aria-hidden="true" />
-                <div className="min-w-0 flex-1">
-                  <Link href={routes.capability(item.key)} className="font-medium text-brand-navy hover:underline">
-                    {titleOf(t, item)}
-                  </Link>
-                  <p className="line-clamp-1 text-xs text-shell-muted">{summaryOf(t, item)}</p>
-                </div>
-                <time dateTime={item.registered_at} className="shrink-0 text-xs text-shell-muted">
-                  {new Intl.DateTimeFormat(locale, {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                  }).format(new Date(item.registered_at))}
-                </time>
-              </li>
-            );
-          })}
+      <div className="relative">
+        <ul
+          className={cn(
+            "divide-y divide-shell-line/70 px-4 [scrollbar-width:thin]",
+            !open && "h-72 overflow-y-auto",
+          )}
+          data-testid={kind === "agent" ? "catalogue-domain-agents" : "catalogue-domain-own"}
+        >
+          {items.map((capability) => (
+            <Row key={capability.key} capability={capability} />
+          ))}
         </ul>
-      ) : (
-        <p className="text-[0.8125rem] text-shell-muted">{t.catalogue.latestEmpty}</p>
-      )}
+        {more && !open ? (
+          <div
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white to-transparent"
+            aria-hidden="true"
+          />
+        ) : null}
+      </div>
+      <footer className="mt-auto flex h-10 shrink-0 items-center border-t border-shell-line/70 px-4">
+        {more ? (
+          <button
+            type="button"
+            onClick={() => setOpen(!open)}
+            aria-expanded={open}
+            className={cn("inline-flex items-center gap-1 rounded text-[0.8125rem] font-medium outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40", hue.text)}
+            data-testid="catalogue-domain-more"
+          >
+            {open ? w.domainLess : fill(w.domainAll, { count: items.length })}
+            <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} aria-hidden="true" />
+          </button>
+        ) : null}
+      </footer>
     </section>
   );
 }
@@ -573,10 +434,13 @@ function Domains({
   tierOf,
   stateOf,
   keep = () => true,
+  byDomain = false,
 }: {
   list: ReturnType<typeof useCapabilities>;
   /** Agents or LEKA's skills: never mixed (LEKA-467). */
   kind: Kind;
+  /** Agents by the registry's domains, not the marketplace's categories. */
+  byDomain?: boolean;
   category?: string | null;
   /** The level asked for, and each agent's — LEKA's own have none. */
   tierOf?: { tier: string; of: (key: string) => string | undefined };
@@ -589,8 +453,9 @@ function Domains({
   const t = useDictionary();
   const offers = useAddOns();
   // An agent's group: its marketplace category; a skill's: its domain.
+  const market = kind === "agent" && !byDomain;
   const groupOf = (capability: Capability): string =>
-    kind === "agent"
+    market
       ? (offers.data?.agents.find((a) => a.key === capability.key)?.market ??
         MARKET_OF_CATEGORY[capability.category] ??
         capability.category)
@@ -622,21 +487,65 @@ function Domains({
       </p>
     );
   }
-  const known = (kind === "agent" ? MARKETS : DOMAINS) as readonly string[];
+  const known = (market ? MARKETS : DOMAINS) as readonly string[];
   const order = [
     ...known,
     ...[...new Set(kept.map(groupOf))].filter((c) => !known.includes(c)).sort(),
   ];
   return (
     <div
-      className="gap-4 md:columns-2 lg:columns-3 xl:columns-4"
+      // Side by side, the same size (2026-10-25); one opened grows alone.
+      className="grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3"
       data-testid={kind === "agent" ? "catalogue-grid" : "catalogue-skills-grid"}
     >
       {order.map((category) => {
         const items = kept.filter((c) => groupOf(c) === category);
-        return items.length ? <Domain key={category} category={category} items={items} kind={kind} /> : null;
+        return items.length ? (
+          <Domain key={category} category={category} items={items} kind={kind} market={market} />
+        ) : null;
       })}
     </div>
+  );
+}
+
+/** The agents made for this organisation (2026-10-25), first and apart:
+ * its own, never sold, never priced — seen by it alone, the server hiding
+ * them from every other workspace. */
+function Dedicated({ list, goal }: { list: ReturnType<typeof useCapabilities>; goal: string | null }) {
+  const t = useDictionary();
+  const w = t.catalogue.dedicated;
+  const organisation = useOrganisationName();
+  const items = (list.data ?? []).filter(
+    (capability) => capability.kind === "agent" && capability.dedicated && (!goal || capability.goals.includes(goal)),
+  );
+  if (!items.length) return null;
+  return (
+    <section
+      // Reached from the home's « Voir tous les agents dédiés » (2026-10-25).
+      id="dedicated"
+      className="flex scroll-mt-24 flex-col gap-3"
+      aria-labelledby="catalogue-dedicated-title"
+      data-testid="catalogue-dedicated"
+    >
+      <div>
+        <h2 id="catalogue-dedicated-title" className="text-[1.25rem] font-bold text-brand-navy">
+          {w.title}
+        </h2>
+        {organisation ? (
+          <p className="text-[0.8125rem] text-shell-muted" data-testid="catalogue-dedicated-lead">
+            {fill(w.lead, { organisation })}
+          </p>
+        ) : null}
+      </div>
+      <ul
+        className="divide-y divide-shell-line/70 rounded-xl border border-shell-line bg-white px-4"
+        data-testid="catalogue-dedicated-agents"
+      >
+        {items.map((capability) => (
+          <Row key={capability.key} capability={capability} />
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -724,21 +633,26 @@ function Filters({
   // The agents' categories, the marketplace's (LEKA-467): a category
   // chosen narrows the agents; LEKA's skills, which have none, step aside.
   const offers = useAddOns();
+  // Under an Enterprise contract (2026-10-25): the registry's domains, as
+  // the agents are laid out — and neither a level nor a state to buy.
+  const enterprise = isEnterprise(offers.data);
   const categories = [
     ...new Set(
       (capabilities ?? [])
-        .filter((c) => c.kind === "agent")
-        .map(
-          (c) =>
-            offers.data?.agents.find((a) => a.key === c.key)?.market ??
-            MARKET_OF_CATEGORY[c.category] ??
-            c.category,
+        .filter((c) => c.kind === "agent" && !c.dedicated)
+        .map((c) =>
+          enterprise
+            ? c.category
+            : (offers.data?.agents.find((a) => a.key === c.key)?.market ??
+              MARKET_OF_CATEGORY[c.category] ??
+              c.category),
         ),
     ),
   ].sort((x, y) => {
-    const order = MARKETS as readonly string[];
+    const order = (enterprise ? DOMAINS : MARKETS) as readonly string[];
     return (order.indexOf(x) + 1 || 99) - (order.indexOf(y) + 1 || 99);
   });
+  const groups = (enterprise ? w.domains : w.markets) as Record<string, string>;
   const tiers = t.catalogue.offers.tiers as Record<string, string>;
   const ALL = "*";
   // A select of its own: the value « every » as one of its items.
@@ -789,31 +703,35 @@ function Filters({
               { value: ALL, label: w.allCategories },
               ...categories.map((c) => ({
                 value: c,
-                label: (w.markets as Record<string, string>)[c] ?? categorySaid(t, c),
+                label: groups[c] ?? categorySaid(t, c),
               })),
             ],
             "catalogue-category",
           )}
-          {pick(
-            w.allTiers,
-            tier,
-            setTier,
-            [{ value: ALL, label: w.allTiers }, ...Object.entries(tiers).map(([value, label]) => ({ value, label }))],
-            "catalogue-tier",
-          )}
-          {pick(
-            w.states.all,
-            state,
-            (next) => setState(next as AgentState | null),
-            [
-              { value: ALL, label: w.states.all },
-              ...(["included", "owned", "option", "upgrade", "unavailable"] as const).map((value) => ({
-                value,
-                label: w.states[value],
-              })),
-            ],
-            "catalogue-state",
-          )}
+          {enterprise
+            ? null
+            : pick(
+                w.allTiers,
+                tier,
+                setTier,
+                [{ value: ALL, label: w.allTiers }, ...Object.entries(tiers).map(([value, label]) => ({ value, label }))],
+                "catalogue-tier",
+              )}
+          {enterprise
+            ? null
+            : pick(
+                w.states.all,
+                state,
+                (next) => setState(next as AgentState | null),
+                [
+                  { value: ALL, label: w.states.all },
+                  ...(["included", "owned", "option", "upgrade", "unavailable"] as const).map((value) => ({
+                    value,
+                    label: w.states[value],
+                  })),
+                ],
+                "catalogue-state",
+              )}
           {needs.length
             ? pick(
                 w.need,
@@ -970,7 +888,8 @@ function Stats() {
   const t = useDictionary();
   const w = t.catalogue.stats;
   const data = useAddOns().data;
-  if (!data?.available) return null;
+  // Under an Enterprise contract nothing is on sale: nothing to count.
+  if (!data?.available || isEnterprise(data)) return null;
   const savings = data.bundles
     .filter((b) => b.sellable && b.discount_percent !== null)
     .map((b) => b.discount_percent as number);
@@ -1013,7 +932,6 @@ export function CatalogueScreen() {
   const t = useDictionary();
   const w = t.catalogue;
   const [view, setView] = useView();
-  const summary = useCatalogueSummary();
   const [shown, setShown] = useState<Shown>("all");
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<NonNullable<CatalogueQuery["sort"]>>("relevant");
@@ -1028,6 +946,10 @@ export function CatalogueScreen() {
   const owned = (capability: Capability) =>
     capability.kind !== "agent" ||
     Boolean(offers.data?.agents.find((a) => a.key === capability.key)?.owned);
+  // An Enterprise contract (2026-10-25): its agents by domain, never a price.
+  const enterprise = isEnterprise(offers.data);
+  // The dedicated agents have their own section, above the others.
+  const sold = (capability: Capability) => !capability.dedicated && (view !== "mine" || owned(capability));
   const empty = view === "mine" && shown === "all" && !q && !goal ? w.mineEmpty : w.empty;
   useBoughtSaid();
 
@@ -1036,9 +958,13 @@ export function CatalogueScreen() {
       <BackHome />
       <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1">
-          <h1 className="text-[2.125rem] leading-tight font-bold tracking-[-0.02em] text-brand-navy">{w.title}</h1>
+          <h1 className="text-[2.125rem] leading-tight font-bold tracking-[-0.02em] text-brand-navy">
+            {enterprise ? w.enterprise.title : w.title}
+          </h1>
           <p className="mt-1 text-[1.0625rem] text-shell-accent-muted">{w.subtitle}</p>
-          <p className="text-[0.9375rem] text-shell-muted">{w.subtitleMore}</p>
+          <p className="text-[0.9375rem] text-shell-muted">
+            {enterprise ? w.enterprise.subtitleMore : w.subtitleMore}
+          </p>
           {/* A suggestion to LEKA's team, not an intention (LEKA-501). */}
           <SuggestCapability />
         </div>
@@ -1089,19 +1015,26 @@ export function CatalogueScreen() {
             setState={setState}
           />
           {view === "mine" ? <Owned /> : null}
+          {shown !== "capabilities" && !tier && !state && !category ? <Dedicated list={list} goal={goal} /> : null}
           {view === "available" ? (
             <div className="flex flex-wrap items-end justify-between gap-2" data-testid="catalogue-all-agents">
               <div>
-                <h2 className="text-[1.25rem] font-bold text-brand-navy">{w.allAgents}</h2>
-                <p className="text-[0.8125rem] text-shell-muted">{w.allAgentsLead}</p>
+                <h2 className="text-[1.25rem] font-bold text-brand-navy">
+                  {enterprise ? w.enterprise.agents : w.allAgents}
+                </h2>
+                <p className="text-[0.8125rem] text-shell-muted">
+                  {enterprise ? w.enterprise.agentsLead : w.allAgentsLead}
+                </p>
               </div>
-              <Link
-                href={routes.billingPlans()}
-                className="inline-flex items-center gap-1 text-[0.8125rem] font-medium text-shell-nav-active hover:underline"
-              >
-                {w.compare}
-                <ArrowRight className="size-3.5 rtl:-scale-x-100" aria-hidden="true" />
-              </Link>
+              {enterprise ? null : (
+                <Link
+                  href={routes.billingPlans()}
+                  className="inline-flex items-center gap-1 text-[0.8125rem] font-medium text-shell-nav-active hover:underline"
+                >
+                  {w.compare}
+                  <ArrowRight className="size-3.5 rtl:-scale-x-100" aria-hidden="true" />
+                </Link>
+              )}
             </div>
           ) : null}
           {shown !== "capabilities" ? (
@@ -1117,7 +1050,8 @@ export function CatalogueScreen() {
                   : undefined
               }
               stateOf={state ? { state, of: (key) => agentStateOf(offers.data, key) } : undefined}
-              keep={view === "mine" ? owned : undefined}
+              keep={sold}
+              byDomain={enterprise}
             />
           ) : null}
           {view === "available" && shown !== "capabilities" ? <Bundles selectable /> : null}
@@ -1128,9 +1062,11 @@ export function CatalogueScreen() {
             <section className="flex flex-col gap-3" aria-labelledby="catalogue-skills-title" data-testid="catalogue-skills">
               <div>
                 <h2 id="catalogue-skills-title" className="text-[1.25rem] font-bold text-brand-navy">
-                  {w.skillsTitle}
+                  {enterprise ? w.enterprise.skillsTitle : w.skillsTitle}
                 </h2>
-                <p className="text-[0.8125rem] text-shell-muted">{w.skillsLead}</p>
+                <p className="text-[0.8125rem] text-shell-muted">
+                  {enterprise ? w.enterprise.skillsLead : w.skillsLead}
+                </p>
               </div>
               <Domains
                 list={list}
@@ -1140,15 +1076,6 @@ export function CatalogueScreen() {
                 category={category}
               />
             </section>
-          ) : null}
-          {/* What ran this week, under what there is — nothing ran, nothing
-              said. */}
-          {summary.data?.runs ? (
-            <div className="grid gap-4 lg:grid-cols-3" data-testid="catalogue-usage">
-              <UsageChart summary={summary.data} />
-              <Top summary={summary.data} />
-              <Latest summary={summary.data} />
-            </div>
           ) : null}
         </div>
       )}

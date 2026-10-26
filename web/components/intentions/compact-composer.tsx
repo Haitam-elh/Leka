@@ -8,6 +8,7 @@ import { Form } from "@/components/forms/form";
 import { FormAlert } from "@/components/forms/form-alert";
 import { useAttachments } from "@/components/intentions/attachments";
 import { IntentionComposer } from "@/components/intentions/intention-composer";
+import { SourceLocked, useSourceLock } from "@/components/sources/source-lock";
 import { routes } from "@/config/routes";
 import { ApiError } from "@/lib/api";
 import { useLekaForm } from "@/lib/forms/use-leka-form";
@@ -35,6 +36,7 @@ export function CompactIntentionComposer() {
   // twice, it is one intention.
   const requestKey = useRef<{ said: string; key: string } | null>(null);
   const files = useAttachments();
+  const locked = useSourceLock();
 
   const form = useLekaForm<IntentionDraft>({
     schema: intentionDraftSchema,
@@ -66,6 +68,11 @@ export function CompactIntentionComposer() {
         void client.invalidateQueries({ queryKey: intentionKeys.all });
         router.push(`${routes.intentions()}/${made.intention.id}`);
       } catch (caught) {
+        // Under a contract, nothing connected (2026-10-25): said, the words kept.
+        if (caught instanceof ApiError && caught.code === "source_required") {
+          form.setError("root", { type: "server", message: t.sourceLock.refused });
+          return;
+        }
         if (caught instanceof ApiError && caught.status === 422) {
           form.setError("root", {
             type: "server",
@@ -82,6 +89,9 @@ export function CompactIntentionComposer() {
       }
     },
   });
+
+  // Under a contract, nothing connected (2026-10-25): the question waits.
+  if (locked) return <SourceLocked what="ask" compact />;
 
   return (
     <Form form={form} className="space-y-3">

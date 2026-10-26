@@ -93,6 +93,23 @@ async def _analysed(acme: dict[str, uuid.UUID], intention_id: str, **kwargs: Any
     )
 
 
+async def test_a_question_left_waits_for_its_answer_said_unclear(
+    client: AsyncClient,
+    model: dict[str, uuid.UUID],
+    queued: list[tuple[uuid.UUID, str]],
+) -> None:
+    # 2026-10-24: every move says its readiness — a question left was said
+    # « ce sur quoi elle agit doit être précisé ».
+    intention = await _ask(client, "Redémarre le service")
+    assert intention["status"] == "needs_clarification"
+    said = await _same(client, intention["id"])
+    assert (said["state"], said["reason"], said["next"]) == (
+        "needs_clarification",
+        "unclear",
+        "answer",
+    )
+
+
 async def test_the_list_and_its_page_say_the_same_state_and_versions_are_kept_apart(
     client: AsyncClient,
     model: dict[str, uuid.UUID],

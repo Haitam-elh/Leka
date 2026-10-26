@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
 from leka.api.pagination import PageEnvelope, PageParams, SortCatalogue, serve_page
+from leka.architect import Node, Tree
 from leka.billing.limits import PlanLimitError, room_for_source
 from leka.connectors import (
     ActivationRefusedError,
@@ -65,7 +66,13 @@ from leka.connectors import (
 from leka.core.errors import ErrorCode, FieldError
 from leka.db import SortableField
 from leka.governance import Permission, Principal, Target, audit_as, require_permission
-from leka.ingestion import retention_days
+from leka.ingestion import (
+    SourceTreeRead,
+    TreeNodeRead,
+    TreeSpaceRead,
+    retention_days,
+    synced_confluence,
+)
 
 router = APIRouter(tags=["connectors"])
 
@@ -295,6 +302,41 @@ async def get_source(source_id: uuid.UUID, service: ReadingService) -> SourceRea
     return await _read(service, await _source(service, source_id))
 
 
+def _node(node: Node) -> TreeNodeRead:
+    page = node.page
+    return TreeNodeRead(
+        id=page.id,
+        title=page.title,
+        url=page.url or None,
+        updated_at=page.updated_at or None,
+        children=[_node(child) for child in node.children],
+    )
+
+
+@router.get("/sources/{source_id}/tree", response_model=SourceTreeRead)
+async def source_tree(
+    source_id: uuid.UUID, service: ReadingService, session: SessionDep, principal: Reader
+) -> SourceTreeRead:
+    """« Arborescence » (2026-10-25): a Confluence source's spaces and their
+    pages as synced — parent and child, how many, how deep. Empty for a
+    source that holds no pages."""
+    source = await _source(service, source_id)
+    spaces = []
+    for space in await synced_confluence(session, principal.workspace_id, source.id, texts=False):
+        tree = Tree(space.pages)
+        spaces.append(
+            TreeSpaceRead(
+                key=space.key,
+                name=space.name,
+                url=space.url or None,
+                pages=len(tree),
+                depth=tree.depth(),
+                nodes=[_node(node) for node in tree.nodes()],
+            )
+        )
+    return SourceTreeRead(source_id=source.id, spaces=spaces)
+
+
 @router.patch("/sources/{source_id}", response_model=SourceRead)
 async def update_source(
     source_id: uuid.UUID,
@@ -381,6 +423,19 @@ async def disable_source(
     except _REFUSALS as error:
         raise _refused(error) from error
     _audited(session, principal, "disabled", source)
+    return await _read(service, source)
+
+
+@router.post("/sources/{source_id}/revoke", response_model=SourceRead)
+async def revoke_source(
+    source_id: uuid.UUID, service: ManagingService, session: SessionDep, principal: Manager
+) -> SourceRead:
+    """Its credentials erased (2026-10-25): LEKA can no longer reach it — the
+    source is disabled, what it already read kept. New credentials and a test
+    bring it back."""
+    source = await _source(service, source_id)
+    await service.revoke_credentials(source)
+    _audited(session, principal, "credentials_revoked", source)
     return await _read(service, source)
 
 

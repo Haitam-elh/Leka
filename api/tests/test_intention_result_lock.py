@@ -24,7 +24,14 @@ from leka.platform import Workspace
 from tests.conftest import FakeIdentity
 from tests.test_agent_runs_api import _ready
 from tests.test_context_engine import model
-from tests.test_intention_agents import Gemini, _proposed, gemini, started
+from tests.test_intention_agents import (
+    OFFERED,
+    SOLD_ASKED,
+    Gemini,
+    _proposed,
+    gemini,
+    started,
+)
 from tests.test_intention_analysis_api import API, queued  # noqa: F401
 from tests.test_intention_offer import _on
 from tests.test_sources_api import _as, acme, fake_connector  # noqa: F401
@@ -71,9 +78,10 @@ async def test_on_free_nothing_found_reaches_the_browser_only_what_it_proposes(
     started: list[uuid.UUID],
 ) -> None:
     await _ready(acme)
-    gemini()
+    # An agent on sale: the architect, dedicated to Acme, needs no plan.
+    gemini(OFFERED)
     _as(identity, acme, "member")
-    intention = (await _proposed(client, acme))["id"]
+    intention = (await _proposed(client, acme, SOLD_ASKED))["id"]
     await _on(acme["acme"], "free")
 
     analysis, first, detail, listed = await _read(client, intention)

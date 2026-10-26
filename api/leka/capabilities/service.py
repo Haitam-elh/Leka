@@ -75,6 +75,7 @@ class AgentRuntime:
         formats: Sequence[str] | None = None,
         sources: Sequence[uuid.UUID] | None = None,
         now: datetime | None = None,
+        asked: str | None = None,
     ) -> AgentRun:
         """Kept queued — RunRefusedError when it cannot run here, by this
         person, with this. The caller commits, then queues it (queue_run).
@@ -83,7 +84,9 @@ class AgentRuntime:
         asked to have drawn (pdf, pptx) — none drawn but those; not given,
         every one it draws (2026-10-14). `sources`: the only sources it reads
         — what came from no other is all it sees (2026-10-14: « l'Architecte
-        sur Confluence seul »)."""
+        sur Confluence seul »). An agent that reads a repository (`depot`)
+        and is given none: the one its request means (`asked`, its inputs),
+        among those the workspace reads — never one to guess (2026-10-25)."""
         entry = await self._catalogue.entry(key, permissions=permissions, user_id=by)
         refused = refusal_of(entry, inputs)
         if refused is not None:
@@ -94,6 +97,19 @@ class AgentRuntime:
         ):
             raise RunRefusedError(Refusal("unknown_context"))
         definition = entry.definition
+        inputs = dict(inputs)
+        found = None
+        if (
+            "depot" in {i.name for i in definition.contract.inputs}
+            and not str(inputs.get("depot") or "").strip()
+        ):
+            # Looked up when used: changes.py reaches the connectors.
+            from leka.capabilities.changes import repository_for
+
+            words = [asked or "", *(str(v) for v in inputs.values() if isinstance(v, str))]
+            found = await repository_for(self._session, self._workspace_id, " ".join(words))
+            if found is not None:
+                inputs["depot"] = found
         format_, pending = delivered(definition)
         moment = now_or(now)
         run = AgentRun(
@@ -118,10 +134,13 @@ class AgentRuntime:
         )
         self._runs.add(run)
         await self._session.flush()
+        steps = Steps(self._session, run, 0)
+        if found is not None:
+            steps.add("repository_found", repository=found)
         if held_by:
-            Steps(self._session, run, 0).add("held", by=str(by), control=held_by)
+            steps.add("held", by=str(by), control=held_by)
         else:
-            Steps(self._session, run, 0).add("queued", by=str(by))
+            steps.add("queued", by=str(by))
         await self._session.flush()
         return run
 

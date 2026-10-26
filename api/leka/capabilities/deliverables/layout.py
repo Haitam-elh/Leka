@@ -245,10 +245,17 @@ def business_layer(
     weights = [max(1, sum(1 for s in g.steps if s.branch == "main")) for g in groupings]
     usable = inner_w - gap * max(len(groupings) - 1, 0)
     # The baseline midway between the groupings' titles and their tags; a
-    # step's height leaves room for a branch above and below it.
+    # step's height leaves room for a branch above and below it — the whole
+    # lane when no step branches (2026-10-25: four lines in 0.3 in ran out
+    # of their box).
     lane_top, lane_bottom = g_top + 0.22, g_bottom - 0.2
     baseline = (lane_top + lane_bottom) / 2
-    step_h = min(0.42, (lane_bottom - lane_top - 0.12) / 3)
+    branched = any(step.branch != "main" for g in groupings for step in g.steps)
+    step_h = (
+        min(0.42, (lane_bottom - lane_top - 0.12) / 3)
+        if branched
+        else min(0.62, lane_bottom - lane_top - 0.1)
+    )
     event_y = head + 0.68
     event_h = min(0.5, max(0.36, bottom - event_y - 0.05))
     event_mid = event_y + event_h / 2
@@ -361,6 +368,10 @@ def business_layer(
     return framed
 
 
+# The band at a business process's top where its small arrow is.
+STEP_ARROW = 0.11
+
+
 def _step(
     x: float, y: float, w: float, h: float, text: str, kind: str, missing: bool
 ) -> list[Box | Stroke]:
@@ -368,25 +379,44 @@ def _step(
     business event (a chevron); orange and dashed when the sources lack it."""
     color = ORANGE if missing else OLIVE
     form: Shape = "chevron" if kind == "event" else "round"
-    room = w - 2 * side_inset(form, w, h, 0.04) - (0 if kind == "event" else 0.08)
-    shape = Box(
-        x,
-        y,
-        w,
-        h,
-        shape=form,
-        fill=WHITE if missing else CREAM,
-        line=color,
-        dashed=missing,
-        text=text,
-        size=fit_size(text, room, h - 0.06, 7, least=4.5),
-        color=ORANGE if missing else BLACK,
-    )
+    fill = WHITE if missing else CREAM
+    ink = ORANGE if missing else BLACK
     if kind == "event":
-        return [shape]
+        room = w - 2 * side_inset(form, w, h, 0.04)
+        size = fit_size(text, room, h - 0.06, 7, least=4.5)
+        return [
+            Box(
+                x,
+                y,
+                w,
+                h,
+                shape=form,
+                fill=fill,
+                line=color,
+                dashed=missing,
+                text=text,
+                size=size,
+                color=ink,
+            )
+        ]
+    # Its words under its arrow, never across it (2026-10-25: four lines in
+    # a narrow box ran under « ⇒ »): the shape, its arrow, then its text in
+    # the room left below.
+    top = y + STEP_ARROW
+    room_w, room_h = w - 0.1, h - STEP_ARROW - 0.03
     return [
-        shape,
+        Box(x, y, w, h, shape=form, fill=fill, line=color, dashed=missing),
         Stroke(x + w - 0.17, y + 0.06, x + w - 0.05, y + 0.06, color=color, width=0.5, arrow=True),
+        Box(
+            x + 0.05,
+            top,
+            room_w,
+            room_h,
+            text=text,
+            size=fit_size(text, room_w - 0.04, room_h - 0.02, 7, least=4.5),
+            color=ink,
+            inset=0.01,
+        ),
     ]
 
 
@@ -936,6 +966,13 @@ def _process_slide(
         # band's title.
         front_right = centers[0] + front_w / 2
         mid = min(max((BANDS_TOP + bottom) / 2, min(branches)), max(branches))
+        # Its middle on a band's title: at the branch nearest it instead — a
+        # title is never struck through (§5.6; 2026-10-25, « 2 - PAIEMENT »).
+        if any(
+            by0 <= mid <= by0 + bh0 and bx0 < bus_x and bx0 + bw0 > front_right
+            for bx0, by0, bw0, bh0 in banners
+        ):
+            mid = min(branches, key=lambda y: abs(y - mid))
         slide.add(Stroke(front_right, mid, bus_x, mid, color=SERVICE_LINE))
         top_y = min(branches)
         for bx0, by0, bw0, bh0 in banners:

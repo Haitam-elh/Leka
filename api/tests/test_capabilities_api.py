@@ -87,7 +87,7 @@ async def test_the_catalogue_for_a_workspace_and_a_person(
     assert (architect["kind"], architect["lifecycle"], architect["version"]) == (
         "agent",
         "active",
-        "19.1.0",
+        "19.3.0",
     )
     assert [i["name"] for i in architect["inputs"]] == [
         "parcours",
@@ -96,6 +96,8 @@ async def test_the_catalogue_for_a_workspace_and_a_person(
         "entite",
         "service",
         "vue_applicative",
+        "espace",
+        "page_racine",
     ]
     assert (architect["output"], architect["formats"]) == ("document", ["pptx", "pdf"])
     assert architect["available"] is False
@@ -131,7 +133,7 @@ async def test_the_catalogue_for_a_workspace_and_a_person(
     assert names == sorted(names, key=str.lower)
 
     detail = (await client.get(f"{API}/{ARCHITECT}")).json()
-    assert detail["history"][0]["version"] == "19.1.0"
+    assert detail["history"][0]["version"] == "19.3.0"
     assert detail["events"][0]["kind"] == "registered"
     assert "instructions" not in detail
     assert (await client.get(f"{API}/nothing-like-this")).status_code == 404
