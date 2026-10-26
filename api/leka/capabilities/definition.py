@@ -191,6 +191,9 @@ class Definition:
     # An agent's: the library of guides it reads while it runs (read_method),
     # a directory under agents/_library/.
     method: str | None = None
+    # An agent made for the organisations it is assigned to (2026-10-25):
+    # seen and run by them only, never sold (capabilities/dedicated.py).
+    dedicated: bool = False
 
     def fingerprint(self) -> str:
         """What it is and does, hashed: everything but where it stands in
@@ -220,6 +223,9 @@ class Definition:
         # Added with the designer's library: none, it says nothing new.
         if self.method is None:
             said.pop("method")
+        # Added with dedicated agents (2026-10-25): not one, nothing new.
+        if not self.dedicated:
+            said.pop("dedicated")
         said["goals"] = sorted(self.goals)
         said["kinds"] = sorted(self.kinds)
         canonical = json.dumps(said, sort_keys=True, ensure_ascii=False, default=str)

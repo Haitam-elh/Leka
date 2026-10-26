@@ -153,8 +153,15 @@ def text_height(text: str, width: float, size: float, bold: bool = False) -> flo
 def fit_size(
     text: str, width: float, height: float, size: float, least: float = 5.5, bold: bool = False
 ) -> float:
-    """The largest size, down to `least`, at which `text` fits the box."""
-    while size > least and text_height(text, width, size, bold) > height:
+    """The largest size, down to `least`, at which `text` fits the box — its
+    height, and its widest line: a word longer than the box is never cut, so
+    the size comes down for it (2026-10-25: « Enregistrement » ran out of its
+    step)."""
+    while size > least and (
+        text_height(text, width, size, bold) > height
+        or max((text_width(line, size, bold) for line in wrap(text, width, size, bold)), default=0)
+        > width
+    ):
         size -= 0.5
     return size
 

@@ -22,6 +22,7 @@ import { useCurrentUser, usePermissions } from "@/components/shell/shell-provide
 import { AddSourceDialog } from "@/components/sources/add-source-dialog";
 import { CustomBadge } from "@/components/sources/custom-badge";
 import { fieldWords, SourceFacts, SourceHistory } from "@/components/sources/source-panel";
+import { SourceTreeSection } from "@/components/sources/source-tree";
 import { SourceLogo } from "@/components/sources/source-logo";
 import { SourceQualitySection } from "@/components/sources/source-quality";
 import { SourceReceptionSection } from "@/components/sources/source-reception";
@@ -103,6 +104,7 @@ export function SourcePage({ sourceId }: { sourceId: string }) {
           <SourceReceptionSection source={source} />
           <SourceRunsSection source={source} />
           <SourceQualitySection source={source} />
+          <SourceTreeSection source={source} />
           <Configuration source={source} />
           <SourceSettingsSection source={source} />
         </div>

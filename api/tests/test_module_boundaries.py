@@ -33,6 +33,9 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "leka"
 # Only the relative order matters — the numbers are labels.
 LAYERS: dict[str, int] = {
     "core": 0,
+    # The application architect's core (2026-10-25): imports nothing of
+    # LEKA's — it ships alone as the downloadable agent.
+    "architect": 0,
     "db": 1,
     "background": 2,
     "platform": 3,
@@ -156,7 +159,8 @@ def test_modules_are_imported_through_their_init() -> None:
 
 @pytest.mark.parametrize(
     "module",
-    sorted(name for name in LAYERS if name not in {"core", "db", "api"}),
+    # The architect's core is a library that ships alone, no table of its own.
+    sorted(name for name in LAYERS if name not in {"core", "db", "api", "architect"}),
 )
 def test_every_module_has_the_same_five_files(module: str) -> None:
     """One shape, so that opening any module means knowing where to look."""

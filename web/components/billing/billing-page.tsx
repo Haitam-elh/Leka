@@ -5,12 +5,14 @@ import { usePathname } from "next/navigation";
 
 import { IconTile, TILE_TONES } from "@/components/environment/parts";
 import { AddOnSubscriptions } from "@/components/billing/add-on-subscriptions";
+import { ContractScreen } from "@/components/billing/contract-page";
 import { SubscriptionSection } from "@/components/billing/subscription-section";
 import { PageContainer, PageHeader } from "@/components/shell/page-container";
 import { StatCard, StatGrid } from "@/components/shell/stat-card";
 import { ErrorState } from "@/components/states/error-state";
 import type { Credits } from "@/lib/billing";
 import { useCredits, useWorkspaceUsage } from "@/lib/billing-queries";
+import { ENTERPRISE } from "@/lib/contract";
 import { fill } from "@/lib/i18n/dictionaries";
 import { buildBreadcrumb } from "@/lib/navigation/breadcrumb";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
@@ -39,6 +41,8 @@ export function BillingScreen() {
   const day = (iso: string) =>
     new Intl.DateTimeFormat(locale, { dateStyle: "long" }).format(new Date(iso));
 
+  // Under an Enterprise contract (2026-10-25): « Contrat », never a bill.
+  if (credits?.plan === ENTERPRISE) return <ContractScreen />;
   return (
     <PageContainer>
       <PageHeader title={w.title} subtitle={w.subtitle} breadcrumb={buildBreadcrumb(pathname, t)} />

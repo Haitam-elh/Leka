@@ -180,7 +180,8 @@ add_ons:
     specialized: 1500
     expert: 2500
   agents:
-    application-architecture: { tier: expert, reference: architect }
+    # application-architecture: dedicated to the organisations it is assigned
+    # to (2026-10-25) — never sold, in no plan, in no bundle.
     code-review: { tier: standard, reference: code-reviewer }
     test-analysis: { tier: standard, reference: test-strategist }
     incident-investigation: { tier: expert, reference: incident-investigator }
@@ -225,7 +226,7 @@ add_ons:
   included:
     starter: [code-review, test-analysis, documentation-assistant]
     growth: [architecture-analysis, infrastructure-analysis, data-analysis, debug-assistant, build-fixer]
-    business: [application-architecture, code-change, security-review, incident-investigation, release-analysis]
+    business: [code-change, security-review, incident-investigation, release-analysis]
     # Enterprise, by contract, every one: Frontend Craft's and Engineering's
     # too (LEKA-461) — built after Karim's matrix, options below until he says.
     enterprise:
@@ -314,8 +315,11 @@ add_ons:
       value:
         fr: "Concevoir, relire et tester votre code."
         en: "Design, review and test your code."
-      members: [architect, codebase-explorer, code-reviewer, test-strategist, test-generator, regression-analyst, change-impact-analyst]
-      monthly_price: 5900
+      # Without the architect since 2026-10-25: dedicated, never sold — its
+      # price brought down with it (59 → 49 €, -26 % on its agents alone,
+      # 66 €; to validate).
+      members: [codebase-explorer, code-reviewer, test-strategist, test-generator, regression-analyst, change-impact-analyst]
+      monthly_price: 4900
     - key: ship-safe
       name: { fr: "Ship Safe", en: "Ship Safe" }
       value:

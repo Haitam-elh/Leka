@@ -4,16 +4,27 @@ import {
   ArrowRight,
   ChevronRight,
   History,
+  Network,
+  Rocket,
 } from "lucide-react";
 import Link from "next/link";
 
 import { cn } from "cn";
+import { InstallAgent } from "@/components/capabilities/install-dialog";
 import { MarketTile, marketOf } from "@/components/capabilities/market-mark";
-import { AgentCardAction, agentStateOf, AgentStateSaid, Bundles } from "@/components/capabilities/offers";
+import {
+  AgentCardAction,
+  agentStateOf,
+  AgentStateSaid,
+  Bundles,
+  isEnterprise,
+  useOrganisationName,
+} from "@/components/capabilities/offers";
 import { type TileTone } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
 import { StatusPill } from "@/components/intentions/intentions-list";
 import { exactDate, timeAgo } from "@/components/knowledge/time";
+import { buttonVariants } from "@/components/ui/button";
 import { routes } from "@/config/routes";
 import { agentTitle } from "@/lib/agent-title";
 import { euros } from "@/lib/billing";
@@ -24,6 +35,7 @@ import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import { useIntentions } from "@/lib/intentions/queries";
 import { recommend } from "@/lib/recommend-agents";
+import { isConnected } from "@/lib/sources";
 import { useSources } from "@/lib/sources-queries";
 import { type Health, overallOf } from "@/lib/twin";
 
@@ -66,7 +78,10 @@ export function EnvironmentCard() {
   const w = t.overview.home;
   const { format } = useLocale();
   const env = useEnvironment().data;
-  const failing = useSources().data?.filter((source) => source.status === "error").length ?? 0;
+  const sources = useSources().data;
+  const failing = sources?.filter((source) => source.status === "error").length ?? 0;
+  // Nothing connected (2026-10-25): said neutral, in grey — never a state.
+  const none = sources !== undefined && !sources.some(isConnected);
   if (!env) {
     return (
       <div
@@ -77,7 +92,7 @@ export function EnvironmentCard() {
   }
   // The page's own rule (LEKA-468): the same figure on both screens.
   const overall = overallOf(env);
-  const { health } = overall;
+  const health: Health = none ? "unknown" : overall.health;
   const percent =
     overall.share !== null && health !== "unknown" ? Math.round(overall.share * 100) : null;
   const last = env.freshness?.last_read_at;
@@ -87,6 +102,7 @@ export function EnvironmentCard() {
       aria-labelledby="home-environment"
       data-testid="home-environment"
       data-health={health}
+      data-sources={none ? "none" : undefined}
     >
       <Link
         href={routes.environment()}
@@ -135,7 +151,7 @@ export function EnvironmentCard() {
         </div>
         <div className="min-w-0 space-y-1.5">
           <Pill tone={HEALTH_TONE[health]} dot data-testid="home-health">
-            {w.health[health]}
+            {none ? w.noSource : w.health[health]}
           </Pill>
           <p
             className="text-[0.6875rem] leading-snug text-shell-muted"
@@ -227,11 +243,11 @@ export function AgentsSection() {
             {w.agents}
           </h2>
           <p className="mt-1 text-[0.875rem] text-shell-muted">
-            {w.agentsBody}
+            {isEnterprise(offers) ? w.agentsBodyContract : w.agentsBody}
           </p>
         </div>
         <Link href={routes.capabilities()} className={LINK}>
-          {w.allAgents}
+          {isEnterprise(offers) ? w.allAgentsOnly : w.allAgents}
           <ArrowRight className="rtl:-scale-x-100 size-4" aria-hidden="true" />
         </Link>
       </div>
@@ -300,6 +316,87 @@ export function AgentsSection() {
               </div>
               <div className="mt-2.5">
                 <AgentCardAction agentKey={agent.key} />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+/** The agents made for this organisation (2026-10-25), first on its home:
+ * each one's card — what it does, the sources it reads, « Lancer ». Never
+ * a price: it is not sold. */
+export function DedicatedAgentsSection() {
+  const t = useDictionary();
+  const w = t.overview.home.dedicated;
+  const offers = useAddOns().data;
+  const organisation = useOrganisationName();
+  const catalogue = useCapabilities({}).data;
+  const keys = offers?.dedicated ?? [];
+  if (!keys.length) return null;
+  const summaries = t.catalogue.summaries as Record<string, string>;
+  return (
+    <section className="mt-8" aria-labelledby="home-dedicated" data-testid="home-dedicated">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 id="home-dedicated" className="text-lg font-bold tracking-[-0.01em] text-brand-navy">
+            {w.title}
+          </h2>
+          {organisation ? (
+            <p className="mt-1 text-[0.875rem] text-shell-muted">{fill(w.lead, { organisation })}</p>
+          ) : null}
+        </div>
+        {/* All of them, on the agents' page, their section (2026-10-25). */}
+        <Link
+          href={`${routes.capabilities()}#dedicated`}
+          className={LINK}
+          data-testid="home-dedicated-all"
+        >
+          {w.seeAll}
+          <ArrowRight className="rtl:-scale-x-100 size-4" aria-hidden="true" />
+        </Link>
+      </div>
+      {/* One line each (2026-10-25, Karim: « ça prend la moitié de la page
+          pour rien »): what it is, what it does, its actions. */}
+      <ul className="mt-3 flex flex-col gap-2">
+        {keys.map((key) => {
+          const capability = catalogue?.find((c) => c.key === key);
+          return (
+            <li
+              key={key}
+              className={cn(CARD, "flex flex-wrap items-center gap-x-4 gap-y-2 border-brand-violet/30 px-4 py-3")}
+              data-testid="home-dedicated-agent"
+              data-key={key}
+            >
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand-violet-soft text-shell-nav-active">
+                <Network className="size-4.5" aria-hidden="true" />
+              </span>
+              <div className="min-w-0 flex-1 basis-60">
+                <h3 className="text-[0.9375rem] font-semibold text-brand-navy">
+                  <Link href={routes.capability(key)} className="rounded hover:underline">
+                    {agentTitle(t, key, capability?.title ?? key)}
+                  </Link>
+                </h3>
+                <p className="truncate text-[0.8125rem] text-shell-muted" title={summaries[key] ?? capability?.summary ?? ""}>
+                  {summaries[key] ?? capability?.summary ?? ""}
+                </p>
+              </div>
+              {/* Its actions wrap on a phone, never wider than the screen. */}
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <AgentStateSaid agentKey={key} />
+                <Link
+                  // The architect on a Confluence space (2026-10-25): its perimeter chosen first.
+                  href={key === "application-architecture" ? routes.architect() : `${routes.capability(key)}#use`}
+                  className={buttonVariants({ size: "sm" })}
+                  data-testid="home-dedicated-launch"
+                >
+                  <Rocket aria-hidden="true" />
+                  {w.launch}
+                </Link>
+                {/* On the organisation's own machines (2026-10-25). */}
+                <InstallAgent agentKey={key} />
               </div>
             </li>
           );

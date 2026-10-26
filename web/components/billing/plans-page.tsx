@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { cn } from "cn";
 
+import { ContractScreen } from "@/components/billing/contract-page";
 import { usePermissions } from "@/components/shell/shell-provider";
 import { BackHome, PageContainer } from "@/components/shell/page-container";
 import { ErrorState } from "@/components/states/error-state";
@@ -13,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { routes } from "@/config/routes";
 import { ApiError } from "@/lib/api";
 import { useCredits } from "@/lib/billing-queries";
+import { ENTERPRISE } from "@/lib/contract";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import { notify } from "@/lib/notify";
@@ -63,6 +65,8 @@ export function PlansPage() {
   const failed = (error: unknown) =>
     notify.error({ title: error instanceof ApiError ? error.message : w.failed });
 
+  // Under an Enterprise contract (2026-10-25): no plan to choose — its contract.
+  if (current === ENTERPRISE) return <ContractScreen />;
   if (pricing.isError) {
     return (
       <PageContainer>

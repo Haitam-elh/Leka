@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Rows3,
   Undo2,
+  Wrench,
   X,
 } from "lucide-react";
 import { useState } from "react";
@@ -28,11 +29,18 @@ import { usePermissions } from "@/components/shell/shell-provider";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
 import { useRewriteChange } from "@/lib/agent-runs-queries";
-import type { CodeChange, CodeChangeFile, CodeChangeFollow } from "@/lib/code-changes";
+import {
+  type CodeChange,
+  type CodeChangeFile,
+  type CodeChangeFollow,
+  type CodeChangeRepair,
+  MAX_REPAIRS,
+} from "@/lib/code-changes";
 import {
   codeChangeKeys,
   useCodeChangeDecision,
   useCodeChangeFollow,
+  useCodeChangeRepair,
   useCodeChangeUndo,
   useCodeChanges,
   useRunCodeChanges,
@@ -40,6 +48,7 @@ import {
 import { type Hunk, hunksOf, type SplitCell, splitRows } from "@/lib/diff";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
+import { modelTitle } from "@/lib/models";
 import { SPINNING } from "@/lib/motion";
 import { notify } from "@/lib/notify";
 import { useAllowWrite } from "@/lib/sources-queries";
@@ -242,15 +251,21 @@ function PullRequestFollow({
   // Followed to the end before the version before it was kept (2026-10-21):
   // read once more, for « Revenir en arrière ».
   const unknownBefore = Boolean(change.follow?.merged_at) && !change.follow?.before_sha;
-  const live = useCodeChangeFollow(change.id, !change.follow?.done || unknownBefore);
+  // Being repaired (2026-10-24): read again until it ends, closed or not.
+  const repairing = change.repairs?.at(-1)?.state === "running";
+  const live = useCodeChangeFollow(change.id, !change.follow?.done || unknownBefore || repairing);
   const follow = live.data?.follow ?? change.follow ?? null;
   const stage = follow?.stage ?? "checks";
   const open = OPEN_STAGES.has(stage);
   const checks = follow?.checks ?? null;
   const environment = follow?.deployment?.environment || w.production;
+  // Closed in red: said red, never « Passée » (2026-10-24).
+  const red = stage === "checks_failed" || (stage === "closed" && checks?.state === "failure");
 
   let checksStep: [StepState, string];
-  if (!open || stage === "ready") {
+  if (stage === "closed" && red) {
+    checksStep = ["failed", fill(w.checks.failure, { names: (checks?.failed ?? []).join(", ") })];
+  } else if (!open || stage === "ready") {
     checksStep = [
       "done",
       checks?.state === "success" ? fill(w.checks.success, { total: String(checks.total) }) : w.checks.passed,
@@ -309,7 +324,7 @@ function PullRequestFollow({
       title: w.steps.checks,
       state: checksStep[0],
       text: checksStep[1],
-      href: stage === "checks_failed" ? checks?.failed_url : null,
+      href: red ? checks?.failed_url : null,
       link: w.checks.seeFailure,
     },
     { key: "merge", title: w.steps.merge, state: mergeStep[0], text: mergeStep[1] },
@@ -380,6 +395,7 @@ function PullRequestFollow({
           {fill(w.readFailed, { error: follow.error })}
         </p>
       ) : null}
+      <RepairPanel change={live.data ?? change} red={red} closed={stage === "closed"} />
       <GoBack
         change={live.data ?? change}
         reverter={reverter}
@@ -387,6 +403,153 @@ function PullRequestFollow({
         refresh={() => void live.refetch()}
       />
     </section>
+  );
+}
+
+const REPAIR_TONE: Record<CodeChangeRepair["state"], string> = {
+  running: "text-brand-violet",
+  pushed: "text-state-success",
+  failed: "text-state-danger",
+  outside: "text-state-warning",
+  unneeded: "text-shell-muted",
+};
+
+/**
+ * « Réparer le problème » (2026-10-24): its CI in red, LEKA reads what
+ * failed on GitHub — the test, the error, the end of its log —, the
+ * workspace's model writes the fix, and LEKA adds it to the pull request's
+ * branch: the CI runs again. Closed in red, the pull request is reopened
+ * first. Never a merge: a person still reviews and merges. Each repair
+ * said after — what failed, why, what it changed, its commit.
+ */
+function RepairPanel({ change, red, closed }: { change: CodeChange; red: boolean; closed: boolean }) {
+  const t = useDictionary();
+  const w = t.codeChanges.repair;
+  // Who may approve what an intention does — as the API holds it.
+  const approver = usePermissions()?.includes("intention:approve") ?? false;
+  const repair = useCodeChangeRepair(change.id);
+  const repairs = change.repairs ?? [];
+  const running = repairs.at(-1)?.state === "running";
+  const left = MAX_REPAIRS - repairs.filter((r) => r.state === "pushed").length;
+  if (!red && !repairs.length) return null;
+
+  async function start() {
+    try {
+      await repair.mutateAsync();
+      notify.success({ title: w.asked });
+    } catch (error) {
+      notify.error({ title: error instanceof ApiError ? error.message : String(error) });
+    }
+  }
+
+  return (
+    <div
+      className="flex flex-col gap-2 border-t border-shell-line pt-2"
+      data-testid="code-change-repair"
+      data-state={repairs.at(-1)?.state ?? "none"}
+    >
+      {running ? (
+        <p className="flex items-center gap-2 text-[0.8125rem] text-brand-violet" role="status">
+          <Loader2 className={cn("size-4 shrink-0", SPINNING)} aria-hidden="true" />
+          {w.running}
+        </p>
+      ) : red ? (
+        <div className="flex flex-col gap-2 rounded-md border border-state-danger/30 bg-white p-3">
+          <p className="flex items-center gap-2 text-[0.8125rem] font-semibold text-brand-navy">
+            <Wrench className="size-4 text-state-danger" aria-hidden="true" />
+            {w.title}
+          </p>
+          <p className="text-[0.8125rem] text-shell-muted">{closed ? w.introClosed : w.intro}</p>
+          {left <= 0 ? (
+            <p className="text-xs text-state-warning">{fill(w.tooMany, { count: String(MAX_REPAIRS) })}</p>
+          ) : approver ? (
+            <div>
+              <Button
+                type="button"
+                size="sm"
+                disabled={repair.isPending}
+                onClick={() => void start()}
+                data-testid="code-change-repair-start"
+              >
+                {repair.isPending ? (
+                  <Loader2 className={cn("size-3.5", SPINNING)} aria-hidden="true" />
+                ) : (
+                  <Wrench className="size-3.5" aria-hidden="true" />
+                )}
+                {closed ? w.startReopen : w.start}
+              </Button>
+            </div>
+          ) : (
+            <p className="text-xs text-shell-muted">{w.askApprover}</p>
+          )}
+        </div>
+      ) : null}
+      {repairs.length ? (
+        <ol className="flex flex-col gap-2">
+          {repairs.map((each, index) => (
+            <RepairLine key={each.asked_at} repair={each} n={index + 1} />
+          ))}
+        </ol>
+      ) : null}
+    </div>
+  );
+}
+
+/** One repair, said: what failed, why, what it changed and where. */
+function RepairLine({ repair, n }: { repair: CodeChangeRepair; n: number }) {
+  const t = useDictionary();
+  const w = t.codeChanges.repair;
+  const failed = repair.failed ?? [];
+  return (
+    <li
+      className="flex flex-col gap-1 rounded-md bg-white px-3 py-2 text-[0.8125rem] text-brand-navy"
+      data-testid="code-change-repair-line"
+      data-state={repair.state}
+    >
+      <p className="flex flex-wrap items-center gap-x-2">
+        <span className="font-semibold">{fill(w.n, { n: String(n) })}</span>
+        <span className={REPAIR_TONE[repair.state]}>{w.states[repair.state]}</span>
+        {repair.commit ? (
+          <span className="font-mono text-xs text-shell-muted">{fill(w.commit, { sha: short(repair.commit) })}</span>
+        ) : null}
+        {repair.model ? (
+          <span className="text-xs text-shell-muted">{fill(w.by, { model: modelTitle(repair.model) })}</span>
+        ) : null}
+      </p>
+      {failed.length ? (
+        <p className="text-xs text-shell-muted">{fill(w.failed, { names: failed.join(", ") })}</p>
+      ) : null}
+      {repair.cause ? (
+        <p>
+          <span className="font-medium">{w.cause}</span> {repair.cause}
+        </p>
+      ) : null}
+      {repair.state === "pushed" && repair.summary ? (
+        <p>
+          <span className="font-medium">{w.fix}</span> {repair.summary}
+        </p>
+      ) : null}
+      {repair.said && repair.state !== "pushed" ? <p className="text-shell-muted">{repair.said}</p> : null}
+      {repair.reopened ? <p className="text-xs text-shell-muted">{w.reopened}</p> : null}
+      {(repair.files ?? []).map((file) => (
+        <details key={file.path} className="rounded-md border border-shell-line" data-testid="code-change-repair-file">
+          <summary className="flex cursor-pointer flex-wrap items-center gap-2 px-2 py-1 text-xs">
+            <FileCode2 className="size-3.5 text-shell-muted" aria-hidden="true" />
+            <span className="min-w-0 font-mono break-all">{file.path}</span>
+            <span className="text-[#15803d]">+{file.additions}</span>
+            <span className="text-[#b91c1c]">−{file.deletions}</span>
+          </summary>
+          <pre className="max-h-80 overflow-auto border-t border-shell-line text-[0.75rem] leading-5">
+            {diffLines(file.diff).map((line, index) => (
+              <div key={index} className={`px-3 font-mono whitespace-pre ${LINE_CLASS[line.kind]}`}>
+                {line.text || " "}
+              </div>
+            ))}
+          </pre>
+        </details>
+      ))}
+      {repair.state === "pushed" ? <p className="text-xs text-shell-muted">{w.checksAgain}</p> : null}
+    </li>
   );
 }
 

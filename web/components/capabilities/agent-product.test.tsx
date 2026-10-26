@@ -27,6 +27,7 @@ const connected = vi.hoisted(() => ({ value: [] as unknown[] }));
 vi.mock("@/components/shell/shell-provider", () => ({
   usePermissions: () => permissions.value,
   useCurrentUser: () => ({ id: "me" }),
+  useCurrentWorkspace: () => ({ id: "w1", name: "Acme Corp", slug: "acme", role: "owner" }),
 }));
 vi.mock("@/lib/billing", async (original) => ({
   ...(await original<typeof import("@/lib/billing")>()),
@@ -283,6 +284,36 @@ describe("an agent's product page", () => {
       "href",
       `/intentions/new?q=${encodeURIComponent("Qui possède vraiment payment-api ?")}`,
     );
+  });
+
+  it("dedicated to this organisation: said so, never priced, no plan — « Utiliser l'agent » (2026-10-25)", async () => {
+    const offer = offers({});
+    sold.addOns.mockResolvedValue({
+      ...offer,
+      agents: offer.agents.filter((a) => a.key !== "application-architecture"),
+      dedicated: ["application-architecture"],
+    });
+    show({ ...REVIEW, key: "application-architecture", title: "Architecte applicatif", category: "architecture", dedicated: true } as CapabilityDetail);
+    expect(await screen.findByTestId("agent-dedicated")).toHaveTextContent("Conçu pour Acme Corp");
+    expect(within(screen.getByTestId("agent-hero")).getByTestId("agent-state")).toHaveTextContent("Dédié à votre organisation");
+    expect(screen.queryByTestId("agent-hero-price")).toBeNull();
+    expect(screen.queryByTestId("agent-plans")).toBeNull();
+    expect(screen.getByTestId("agent-contract")).toHaveTextContent(
+      "Conçu pour Acme Corp et inclus dans votre contrat : il n'est pas vendu.",
+    );
+    expect(cta()).toHaveAttribute("data-cta", "use");
+    expect(screen.getByTestId("agent-use")).toBeInTheDocument();
+    expect(screen.getByTestId("agent-facts")).not.toHaveTextContent(DICTIONARIES.fr.catalogue.product.fact.buy);
+  });
+
+  it("under an Enterprise contract: included, never a price (2026-10-25)", async () => {
+    sold.addOns.mockResolvedValue(offers({ included: true, owned: true, why: null, plan: "enterprise" }));
+    show();
+    expect(await screen.findByTestId("agent-contract")).toHaveTextContent("Inclus dans votre contrat Entreprise.");
+    expect(screen.queryByTestId("agent-hero-price")).toBeNull();
+    expect(screen.queryByTestId("agent-plans")).toBeNull();
+    expect(screen.getByTestId("capability")).not.toHaveTextContent("€");
+    expect(cta()).toHaveAttribute("data-cta", "use");
   });
 
   it("each use case, a request to give it; its sources, those connected said", async () => {

@@ -55,6 +55,7 @@ from leka.identity.service import (
     AuthService,
     LoginResult,
     PasswordRejectedError,
+    password_is_breached,
     truncate_ip,
 )
 from leka.identity.wiring import (
@@ -109,6 +110,7 @@ __all__ = [
     "email_language",
     "invitation_message",
     "load_session",
+    "password_is_breached",
     "read_session_token",
     "session_store",
     "spoken_language",

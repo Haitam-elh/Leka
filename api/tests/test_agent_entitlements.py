@@ -119,14 +119,11 @@ async def test_on_free_no_agent_runs_nor_is_bought(
     await sync_catalogue()
     await _connect({"acme": acme["globex"]}, "confluence")
     _as(identity, acme, "other_admin")
-    assert await _why(client, "application-architecture") == {"plan_required"}
+    assert await _why(client, "incident-investigation") == {"plan_required"}
     # Refused by the server, not only a screen.
     started = await client.post(
         f"{API}/agent-runs",
-        json={
-            "key": "application-architecture",
-            "inputs": {"parcours": "Paiement CB", "perimetre": "Digital"},
-        },
+        json={"key": "incident-investigation", "inputs": {"incident": "payment-api"}},
     )
     assert (started.status_code, started.json()["error"]["code"]) == (422, "plan_required")
     sold = (await client.get(f"{API}/billing/add-ons")).json()
@@ -146,22 +143,25 @@ async def test_what_is_sold_its_prices_and_what_is_owned(
     _as(identity, acme, "member")
     sold = (await client.get(f"{API}/billing/add-ons")).json()
     agents = {a["key"]: a for a in sold["agents"]}
-    assert (agents["application-architecture"]["tier"], agents["code-review"]["tier"]) == (
+    assert (agents["incident-investigation"]["tier"], agents["code-review"]["tier"]) == (
         "expert",
         "standard",
     )
-    assert agents["application-architecture"]["monthly_price"] == 2500
+    assert agents["incident-investigation"]["monthly_price"] == 2500
     assert agents["code-review"]["monthly_price"] == 900
     # Its name in the marketplace reference (LEKA-454).
-    assert agents["application-architecture"]["reference"] == "Architect"
+    assert agents["incident-investigation"]["reference"] == "Incident Investigator"
+    # A dedicated agent is never sold (2026-10-25).
+    assert "application-architecture" not in agents
     assert "engineering" in agents["code-review"]["bundles"]
     engineering = next(b for b in sold["bundles"] if b["key"] == "engineering")
     # As the reference composes it, every one of its agents built (LEKA-461):
     # sold; its saving computed from its members' prices.
-    assert len(engineering["agents"]) == 7
+    # Without the architect since 2026-10-25: dedicated, never sold.
+    assert len(engineering["agents"]) == 6
     assert [m["agent"] for m in engineering["members"]].count(None) == 0
-    assert (engineering["sellable"], engineering["monthly_price"]) == (True, 5900)
-    assert (engineering["alone_price"], engineering["discount_percent"]) == (9100, 35)
+    assert (engineering["sellable"], engineering["monthly_price"]) == (True, 4900)
+    assert (engineering["alone_price"], engineering["discount_percent"]) == (6600, 26)
     ship_safe = next(b for b in sold["bundles"] if b["key"] == "ship-safe")
     # Every agent built (2026-10-22): sold — its saving not shown, the
     # migration planner having no reference price.
@@ -237,7 +237,7 @@ async def test_bought_paid_owned_cancelled_no_longer_the_plan_untouched(
     )
     assert paid.status_code == 200, paid.text
     assert await _why(client, "security-review") == set()
-    assert await _why(client, "application-architecture") == {"not_owned"}
+    assert await _why(client, "performance-analysis") == {"not_owned"}
     # The plan is the plan's: an add-on's events never touch it.
     assert await _plan(globex) == "starter"
 

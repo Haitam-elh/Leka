@@ -228,10 +228,28 @@ describe("its runs", () => {
     );
   });
 
+  it("offers the architect's dossier on a Confluence space: PDF, Word, Markdown, JSON (2026-10-25)", async () => {
+    const file = (format: "md" | "pdf" | "docx" | "json") => ({
+      format,
+      name: `Dossier d'architecture - Architecture.${format}`,
+      size: 9,
+      slides: 0,
+      kind: "dossier" as const,
+    });
+    api.list.mockResolvedValue([run({ pending: [], deliverables: [file("md"), file("json"), file("docx"), file("pdf")] })]);
+    show(<AgentRuns agentKey={ARCHITECT.key} />);
+    const offered = await screen.findByTestId("agent-run-deliverables");
+    const links = within(offered).getAllByRole("link");
+    expect(links.map((l) => l.textContent)).toEqual(["Télécharger le PDF", "Word", "Markdown", "JSON"]);
+    expect(links[1]).toHaveAttribute("href", expect.stringContaining("/deliverables/docx"));
+    expect(offered).toHaveTextContent("Dossier ArchiMate : chaque section cite ses pages Confluence.");
+    expect(offered).not.toHaveTextContent("slides");
+  });
+
   it("offers the files LEKA drew to download, the PDF first", async () => {
     const files = [
-      { format: "pptx" as const, name: "Architecture applicative - Parcours Paiement CB.pptx", size: 9, slides: 11 },
-      { format: "pdf" as const, name: "Architecture applicative - Parcours Paiement CB.pdf", size: 7, slides: 11 },
+      { format: "pptx" as const, name: "Architecture applicative - Parcours Paiement CB.pptx", size: 9, slides: 11, kind: "deck" as const },
+      { format: "pdf" as const, name: "Architecture applicative - Parcours Paiement CB.pdf", size: 7, slides: 11, kind: "deck" as const },
     ];
     api.list.mockResolvedValue([run({ pending: [], deliverables: files })]);
     show(<AgentRuns agentKey={ARCHITECT.key} />);

@@ -214,6 +214,16 @@ export const ROUTES: readonly RouteEntry[] = [
     availability: "available",
   },
   {
+    // The architect on a Confluence space (2026-10-25): its perimeter
+    // chosen — a space, a root page —, an intention asked, the run started.
+    id: "architect",
+    path: "/architecte",
+    labelKey: "architect",
+    parentId: "capabilities",
+    requiredPermission: "intention:create",
+    availability: "available",
+  },
+  {
     id: "sources",
     path: "/sources",
     labelKey: "sources",
@@ -316,6 +326,7 @@ export const routes = {
   welcome: () => "/welcome",
   capabilities: () => "/capabilities",
   capability: (capabilityId: string) => `/capabilities/${capabilityId}`,
+  architect: () => "/architecte",
   governance: () => "/governance",
   team: () => "/team",
   billing: () => "/billing",

@@ -87,6 +87,23 @@ PROPOSED = {
     "informative": False,
 }
 
+# An expert agent on sale, included from Business (Karim's matrix): the
+# security reviewer — the architect, dedicated since 2026-10-25, never is.
+SOLD = "security-review"
+OFFERED = {
+    **PROPOSED,
+    "agents": [
+        {"key": SOLD, "inputs": {"sujet": "payment-api"}, "why": "La revue de sécurité."},
+        {"key": "made-up-agent", "why": "Not offered: dropped."},
+    ],
+    "steps": [
+        {"title": "Rassembler ce qui l'expose", "detail": "Ses données, ce qui l'atteint."},
+        {"title": "Revoir sa sécurité", "detail": "Ce qu'il faut vérifier.", "agent": SOLD},
+    ],
+}
+SOLD_ASKED = "Fais une revue de sécurité de payment-api"
+SOLD_LAUNCH = {"agents": [{"key": SOLD, "inputs": {"sujet": "payment-api"}}]}
+
 
 def _gemini(said: dict[str, Any]) -> httpx.Response:
     return httpx.Response(
@@ -205,8 +222,10 @@ async def _end(workspace_id: uuid.UUID, run_id: uuid.UUID, status: str, **detail
             await session.commit()
 
 
-async def _proposed(client: AsyncClient, acme: dict[str, uuid.UUID]) -> dict[str, Any]:
-    intention = await _ask(client, ASKED)
+async def _proposed(
+    client: AsyncClient, acme: dict[str, uuid.UUID], asked: str = ASKED
+) -> dict[str, Any]:
+    intention = await _ask(client, asked)
     await _analysed(acme, intention)
     return intention
 

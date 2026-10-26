@@ -100,6 +100,24 @@ class WorkspaceCapability(Base, WorkspaceScopedMixin):
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class DedicatedAgent(Base, WorkspaceScopedMixin):
+    """An agent made for one organisation (2026-10-25): seen and run only by
+    the organisations it is assigned to — assigned by LEKA, from the server
+    (python -m leka.ops.enterprise), never bought."""
+
+    __tablename__ = "dedicated_agents"
+    __table_args__ = (UniqueConstraint("workspace_id", "key", name="uq_dedicated_agents_key"),)
+
+    key: Mapped[str] = mapped_column(String(100), nullable=False)
+    # Who at LEKA: the server command's operator — no account of the workspace.
+    assigned_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Its organisation's own instructions (2026-10-25), in place of the
+    # registry's: its architect, its words — given by LEKA from the server,
+    # never in the code, never shown to a browser.
+    instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class CapabilityFavourite(Base, WorkspaceScopedMixin):
     """A capability a person keeps at hand: « Mes capacités »."""
 
@@ -608,6 +626,12 @@ class CodeChange(Base, WorkspaceScopedMixin):
         UUID(as_uuid=True), ForeignKey("code_changes.id", ondelete="SET NULL"), nullable=True
     )
     rollbacks: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    # Repaired on asking, its checks in red (2026-10-24): each time, what
+    # failed, the cause found, the commit LEKA added to its branch and the
+    # files it fixed — or why not.
+    repairs: Mapped[list[dict[str, object]]] = mapped_column(
         JSONB, nullable=False, server_default="[]"
     )
 

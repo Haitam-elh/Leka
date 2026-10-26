@@ -53,7 +53,16 @@ from tests.test_billing_stripe import (
     stripe,
 )
 from tests.test_context_engine import model
-from tests.test_intention_agents import ARCHITECT, LAUNCH, Gemini, _proposed, gemini, started
+from tests.test_intention_agents import (
+    OFFERED,
+    SOLD,
+    SOLD_ASKED,
+    SOLD_LAUNCH,
+    Gemini,
+    _proposed,
+    gemini,
+    started,
+)
 from tests.test_intention_analysis_api import API, queued  # noqa: F401
 from tests.test_sources_api import _as, acme, fake_connector  # noqa: F401
 
@@ -105,12 +114,12 @@ async def test_granted_every_agent_nothing_to_buy(
     started: list[uuid.UUID],
 ) -> None:
     await _ready(acme)
-    gemini()
+    gemini(OFFERED)
     _as(identity, acme, "member")
-    intention = await _proposed(client, acme)
+    intention = await _proposed(client, acme, SOLD_ASKED)
     said = await _offer(client, intention["id"])
     [agent] = said["agents"]
-    assert (agent["key"], agent["status"], agent["chosen"]) == (ARCHITECT, "included", True)
+    assert (agent["key"], agent["status"], agent["chosen"]) == (SOLD, "included", True)
     assert (said["ready"], said["lines"], said["total_monthly"]) == (True, [], 0)
 
 
@@ -124,9 +133,9 @@ async def test_on_free_the_least_plan_and_the_agent_priced_now_and_after(
     started: list[uuid.UUID],
 ) -> None:
     await _ready(acme)
-    gemini()
+    gemini(OFFERED)
     _as(identity, acme, "member")
-    intention = await _proposed(client, acme)
+    intention = await _proposed(client, acme, SOLD_ASKED)
     await _on(acme["acme"], "free")
     said = await _offer(client, intention["id"])
 
@@ -143,7 +152,7 @@ async def test_on_free_the_least_plan_and_the_agent_priced_now_and_after(
         5900,
         12,
     )
-    assert (option["kind"], option["key"], option["monthly_price"]) == ("agent", ARCHITECT, 2500)
+    assert (option["kind"], option["key"], option["monthly_price"]) == ("agent", SOLD, 2500)
     assert (said["total_monthly"], said["then_monthly"]) == (7220, 8400)
     assert said["ready"] is False
     # The month measured; the agent's run estimated — unknown before it ran.
@@ -169,12 +178,12 @@ async def test_what_the_plan_includes_is_never_sold_with_it(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Any,
 ) -> None:
-    _catalogued(monkeypatch, tmp_path, lambda a: a.update(included={"starter": [ARCHITECT]}))
+    _catalogued(monkeypatch, tmp_path, lambda a: a.update(included={"starter": [SOLD]}))
     try:
         await _ready(acme)
-        gemini()
+        gemini(OFFERED)
         _as(identity, acme, "member")
-        intention = await _proposed(client, acme)
+        intention = await _proposed(client, acme, SOLD_ASKED)
         await _on(acme["acme"], "free")
         said = await _offer(client, intention["id"])
         # Starter includes it: the plan alone, the agent said included.
@@ -196,9 +205,9 @@ async def test_on_starter_owning_it_launched_as_it_is(
     started: list[uuid.UUID],
 ) -> None:
     await _ready(acme)
-    gemini()
+    gemini(OFFERED)
     _as(identity, acme, "member")
-    intention = await _proposed(client, acme)
+    intention = await _proposed(client, acme, SOLD_ASKED)
     await _on(acme["acme"], "starter")
     said = await _offer(client, intention["id"])
     # On Starter, the plan suffices: only the option.
@@ -217,7 +226,7 @@ async def test_several_agents_bought_together_back_to_the_intention_each_owned(
     intention = uuid.uuid4()
     await _synced(paying)
     # Neither included in Starter (Karim's matrix): both options.
-    keys = f"{ARCHITECT},debug-assistant"
+    keys = f"{SOLD},debug-assistant"
     bought = await client.post(
         "/api/v1/billing/add-ons/checkout",
         json={"kind": "agents", "key": keys, "intention_id": str(intention)},
@@ -225,9 +234,7 @@ async def test_several_agents_bought_together_back_to_the_intention_each_owned(
     assert bought.status_code == 200, bought.text
     [opened] = paying.posted("/v1/checkout/sessions")
     # One subscription, a line each, at its Stripe price (LEKA-461).
-    assert (
-        opened["line_items[0][price]"] == paying.prices[f"leka_addon_agent_{ARCHITECT}_month_2500"]
-    )
+    assert opened["line_items[0][price]"] == paying.prices[f"leka_addon_agent_{SOLD}_month_2500"]
     assert (
         opened["line_items[1][price]"]
         == paying.prices["leka_addon_agent_debug-assistant_month_1500"]
@@ -257,7 +264,7 @@ async def test_several_agents_bought_together_back_to_the_intention_each_owned(
     )
     assert paid.status_code == 200, paid.text
     rights = (await client.get("/api/v1/billing/entitlements")).json()
-    assert sorted(r["key"] for r in rights) == [ARCHITECT, "debug-assistant"]
+    assert sorted(r["key"] for r in rights) == sorted([SOLD, "debug-assistant"])
     ended = await _deliver(
         client,
         _event(
@@ -293,7 +300,7 @@ async def test_several_bundles_in_one_checkout_each_its_own_right_never_one_owne
     assert bought.status_code == 200, bought.text
     [opened] = paying.posted("/v1/checkout/sessions")
     assert (
-        opened["line_items[0][price]"] == paying.prices["leka_addon_bundle_engineering_month_5900"]
+        opened["line_items[0][price]"] == paying.prices["leka_addon_bundle_engineering_month_4900"]
     )
     assert (
         opened["line_items[1][price]"]
@@ -374,9 +381,9 @@ async def test_the_month_spent_is_blocked_and_the_next_plan_offered_never_an_ove
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     await _ready(acme)
-    gemini()
+    gemini(OFFERED)
     _as(identity, acme, "member")
-    intention = await _proposed(client, acme)
+    intention = await _proposed(client, acme, SOLD_ASKED)
     await _on(acme["acme"], "starter")
 
     async def spent(*_: Any, **__: Any) -> CreditsLeftRead:
@@ -408,7 +415,7 @@ async def test_the_month_spent_is_blocked_and_the_next_plan_offered_never_an_ove
         ("free", "to_buy", True, ["plan", "agent"]),
         ("starter", "to_buy", False, ["agent"]),
         ("growth", "to_buy", False, ["agent"]),
-        # Karim's matrix: Business includes the architect; Enterprise every one.
+        # Karim's matrix: Business includes the security reviewer; Enterprise every one.
         ("business", "included", False, []),
         ("enterprise", "included", False, []),
     ],
@@ -427,9 +434,9 @@ async def test_each_plan_as_its_rights_say(
     kinds: list[str],
 ) -> None:
     await _ready(acme)
-    gemini()
+    gemini(OFFERED)
     _as(identity, acme, "member")
-    intention = await _proposed(client, acme)
+    intention = await _proposed(client, acme, SOLD_ASKED)
     await _on(acme["acme"], plan)
     said = await _offer(client, intention["id"])
     [agent] = said["agents"]
@@ -451,15 +458,13 @@ async def test_on_growth_owning_it_covered_launched_never_sold(
     started: list[uuid.UUID],
 ) -> None:
     await _ready(acme)
-    gemini()
+    gemini(OFFERED)
     _as(identity, acme, "member")
-    intention = await _proposed(client, acme)
+    intention = await _proposed(client, acme, SOLD_ASKED)
     await _on(acme["acme"], "growth")
     with workspace_scope(acme["acme"]):
         async with session_factory() as session:
-            await grant(
-                session, acme["acme"], key=ARCHITECT, kind="agent", by="tests", reason="bought"
-            )
+            await grant(session, acme["acme"], key=SOLD, kind="agent", by="tests", reason="bought")
             await session.commit()
     said = await _offer(client, intention["id"])
     [agent] = said["agents"]
@@ -469,7 +474,7 @@ async def test_on_growth_owning_it_covered_launched_never_sold(
         [],
         0,
     )
-    launched = await client.post(f"{API}/{intention['id']}/agents", json=LAUNCH)
+    launched = await client.post(f"{API}/{intention['id']}/agents", json=SOLD_LAUNCH)
     assert launched.status_code == 200, launched.text
     assert launched.json()["status"] == "executing"
 
@@ -486,17 +491,17 @@ async def test_a_launch_its_rights_do_not_cover_is_refused_on_the_server(
     """Whatever a screen shows: an option not bought, a plan that runs no
     agent — refused before anything starts."""
     await _ready(acme)
-    gemini()
+    gemini(OFFERED)
     _as(identity, acme, "member")
-    intention = await _proposed(client, acme)
+    intention = await _proposed(client, acme, SOLD_ASKED)
     url = f"{API}/{intention['id']}/agents"
     await _on(acme["acme"], "growth")
-    not_bought = await client.post(url, json=LAUNCH)
+    not_bought = await client.post(url, json=SOLD_LAUNCH)
     assert (not_bought.status_code, not_bought.json()["error"]["code"]) == (
         422,
         "agent_not_owned",
     )
     await _on(acme["acme"], "free")
-    on_free = await client.post(url, json=LAUNCH)
+    on_free = await client.post(url, json=SOLD_LAUNCH)
     assert (on_free.status_code, on_free.json()["error"]["code"]) == (422, "plan_required")
     assert started == []
