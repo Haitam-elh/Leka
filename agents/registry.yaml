@@ -89,7 +89,7 @@ agents:
 
   - path: development/release-analysis/SKILL.md
     name: release-analysis
-    version: 1.3.0
+    version: 1.4.0
     status: active
 
   - path: development/test-analysis/SKILL.md
