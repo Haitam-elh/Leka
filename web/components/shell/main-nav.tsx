@@ -41,7 +41,7 @@ export function useMainNav() {
   const entries = ENTRIES.filter((e) => opens(e.routeId)).map((e) => ({
     id: e.id,
     href: e.href,
-    label: e.id === "history" ? "intention" : t[e.id as keyof typeof t],
+    label: t[e.id as keyof typeof t],
     current: e.active(path),
     count: 0,
   }));
