@@ -4,12 +4,12 @@ import { type AgentProduct, w } from "@/lib/agent-products/types";
 export const BUILD: Record<string, AgentProduct> = {
   "application-architecture": {
     promise: w(
-      "Le dossier d'architecture d'un parcours métier, prêt à présenter : couche métier, couche applicative, règles de gestion et RACI — construit uniquement depuis votre documentation.",
-      "The architecture deck of a business journey, ready to present: business layer, application layer, business rules and RACI — built only from your documentation.",
+      "Le dossier d'architecture d'un parcours métier, prêt à présenter : couche métier, couche applicative, règles de gestion et RACI, construit uniquement depuis votre documentation.",
+      "The architecture deck of a business journey, ready to present: business layer, application layer, business rules and RACI, built only from your documentation.",
     ),
     problem: w(
-      "Documenter l'architecture d'un parcours demande des semaines d'entretiens et de recherches dans la documentation, les tickets et le code — et le résultat vieillit vite.",
-      "Documenting a journey's architecture takes weeks of interviews and digging through documentation, tickets and code — and the result ages fast.",
+      "Documenter l'architecture d'un parcours demande des semaines d'entretiens et de recherches dans la documentation, les tickets et le code, et le résultat vieillit vite.",
+      "Documenting a journey's architecture takes weeks of interviews and digging through documentation, tickets and code, and the result ages fast.",
     ),
     benefits: [
       {
@@ -143,8 +143,8 @@ export const BUILD: Record<string, AgentProduct> = {
 
   "architecture-analysis": {
     promise: w(
-      "Comprenez de quoi est fait un service, ce dont il dépend et où il est fragile — sans monter de dossier.",
-      "Understand what a service is made of, what it depends on and where it is fragile — without building a deck.",
+      "Comprenez de quoi est fait un service, ce dont il dépend et où il est fragile, sans monter de dossier.",
+      "Understand what a service is made of, what it depends on and where it is fragile, without building a deck.",
     ),
     problem: w(
       "Avant de toucher à un système, il faut savoir ce qu'il contient et qui en dépend ; cette connaissance est éparpillée entre les équipes.",
@@ -301,8 +301,8 @@ export const BUILD: Record<string, AgentProduct> = {
       },
     ],
     does: w(
-      "Il lit l'arborescence de votre dépôt GitHub et ses fichiers déclaratifs — README, manifestes, build, intégration continue —, repère ses points d'entrée et suit votre question jusqu'à l'endroit exact du code.",
-      "It reads your GitHub repository's tree and declarative files — README, manifests, build, continuous integration —, finds its entry points and follows your question to the exact place in the code.",
+      "Il lit l'arborescence de votre dépôt GitHub et ses fichiers déclaratifs (README, manifestes, build, intégration continue), repère ses points d'entrée et suit votre question jusqu'à l'endroit exact du code.",
+      "It reads your GitHub repository's tree and declarative files (README, manifests, build, continuous integration), finds its entry points and follows your question to the exact place in the code.",
     ),
     features: [
       w("Ce que fait le dépôt, en une phrase", "What the repository does, in a sentence"),
@@ -354,10 +354,10 @@ export const BUILD: Record<string, AgentProduct> = {
         kind: "list",
         title: w("La carte d'un dépôt", "A repository's map"),
         items: [
-          w("api/ — le serveur et ses routes", "api/ — the server and its routes"),
-          w("web/ — l'application et ses écrans", "web/ — the application and its screens"),
-          w("tests/ — les tests automatisés", "tests/ — the automated tests"),
-          w("infra/ — le déploiement", "infra/ — the deployment"),
+          w("api/ : le serveur et ses routes", "api/: the server and its routes"),
+          w("web/ : l'application et ses écrans", "web/: the application and its screens"),
+          w("tests/ : les tests automatisés", "tests/: the automated tests"),
+          w("infra/ : le déploiement", "infra/: the deployment"),
         ],
       },
       {
@@ -380,8 +380,8 @@ export const BUILD: Record<string, AgentProduct> = {
 
   "code-review": {
     promise: w(
-      "Une revue de chaque pull request : ce qu'elle touche, ce qu'elle risque et qui devrait la relire — commentée ligne par ligne.",
-      "A review of every pull request: what it touches, what it risks and who should review it — commented line by line.",
+      "Une revue de chaque pull request : ce qu'elle touche, ce qu'elle risque et qui devrait la relire, commentée ligne par ligne.",
+      "A review of every pull request: what it touches, what it risks and who should review it, commented line by line.",
     ),
     problem: w(
       "Les relecteurs manquent de temps et de contexte : une pull request qui touche un service critique peut passer sans que les bonnes personnes la voient.",
@@ -414,8 +414,8 @@ export const BUILD: Record<string, AgentProduct> = {
       },
     ],
     does: w(
-      "Il lit la pull request, sa description et son diff, regarde les services qu'elle porte et leurs responsables, et rend un avis argumenté — un avis, jamais une décision : la pull request reste à ses relecteurs.",
-      "It reads the pull request, its description and its diff, looks at the services it carries and their owners, and gives a reasoned opinion — an opinion, never a decision: the pull request stays with its reviewers.",
+      "Il lit la pull request, sa description et son diff, regarde les services qu'elle porte et leurs responsables, et rend un avis argumenté (un avis, jamais une décision) : la pull request reste à ses relecteurs.",
+      "It reads the pull request, its description and its diff, looks at the services it carries and their owners, and gives a reasoned opinion (an opinion, never a decision): the pull request stays with its reviewers.",
     ),
     features: [
       w("Ce que fait le changement, en une phrase", "What the change does, in a sentence"),
@@ -475,7 +475,7 @@ export const BUILD: Record<string, AgentProduct> = {
         kind: "list",
         title: w("Avis et relecteurs", "Opinion and reviewers"),
         items: [
-          w("Avis : prudence — un constat élevé", "Opinion: caution — one high finding"),
+          w("Avis : prudence, un constat élevé", "Opinion: caution, one high finding"),
           w("Relecteurs proposés : l'équipe Paiements", "Suggested reviewers: the Payments team"),
           w("À garder : la validation des entrées", "To keep: the input validation"),
         ],
@@ -584,8 +584,8 @@ export const BUILD: Record<string, AgentProduct> = {
         kind: "list",
         title: w("Une modification proposée", "A proposed change"),
         items: [
-          w("billing/rounding.py — arrondi au centime supérieur", "billing/rounding.py — round up to the cent"),
-          w("tests/test_rounding.py — un cas ajouté", "tests/test_rounding.py — one case added"),
+          w("billing/rounding.py : arrondi au centime supérieur", "billing/rounding.py: round up to the cent"),
+          w("tests/test_rounding.py : un cas ajouté", "tests/test_rounding.py: one case added"),
           w("Risque : les factures déjà émises ne changent pas", "Risk: invoices already issued do not change"),
         ],
       },
@@ -609,8 +609,8 @@ export const BUILD: Record<string, AgentProduct> = {
 
   "test-generation": {
     promise: w(
-      "Les tests qui manquent, écrits dans le style de votre dépôt et proposés en diff — la pull request ne s'ouvre qu'avec votre accord.",
-      "The missing tests, written in your repository's style and proposed as a diff — the pull request opens only with your consent.",
+      "Les tests qui manquent, écrits dans le style de votre dépôt et proposés en diff : la pull request ne s'ouvre qu'avec votre accord.",
+      "The missing tests, written in your repository's style and proposed as a diff: the pull request opens only with your consent.",
     ),
     problem: w(
       "Le code sans tests s'accumule ; écrire les bons tests demande de comprendre le code et les conventions du projet.",
@@ -643,8 +643,8 @@ export const BUILD: Record<string, AgentProduct> = {
       },
     ],
     does: w(
-      "Il lit le code à tester et les tests qui existent, reconnaît le cadre utilisé — pytest, Jest, Vitest, JUnit, Go test… — et propose les nouveaux tests ; LEKA en calcule le diff et le présente à une personne qui décide.",
-      "It reads the code to test and the existing tests, recognises the framework used — pytest, Jest, Vitest, JUnit, Go test… — and proposes the new tests; LEKA computes the diff and shows it to a person who decides.",
+      "Il lit le code à tester et les tests qui existent, reconnaît le cadre utilisé (pytest, Jest, Vitest, JUnit, Go test…) et propose les nouveaux tests ; LEKA en calcule le diff et le présente à une personne qui décide.",
+      "It reads the code to test and the existing tests, recognises the framework used (pytest, Jest, Vitest, JUnit, Go test…) and proposes the new tests; LEKA computes the diff and shows it to a person who decides.",
     ),
     features: [
       w("Les tests existants du périmètre, cités", "The perimeter's existing tests, cited"),
@@ -730,8 +730,8 @@ export const BUILD: Record<string, AgentProduct> = {
 
   "api-design-review": {
     promise: w(
-      "Sachez si un changement d'API casse ceux qui l'appellent, et si votre API tient ses propres règles — erreurs, pagination, ce qu'elle expose.",
-      "Know whether an API change breaks those who call it, and whether your API keeps its own rules — errors, pagination, what it exposes.",
+      "Sachez si un changement d'API casse ceux qui l'appellent, et si votre API tient ses propres règles : erreurs, pagination, ce qu'elle expose.",
+      "Know whether an API change breaks those who call it, and whether your API keeps its own rules: errors, pagination, what it exposes.",
     ),
     problem: w(
       "Un champ renommé, un paramètre devenu obligatoire, une erreur qui change de forme : la rupture se découvre chez les clients, après la livraison.",
@@ -764,8 +764,8 @@ export const BUILD: Record<string, AgentProduct> = {
       },
     ],
     does: w(
-      "Il lit le contrat de l'API — sa spécification, sinon ses routes et ses modèles dans le code — et, pour une pull request, ce qu'elle change. Il sépare ce qui est sans risque de ce qui rompt, dit qui serait cassé et comment livrer, puis relève les écarts à ses propres conventions avec la correction exacte.",
-      "It reads the API's contract — its specification, else its routes and models in the code — and, for a pull request, what it changes. It separates what is safe from what breaks, says who would be broken and how to ship, then lists the departures from its own conventions with the exact fix.",
+      "Il lit le contrat de l'API (sa spécification, sinon ses routes et ses modèles dans le code) et, pour une pull request, ce qu'elle change. Il sépare ce qui est sans risque de ce qui rompt, dit qui serait cassé et comment livrer, puis relève les écarts à ses propres conventions avec la correction exacte.",
+      "It reads the API's contract (its specification, else its routes and models in the code) and, for a pull request, what it changes. It separates what is safe from what breaks, says who would be broken and how to ship, then lists the departures from its own conventions with the exact fix.",
     ),
     features: [
       w("Le contrat lu, et d'où il vient", "The contract read, and where from"),
@@ -967,8 +967,8 @@ export const BUILD: Record<string, AgentProduct> = {
     ],
     limits: [
       w(
-        "Il lit le modèle, l'historique et le code sans rien provoquer : aucun test de charge, aucune panne simulée — une relève que les sources ne montrent pas est posée en question.",
-        "It reads the model, the history and the code without causing anything: no load test, no simulated outage — a standby the sources do not show is asked as a question.",
+        "Il lit le modèle, l'historique et le code sans rien provoquer : aucun test de charge, aucune panne simulée ; une relève que les sources ne montrent pas est posée en question.",
+        "It reads the model, the history and the code without causing anything: no load test, no simulated outage; a standby the sources do not show is asked as a question.",
       ),
     ],
   },
@@ -1068,8 +1068,8 @@ export const BUILD: Record<string, AgentProduct> = {
         kind: "levels",
         title: w("Vulnérabilités", "Vulnerabilities"),
         items: [
-          { level: "critical", text: w("log4j-core 2.14.1, en production — corrigé en 2.17.1", "log4j-core 2.14.1, in production — fixed in 2.17.1") },
-          { level: "high", text: w("qs 6.5.0, transitive par express — monter express", "qs 6.5.0, transitive through express — upgrade express") },
+          { level: "critical", text: w("log4j-core 2.14.1, en production : corrigé en 2.17.1", "log4j-core 2.14.1, in production: fixed in 2.17.1") },
+          { level: "high", text: w("qs 6.5.0, transitive par express : monter express", "qs 6.5.0, transitive through express: upgrade express") },
           { level: "medium", text: w("Script postinstall d'un paquet tiré d'un dépôt git", "Postinstall script of a package pulled from a git repository") },
           { level: "low", text: w("lodash en trois versions", "lodash in three versions") },
         ],
@@ -1086,8 +1086,8 @@ export const BUILD: Record<string, AgentProduct> = {
     ],
     limits: [
       w(
-        "Il lit les fichiers sans rien installer ni exécuter ; seuls les noms et versions des paquets publics sont envoyés à la base de vulnérabilités — une faille que la base ne connaît pas encore n'est pas vue.",
-        "It reads the files without installing or running anything; only public packages' names and versions are sent to the vulnerability database — a flaw the database does not know yet is not seen.",
+        "Il lit les fichiers sans rien installer ni exécuter ; seuls les noms et versions des paquets publics sont envoyés à la base de vulnérabilités : une faille que la base ne connaît pas encore n'est pas vue.",
+        "It reads the files without installing or running anything; only public packages' names and versions are sent to the vulnerability database: a flaw the database does not know yet is not seen.",
       ),
     ],
   },
@@ -1106,8 +1106,8 @@ export const BUILD: Record<string, AgentProduct> = {
         icon: "database",
         title: w("Le schéma tel qu'il est", "The schema as it is"),
         body: w(
-          "Lu dans le catalogue de la base : clés, index, types, volumes — jamais une ligne de données.",
-          "Read from the database's catalogue: keys, indexes, types, volumes — never a row of data.",
+          "Lu dans le catalogue de la base : clés, index, types, volumes, jamais une ligne de données.",
+          "Read from the database's catalogue: keys, indexes, types, volumes, never a row of data.",
         ),
       },
       {
@@ -1128,8 +1128,8 @@ export const BUILD: Record<string, AgentProduct> = {
       },
     ],
     does: w(
-      "Il lit la structure de la base dans son catalogue — chaque table, ses clés, ses index, son volume — et calcule ce qui manque : clé primaire, index de clé étrangère, types exacts. Il relit dans le code les requêtes et les migrations, dit lesquelles ne tiendront pas quand la base grossira et comment les corriger, puis ce qu'il faut mesurer sur la base.",
-      "It reads the database's structure from its catalogue — each table, its keys, its indexes, its volume — and works out what is missing: primary keys, foreign key indexes, exact types. It reviews the queries and migrations in the code, says which will not hold as the database grows and how to fix them, then what to measure on the database.",
+      "Il lit la structure de la base dans son catalogue (chaque table, ses clés, ses index, son volume) et calcule ce qui manque : clé primaire, index de clé étrangère, types exacts. Il relit dans le code les requêtes et les migrations, dit lesquelles ne tiendront pas quand la base grossira et comment les corriger, puis ce qu'il faut mesurer sur la base.",
+      "It reads the database's structure from its catalogue (each table, its keys, its indexes, its volume) and works out what is missing: primary keys, foreign key indexes, exact types. It reviews the queries and migrations in the code, says which will not hold as the database grows and how to fix them, then what to measure on the database.",
     ),
     features: [
       w("Les tables sans clé primaire", "Tables without a primary key"),
@@ -1186,7 +1186,7 @@ export const BUILD: Record<string, AgentProduct> = {
         kind: "levels",
         title: w("Constats", "Findings"),
         items: [
-          { level: "critical", text: w("invoices.customer_id sans index — 12 millions de lignes", "invoices.customer_id without an index — 12 million rows") },
+          { level: "critical", text: w("invoices.customer_id sans index : 12 millions de lignes", "invoices.customer_id without an index: 12 million rows") },
           { level: "high", text: w("Index créé sans CONCURRENTLY sur orders", "Index created without CONCURRENTLY on orders") },
           { level: "medium", text: w("Montant en double precision", "Amount in double precision") },
           { level: "low", text: w("Deux index sur lines (sku)", "Two indexes on lines (sku)") },
@@ -1216,8 +1216,8 @@ export const BUILD: Record<string, AgentProduct> = {
       "Know where a slow page's time goes, what will not hold as the data grows, and what to fix first.",
     ),
     problem: w(
-      "Une page ralentit, on ajoute des serveurs ou un cache au hasard : la vraie cause — une requête par ligne, des appels en série — reste là et grandit avec les données.",
-      "A page slows down, servers or a cache get added at random: the real cause — one query per row, calls in sequence — stays and grows with the data.",
+      "Une page ralentit, on ajoute des serveurs ou un cache au hasard : la vraie cause (une requête par ligne, des appels en série) reste là et grandit avec les données.",
+      "A page slows down, servers or a cache get added at random: the real cause (one query per row, calls in sequence) stays and grows with the data.",
     ),
     benefits: [
       {
@@ -1246,8 +1246,8 @@ export const BUILD: Record<string, AgentProduct> = {
       },
     ],
     does: w(
-      "Il part de ce qui est mesuré — une durée, un incident, une alerte — et suit la requête lente de la page jusqu'à la base, dans le code et dans ce dont le service dépend. Il dit où le temps peut passer, ce qui ne tiendra pas quand les données grandiront, ce qu'une pull request ajoute sur le chemin, puis les corrections et le plan de mesure qui les prouvera.",
-      "It starts from what is measured — a duration, an incident, an alert — and follows the slow request from the page to the database, in the code and in what the service depends on. It says where the time can go, what will not hold as the data grows, what a pull request adds on the path, then the fixes and the measurement plan that will prove them.",
+      "Il part de ce qui est mesuré (une durée, un incident, une alerte) et suit la requête lente de la page jusqu'à la base, dans le code et dans ce dont le service dépend. Il dit où le temps peut passer, ce qui ne tiendra pas quand les données grandiront, ce qu'une pull request ajoute sur le chemin, puis les corrections et le plan de mesure qui les prouvera.",
+      "It starts from what is measured (a duration, an incident, an alert) and follows the slow request from the page to the database, in the code and in what the service depends on. It says where the time can go, what will not hold as the data grows, what a pull request adds on the path, then the fixes and the measurement plan that will prove them.",
     ),
     features: [
       w("Le chemin d'une requête lente, étape par étape", "A slow request's path, step by step"),
@@ -1318,8 +1318,8 @@ export const BUILD: Record<string, AgentProduct> = {
     ],
     limits: [
       w(
-        "Il lit le code et l'histoire sans rien exécuter : aucun profil, aucun test de charge — chaque gain est un ordre de grandeur, à confirmer par la mesure qu'il indique.",
-        "It reads the code and the history without running anything: no profile, no load test — each gain is an order of magnitude, to confirm with the measure it gives.",
+        "Il lit le code et l'histoire sans rien exécuter : aucun profil, aucun test de charge ; chaque gain est un ordre de grandeur, à confirmer par la mesure qu'il indique.",
+        "It reads the code and the history without running anything: no profile, no load test; each gain is an order of magnitude, to confirm with the measure it gives.",
       ),
     ],
   },
@@ -1360,8 +1360,8 @@ export const BUILD: Record<string, AgentProduct> = {
       },
     ],
     does: w(
-      "Il dresse l'inventaire de ce qui bouge et de ce qui en dépend — le code, les services, les données et leur volume, les équipes —, choisit la stratégie qui convient à ce qui migre, puis écrit les étapes dans l'ordre, chacune avec sa vérification et son retour arrière, le passage, ceux à prévenir et ce qui sera retiré en dernier.",
-      "It takes stock of what moves and what depends on it — the code, the services, the data and its volume, the teams —, chooses the strategy that fits what migrates, then writes the steps in order, each with its check and its way back, the switch, who to tell and what will be retired last.",
+      "Il dresse l'inventaire de ce qui bouge et de ce qui en dépend (le code, les services, les données et leur volume, les équipes), choisit la stratégie qui convient à ce qui migre, puis écrit les étapes dans l'ordre, chacune avec sa vérification et son retour arrière, le passage, ceux à prévenir et ce qui sera retiré en dernier.",
+      "It takes stock of what moves and what depends on it (the code, the services, the data and its volume, the teams), chooses the strategy that fits what migrates, then writes the steps in order, each with its check and its way back, the switch, who to tell and what will be retired last.",
     ),
     features: [
       w("L'inventaire de ce qui est touché", "The inventory of what is touched"),
@@ -1451,8 +1451,8 @@ export const BUILD: Record<string, AgentProduct> = {
 
   "qa-acceptance": {
     promise: w(
-      "Sachez si une pull request est prête : chaque critère attendu, vérifié avec sa preuve — le code, le test, la CI.",
-      "Know whether a pull request is ready: each expected criterion, checked with its proof — the code, the test, the CI.",
+      "Sachez si une pull request est prête : chaque critère attendu, vérifié avec sa preuve (le code, le test, la CI).",
+      "Know whether a pull request is ready: each expected criterion, checked with its proof (the code, the test, the CI).",
     ),
     problem: w(
       "« C'est testé, c'est prêt » se dit souvent sans preuve : ce qui manque se découvre en production.",
@@ -1485,8 +1485,8 @@ export const BUILD: Record<string, AgentProduct> = {
       },
     ],
     does: w(
-      "Il lit le ticket et ses critères d'acceptation, puis la pull request : le code changé, ses tests et sa CI. Il rend un verdict — Prêt, À reprendre ou Bloqué — avec la preuve de chaque critère et les problèmes reproductibles.",
-      "It reads the ticket and its acceptance criteria, then the pull request: the changed code, its tests and its CI. It gives a verdict — Ready, Needs work or Blocked — with the proof of each criterion and the reproducible issues.",
+      "Il lit le ticket et ses critères d'acceptation, puis la pull request : le code changé, ses tests et sa CI. Il rend un verdict (Prêt, À reprendre ou Bloqué) avec la preuve de chaque critère et les problèmes reproductibles.",
+      "It reads the ticket and its acceptance criteria, then the pull request: the changed code, its tests and its CI. It gives a verdict (Ready, Needs work or Blocked) with the proof of each criterion and the reproducible issues.",
     ),
     features: [
       w("Les critères cités, d'où ils viennent", "The criteria quoted, and where they come from"),
@@ -1541,10 +1541,10 @@ export const BUILD: Record<string, AgentProduct> = {
         kind: "levels",
         title: w("Critère par critère", "Criterion by criterion"),
         items: [
-          { level: "low", text: w("Export CSV avec la date — vérifié", "CSV export with the date — checked") },
-          { level: "medium", text: w("Tri par montant — fait, sans test", "Sort by amount — done, no test") },
-          { level: "high", text: w("Filtre par client — absent", "Filter by customer — missing") },
-          { level: "critical", text: w("Total recalculé — test en échec", "Recomputed total — test failing") },
+          { level: "low", text: w("Export CSV avec la date : vérifié", "CSV export with the date: checked") },
+          { level: "medium", text: w("Tri par montant : fait, sans test", "Sort by amount: done, no test") },
+          { level: "high", text: w("Filtre par client : absent", "Filter by customer: missing") },
+          { level: "critical", text: w("Total recalculé : test en échec", "Recomputed total: test failing") },
         ],
       },
       {
@@ -1657,9 +1657,9 @@ export const BUILD: Record<string, AgentProduct> = {
         kind: "list",
         title: w("Par ricochet", "In turn"),
         items: [
-          w("checkout — appelle l'API modifiée", "checkout — calls the changed API"),
-          w("facturation — lit la même table", "billing — reads the same table"),
-          w("notifications — dépend de l'événement", "notifications — depends on the event"),
+          w("checkout : appelle l'API modifiée", "checkout: calls the changed API"),
+          w("facturation : lit la même table", "billing: reads the same table"),
+          w("notifications : dépend de l'événement", "notifications: depends on the event"),
         ],
       },
     ],
@@ -1673,8 +1673,8 @@ export const BUILD: Record<string, AgentProduct> = {
 
   "regression-analysis": {
     promise: w(
-      "Avant de livrer, sachez ce que votre changement pourrait casser qui fonctionnait — et si un test le protège.",
-      "Before shipping, know what your change could break that used to work — and whether a test guards it.",
+      "Avant de livrer, sachez ce que votre changement pourrait casser qui fonctionnait, et si un test le protège.",
+      "Before shipping, know what your change could break that used to work, and whether a test guards it.",
     ),
     problem: w(
       "Une régression se découvre souvent en production, parce que personne n'a vu qui dépendait du comportement modifié.",
@@ -1707,14 +1707,14 @@ export const BUILD: Record<string, AgentProduct> = {
       },
     ],
     does: w(
-      "Il lit le diff, suit ce qui dépend du code modifié — dans le code et dans votre environnement —, cherche les tests qui le gardent et regarde ce qui a cassé dans la zone, pour dresser la liste des risques de régression.",
-      "It reads the diff, follows what depends on the changed code — in the code and in your environment —, looks for the tests that guard it and at what broke in the area, to list the regression risks.",
+      "Il lit le diff, suit ce qui dépend du code modifié (dans le code et dans votre environnement), cherche les tests qui le gardent et regarde ce qui a cassé dans la zone, pour dresser la liste des risques de régression.",
+      "It reads the diff, follows what depends on the changed code (in the code and in your environment), looks for the tests that guard it and at what broke in the area, to list the regression risks.",
     ),
     features: [
       w("Ce qui change vraiment, d'après le diff", "What really changes, from the diff"),
       w("Les risques de régression, en tableau", "Regression risks, in a table"),
       w("Qui dépend de chaque comportement modifié", "What depends on each changed behaviour"),
-      w("Le test qui le garde — ou son absence", "The test that guards it — or none"),
+      w("Le test qui le garde, ou son absence", "The test that guards it, or none"),
       w("Les cassures passées de la zone", "The area's past breakages"),
       w("Les tests à ajouter et les personnes à prévenir", "Tests to add and people to warn"),
     ],
@@ -1764,9 +1764,9 @@ export const BUILD: Record<string, AgentProduct> = {
         kind: "levels",
         title: w("Risques de régression", "Regression risks"),
         items: [
-          { level: "high", text: w("Calcul des remises modifié — aucun test", "Discount computation changed — no test") },
-          { level: "medium", text: w("Format de date de l'export changé — 2 consommateurs", "Export date format changed — 2 consumers") },
-          { level: "low", text: w("Libellé d'erreur modifié — test existant", "Error wording changed — test exists") },
+          { level: "high", text: w("Calcul des remises modifié : aucun test", "Discount computation changed: no test") },
+          { level: "medium", text: w("Format de date de l'export changé : 2 consommateurs", "Export date format changed: 2 consumers") },
+          { level: "low", text: w("Libellé d'erreur modifié : test existant", "Error wording changed: test exists") },
         ],
       },
       {

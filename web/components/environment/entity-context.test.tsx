@@ -710,7 +710,7 @@ describe("the context tab", () => {
       "Résolution90 %la résolution en est sûre à 90 %",
       "Fraîcheur100 %vu par une source aujourd'hui",
       "Sources100 %Catalogue : active, saine",
-      "Qualité—jamais mesurée",
+      "Qualité-jamais mesurée",
     ]);
     await user.click(within(rows[1]).getByRole("button", { name: "Provenance de Checkout" }));
     expect(rows[1]).toHaveTextContent("Doublons regroupéscheckout-web (same_name, 80 %)");
@@ -783,8 +783,8 @@ describe("the context tab", () => {
     await user.click(within(panel).getByRole("button", { name: "Voir les changements (2)" }));
     const pending = within(screen.getByTestId("context-pending")).getAllByRole("listitem");
     expect(pending.map((item) => item.textContent)).toEqual([
-      "Checkout dépend de Billing API — lien retiré",
-      "Service Checkout — retiré (cycle de vie)",
+      "Checkout dépend de Billing API · lien retiré",
+      "Service Checkout · retiré (cycle de vie)",
     ]);
 
     await user.click(within(panel).getByRole("button", { name: "Mettre à jour" }));

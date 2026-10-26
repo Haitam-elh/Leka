@@ -598,7 +598,7 @@ describe("its data quality (LEKA-358)", () => {
     });
     expect(within(kept).getByText("acme.atlassian.net/PAY-9")).toBeInTheDocument();
     expect(
-      within(kept).getByText("Date illisible — Une date qui ne se lit pas."),
+      within(kept).getByText("Date illisible : Une date qui ne se lit pas."),
     ).toBeInTheDocument();
   });
 

@@ -268,7 +268,7 @@ def _component_said(p: Payload) -> str:
         said.append("in " + ", ".join(strings(p, "technology")))
     if string(p, "public_url"):
         said.append(f"reached at {string(p, 'public_url')}")
-    return " — ".join(said)
+    return "; ".join(said)
 
 
 @strategy("github.deployments", 1, (GITHUB, C.DEPLOYMENTS))

@@ -577,7 +577,7 @@ class GitHubCode:
             ]
             for run in failed[:MAX_FAILED_READ]:
                 output = run.get("output") or {}
-                summary = " — ".join(
+                summary = ": ".join(
                     str(part) for part in (output.get("title"), output.get("summary")) if part
                 )
                 entry: dict[str, Any] = {

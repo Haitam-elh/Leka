@@ -126,7 +126,7 @@ export function DeliverableView({ intention }: { intention: IntentionDetail }) {
         icon={failed ? CircleAlert : FileText}
         title={
           failed
-            ? fill(w.failed, { agent, why: (run.error && errors[run.error]) || run.error || "—" })
+            ? fill(w.failed, { agent, why: (run.error && errors[run.error]) || run.error || "-" })
             : fill(w.working, { agent })
         }
         testId="deliverable-waiting"
@@ -177,7 +177,7 @@ function Delivered({
           <p className="text-[0.8125rem] text-shell-muted">
             {fill(w.by, {
               version: run.version,
-              when: run.finished_at ? exactDate(locale, run.finished_at) : "—",
+              when: run.finished_at ? exactDate(locale, run.finished_at) : "-",
             })}
           </p>
         </div>

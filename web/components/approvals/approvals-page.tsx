@@ -359,14 +359,14 @@ function Chip({
 /** How sure: a proposal's confidence; for a conflict, how clearly LEKA
  * recommends a side — sorted by that side's score, among the proposals. */
 function sureness(t: Dictionary, item: Item): { value: number; said: string } {
-  if (item.kind === "decision") return { value: 0, said: "—" };
+  if (item.kind === "decision") return { value: 0, said: "-" };
   if (item.kind === "candidate") {
     return { value: item.data.confidence, said: sureWord(t, item.data.confidence) };
   }
   const recommendation = item.data.recommendation;
   const strength = (t.approvals.conflict.strength as Record<string, string>)[recommendation.strength];
   const best = recommendation.side !== null ? item.data.sides[recommendation.side] : undefined;
-  return { value: best?.score ?? 0, said: strength || "—" };
+  return { value: best?.score ?? 0, said: strength || "-" };
 }
 
 /** What waits. Beside an opened one, what fits a 13-inch screen: what it
@@ -428,7 +428,7 @@ function ItemsTable({
             {t.decisions.impact[item.data.decision.risk]}
           </Pill>
         ) : (
-          "—"
+          "-"
         ),
     },
     {

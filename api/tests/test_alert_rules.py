@@ -273,7 +273,7 @@ async def test_a_failed_delivery_kept_and_said_a_test_tries_each_channel(
     assert tested.status_code == 200, tested.text
     said = {(d["channel"], d["status"], d["alert_id"]) for d in tested.json()["deliveries"]}
     assert said == {("in_app", "sent", None), ("email", "sent", None)}
-    [test_mail] = [m for m in outbox.sent if "test" in m.subject]
+    [test_mail] = [m for m in outbox.sent if "test" in m.subject.lower()]
     assert "« payment-api en panne »" in test_mail.subject
 
     monkeypatch.setattr(monitoring_rules, "build_email_sender", lambda: Refusing())

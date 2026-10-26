@@ -168,7 +168,7 @@ function RunSteps({ run }: { run: AgentRun }) {
                 ? fill(words.tool, { count })
                 : kind === "failed"
                   ? fill(words.failed, {
-                      why: (run.error && errors[run.error]) || run.error || "—",
+                      why: (run.error && errors[run.error]) || run.error || "-",
                     })
                   : words[kind]
             }

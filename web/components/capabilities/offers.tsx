@@ -326,8 +326,8 @@ export function AgentPrice({ agentKey, compact = false }: { agentKey: string; co
             type="button"
             className={cn(round, "border-shell-line text-shell-nav-active hover:bg-brand-violet-soft disabled:opacity-50")}
             disabled={buy.isPending}
-            title={`${w.buy} — ${agentTitle(t, offer.key, offer.title)}`}
-            aria-label={`${w.buy} — ${agentTitle(t, offer.key, offer.title)}`}
+            title={`${w.buy} · ${agentTitle(t, offer.key, offer.title)}`}
+            aria-label={`${w.buy} · ${agentTitle(t, offer.key, offer.title)}`}
             onClick={() =>
               buy.mutate({ kind: "agent", key: offer.key }, { onError: (error) => bought(t, error) })
             }

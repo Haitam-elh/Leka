@@ -187,7 +187,7 @@ function Arbitration({ conflict }: { conflict: ConflictDetail }) {
                       <SourceLogo kind={source.kind as SourceKind} className="size-3.5" />
                     ) : null}
                     <span className="text-brand-navy">
-                      {source.name ?? (source.kind ? sourceTitle(source.kind as SourceKind) : "—")}
+                      {source.name ?? (source.kind ? sourceTitle(source.kind as SourceKind) : "-")}
                     </span>
                     <span>· {fill(p.authority, { score: Math.round(source.authority * 100) })}</span>
                     {source.observed_at ? (

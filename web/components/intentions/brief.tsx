@@ -199,7 +199,7 @@ function SlotRow({ slot, understanding }: { slot: BriefSlot; understanding: Unde
   let value: string;
   switch (slot.slot) {
     case "goal":
-      value = (u.goals as Record<string, string>)[slot.value ?? "unknown"] ?? slot.value ?? "—";
+      value = (u.goals as Record<string, string>)[slot.value ?? "unknown"] ?? slot.value ?? "-";
       break;
     case "target":
       value = values.length
@@ -218,7 +218,7 @@ function SlotRow({ slot, understanding }: { slot: BriefSlot; understanding: Unde
       break;
     }
     case "expected": {
-      value = (w.expected as Record<string, string>)[slot.value ?? "answer"] ?? slot.value ?? "—";
+      value = (w.expected as Record<string, string>)[slot.value ?? "answer"] ?? slot.value ?? "-";
       const acts = understanding.actions.filter((a) => a.changes_systems);
       if (slot.value === "action" && acts.length) {
         const names = u.actionNames as Record<string, string>;

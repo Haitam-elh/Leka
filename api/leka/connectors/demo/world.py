@@ -555,7 +555,7 @@ def _datadog(at: _Clock) -> Said:
     for number, name, state, query, service, team, priority in (
         (
             301,
-            "nova-checkout-api — taux de paiements refusés",
+            "nova-checkout-api : taux de paiements refusés",
             "Alert",
             "sum(last_15m):sum:nova.payments.refused{env:production}.as_count() > 50",
             "nova-checkout-api",
@@ -564,7 +564,7 @@ def _datadog(at: _Clock) -> Said:
         ),
         (
             302,
-            "nova-checkout-api — latence p99",
+            "nova-checkout-api : latence p99",
             "Warn",
             "avg(last_5m):p99:trace.http.request{service:nova-checkout-api} > 1.5",
             "nova-checkout-api",
@@ -573,7 +573,7 @@ def _datadog(at: _Clock) -> Said:
         ),
         (
             303,
-            "nova-catalog-api — erreurs 5xx",
+            "nova-catalog-api : erreurs 5xx",
             "OK",
             "sum(last_5m):sum:trace.http.request.errors{service:nova-catalog-api}.as_count() > 20",
             "nova-catalog-api",
@@ -742,7 +742,7 @@ def _confluence(at: _Clock) -> Said:
         ),
         (
             "2002",
-            "Runbook — checkout-api",
+            "Runbook : checkout-api",
             "lea",
             15,
             "<p>Responsable : équipe Paiements (Léa Martin). En cas de hausse des paiements refusés : "

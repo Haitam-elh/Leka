@@ -104,7 +104,7 @@ describe("the figures", () => {
     mount(<ArchitectureFigures data={undefined} />);
 
     const services = within(screen.getByTestId("arch-figure-services"));
-    expect(services.getByText("—")).toBeInTheDocument();
+    expect(services.getByText("-")).toBeInTheDocument();
   });
 });
 

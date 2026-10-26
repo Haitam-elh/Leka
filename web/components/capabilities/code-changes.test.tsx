@@ -143,7 +143,7 @@ describe("a proposed code change", () => {
     show();
     const card = await screen.findByTestId("code-change");
     expect(within(card).getByTestId("code-change-modifications")).toHaveTextContent(
-      "Ce que LEKA change : 3 modifications dans 2 fichiers (+9 −1) — rien d'autre.",
+      "Ce que LEKA change : 3 modifications dans 2 fichiers (+9 −1), rien d'autre.",
     );
     const modifications = within(card).getAllByTestId("code-change-modification");
     expect(modifications.map((m) => m.querySelector("summary")?.textContent)).toEqual([
@@ -309,7 +309,7 @@ describe("an applied code change, followed to production", () => {
     for (const step of ["opened", "checks", "merge", "deploy"]) {
       expect(within(follow).getByTestId(`code-change-step-${step}`)).toHaveAttribute("data-state", "done");
     }
-    expect(within(follow).getByTestId("code-change-step-checks")).toHaveTextContent("Verte — 3 vérifications");
+    expect(within(follow).getByTestId("code-change-step-checks")).toHaveTextContent("Verte, 3 vérifications");
     expect(within(follow).getByTestId("code-change-step-deploy")).toHaveTextContent("En production depuis le");
     expect(within(follow).queryByRole("button", { name: "Actualiser" })).not.toBeInTheDocument();
     expect(api.follow).not.toHaveBeenCalled();

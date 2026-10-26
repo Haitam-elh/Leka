@@ -144,7 +144,7 @@ describe("Insights LEKA", () => {
     const lines = within(await screen.findByTestId("insights-findings")).getAllByRole("listitem");
     expect(lines).toHaveLength(3);
     expect(lines[0]).toHaveTextContent("4 éléments dépendent de postgresql");
-    expect(lines[0]).toHaveTextContent("Important · Rien ne le surveille — son état est déduit");
+    expect(lines[0]).toHaveTextContent("Important · Rien ne le surveille : son état est déduit");
     expect(within(lines[0]).getByRole("link")).toHaveAttribute(
       "href",
       `/environment/databases/${DATABASE}`,

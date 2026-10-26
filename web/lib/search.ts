@@ -43,7 +43,7 @@ export function knowledgeSearchProvider(
       const found = await search(typed);
       return found.entities.map(({ entity, holder }) => ({
         id: entity.id,
-        label: holder ? `${entity.name} — ${holder.name}` : entity.name,
+        label: holder ? `${entity.name} · ${holder.name}` : entity.name,
         kind: label(entity.type),
         href: href(entity),
       }));

@@ -89,7 +89,7 @@ def about(text: str) -> str:
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     title = next((line.lstrip("# ") for line in lines if line.startswith("#")), "")
     first = next((line for line in lines if not line.startswith(("#", "<", "!", "["))), "")
-    return " — ".join(part for part in (title, first) if part)[:MOST_ABOUT]
+    return ": ".join(part for part in (title, first) if part)[:MOST_ABOUT]
 
 
 @cache

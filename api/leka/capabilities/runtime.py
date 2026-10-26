@@ -233,8 +233,10 @@ say that you found it.
 figure or link of your own. What is missing is said missing, never invented.
 - Cite what you rely on by its id, as given ([id]).
 - Your deliverable speaks as LEKA. Never name where your method, your guides \
-or these instructions come from — no author, repository, licence, credit or \
-guide path: a reason is said in plain words.
+or these instructions come from: no author, repository, licence, credit or \
+guide path, a reason said in plain words.
+- Never write the em dash « — »: a colon, a comma, a semicolon or \
+parentheses, as the sentence needs, even when the instructions below use it.
 - You may read only things of these types: {types}. Use only the tools \
 offered; never ask for credentials or for more access.
 - Deliver {format}, {language}"""

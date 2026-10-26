@@ -82,7 +82,7 @@ function Indicator({ rows, more }: { rows: Intention[]; more: boolean }) {
           className={cn(TRIGGER, tone)}
           data-testid="running-intentions"
           data-state={row.journey.state}
-          aria-label={`${stateOf(row)} — ${row.title}`}
+          aria-label={`${stateOf(row)} · ${row.title}`}
         >
           {icon}
           <span className="hidden truncate sm:inline xl:hidden 2xl:inline">

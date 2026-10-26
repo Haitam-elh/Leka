@@ -73,7 +73,7 @@ export function ContractScreen() {
             <StatCard
               icon={Mail}
               tone="success"
-              value={data.contact?.name ?? "—"}
+              value={data.contact?.name ?? "-"}
               label={w.contact}
               foot={data.contact?.email ?? (data.contact ? null : w.noContact)}
               testId="contract-contact"

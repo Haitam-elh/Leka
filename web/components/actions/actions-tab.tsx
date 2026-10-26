@@ -373,7 +373,7 @@ function StepCard({
               <UserRound className="size-3.5" aria-hidden="true" />
             )}
             {step.executor === "webhook"
-              ? fill(w.byWebhook, { name: step.endpoint_name ?? "—" })
+              ? fill(w.byWebhook, { name: step.endpoint_name ?? "-" })
               : w.byPerson}
           </p>
           {step.error ? (
@@ -570,7 +570,7 @@ function Controls({ plan, intention }: { plan: Plan; intention: IntentionDetail 
       <div className="flex flex-wrap items-center gap-3" data-testid="plan-controls">
         <p className="text-[0.8125rem] text-brand-navy">
           {fill(w.scheduledFor, {
-            at: plan.scheduled_for ? exactDate(locale, plan.scheduled_for) : "—",
+            at: plan.scheduled_for ? exactDate(locale, plan.scheduled_for) : "-",
           })}
         </p>
         <Button

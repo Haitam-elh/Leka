@@ -76,7 +76,9 @@ couche applicative de chaque sous-processus (ses briques dans l'ordre du \
 premier appel, ses phases, chaque chaîne d'appels), le RACI, les points de \
 contrôle, les sources.
 - L'outil dessine ensuite le PowerPoint modifiable et son PDF à partir de \
-cette analyse, au gabarit : ne décris pas de fichiers."""
+cette analyse, au gabarit : ne décris pas de fichiers.
+- N'écris jamais le tiret long « — » : un deux-points, une virgule, un point-virgule ou des \
+parenthèses, selon la phrase."""
 
 NOTES_NOTE = """---
 

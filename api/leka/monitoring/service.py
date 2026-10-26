@@ -338,7 +338,7 @@ async def watch(workspace_id: uuid.UUID, now: datetime) -> int:
 
 _WORDS: dict[str, dict[str, str]] = {
     "fr": {
-        "subject": "LEKA — {count} {alerts} sur {name}",
+        "subject": "LEKA · {count} {alerts} sur {name}",
         "one": "alerte",
         "many": "alertes",
         "nameless": "votre espace",
@@ -352,7 +352,7 @@ _WORDS: dict[str, dict[str, str]] = {
         "end": "Le détail, ce qui l'étaie et l'intention à lancer : Mon environnement, dans LEKA.",
     },
     "en": {
-        "subject": "LEKA — {count} {alerts} on {name}",
+        "subject": "LEKA · {count} {alerts} on {name}",
         "one": "alert",
         "many": "alerts",
         "nameless": "your workspace",

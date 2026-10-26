@@ -307,7 +307,7 @@ describe("what it takes", () => {
     expect(screen.getByTestId("feasibility-verdict")).toHaveTextContent("Tout est prêt");
     const [standing, security] = screen.getAllByTestId("feasibility-capability");
     expect(standing).toHaveTextContent("Inclus");
-    expect(security).toHaveTextContent("Bêta — inclus pour l'instant, deviendra une option");
+    expect(security).toHaveTextContent("Bêta : inclus pour l'instant, deviendra une option");
     expect(screen.getByTestId("feasibility-credits")).toHaveTextContent(
       "Crédits IA : 150 restants sur 200 (Free)",
     );

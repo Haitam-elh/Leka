@@ -531,7 +531,7 @@ def coverage(material: Material) -> list[Draft]:
                 "monitoring",
                 len(services),
                 f"Nothing watches the {len(services)} service(s): no monitoring source is "
-                "connected — their state is deduced at best.",
+                "connected: their state is deduced at best.",
             )
         )
     if services and "cloud" not in connected:

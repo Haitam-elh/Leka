@@ -59,8 +59,8 @@ function pages(title: Words, body: Words): NextStep {
 const TICKETS = issues(
   w("Créer les tickets", "Create the tickets"),
   w(
-    "Une action par ticket dans Jira, avec sa priorité — créés quand vous les avez choisis.",
-    "One action per ticket in Jira, with its priority — created once you chose them.",
+    "Une action par ticket dans Jira, avec sa priorité : créés quand vous les avez choisis.",
+    "One action per ticket in Jira, with its priority: created once you chose them.",
   ),
 );
 
@@ -149,8 +149,8 @@ export const NEXT_STEPS: Readonly<Record<string, readonly NextStep[]>> = {
   "qa-acceptance": [
     CODE_FIX(
       w(
-        "Corrige les problèmes trouvés par cette recette — les bloquants d'abord — pour que chaque critère soit tenu.",
-        "Fix the issues this acceptance found — the blocking first — so that each criterion is met.",
+        "Corrige les problèmes trouvés par cette recette (les bloquants d'abord) pour que chaque critère soit tenu.",
+        "Fix the issues this acceptance found (the blocking first) so that each criterion is met.",
       ),
       w("Corriger ce qui bloque", "Fix what blocks"),
     ),
@@ -200,8 +200,8 @@ export const NEXT_STEPS: Readonly<Record<string, readonly NextStep[]>> = {
   "reliability-analysis": [
     CODE_FIX(
       w(
-        "Corrige dans le code les actions de cette analyse : délais d'attente, reprises bornées, erreurs avalées, vérifications de santé — la plus utile d'abord.",
-        "Fix in the code this analysis's actions: timeouts, bounded retries, swallowed errors, health checks — the most useful first.",
+        "Corrige dans le code les actions de cette analyse : délais d'attente, reprises bornées, erreurs avalées, vérifications de santé, la plus utile d'abord.",
+        "Fix in the code this analysis's actions: timeouts, bounded retries, swallowed errors, health checks, the most useful first.",
       ),
       w("Renforcer le code", "Harden the code"),
     ),
@@ -262,8 +262,8 @@ export const NEXT_STEPS: Readonly<Record<string, readonly NextStep[]>> = {
         "LEKA upgrades each vulnerable dependency to the fixing version; you review before the pull request.",
       ),
       w(
-        "Monte dans les manifestes chaque dépendance vulnérable de cette analyse à la version qui corrige — les plus urgentes d'abord, une version majeure dite comme telle. Ne modifie pas un fichier de verrouillage à la main : dis la commande qui le régénère.",
-        "Upgrade in the manifests each vulnerable dependency of this analysis to the fixing version — the most urgent first, a major version said as such. Never edit a lock file by hand: say the command that regenerates it.",
+        "Monte dans les manifestes chaque dépendance vulnérable de cette analyse à la version qui corrige : les plus urgentes d'abord, une version majeure dite comme telle. Ne modifie pas un fichier de verrouillage à la main : dis la commande qui le régénère.",
+        "Upgrade in the manifests each vulnerable dependency of this analysis to the fixing version: the most urgent first, a major version said as such. Never edit a lock file by hand: say the command that regenerates it.",
       ),
     ),
     TICKETS,
@@ -272,8 +272,8 @@ export const NEXT_STEPS: Readonly<Record<string, readonly NextStep[]>> = {
   "performance-analysis": [
     CODE_FIX(
       w(
-        "Applique les corrections de cette analyse sur le chemin lent — requêtes N+1, appels en série, listes sans limite — la plus utile d'abord, sans changer le comportement.",
-        "Apply this analysis's fixes on the slow path — N+1 queries, calls in sequence, unbounded lists — the most useful first, without changing the behaviour.",
+        "Applique les corrections de cette analyse sur le chemin lent (requêtes N+1, appels en série, listes sans limite), la plus utile d'abord, sans changer le comportement.",
+        "Apply this analysis's fixes on the slow path (N+1 queries, calls in sequence, unbounded lists), the most useful first, without changing the behaviour.",
       ),
       w("Optimiser le code", "Optimise the code"),
     ),
@@ -293,12 +293,12 @@ export const NEXT_STEPS: Readonly<Record<string, readonly NextStep[]>> = {
     fix(
       w("Écrire la migration", "Write the migration"),
       w(
-        "LEKA écrit la migration qui corrige le schéma — réversible, sans verrouiller ; vous relisez avant la pull request.",
-        "LEKA writes the migration fixing the schema — reversible, without locking; you review before the pull request.",
+        "LEKA écrit la migration qui corrige le schéma : réversible, sans verrouiller ; vous relisez avant la pull request.",
+        "LEKA writes the migration fixing the schema: reversible, without locking; you review before the pull request.",
       ),
       w(
-        "Écris, dans l'outil de migration du dépôt, la migration qui corrige les constats bloquants et importants de cette revue : index créés sans verrouiller, contraintes, types — réversible, et les requêtes du code à corriger.",
-        "Write, in the repository's migration tool, the migration fixing this review's blocking and important findings: indexes created without locking, constraints, types — reversible, and the code's queries to fix.",
+        "Écris, dans l'outil de migration du dépôt, la migration qui corrige les constats bloquants et importants de cette revue : index créés sans verrouiller, contraintes, types, réversible, et les requêtes du code à corriger.",
+        "Write, in the repository's migration tool, the migration fixing this review's blocking and important findings: indexes created without locking, constraints, types, reversible, and the code's queries to fix.",
       ),
     ),
     TICKETS,

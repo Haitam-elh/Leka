@@ -133,9 +133,9 @@ def test_the_email_lists_what_opened_and_how_sure_in_its_language() -> None:
         ),
     ]
     fr = message(alerts, "Acme Corp", "fr")
-    assert fr.subject == "LEKA — 2 alertes sur Acme Corp"
+    assert fr.subject == "LEKA · 2 alertes sur Acme Corp"
     assert "- payment-api: indisponible (confirmé)" in fr.body
     assert "- Runbooks space: source en échec (confirmé)" in fr.body
     en = message(alerts[:1], None, "en")
-    assert en.subject == "LEKA — 1 alert on your workspace"
+    assert en.subject == "LEKA · 1 alert on your workspace"
     assert en.language == "en"

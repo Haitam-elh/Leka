@@ -114,7 +114,7 @@ describe("the analyses already asked", () => {
     env.data = measured;
     listed.data = [{ status: "error" }];
     show(<EnvironmentCard />);
-    expect(screen.getByTestId("home-sources-failing")).toHaveTextContent("1 source en erreur — voir les sources");
+    expect(screen.getByTestId("home-sources-failing")).toHaveTextContent("1 source en erreur : voir les sources");
     expect(screen.getByTestId("home-sources-failing")).toHaveAttribute("href", "/sources");
     listed.data = undefined;
   });

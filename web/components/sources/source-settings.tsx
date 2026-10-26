@@ -402,7 +402,7 @@ function Findings({
           )}
           <span>
             <span className="font-medium">{f.level === "error" ? w.error : w.warning}</span> ·{" "}
-            <code className="text-xs">{f.path}</code> — {f.message}
+            <code className="text-xs">{f.path}</code>{t.shell.colon}{f.message}
           </span>
         </li>
       ))}

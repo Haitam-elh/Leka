@@ -30,7 +30,7 @@ describe("the knowledge search provider", () => {
     const provider = knowledgeSearchProvider(label, href, search);
 
     expect(await provider("  pay ")).toEqual([
-      { id: "s1", label: "Payment API — Shop", kind: "Service", href: "/environment/services/s1" },
+      { id: "s1", label: "Payment API · Shop", kind: "Service", href: "/environment/services/s1" },
       { id: "t1", label: "Payments", kind: "Équipe", href: "/environment/teams/t1" },
     ]);
     expect(search).toHaveBeenCalledWith("pay");
