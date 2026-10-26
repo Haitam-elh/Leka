@@ -57,3 +57,26 @@ describe("the screens' words", () => {
     expect(found, "move these words to lib/i18n/dictionaries.ts").toEqual([]);
   });
 });
+
+// No em dash in what a person reads (2026-10-26: « — » reads as a machine's
+// text): a colon, a comma or parentheses instead; « - » for « nothing ».
+// Comments may keep theirs; tests and dev pages are not read by anyone.
+const DASH_ALLOWED = [/\.test\./, /\.test-data\./, /%5Fdev|\/_dev\//, /api-types\.ts$/];
+
+describe("the screens' punctuation", () => {
+  it("never shows an em dash", () => {
+    const found: string[] = [];
+    for (const dir of DIRS) {
+      for (const file of files(path.join(ROOT, dir))) {
+        if (DASH_ALLOWED.some((pattern) => pattern.test(file))) continue;
+        const text = readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, " "));
+        text.split("\n").forEach((line, n) => {
+          const code = line.replace(/(^|\s)\/\/.*$/, "");
+          if (code.includes("\u2014")) found.push(`${path.relative(ROOT, file)}:${n + 1}: ${code.trim().slice(0, 80)}`);
+        });
+      }
+    }
+    expect(found).toEqual([]);
+  });
+});
+

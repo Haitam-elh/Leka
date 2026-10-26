@@ -386,13 +386,13 @@ def tls_refusal(error: BaseException) -> str | None:
     text = " ".join(said).upper()
     if "CERTIFICATE_VERIFY_FAILED" in text or "SSLCERTVERIFICATIONERROR" in text:
         return (
-            "Le certificat du serveur n'est pas reconnu — auto-signé, ou d'une autorité "
+            "Le certificat du serveur n'est pas reconnu : auto-signé, ou d'une autorité "
             "interne : LEKA ne se connecte qu'aux serveurs dont le certificat est public."
         )
     if "CERTIFICATE_REQUIRED" in text or "CERTIFICATE REQUIRED" in text:
         return (
             "Le serveur demande un certificat client (TLS mutuel) : ce n'est pas pris en "
-            "charge. Il faut une autre façon de s'authentifier — un token, une clé d'API."
+            "charge. Il faut une autre façon de s'authentifier : un token, une clé d'API."
         )
     return None
 

@@ -150,9 +150,9 @@ def test_what_a_guide_is_for_its_description_or_its_title_and_first_line() -> No
         "Build an animation."
     )
     assert about("# Animation Recipes\n\nReady-to-build implementations.\n") == (
-        "Animation Recipes — Ready-to-build implementations."
+        "Animation Recipes: Ready-to-build implementations."
     )
-    assert about("<a href='x'>\n\n# Skills\n\nFor designers.\n") == "Skills — For designers."
+    assert about("<a href='x'>\n\n# Skills\n\nFor designers.\n") == "Skills: For designers."
 
 
 async def test_read_method_gives_the_index_or_one_guide_never_more() -> None:

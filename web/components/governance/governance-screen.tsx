@@ -101,7 +101,7 @@ function AccessMatrix({ model }: { model: AccessModel }) {
                       <span aria-label={w.yes}>✓</span>
                     ) : (
                       <span className="text-shell-muted" aria-label={w.no}>
-                        —
+                        -
                       </span>
                     )}
                   </td>

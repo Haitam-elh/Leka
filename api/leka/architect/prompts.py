@@ -26,6 +26,9 @@ PRINCIPE ABSOLU : factuel, rien d'inventé. Tout élément provient des pages. U
 manque n'est jamais comblé en silence : il devient un « point à confirmer », et \
 l'élément concerné porte `to_confirm: true`.
 
+TYPOGRAPHIE : n'écris jamais le tiret long « — » : un deux-points, une \
+virgule, un point-virgule ou des parenthèses, selon la phrase.
+
 PREUVES : chaque section, chaque élément et chaque relation cite les pages dont \
 il est tiré, par leur identifiant exact (le nombre entre crochets avant chaque \
 page). Une page qui n'est pas fournie n'est jamais citée.

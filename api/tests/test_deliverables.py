@@ -18,6 +18,7 @@ What these protect, as the agent's template asks (SKILL.md, v18):
 
 from __future__ import annotations
 
+import json
 from io import BytesIO
 
 from pptx import Presentation
@@ -357,3 +358,16 @@ def test_the_pdf_says_what_helvetica_cannot_draw_in_what_it_can() -> None:
     assert plain("Front → NEXUS ⇒ FACTURATION") == "Front -> NEXUS => FACTURATION"
     assert plain("Règle « À confirmer » — œuvre") == "Règle « À confirmer » — œuvre"
     assert plain("✓ 漢") == "v ?"
+
+
+def test_no_em_dash_is_drawn_whatever_the_model_wrote() -> None:
+    # 2026-10-26: « — » reads as a machine's on a client's slide.
+    content = deck().model_dump()
+    content["parcours"] = "Paiement CB — Digital"
+    content["business"]["trigger"] = "Le client — ou un conseiller — paie"
+    content["rules"][0]["regle"] = "Statut : en cours — à vérifier"
+    drawn = ArchitectureDeck.model_validate(content)
+    assert drawn.parcours == "Paiement CB : Digital"
+    assert drawn.business.trigger == "Le client (ou un conseiller) paie"
+    assert drawn.rules[0].regle == "Statut : en cours, à vérifier"
+    assert "—" not in json.dumps(drawn.model_dump(), ensure_ascii=False)

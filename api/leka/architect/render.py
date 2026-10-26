@@ -371,7 +371,7 @@ def pdf(dossier: Dossier) -> bytes:
         topMargin=1.6 * cm,
         bottomMargin=1.6 * cm,
         title=dossier.title,
-        author="LEKA — Architecte applicatif",
+        author="LEKA, Architecte applicatif",
     ).build(flow)
     return out.getvalue()
 

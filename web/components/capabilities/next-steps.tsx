@@ -174,7 +174,7 @@ function WriteForm({
     if (!ready) return;
     const intro = fill(w.ask, {
       agent: run.title ?? run.key,
-      when: run.finished_at ? exactDate(format, run.finished_at) : "—",
+      when: run.finished_at ? exactDate(format, run.finished_at) : "-",
     });
     try {
       const started = await start.mutateAsync({

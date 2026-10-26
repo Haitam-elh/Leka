@@ -123,7 +123,7 @@ function Axis({
               {(w.signals as Record<string, string>)[signal.name] ?? signal.name}
             </span>
             <span className="w-10 shrink-0 text-end tabular-nums">
-              {signal.value === null ? "—" : `${percent(signal.value)} %`}
+              {signal.value === null ? "-" : `${percent(signal.value)} %`}
             </span>
             <span className="min-w-0">{said(t, signal)}</span>
           </li>

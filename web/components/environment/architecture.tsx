@@ -315,7 +315,7 @@ export function ArchitectureFigures({ data }: { data: Architecture | undefined }
   const t = useDictionary();
   const w = t.environment.architecture;
   const { format: locale } = useLocale();
-  const value = (n: number | undefined) => (n === undefined ? "—" : String(n));
+  const value = (n: number | undefined) => (n === undefined ? "-" : String(n));
   const figures = data?.figures;
   const providers = Object.keys(figures?.providers ?? {});
   const provider = providers.length === 1 ? providers[0] : null;
@@ -432,7 +432,7 @@ export function ArchitectureFigures({ data }: { data: Architecture | undefined }
           </ul>
         ) : (
           <p className="py-2 text-[0.8125rem] text-shell-muted">
-            {health ? w.health.none : "—"}
+            {health ? w.health.none : "-"}
           </p>
         )}
       </li>
@@ -1455,7 +1455,7 @@ export function CardBox({
       data-card={card.id}
       aria-pressed={selected}
       aria-label={label}
-      title={`${card.name} — ${subtitle(w, card, number)}`}
+      title={`${card.name} · ${subtitle(w, card, number)}`}
       onClick={() => onSelect(card.id)}
       className={cn(
         "relative z-20 flex w-full min-w-0 items-center gap-2 rounded-lg border px-2 py-1.5 text-start outline-none transition focus-visible:ring-3 focus-visible:ring-brand-violet/40",

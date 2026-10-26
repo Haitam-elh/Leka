@@ -444,7 +444,7 @@ export function DependencyGraph(props: DependencyGraphProps) {
       style={{ height }}
     >
       <h3 id={titleId} className="sr-only">
-        {`${t.knowledge.graph.label} — ${fill(t.knowledge.graph.summary, {
+        {`${t.knowledge.graph.label} · ${fill(t.knowledge.graph.summary, {
           entities: entities.length,
           relationships: described.length,
         })}`}

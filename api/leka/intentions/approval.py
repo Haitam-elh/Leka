@@ -873,7 +873,7 @@ _REFUSALS = {
     ),
     "already_approved": "Already approved by you: another person's approval is needed.",
     "no_delegation": (
-        "No delegation lets you vote for them now, on a decision this risky — or they may no "
+        "No delegation lets you vote for them now, on a decision this risky, or they may no "
         "longer approve."
     ),
     "frozen": "A freeze covers it: it cannot be approved while the freeze holds.",

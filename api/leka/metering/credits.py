@@ -155,7 +155,7 @@ _WORDS: dict[str, dict[str, str]] = {
     "fr": {
         "nameless": "votre espace",
         "date": "%d/%m/%Y",
-        "spent.subject": "LEKA — les crédits IA de {name} sont épuisés",
+        "spent.subject": "LEKA · Les crédits IA de {name} sont épuisés",
         "spent.body": (
             "{name} a utilisé tous ses crédits IA du mois ({allowance} crédits, plan {plan}). "
         ),
@@ -165,19 +165,19 @@ _WORDS: dict[str, dict[str, str]] = {
             "sauf ajout d'un pack de crédits ou passage à un plan supérieur : "
             "contactez-nous. Aucun dépassement n'est jamais facturé."
         ),
-        "near.subject": "LEKA — {threshold} % des crédits IA de {name} utilisés",
+        "near.subject": "LEKA · {threshold} % des crédits IA de {name} utilisés",
         "near.body": (
             "{name} a utilisé {threshold} % de ses crédits IA du mois "
             "({used} sur {allowance}, plan {plan}). "
             "Il en reste {remaining} jusqu'au {end}. Au-delà, l'IA de LEKA "
             "s'arrête jusqu'au mois suivant, sauf ajout d'un pack ou passage à un plan "
-            "supérieur — aucun dépassement n'est facturé."
+            "supérieur : aucun dépassement n'est facturé."
         ),
     },
     "en": {
         "nameless": "your workspace",
         "date": "%d %b %Y",
-        "spent.subject": "LEKA — {name} has used all its AI credits",
+        "spent.subject": "LEKA · {name} has used all its AI credits",
         "spent.body": (
             "{name} has used all its AI credits for the month ({allowance} credits, {plan} plan). "
         ),
@@ -187,12 +187,12 @@ _WORDS: dict[str, dict[str, str]] = {
             "unless a credit pack is added or the plan is upgraded: contact us. "
             "Overage is never charged."
         ),
-        "near.subject": "LEKA — {name} has used {threshold}% of its AI credits",
+        "near.subject": "LEKA · {name} has used {threshold}% of its AI credits",
         "near.body": (
             "{name} has used {threshold}% of its AI credits for the month "
             "({used} of {allowance}, {plan} plan). "
             "{remaining} are left until {end}. Beyond that, LEKA's AI stops until the "
-            "next month, unless a pack is added or the plan is upgraded — overage is "
+            "next month, unless a pack is added or the plan is upgraded; overage is "
             "never charged."
         ),
     },

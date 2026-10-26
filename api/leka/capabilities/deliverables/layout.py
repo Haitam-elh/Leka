@@ -452,7 +452,7 @@ def overview_slide(deck: ArchitectureDeck) -> Slide:
     half = (full - 0.3) / 2
 
     def height(width: float, size: float, chunk: Sequence[tuple[str, str]]) -> float:
-        return sum(0.2 + text_height(text or "—", width, size) + 0.06 for _, text in chunk)
+        return sum(0.2 + text_height(text or "-", width, size) + 0.06 for _, text in chunk)
 
     # On the whole width, as the template says; in two columns only when the
     # text would otherwise fall under 7 pt.
@@ -468,7 +468,7 @@ def overview_slide(deck: ArchitectureDeck) -> Slide:
         x = MARGIN + column * (col_w + 0.3)
         y = y0
         for title, text in chunk:
-            body = text or "—"
+            body = text or "-"
             h = text_height(body, col_w, size)
             slide.add(
                 Box(
@@ -608,8 +608,8 @@ def rules_slides(deck: ArchitectureDeck) -> list[Slide]:
         for n, r in enumerate(deck.rules, 1)
     ] or [
         [
-            Cell("—"),
-            Cell("—"),
+            Cell("-"),
+            Cell("-"),
             Cell("Aucune règle trouvée dans les sources"),
             Cell(""),
             Cell(""),
@@ -649,7 +649,7 @@ def raci_slides(deck: ArchitectureDeck) -> list[Slide]:
         for c in deck.raci
     ] or [
         [
-            Cell("—"),
+            Cell("-"),
             Cell(""),
             Cell(""),
             Cell(""),

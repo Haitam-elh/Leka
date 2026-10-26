@@ -140,7 +140,7 @@ export function LanguageSettings() {
           <p className="text-xs font-semibold text-shell-muted">{t.workspaceTitle}</p>
           <div className="flex flex-wrap items-center gap-2">
             <span lang={shared?.tag} dir={shared?.dir} className="font-semibold text-brand-navy">
-              {shared?.native ?? "—"}
+              {shared?.native ?? "-"}
             </span>
             {admin ? (
               <Button type="button" size="sm" variant="outline" onClick={() => setTheirs(true)}>

@@ -652,7 +652,7 @@ function CoveredCard({
               <Check className="size-3.5 text-[#15803d]" aria-hidden="true" />
               <span className="font-medium">{agentTitle(t, agent.key, agent.title)}</span>
               <span className="text-shell-muted">
-                — {agent.status === "owned" ? w.coveredBox.owned : w.coveredBox.included}
+                · {agent.status === "owned" ? w.coveredBox.owned : w.coveredBox.included}
               </span>
             </li>
           ))}

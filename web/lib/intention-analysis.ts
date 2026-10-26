@@ -466,7 +466,7 @@ function explanationOf(
   const conflictSaid = (id: unknown) => {
     const found = conflicts.find((c) => c.id === text(id));
     return found
-      ? `${found.label} — ${found.values.map((v) => `${v.value} (${v.by.join(", ")})`).join(" ≠ ")}`
+      ? `${found.label} · ${found.values.map((v) => `${v.value} (${v.by.join(", ")})`).join(" ≠ ")}`
       : "";
   };
   const next = explained.next;

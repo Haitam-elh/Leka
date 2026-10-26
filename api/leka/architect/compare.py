@@ -195,7 +195,7 @@ def markdown(comparison: Comparison, title: str) -> str:
     for row in comparison.rows:
         lines.append(
             f"| {row.title} | {'oui' if row.ours else 'non'} | "
-            f"{', '.join(row.theirs) or '—'} | {row.status} |"
+            f"{', '.join(row.theirs) or '-'} | {row.status} |"
         )
     if comparison.others:
         lines += ["", "## Dans la référence, hors des sections ArchiMate", ""]

@@ -156,7 +156,7 @@ describe("the plans compared", () => {
   it("yearly: the discount, never the launch offer", async () => {
     const user = userEvent.setup();
     show();
-    expect(screen.getByTestId("plans-year")).toHaveTextContent("Annuel — économisez 30 %");
+    expect(screen.getByTestId("plans-year")).toHaveTextContent("Annuel : économisez 30 %");
     await user.click(screen.getByTestId("plans-year"));
     expect(within(card("growth")).getByTestId("plan-price")).toHaveTextContent("125,30 €");
     expect(within(card("growth")).getByTestId("plan-then")).toHaveTextContent(/1\s503,60 € HT par an/);

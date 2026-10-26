@@ -4,8 +4,8 @@ import { type AgentProduct, w } from "@/lib/agent-products/types";
 export const FRONT: Record<string, AgentProduct> = {
   "accessibility-audit": {
     promise: w(
-      "Vérifiez que votre application est utilisable par tous : clavier, lecteurs d'écran, contrastes — au regard du WCAG 2.2 et du RGAA.",
-      "Check that your application works for everyone: keyboard, screen readers, contrast — against WCAG 2.2 and the RGAA.",
+      "Vérifiez que votre application est utilisable par tous : clavier, lecteurs d'écran, contrastes, au regard du WCAG 2.2 et du RGAA.",
+      "Check that your application works for everyone: keyboard, screen readers, contrast, against WCAG 2.2 and the RGAA.",
     ),
     problem: w(
       "L'accessibilité se découvre souvent à l'audit final ou par une plainte, quand corriger coûte le plus cher.",
@@ -32,8 +32,8 @@ export const FRONT: Record<string, AgentProduct> = {
       },
     ],
     does: w(
-      "Il lit le code front-end de votre dépôt — écrans, composants, styles et thème — et relève ce qui gêne le clavier, les lecteurs d'écran, les contrastes ou la taille du texte, critère par critère.",
-      "It reads your repository's front-end code — screens, components, styles and theme — and reports what hinders keyboards, screen readers, contrast or text size, criterion by criterion.",
+      "Il lit le code front-end de votre dépôt (écrans, composants, styles et thème) et relève ce qui gêne le clavier, les lecteurs d'écran, les contrastes ou la taille du texte, critère par critère.",
+      "It reads your repository's front-end code (screens, components, styles and theme) and reports what hinders keyboards, screen readers, contrast or text size, criterion by criterion.",
     ),
     features: [
       w("Formulaires, boutons, liens, menus et fenêtres passés en revue", "Forms, buttons, links, menus and dialogs reviewed"),
@@ -149,11 +149,11 @@ export const FRONT: Record<string, AgentProduct> = {
       },
     ],
     does: w(
-      "Il reconnaît la pile et les jetons de votre dépôt, ouvre le guide qui s'applique — design, animations, performance, pire des cas, téléphone —, relit les écrans ou la pull request, propose deux ou trois directions, puis LEKA dessine l'écran actuel et chaque proposition côte à côte, avec la revue avant, après, pourquoi et des plans de correction prêts à appliquer.",
-      "It identifies your repository's stack and tokens, opens the guide that applies — design, animation, performance, worst case, phone —, reviews the screens or the pull request, proposes two or three directions, then LEKA draws today's screen and each proposal side by side, with the before, after, why review and fix plans ready to apply.",
+      "Il reconnaît la pile et les jetons de votre dépôt, ouvre le guide qui s'applique (design, animations, performance, pire des cas, téléphone), relit les écrans ou la pull request, propose deux ou trois directions, puis LEKA dessine l'écran actuel et chaque proposition côte à côte, avec la revue avant, après, pourquoi et des plans de correction prêts à appliquer.",
+      "It identifies your repository's stack and tokens, opens the guide that applies (design, animation, performance, worst case, phone), reviews the screens or the pull request, proposes two or three directions, then LEKA draws today's screen and each proposal side by side, with the before, after, why review and fix plans ready to apply.",
     ),
     features: [
-      w("La revue avant, après, pourquoi — fichier et ligne cités", "The before, after, why review — file and line cited"),
+      w("La revue avant, après, pourquoi : fichier et ligne cités", "The before, after, why review: file and line cited"),
       w("Le système de design vérifié : hiérarchie, jetons, composants", "The design system checked: hierarchy, tokens, components"),
       w(
         "Les animations jugées : utiles ou non, courbes, durées, mouvement réduit",
@@ -210,7 +210,7 @@ export const FRONT: Record<string, AgentProduct> = {
       w("Constats : avant, après, pourquoi", "Findings: before, after, why"),
       w("Le pire des cas", "The worst case"),
       w("Sur téléphone", "On a phone"),
-      w("Ce qui devrait bouger — et ce qui ne doit pas", "What should move — and what should not"),
+      w("Ce qui devrait bouger, et ce qui ne doit pas", "What should move, and what should not"),
       w("Les plans de correction", "The fix plans"),
       w("Ce qui est bien fait", "What is done well"),
       w("Limites", "Limits"),
@@ -252,8 +252,8 @@ export const FRONT: Record<string, AgentProduct> = {
     ],
     limits: [
       w(
-        "Ce qui ne se juge qu'à l'écran — le ressenti d'une animation, un rendu de police, un geste sur un vrai téléphone — est signalé à vérifier, avec la façon de le faire.",
-        "What can only be judged on screen — how an animation feels, a font's rendering, a gesture on a real phone — is flagged for checking, with how to do it.",
+        "Ce qui ne se juge qu'à l'écran (le ressenti d'une animation, un rendu de police, un geste sur un vrai téléphone) est signalé à vérifier, avec la façon de le faire.",
+        "What can only be judged on screen (how an animation feels, a font's rendering, a gesture on a real phone) is flagged for checking, with how to do it.",
       ),
       w(
         "Les maquettes sont redessinées à partir du code, pas capturées sur l'application en marche : l'écran réel peut en différer.",
@@ -296,8 +296,8 @@ export const FRONT: Record<string, AgentProduct> = {
       },
     ],
     does: w(
-      "Il repère où vit le mouvement dans votre code — transitions et animations CSS, Framer Motion, GSAP, Web Animations — et juge chaque animation : utilité, durée, courbe, fluidité et mouvement réduit.",
-      "It finds where motion lives in your code — CSS transitions and animations, Framer Motion, GSAP, Web Animations — and judges each animation: usefulness, duration, easing, smoothness and reduced motion.",
+      "Il repère où vit le mouvement dans votre code (transitions et animations CSS, Framer Motion, GSAP, Web Animations) et juge chaque animation : utilité, durée, courbe, fluidité et mouvement réduit.",
+      "It finds where motion lives in your code (CSS transitions and animations, Framer Motion, GSAP, Web Animations) and judges each animation: usefulness, duration, easing, smoothness and reduced motion.",
     ),
     features: [
       w("Transitions, keyframes et bibliothèques d'animation recensées", "Transitions, keyframes and animation libraries listed"),

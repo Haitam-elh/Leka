@@ -71,7 +71,7 @@ function Usage() {
                   <td className={`${CELL} text-right font-semibold`}>{row.runs}</td>
                   <td className={`${CELL} text-right`}>{row.succeeded}</td>
                   <td className={`${CELL} text-right`}>{row.failed}</td>
-                  <td className={CELL}>{row.last_at ? exactDate(locale, row.last_at) : "—"}</td>
+                  <td className={CELL}>{row.last_at ? exactDate(locale, row.last_at) : "-"}</td>
                 </tr>
               ))}
             </tbody>

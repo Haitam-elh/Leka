@@ -60,7 +60,7 @@ describe("the header's intentions in progress", () => {
     show();
     const link = screen.getByTestId("running-intentions");
     expect(link).toHaveAttribute("href", "/intentions/a1");
-    expect(link).toHaveAccessibleName("Analyse en cours — Intention a1");
+    expect(link).toHaveAccessibleName("Analyse en cours · Intention a1");
     expect(link.className).toMatch(/brand-violet/);
     expect(link.querySelector(".animate-spin")).not.toBeNull();
   });
@@ -69,7 +69,7 @@ describe("the header's intentions in progress", () => {
     page([row("a1", "ready", "leka", true)]);
     show();
     const link = screen.getByTestId("running-intentions");
-    expect(link).toHaveAccessibleName("Prête à analyser · en retard — Intention a1");
+    expect(link).toHaveAccessibleName("Prête à analyser · en retard · Intention a1");
     expect(link.className).toMatch(/state-warning/);
     expect(link.querySelector(".animate-spin")).toBeNull();
   });
@@ -82,7 +82,7 @@ describe("the header's intentions in progress", () => {
     page([row("d1", "decision_required", "approver")]);
     show();
     const link = screen.getAllByTestId("running-intentions").at(-1)!;
-    expect(link).toHaveAccessibleName("Décision requise — Intention d1");
+    expect(link).toHaveAccessibleName("Décision requise · Intention d1");
     expect(link.className).toMatch(/state-warning/);
   });
 

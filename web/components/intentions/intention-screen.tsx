@@ -495,7 +495,7 @@ function Overview({ intention }: { intention: IntentionDetail }) {
         <Card title={w.asked}>
           <dl className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] gap-x-3 gap-y-2 text-[0.8125rem]">
             <dt className="text-shell-muted">{w.kind}</dt>
-            <dd className="text-brand-navy">{kind ?? "—"}</dd>
+            <dd className="text-brand-navy">{kind ?? "-"}</dd>
             <dt className="text-shell-muted">{w.scope}</dt>
             <dd className="text-brand-navy">
               {scope.length ? scope.map((line) => <span key={line} className="block">{line}</span>) : w.noScope}

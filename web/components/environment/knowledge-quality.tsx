@@ -413,7 +413,7 @@ function AreaTable({ rows }: { rows: readonly QualityScore[] }) {
       header: w.lacks,
       cell: (row) => (
         <span className="text-[0.8125rem] text-shell-muted">
-          {lacksSaid(t, row).join(" · ") || "—"}
+          {lacksSaid(t, row).join(" · ") || "-"}
         </span>
       ),
     },

@@ -156,7 +156,7 @@ describe("a correction asked of a mock-up", () => {
       corrections: [{ target: "0", note: "Le logo n'est pas le bon", at: "2026-10-19T21:30:00Z" }],
     });
     await waitFor(() => expect(screen.getByTestId("design-corrections")).toHaveTextContent(
-      "Corrigée — Calme : « Le logo n'est pas le bon »",
+      "Corrigée · Calme : « Le logo n'est pas le bon »",
     ), { timeout: 6000 });
     await waitFor(() => expect(api.design.mock.calls.length).toBeGreaterThan(1));
   }, 10_000);

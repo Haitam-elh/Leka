@@ -30,16 +30,16 @@ from leka.core.config import settings
 from leka.knowledge import EntityType
 
 VERSIONS = {
-    "architecture-analysis": "1.3.0",
+    "architecture-analysis": "1.4.0",
     "build-fixer": "1.3.0",
     "code-review": "1.4.0",
     "data-analysis": "1.4.0",
     "debug-assistant": "1.4.1",
     "documentation-assistant": "2.0.0",
     "incident-investigation": "1.4.0",
-    "infrastructure-analysis": "1.3.0",
+    "infrastructure-analysis": "1.4.0",
     "release-analysis": "1.4.0",
-    "security-review": "1.4.1",
+    "security-review": "1.5.0",
     "test-analysis": "1.4.0",
 }
 # The code an agent may read, beside the runtime's tools: the code review its
@@ -49,6 +49,7 @@ CODE_READ = {
     "documentation-assistant": {"list_files", "read_file"},
     "build-fixer": {"list_pull_requests", "read_pull_request", "read_file"},
     "release-analysis": {"list_pull_requests", "read_pull_request"},
+    "security-review": {"list_files", "read_file"},
     "test-analysis": {"list_pull_requests", "read_pull_request"},
 }
 NOTICES = (settings.agents_dir.parent / "THIRD_PARTY_LICENSES.md").read_text(encoding="utf-8")
@@ -478,6 +479,14 @@ def test_the_architecture_analysis_reads_the_real_links() -> None:
     for step in ("Quand ça tombe", "Les qualités, nommées"):
         assert step in said, step
     assert "**Décision à prendre (brouillon)**" in said
+    # 2026-10-23, tested on leka-core: a database already on RDS told to move
+    # to « a managed service » — or back to a hand-made replica —, files that
+    # do not exist in its plan, fields of LEKA's model to fill, a person
+    # named owner, the worker and the scheduler left out.
+    assert "une option\ndéjà en place n'en est pas une" in said
+    assert "pas seulement ceux reliés au premier\n   trouvé" in said
+    assert "Jamais une action sur la façon dont LEKA range ses données" in said
+    assert "« à désigner par l'équipe »" in said
     assert credited("architecture-analysis", "affaan-m/ECC", "msitarzewski/agency-agents")
 
 
@@ -599,6 +608,13 @@ def test_the_infrastructure_analysis_finds_what_falls_together() -> None:
     # 2026-10-18: across regions, exposed, saving without weakening.
     for step in ("Ce qui traverse les régions", "Ce qui est exposé", "Économiser sans fragiliser"):
         assert step in said, step
+    # 2026-10-23, tested on leka-core: its RDS database and S3 buckets left
+    # out — « everything on one instance » —, a public instance said not
+    # exposed, field names and ids for names, teams supposed.
+    assert "L'inventaire entier d'abord" in said and "jamais omise" in said
+    assert "porte une adresse publique" in said
+    assert "jamais l'identifiant à la place du nom" in said
+    assert "« à désigner »" in said
     assert credited("infrastructure-analysis", "affaan-m/ECC", "msitarzewski/agency-agents")
 
 
@@ -708,6 +724,14 @@ def test_the_security_review_names_what_it_found_not_how_it_searched() -> None:
     # 2026-10-20, relaunched: whole and plain, but « (owned: false) »,
     # « (restricted) » — a field's raw value in brackets.
     assert "jamais sa valeur brute" in said
+    # 2026-10-23, tested on leka-core: asked to review authentication and
+    # sessions, it read no code — it had no tool to — and gave a public
+    # repository, public on purpose, as its first finding.
+    review = {d.key: d for d in catalogue()}["security-review"]
+    assert {"list_files", "read_file"} <= set(review.tools)
+    assert "**le jeton de session**" in said and "**la protection CSRF**" in said
+    assert "Une protection n'est pas un défaut" in said
+    assert "Un dépôt public n'est jamais un constat en soi" in said
 
 
 def test_the_code_change_proposes_the_smallest_change_and_says_the_rest() -> None:
@@ -1122,6 +1146,17 @@ def test_the_regression_analysis_reads_the_pull_request_asked() -> None:
     # 2026-10-23, tested on leka-core: asked about PR #404, it read #378 — one
     # the context showed —, and cited test lines it never read.
     d = {d.key: d for d in catalogue()}["regression-analysis"]
+    assert d.version == "1.2.0"
+    said = d.instructions or ""
+    assert "La pull request que la demande nomme est celle qui se lit" in said
+    assert "Une ligne citée (`chemin:ligne`) est une ligne lue" in said
+    assert "« à désigner »" in said
+
+
+def test_the_change_impact_analysis_reads_the_pull_request_asked() -> None:
+    # 2026-10-23, tested on leka-core: asked about PR #402, it read #398 — one
+    # the context showed —, and named teams no source gave.
+    d = {d.key: d for d in catalogue()}["change-impact-analysis"]
     assert d.version == "1.2.0"
     said = d.instructions or ""
     assert "La pull request que la demande nomme est celle qui se lit" in said

@@ -29,7 +29,7 @@ agents:
 
   - path: architecture/architecture-analysis/SKILL.md
     name: architecture-analysis
-    version: 1.3.0
+    version: 1.4.0
     status: active
 
   - path: architecture/migration-planning/SKILL.md
@@ -134,7 +134,7 @@ agents:
 
   - path: incident/change-impact-analysis/SKILL.md
     name: change-impact-analysis
-    version: 1.1.0
+    version: 1.2.0
     status: active
 
   - path: incident/correlate-deploy-with-latency/SKILL.md
@@ -154,7 +154,7 @@ agents:
 
   - path: infrastructure/infrastructure-analysis/SKILL.md
     name: infrastructure-analysis
-    version: 1.3.0
+    version: 1.4.0
     status: active
 
   - path: operations/debug-assistant/SKILL.md
@@ -174,5 +174,5 @@ agents:
 
   - path: security/security-review/SKILL.md
     name: security-review
-    version: 1.4.1
+    version: 1.5.0
     status: active
