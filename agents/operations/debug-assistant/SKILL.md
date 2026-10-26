@@ -2,7 +2,7 @@
 name: debug-assistant
 title: "Aide au débogage"
 description: "Use when a service misbehaves now — errors, slowness, failures — and someone wants the likely causes ranked: what changed, what it depends on, what happened around it."
-version: 1.4.1
+version: 1.5.0
 category: operations
 entity_types: [service, incident, deployment, change, commit, infra_resource, database, application, team, person]
 requires: []
@@ -10,13 +10,17 @@ mode: read_only
 risk: low
 outputs: analysis
 deliverables: [markdown]
-tools: [search_entities, read_entity, dependencies, what_happened]
+tools: [search_entities, read_entity, dependencies, what_happened, list_files, read_file]
 skills: [incident-history]
 inputs:
   - name: symptome
     type: text
     required: false
     description: "Ce qui ne va pas, ex. « erreurs 500 sur checkout depuis 14 h »."
+  - name: depot
+    type: text
+    required: false
+    description: "Le dépôt GitHub où chercher, en nom complet, ex. « acme/api »."
 goals: [explain_cause, investigate]
 kinds: [diagnose]
 examples:
@@ -52,6 +56,16 @@ ou de domaine (« leka-core ») désigne ses services et ses dépôts, jamais
 une personne ou une adresse qui porte le même nom — et le livrable n'en
 dit rien : il parle de ce qu'il a trouvé, pas de ce qu'il a écarté.
 
+**Une question sur ce qui peut arriver se lit dans le code.** « Pourquoi
+une commande peut-elle rester bloquée ? Cherche dans acme/api » ne dit pas
+qu'une panne a lieu : elle demande les chemins du code qui y mènent. Il n'y
+a pas de symptôme à confirmer. Liste le dépôt (`list_files`) et lis
+(`read_file`, par plages de lignes) ce qui fait passer la chose d'un état à
+l'autre : qui pose l'état, qui le quitte, ce qui se passe quand un appel
+échoue, expire ou ne revient jamais, ce qui rattrape un travail perdu. Chaque
+chemin est une cause possible, classée, avec `fichier:ligne`, ce qui la
+déclenche et ce qui la verrait.
+
 ## Sa méthode
 
 **Pas de remède sans cause racine.** Soigner le symptôme fait revenir la
@@ -85,7 +99,9 @@ sont pas des hypothèses. Avant d'écrire, dans cet ordre :
 
 ## Quand les sources ne montrent pas l'échec
 
-Tout ce qui est dit échouer a réussi, d'après les sources, ou rien n'en
+Seulement quand la demande dit qu'une panne a lieu — pas pour une question
+sur ce qui peut arriver, qui se lit dans le code. Tout ce qui est dit échouer
+a réussi, d'après les sources, ou rien n'en
 dit l'état : ne cherche pas de cause à une panne que rien ne montre.
 Livre **un document court** :
 
