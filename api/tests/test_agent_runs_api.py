@@ -245,7 +245,7 @@ async def test_the_architect_runs_end_to_end(
     )
     assert (started["title"], started["version"], started["mine"]) == (
         "Architecte applicatif",
-        "19.1.0",
+        "19.3.0",
         True,
     )
     assert started["deliverables"] == []
@@ -346,7 +346,9 @@ async def test_the_architect_runs_end_to_end(
     pptx = await client.get(f"{API}/{started['id']}/deliverables/pptx")
     assert pptx.status_code == 200
     assert len(Presentation(BytesIO(pptx.content)).slides) == slides
-    assert (await client.get(f"{API}/{started['id']}/deliverables/docx")).status_code == 422
+    # A format runs deliver, this one did not: none; one they never do: refused.
+    assert (await client.get(f"{API}/{started['id']}/deliverables/docx")).status_code == 404
+    assert (await client.get(f"{API}/{started['id']}/deliverables/exe")).status_code == 422
     assert (await client.get(f"{API}/{uuid.uuid4()}/deliverables/pdf")).status_code == 404
     # Kept under the run, in the workspace.
     kept = [key async for key in store.iter_prefix(f"{acme['acme']}/agent-runs/")]
@@ -613,7 +615,12 @@ async def test_a_run_is_refused_before_anything_is_kept(
     # An agent only who may approve may run: refused to a member, 403.
     architect = find(ARCHITECT)
     assert architect is not None
-    guarded = replace(architect, key="architect-for-approvers", permission="intention:approve")
+    guarded = replace(
+        architect,
+        key="architect-for-approvers",
+        permission="intention:approve",
+        dedicated=False,
+    )
     every = catalogue_module.catalogue()
     monkeypatch.setattr(catalogue_module, "catalogue", lambda: (*every, guarded))
     forbidden = await refused({"key": "architect-for-approvers"})

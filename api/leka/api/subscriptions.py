@@ -74,7 +74,8 @@ def _unavailable() -> ApiError:
 
 
 def _refused(error: CheckoutRefusedError) -> ApiError:
-    code = status.HTTP_409_CONFLICT if error.code in ("subscribed", "same_plan") else 422
+    conflicts = ("subscribed", "same_plan", "enterprise_contract")
+    code = status.HTTP_409_CONFLICT if error.code in conflicts else 422
     return ApiError(
         code,
         ErrorCode.CONFLICT if code == status.HTTP_409_CONFLICT else ErrorCode.VALIDATION_FAILED,

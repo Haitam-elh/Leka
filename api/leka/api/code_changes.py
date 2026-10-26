@@ -18,6 +18,11 @@
                                                précédente »: the deployment
                                                workflow started for the version
                                                before it, where allowed
+    POST   /code-changes/{id}/repair           « Réparer le problème »: its
+                                               pull request in red, LEKA reads
+                                               what failed and adds the fix to
+                                               its branch — 202, a worker does
+                                               it (2026-10-24)
 
 Reading takes `intention:read`; deciding, `intention:approve` — who may
 approve what an intention asks to do. The workspace is the session's.
@@ -42,8 +47,10 @@ from leka.capabilities import (
     CodeChangeFileRead,
     CodeChangeFollow,
     CodeChangeRead,
+    CodeChangeRepair,
     CodeChangeRollback,
     files_read,
+    queue_repair,
 )
 from leka.core.errors import ErrorCode, FieldError
 from leka.governance import Permission, Principal, Target, audit_as, require_permission
@@ -84,6 +91,7 @@ async def _read(service: ChangeService, change: CodeChange) -> CodeChangeRead:
         follow=CodeChangeFollow.model_validate(change.follow) if change.follow else None,
         reverts=change.reverts,
         rollbacks=[CodeChangeRollback.model_validate(r) for r in change.rollbacks or []],
+        repairs=[CodeChangeRepair.model_validate(r) for r in change.repairs or []],
         deploys_allowed=await service.deploys(change),
         created_at=change.created_at,
     )
@@ -250,3 +258,37 @@ async def rollback_change(
         raise _missing() from None
     except ChangeRefusedError as refused:
         raise _refused(refused) from None
+
+
+@router.post(
+    "/{change_id}/repair",
+    response_model=CodeChangeRead,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Repair a pull request in red: LEKA reads what failed and fixes it on its branch",
+)
+async def repair_pull_request(
+    change_id: uuid.UUID, session: SessionDep, principal: Approver
+) -> CodeChangeRead:
+    """« Réparer le problème » (2026-10-24): what failed on its pull request
+    read on GitHub, the fix written by the workspace's model and added to
+    its leka/ branch as one more commit — closed, reopened first. 202, a
+    worker does it; 409 when there is nothing to repair (merged, no pull
+    request), a repair runs, three were pushed, or the source does not let
+    LEKA write."""
+    service = ChangeService(session, principal.workspace_id)
+    audit_as(
+        session,
+        principal,
+        "action",
+        "code_change.repair_asked",
+        target=Target("code_change", change_id, None),
+        detail={},
+    )
+    try:
+        change = await service.repair(change_id, by=principal.user_id)
+    except ChangeNotFoundError:
+        raise _missing() from None
+    except ChangeRefusedError as refused:
+        raise _refused(refused) from None
+    await queue_repair(principal.workspace_id, change.id)
+    return await _read(service, change)

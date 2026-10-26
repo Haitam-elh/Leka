@@ -75,7 +75,7 @@ test.describe("The frame", () => {
     await expect(strip).toBeVisible();
   });
 
-  test("Capacités: each domain's box right under the one before, in four columns (LEKA-460)", async ({ page }) => {
+  test("Agents: each domain's box the same size as those beside it (2026-10-25)", async ({ page }) => {
     await signIn(page);
     await page.goto("/capabilities");
     // The agents' boxes (LEKA-467: LEKA's skills are a section of their own).
@@ -84,18 +84,16 @@ test.describe("The frame", () => {
     const boxes = await agents.evaluateAll((all) =>
       all.map((box) => {
         const r = box.getBoundingClientRect();
-        return { left: Math.round(r.left), top: r.top, bottom: r.bottom };
+        return { top: Math.round(r.top), height: Math.round(r.height), width: Math.round(r.width) };
       }),
     );
-    const columns = new Map<number, { top: number; bottom: number }[]>();
-    for (const box of boxes) columns.set(box.left, [...(columns.get(box.left) ?? []), box]);
-    expect(columns.size).toBe(4);
-    for (const column of columns.values()) {
-      column.sort((a, b) => a.top - b.top);
-      for (let i = 1; i < column.length; i++) {
-        // The 16px between two boxes, never more.
-        expect(column[i].top - column[i - 1].bottom).toBeLessThanOrEqual(17);
-      }
+    // Side by side, three a row; every box the same size, closed.
+    const rows = new Map<number, { height: number; width: number }[]>();
+    for (const box of boxes) rows.set(box.top, [...(rows.get(box.top) ?? []), box]);
+    expect(rows.size).toBeLessThan(boxes.length);
+    for (const box of boxes) {
+      expect(Math.abs(box.height - boxes[0].height)).toBeLessThanOrEqual(1);
+      expect(Math.abs(box.width - boxes[0].width)).toBeLessThanOrEqual(1);
     }
   });
 

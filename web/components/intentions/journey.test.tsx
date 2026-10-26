@@ -17,6 +17,8 @@
  * - An analysis stopped, or of a version asked again since, is never shown
  *   as its result, nor its evidence.
  * - Its history says its versions apart, the earlier said replaced.
+ * - « Répondre » leads to its questions, from any step; nothing to answer,
+ *   « Préciser ma demande » to its request.
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -249,6 +251,32 @@ describe("an intention's journey", () => {
       "En attente depuis plus de 5 min",
     );
     expect(screen.getByTestId("journey-analyse_again")).toBeInTheDocument();
+  });
+
+  it("leads « Répondre » to its questions, and to its request when nothing is asked", async () => {
+    // 2026-10-24: « Répondre » linked to the page it was on, and did nothing.
+    route.pathname = `/intentions/${ID}/history`;
+    api.one.mockResolvedValue(intention({ status: "needs_clarification" }));
+    const { unmount } = show(<IntentionScreen />);
+    const answer = await screen.findByTestId("journey-next");
+    expect(answer).toHaveTextContent("Répondre");
+    expect(answer).toHaveAttribute("href", `/intentions/${ID}/overview#brief-questions`);
+    unmount();
+
+    // Only its context in the way: its request made precise, asked again.
+    api.one.mockResolvedValue(
+      intention({
+        status: "needs_clarification",
+        journey: sampleJourney("needs_clarification", { reason: "context_blocked", next: "clarify" }, ago(3)),
+      }),
+    );
+    show(<IntentionScreen />);
+    const clarify = await screen.findByTestId("journey-next");
+    expect(clarify).toHaveTextContent("Préciser ma demande");
+    expect(clarify).toHaveAttribute("href", `/intentions/new?intention=${ID}`);
+    expect(screen.getByTestId("journey-next-said")).toHaveTextContent(
+      "À vous · Précisez votre demande : nommez ce sur quoi elle porte.",
+    );
   });
 
   it("offers no control its state does not allow", async () => {

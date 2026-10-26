@@ -8,7 +8,9 @@ import { cn } from "cn";
 
 import { Card } from "@/components/environment/parts";
 import { ApprovalGovernance } from "@/components/governance/approval-governance";
+import { AgentUsageTab } from "@/components/governance/agent-usage";
 import { DataProtection } from "@/components/governance/data-protection";
+import { SecurityTab } from "@/components/governance/security-tab";
 import { Pill } from "@/components/intelligence/pill";
 import { useConfirm } from "@/components/interactions/confirm";
 import { exactDate } from "@/components/knowledge/time";
@@ -333,7 +335,7 @@ function Decisions() {
   );
 }
 
-const TABS = ["overview", "access", "ai", "journal", "approvals", "data"] as const;
+const TABS = ["overview", "access", "ai", "journal", "approvals", "security", "agents", "data"] as const;
 type Tab = (typeof TABS)[number];
 
 function tabHref(pathname: string, tab: Tab): string {
@@ -419,8 +421,8 @@ export function GovernanceScreen() {
   const roles = useCustomRoles();
   const mine = new Set<string>(model.data?.mine ?? []);
   const [tab, setTab] = useTab();
-  // The journal is for who may read the audit trail.
-  const tabs = TABS.filter((name) => name !== "journal" || mine.has("audit:read"));
+  // The journal and the agents' use are for who may read the audit trail.
+  const tabs = TABS.filter((name) => (name !== "journal" && name !== "agents") || mine.has("audit:read"));
   const manage = mine.has("policy:manage");
 
   let body: React.ReactNode;
@@ -428,6 +430,12 @@ export function GovernanceScreen() {
     body = <ApprovalGovernance />;
   } else if (tab === "data") {
     body = <DataProtection />;
+  } else if (tab === "security") {
+    // Devices, LEKA's access to each source, what LEKA keeps (2026-10-25).
+    body = <SecurityTab canManageSources={mine.has("source:manage")} />;
+  } else if (tab === "agents" && mine.has("audit:read")) {
+    // Each agent's use, counted, and who ran which (2026-10-25).
+    body = <AgentUsageTab />;
   } else if (model.isError) {
     body = <ErrorState error={model.error} onRetry={() => void model.refetch()} />;
   } else if (!model.data) {

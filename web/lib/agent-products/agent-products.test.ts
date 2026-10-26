@@ -1,7 +1,8 @@
 /**
  * Every agent on sale has its product page, whole, in French and in English
  * (LEKA-471) — and an agent not on sale has none: it is never presented as
- * something to buy.
+ * something to buy. A dedicated agent (2026-10-25), never sold, has one too:
+ * the organisations it is made for read it.
  *
  * The agents on sale are read from the server's catalogue itself
  * (api/leka/billing/catalogue.yaml), the agents from the registry
@@ -23,6 +24,14 @@ function onSale(): string[] {
   const yaml = readFileSync(join(ROOT, "api/leka/billing/catalogue.yaml"), "utf8");
   const block = yaml.split(/\n {2}agents:\n/)[1].split(/\n {2}[a-z_]+:/)[0];
   return [...block.matchAll(/^ {4}([a-z][a-z-]+): \{ tier:/gm)].map((m) => m[1]);
+}
+
+/** The agents made for some organisations: `dedicated: true` in their file. */
+function dedicated(): string[] {
+  const yaml = readFileSync(join(ROOT, "agents/registry.yaml"), "utf8");
+  return [...yaml.matchAll(/^ {2}- path: (\S+)\n {4}name: ([a-z-]+)/gm)]
+    .filter(([, path]) => /^dedicated: true$/m.test(readFileSync(join(ROOT, "agents", path), "utf8")))
+    .map(([, , name]) => name);
 }
 
 /** The registry's agents and their status. */
@@ -56,11 +65,14 @@ function words(product: AgentProduct): Words[] {
 
 describe("the agents' product pages", () => {
   const sold = onSale();
+  const made = dedicated();
 
-  it("every agent on sale has one, and only those", () => {
+  it("every agent on sale has one, every dedicated one too, and only those", () => {
     expect(sold.length).toBeGreaterThan(20);
-    expect(sold.filter((key) => !AGENT_PRODUCTS[key])).toEqual([]);
-    expect(Object.keys(AGENT_PRODUCTS).filter((key) => !sold.includes(key))).toEqual([]);
+    expect(made).toEqual(["application-architecture"]);
+    expect(sold.filter((key) => made.includes(key))).toEqual([]);
+    expect([...sold, ...made].filter((key) => !AGENT_PRODUCTS[key])).toEqual([]);
+    expect(Object.keys(AGENT_PRODUCTS).filter((key) => !sold.includes(key) && !made.includes(key))).toEqual([]);
   });
 
   it("no draft is presented as something to buy", () => {

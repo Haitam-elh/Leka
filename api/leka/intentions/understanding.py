@@ -96,8 +96,12 @@ VERBS: tuple[Verb, ...] = (
         "analyser analysez investiguer investigue investigate analyze analyse diagnostiquer",
     ),
     _verb("compare", False, "comparer compare comparez"),
+    # « Fais une revue de … », « relis … », « review … »: looked at, nothing done.
     _verb(
-        "assess", False, "evaluer evalue evaluez verifier verifie verifiez check auditer estimer"
+        "assess",
+        False,
+        "evaluer evalue evaluez verifier verifie verifiez check auditer estimer revue review "
+        "relire relis relisez",
     ),
     _verb("list", False, "lister listez list inventorier"),
     _verb("document", False, "documenter documente documentez rediger redige redigez"),

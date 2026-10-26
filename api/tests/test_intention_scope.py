@@ -221,6 +221,14 @@ def test_a_migration_without_where_to_is_asked() -> None:
     assert "missing_target" in blocking(understood)
 
 
+def test_a_migration_planned_without_where_to_weighs_the_options() -> None:
+    text = "Planifie la migration de Billing API"
+    understood = read(text, plan(text, "migration"))
+    assert understood.goal.code == "plan_migration"
+    assert "missing_target" in {a.kind for a in understood.ambiguities}
+    assert "missing_target" not in blocking(understood)
+
+
 def test_acting_and_changing_nothing_are_at_odds() -> None:
     text = "Redémarre Billing API en production sans rien modifier"
     understood = read(text, plan(text, environment="production", origin="text"))

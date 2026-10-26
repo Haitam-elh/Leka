@@ -78,7 +78,7 @@ def test_the_repositorys_catalogue_loads_whole() -> None:
     assert (architect.kind, architect.lifecycle, architect.version) == (
         Kind.AGENT,
         Lifecycle.ACTIVE,
-        "19.1.0",
+        "19.3.0",
     )
     assert architect.title == "Architecte applicatif"
     assert [(i.name, i.required) for i in architect.contract.inputs] == [
@@ -88,6 +88,9 @@ def test_the_repositorys_catalogue_loads_whole() -> None:
         ("entite", False),
         ("service", False),
         ("vue_applicative", False),
+        # On a Confluence space, its dossier (2026-10-25).
+        ("espace", False),
+        ("page_racine", False),
     ]
     assert (architect.contract.output, architect.contract.formats) == ("document", ("pptx", "pdf"))
     # Any documentation, code, ticket or database source: what it draws on,

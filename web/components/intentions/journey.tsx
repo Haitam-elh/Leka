@@ -134,16 +134,48 @@ function AnalyseButton({
 
 type ControlLabel = keyof Dictionary["intentions"]["journey"]["controls"];
 
-/** Where its next step is taken, by next step: the view, the control it
+/** Where its next step is taken, by next step: the address, the control it
  * needs — none, anyone who reads it — and its words. */
-const NEXT_STEP: Record<string, { control: JourneyControl | null; label: ControlLabel; path: string }> = {
-  answer: { control: "answer", label: "answer", path: "" },
-  decide: { control: "decide", label: "decide", path: "/decision" },
-  start_actions: { control: "start_actions", label: "start_actions", path: "/actions" },
-  retry_actions: { control: "retry_actions", label: "retry_actions", path: "/actions" },
-  wait_verification: { control: "report_outcome", label: "report_outcome", path: "/actions" },
-  read_result: { control: null, label: "read_result", path: "/results" },
-  follow_actions: { control: null, label: "follow_actions", path: "/actions" },
+const NEXT_STEP: Record<
+  string,
+  { control: JourneyControl | null; label: ControlLabel; href: (id: string) => string }
+> = {
+  // Its questions, where they are answered — never the page it is on
+  // (2026-10-24: « Répondre » did nothing).
+  answer: {
+    control: "answer",
+    label: "answer",
+    href: (id) => `${routes.intention(id, "overview")}#brief-questions`,
+  },
+  // Nothing to answer, only its context in the way: its request made
+  // precise, asked again (LEKA-385).
+  clarify: {
+    control: "ask_again",
+    label: "clarify",
+    href: (id) => `${routes.intentionNew()}?intention=${id}`,
+  },
+  decide: { control: "decide", label: "decide", href: (id) => routes.intention(id, "decision") },
+  start_actions: {
+    control: "start_actions",
+    label: "start_actions",
+    href: (id) => routes.intention(id, "actions"),
+  },
+  retry_actions: {
+    control: "retry_actions",
+    label: "retry_actions",
+    href: (id) => routes.intention(id, "actions"),
+  },
+  wait_verification: {
+    control: "report_outcome",
+    label: "report_outcome",
+    href: (id) => routes.intention(id, "actions"),
+  },
+  read_result: { control: null, label: "read_result", href: (id) => routes.intention(id, "results") },
+  follow_actions: {
+    control: null,
+    label: "follow_actions",
+    href: (id) => routes.intention(id, "actions"),
+  },
 };
 
 /** The control its next step asks for, when this person may use it. */
@@ -159,7 +191,7 @@ function NextControl({ intention }: { intention: IntentionDetail }) {
   if (!step || (step.control && !may(journey, step.control, rights))) return null;
   return (
     <Link
-      href={`${routes.intention(intention.id)}${step.path}`}
+      href={step.href(intention.id)}
       className={buttonVariants({ size: "sm" })}
       data-testid="journey-next"
     >

@@ -42,6 +42,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/components/shell/shell-provider", () => ({
   usePermissions: () => permissions.value,
   useCurrentUser: () => ({ id: "me" }),
+  useCurrentWorkspace: () => ({ id: "w1", name: "Acme Corp", slug: "acme", role: "owner" }),
 }));
 vi.mock("@/lib/capabilities", async (original) => ({
   ...(await original<typeof import("@/lib/capabilities")>()),
@@ -145,6 +146,7 @@ function capability(overrides: Partial<Capability> = {}): Capability {
     kinds: ["ownership"],
     entity_types: [],
     examples: [],
+    dedicated: false,
     always: false,
     available: true,
     reasons: [],
@@ -251,7 +253,7 @@ describe("the catalogue", () => {
     expect(owner).toHaveTextContent("Disponible");
     expect(architect).toHaveTextContent("Architecte applicatif");
     // What it does in the reader's words, not the description its model reads.
-    expect(architect).toHaveTextContent("Le deck d'architecture d'un parcours");
+    expect(architect).toHaveTextContent("Génère la documentation d'architecture applicative structurée ArchiMate");
     expect(architect).not.toHaveTextContent("Use when");
     expect(architect).toHaveAttribute("data-available", "false");
     expect(within(architect).getByTestId("capability-reasons")).toHaveTextContent(
@@ -264,9 +266,8 @@ describe("the catalogue", () => {
     // Not run yet: nothing said about it.
     expect(architect).not.toHaveTextContent("Pas encore exécutée");
     expect(screen.queryByTestId("catalogue-stats")).not.toBeInTheDocument();
-    expect(screen.getByTestId("catalogue-top")).toHaveTextContent("Responsabilités");
-    expect(screen.getByTestId("catalogue-latest")).toHaveTextContent("Architecte applicatif");
-    expect(screen.getByTestId("catalogue-latest")).not.toHaveTextContent("Use when");
+    // No figures under the agents (2026-10-25: « ça rajoute des trucs pour rien »).
+    expect(screen.queryByTestId("catalogue-usage")).not.toBeInTheDocument();
     // A suggestion to LEKA's team, not a new intention (LEKA-501).
     expect(screen.getByTestId("catalogue-ask")).not.toHaveAttribute("href");
   });
@@ -414,13 +415,10 @@ describe("the catalogue", () => {
     await waitFor(() => expect(api.favourite).toHaveBeenCalledWith("ownership", true));
   });
 
-  it("leaves the usage out when nothing ran, and says the model only when it holds one back", async () => {
-    api.summary.mockResolvedValue({ ...SUMMARY, runs: 0, runs_previous: 0 });
+  it("says the model only when it holds one back", async () => {
     api.list.mockResolvedValue([capability()]);
     show(<CatalogueScreen />);
     await screen.findAllByTestId("capability-card");
-    await waitFor(() => expect(api.summary).toHaveBeenCalled());
-    expect(screen.queryByTestId("catalogue-usage")).not.toBeInTheDocument();
     expect(screen.queryByTestId("catalogue-wide")).not.toBeInTheDocument();
   });
 
@@ -468,6 +466,41 @@ describe("the catalogue", () => {
     const price = await screen.findByTestId("agent-price");
     expect(price).toHaveTextContent("À partir du plan Starter");
     expect(within(price).queryByTestId("agent-buy")).not.toBeInTheDocument();
+  });
+
+  it("puts the agents made for this organisation first, apart, never priced (2026-10-25)", async () => {
+    api.list.mockResolvedValue([capability(), { ...ARCHITECT, dedicated: true, available: true, reasons: [] }]);
+    sold.addOns.mockResolvedValue({ ...addOns(false), agents: [], dedicated: ["application-architecture"] });
+    show(<CatalogueScreen />);
+    const dedicated = await screen.findByTestId("catalogue-dedicated");
+    expect(dedicated).toHaveTextContent("Agents dédiés");
+    expect(dedicated).toHaveTextContent("Conçus pour Acme Corp");
+    const card = within(dedicated).getByTestId("capability-card");
+    expect(card).toHaveAttribute("data-key", "application-architecture");
+    expect(await within(card).findByTestId("agent-state")).toHaveTextContent("Dédié à votre organisation");
+    expect(within(card).queryByTestId("agent-price")).not.toBeInTheDocument();
+    // Said once: never among the agents on sale too.
+    expect(screen.getAllByTestId("capability-card").filter((c) => c.dataset.key === "application-architecture")).toHaveLength(1);
+  });
+
+  it("under an Enterprise contract: its agents by domain, never a price, never a bundle (2026-10-25)", async () => {
+    const offer = addOns(false, "enterprise");
+    sold.addOns.mockResolvedValue({ ...offer, agents: [{ ...offer.agents[0], included: true, owned: true, why: null }] });
+    show(<CatalogueScreen />);
+    expect(await screen.findByTestId("agent-state")).toHaveTextContent("Inclus dans votre contrat");
+    expect(screen.getByTestId("catalogue-all-agents")).toHaveTextContent("Agents disponibles");
+    expect(screen.getByTestId("catalogue-all-agents")).toHaveTextContent("Inclus dans votre contrat Entreprise");
+    expect(screen.queryByTestId("agent-price")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("bundles")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("catalogue-figures")).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("€");
+    // By the registry's domains, not the marketplace's categories; no level,
+    // no state to buy to choose from.
+    const box = screen.getAllByTestId("catalogue-domain").find((d) => d.dataset.kind === "agent");
+    expect(box).toHaveAttribute("data-domain", "architecture");
+    expect(within(box!).getByRole("heading", { level: 3 })).toHaveTextContent(/^Architecture$/);
+    expect(screen.queryByTestId("catalogue-tier")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("catalogue-state")).not.toBeInTheDocument();
   });
 
   it("lets an admin turn one off, only saying why — and anyone else read it", async () => {

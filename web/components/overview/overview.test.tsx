@@ -87,6 +87,7 @@ let currentUser: { id: string; email: string; first_name?: string | null } = {
 };
 vi.mock("@/components/shell/shell-provider", () => ({
   useCurrentUser: () => currentUser,
+  useCurrentWorkspace: () => ({ id: "w1", name: "Acme Corp", slug: "acme", role: "owner" }),
 }));
 
 // The box has its own tests; here it is only a place on the page.
@@ -491,9 +492,9 @@ describe("the overview", () => {
 
     expect(await screen.findByText("Connectez une première source pour commencer.")).toBeVisible();
     expect(screen.getByText("Aucune source connectée pour l'instant.")).toBeVisible();
-    // The first steps above the question, where a newcomer looks (LEKA-445).
+    // The first steps under the question and its history, a strip (2026-10-25).
     const steps = await screen.findByTestId("first-steps");
-    expect(steps.compareDocumentPosition(screen.getByTestId("composer")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(steps.compareDocumentPosition(screen.getByTestId("home-history")) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
   });
 
   it("lists what LEKA proposes, waiting on someone, each leading to it", async () => {

@@ -33,14 +33,32 @@ export function useRunCodeChanges(runId: string | null, writing = false) {
   });
 }
 
+export const followKey = (id: string) => [...codeChangeKeys.all, "follow", id] as const;
+
 /** Where its pull request stands, read on GitHub — again every minute
- * until deployed, closed or quiet (2026-10-20). */
+ * until deployed, closed or quiet (2026-10-20); every few seconds while
+ * LEKA repairs it (2026-10-24). */
 export function useCodeChangeFollow(id: string, following: boolean) {
   return useQuery({
-    queryKey: [...codeChangeKeys.all, "follow", id] as const,
+    queryKey: followKey(id),
     queryFn: () => codeChanges.follow(id),
     enabled: following,
-    refetchInterval: (query) => (query.state.data?.follow?.done ? false : 60_000),
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (data?.repairs?.at(-1)?.state === "running") return 5000;
+      return data?.follow?.done ? false : 60_000;
+    },
+  });
+}
+
+/** « Réparer le problème » (2026-10-24): asked, the change as the API says
+ * it — its repair running — read again until it ends. */
+export function useCodeChangeRepair(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => codeChanges.repair(id),
+    onSuccess: (change) => client.setQueryData(followKey(id), change),
+    onSettled: () => client.invalidateQueries({ queryKey: codeChangeKeys.all }),
   });
 }
 

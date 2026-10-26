@@ -6,7 +6,9 @@
  *
  * Allowed: tests, comments, the dev pages, the dictionaries themselves, and
  * the agents' product pages (lib/agent-products), written as French and
- * English pairs, w("…", "…"). The names of the company's own things — a
+ * English pairs, w("…", "…"), and the architect's installer
+ * (lib/architect-install.ts): the words of the scripts it writes, read in a
+ * terminal — French, as the agent's own instructions. The names of the company's own things — a
  * service, a repository — come from the data, never from here.
  */
 
@@ -17,7 +19,14 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = path.resolve(__dirname, "..", "..");
 const DIRS = ["components", "app", "lib", "config"];
-const ALLOWED = [/\.test\./, /\/lib\/i18n\//, /%5Fdev|\/_dev\//, /\/lib\/agent-products\//, /api-types\.ts$/];
+const ALLOWED = [
+  /\.test\./,
+  /\/lib\/i18n\//,
+  /%5Fdev|\/_dev\//,
+  /\/lib\/agent-products\//,
+  /\/lib\/architect-install\.ts$/,
+  /api-types\.ts$/,
+];
 // A French letter inside a quoted string, or in JSX text between tags.
 const FRENCH = /(["'`])([^"'`\n]*[éèêàçùôîûâÉÀ][^"'`\n]*)\1|>([^<>{}\n]*[éèêàçùôîûâÉÀ][^<>{}\n]*)</;
 

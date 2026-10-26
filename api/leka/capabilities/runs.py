@@ -44,12 +44,15 @@ import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from leka.architect import DossierError
 from leka.background import JobQueue, enqueue_job
 from leka.capabilities.catalogue import CatalogueService, Entry, needs_of
 from leka.capabilities.code_tools import CODE_NAMES, CODE_TOOLS, code_handlers
+from leka.capabilities.dedicated import own_definition
 from leka.capabilities.definition import Definition, check_input
-from leka.capabilities.deliverable_check import missing, unread
+from leka.capabilities.deliverable_check import deferred, missing, unread
 from leka.capabilities.delivery import draw, organisation_of
+from leka.capabilities.dossier import draw_dossier, perimeter_of, summary_of, wants_dossier
 from leka.capabilities.gateway import (
     Completion,
     Gateway,
@@ -61,6 +64,7 @@ from leka.capabilities.gateway import (
 )
 from leka.capabilities.gateway.service import CUT
 from leka.capabilities.method_tools import METHOD_NAMES, METHOD_TOOLS, method_handlers
+from leka.capabilities.mockups import design_target
 from leka.capabilities.models import AgentRun, AgentRunEvent
 from leka.capabilities.repository import CapabilityRunRepository, stale_runs
 from leka.capabilities.review import review_of
@@ -97,7 +101,7 @@ from leka.governance import (
 from leka.identity import spoken_language
 from leka.ingestion import ContentRepository, ResolutionRepository
 from leka.knowledge import EntityRepository, GraphRepository, GraphService, KnowledgeService
-from leka.platform import Role
+from leka.platform import ObjectStoreError, Role
 
 logger = structlog.get_logger(__name__)
 
@@ -120,6 +124,13 @@ MOST_READ_KEPT = 60
 DECK_FILES = ("pdf", "pptx")
 # Asked longer ago and still not drawn: lost (a worker gone) — asked again.
 DRAWING_LOST = timedelta(minutes=20)
+# What stops a change or a design for good — no model here, an AI control's
+# refusal, a quota, no repository to write on: said, never done again by
+# itself. Anything else — a model out of time, edits that did not land — is
+# done again at once (2026-10-25).
+FINAL_RENDER = frozenset(
+    {"no_model", "refused", "limited", "no_repository", "out_of_scope", "not_found"}
+)
 # How long a run may take, all of it: its context, its tools, its model.
 RUN_BUDGET = 15 * 60.0
 # A run found running this long had its worker go away; one queued this
@@ -466,7 +477,8 @@ async def _run(
             reasons=[dict(r) for r in refused.reasons],
         )
     assert entry is not None  # refusal_of said not_found otherwise
-    definition = entry.definition
+    # Its organisation's own instructions, when it has them (2026-10-25).
+    definition = await own_definition(session, workspace_id, entry.definition)
     decided = evaluate(
         subject,
         Permission(definition.permission),
@@ -490,6 +502,10 @@ async def _run(
     if definition.version != run.version:
         run.detail = {**run.detail, "asked_version": run.version}
         run.version = definition.version
+    # On a Confluence space (2026-10-25): the architect's dossier, its steps
+    # leka.architect's — the downloadable agent's — not the deck.
+    if wants_dossier(definition, run.inputs):
+        return await _dossier(session, run, definition, steps, budget)
 
     # Its context, what its types allow.
     context = await _context(session, run, definition)
@@ -556,11 +572,16 @@ async def _run(
         [t.name for t in skilled],
     )
     language = await spoken_language(session, run.requested_by, workspace_id)
+    # Asked to implement a design review's direction: its mock-up, given —
+    # never its words alone (2026-10-24).
+    target = await design_target(session, run) if definition.renders == "code_change" else None
+    if target is not None:
+        steps.add("design_target", screen=target["screen"], direction=target["direction"])
     request = Request(
         purpose=f"agent:{definition.key}"[:100],
         messages=messages(
             definition,
-            run.inputs,
+            {**run.inputs, "maquette": target} if target is not None else run.inputs,
             injected,
             tools=given,
             language=language,
@@ -592,6 +613,8 @@ async def _run(
                         framed=framed(definition),
                     ),
                     *(unread(text, read.get("files", {})) if reads_code else []),
+                    # A design implemented whole, never by halves.
+                    *(deferred(text) if target is not None else []),
                 ],
                 corrections=settings.agent_corrections,
             ),
@@ -658,6 +681,7 @@ async def _run(
             )
     # Only the files a person asked for (2026-10-14: a PDF nobody asked for
     # was drawn) — every one when the run says nothing of it.
+    again: str | None = None
     asked = run.detail.get("formats")
     wanted = None if not isinstance(asked, list) else [str(f) for f in asked]
     # The files a code change or a design is drawn from, named: read again
@@ -673,9 +697,21 @@ async def _run(
         )
         if drawn.error is None:
             steps.add(drawn.step, **drawn.said())
+            detail |= drawn.detail()
+        elif definition.renders in REDRAWN and drawn.error not in FINAL_RENDER:
+            # Its change or its mock-ups not delivered the first time: done
+            # again at once by a worker, as « Réessayer » does — never left
+            # for a person to ask (2026-10-25: the design review came without
+            # its mock-ups, the code change without its change).
+            steps.add("render_retried", code=drawn.error, said=drawn.refusal)
+            detail |= {
+                "drawing": [REDRAWN[definition.renders][1]],
+                "drawing_since": now_or().isoformat(),
+            }
+            again = definition.renders
         else:
             steps.add("render_failed", code=drawn.error, said=drawn.refusal)
-        detail |= drawn.detail()
+            detail |= drawn.detail()
     runs = CapabilityRunRepository(session, workspace_id)
     ended = await runs.finish(
         run.id,
@@ -692,8 +728,99 @@ async def _run(
         steps.add("succeeded", chars=len(output))
         _ended(session, run, "succeeded", model=done.model, tool_calls=run.tool_calls)
     await session.commit()
+    if ended and again is not None:
+        await queue_redraw(workspace_id, run.id, again)
     status = "succeeded" if ended else "cancelled"
     logger.info("agent_run_ended", run=str(run.id), key=run.key, status=status)
+    return {"status": status}
+
+
+async def _dossier(
+    session: AsyncSession,
+    run: AgentRun,
+    definition: Definition,
+    steps: Steps,
+    budget: float,
+) -> dict[str, object]:
+    """The dossier of a Confluence space, or of a page and everything under
+    it — its pages the ones LEKA synced, held to their source."""
+    perimeter = await perimeter_of(session, run.workspace_id, run.inputs)
+    if not perimeter.pages:
+        return await _fail(
+            session,
+            run,
+            "unavailable",
+            refused="no_pages",
+            space=perimeter.space,
+            root=perimeter.root,
+        )
+    held = [str(perimeter.source_id)] if perimeter.source_id else []
+    run.detail = {**run.detail, "sources": held}
+    steps.add(
+        "dossier_pages", space=perimeter.space, root=perimeter.root, pages=len(perimeter.pages)
+    )
+    await session.commit()
+
+    def said(step: str, detail: dict[str, Any]) -> None:
+        steps.add(f"dossier_{step}", **detail)
+
+    try:
+        drawn = await asyncio.wait_for(
+            draw_dossier(session, run, definition, perimeter, said=said), timeout=budget
+        )
+    except NoModelError as error:
+        return await _fail(
+            session,
+            run,
+            "no_model",
+            said=str(error),
+            tried=len(error.attempts),
+            reason=error.reason,
+        )
+    except TimeoutError:
+        return await _fail(session, run, "timeout", seconds=budget)
+    except DossierError as error:
+        return await _fail(session, run, "invalid_output", format="dossier", said=str(error)[:300])
+    except ObjectStoreError:
+        logger.exception("dossier_not_kept", run=str(run.id))
+        return await _fail(session, run, "error", kind="storage")
+    done = drawn.completion
+    if done is not None:
+        steps.add(
+            "answered",
+            provider=done.provider,
+            model=done.model,
+            version=done.version,
+            tokens_in=done.usage.tokens_in,
+            tokens_out=done.usage.tokens_out,
+            calls=drawn.calls,
+        )
+    summary = summary_of(drawn.dossier, perimeter)
+    steps.add("dossier", **{k: v for k, v in summary.items() if k != "lacking"})
+    runs = CapabilityRunRepository(session, run.workspace_id)
+    ended = await runs.finish(
+        run.id,
+        status=RunStatus.SUCCEEDED.value,
+        output=drawn.text[:OUTPUT_KEPT],
+        finished_at=now_or(),
+        provider=done.provider if done is not None else None,
+        model=done.model[:120] if done is not None else None,
+        model_version=done.version[:120] if done is not None else None,
+        tool_calls=run.tool_calls,
+        detail={**run.detail, "deliverables": drawn.files, "dossier": summary, "sources": held},
+    )
+    if ended:
+        steps.add("succeeded", chars=len(drawn.text))
+        _ended(
+            session,
+            run,
+            "succeeded",
+            model=done.model if done is not None else None,
+            tool_calls=run.tool_calls,
+        )
+    await session.commit()
+    status = "succeeded" if ended else "cancelled"
+    logger.info("agent_run_ended", run=str(run.id), key=run.key, status=status, dossier=True)
     return {"status": status}
 
 
@@ -791,7 +918,13 @@ async def _redraw(
     output = run.output
     # Nothing held while the model writes: minutes.
     await session.commit()
-    drawn = await draw(session, run, entry.definition, output, formats=formats)
+    drawn = await draw(
+        session,
+        run,
+        await own_definition(session, workspace_id, entry.definition),
+        output,
+        formats=formats,
+    )
     # Then kept, the run read again as it is now.
     run = await runs.run(run_id, lock=True)
     if run is None:
@@ -949,6 +1082,11 @@ async def _redraw_render(
     # Nothing held while the model writes: minutes.
     await session.commit()
     drawn = await draw(session, run, entry.definition, output, read=read)
+    if drawn.error is not None and drawn.error not in FINAL_RENDER:
+        # Once more, at once (2026-10-25): a model out of time, or whose
+        # edits did not land, mostly delivers the second time.
+        logger.info("run_drawn_again", run=str(run_id), code=drawn.error)
+        drawn = await draw(session, run, entry.definition, output, read=read)
     run = await runs.run(run_id, lock=True)
     if run is None:
         return {"proposed": None, "skipped": "gone"}
