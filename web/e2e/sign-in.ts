@@ -77,7 +77,8 @@ export async function signIn(page: Page): Promise<void> {
  */
 export async function expectShellReady(page: Page): Promise<void> {
   try {
-    await expect(page.getByTestId("plan-badge")).toBeVisible();
+    // A public plan's badge, or an Enterprise contract's (2026-10-25).
+    await expect(page.getByTestId("plan-badge").or(page.getByTestId("enterprise-badge"))).toBeVisible();
   } catch {
     // The shell has three ways of failing and it prints all of them: a
     // loading message that never resolved, "the API is unreachable", or

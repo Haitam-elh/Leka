@@ -39,6 +39,8 @@ class SecretStore(Protocol):
 
     async def describe(self, source_id: uuid.UUID) -> StoredCredentials | None: ...
 
+    async def erase(self, source_id: uuid.UUID) -> bool: ...
+
 
 def reveal(credentials: BaseModel) -> dict[str, str]:
     """A credentials model as plain strings — for encryption, and nothing else."""
@@ -98,3 +100,13 @@ class DatabaseFernetSecretStore:
         return StoredCredentials(
             hint=row.hint, key_version=row.key_version, rotated_at=row.rotated_at
         )
+
+    async def erase(self, source_id: uuid.UUID) -> bool:
+        """Its secret gone — revoked by a person (2026-10-25) — True when there
+        was one."""
+        row = await self._repository.find(source_id)
+        if row is None:
+            return False
+        await self._repository.delete(row)
+        await self._repository.flush()
+        return True

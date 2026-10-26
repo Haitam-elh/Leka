@@ -11,6 +11,7 @@ import { usePermissions } from "@/components/shell/shell-provider";
 import { ErrorState } from "@/components/states/error-state";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
+import { useEnterprise } from "@/lib/contract";
 import { type Dictionary, fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import {
@@ -67,6 +68,8 @@ function priceSaid(t: Dictionary, profile: ModelProfile, locale: string): string
 
 function DefaultModel({ gateway }: { gateway: ModelGateway }) {
   const t = useDictionary();
+  // Under an Enterprise contract (2026-10-25): LEKA's model is never priced.
+  const enterprise = useEnterprise();
   const w = t.languageModel;
   const { format: locale } = useLocale();
   const model = gateway.default;
@@ -84,7 +87,7 @@ function DefaultModel({ gateway }: { gateway: ModelGateway }) {
           {gateway.default_ready ? w.ready : w.notReady}
         </Pill>
       </p>
-      {priceSaid(t, model, locale).map((line) => (
+      {(enterprise ? [] : priceSaid(t, model, locale)).map((line) => (
         <p key={line} className="text-[0.8125rem] text-brand-navy">
           {line}
         </p>
@@ -108,6 +111,8 @@ function DefaultModel({ gateway }: { gateway: ModelGateway }) {
  */
 function ChooseDefault({ gateway, admin }: { gateway: ModelGateway; admin: boolean }) {
   const t = useDictionary();
+  // Under an Enterprise contract (2026-10-25): LEKA's model is never priced.
+  const enterprise = useEnterprise();
   const w = t.languageModel.choose;
   const { format: locale } = useLocale();
   const { choose, unchoose } = useModelDefault();
@@ -157,7 +162,7 @@ function ChooseDefault({ gateway, admin }: { gateway: ModelGateway; admin: boole
                   <span className="font-normal text-shell-muted"> · {vendor?.title ?? m.provider}</span>
                 </span>
                 {isLeka(m) ? <span className="text-xs text-shell-muted">{w.lekaDefault}</span> : null}
-                {priceSaid(t, m, locale)
+                {(enterprise && isLeka(m) ? [] : priceSaid(t, m, locale))
                   .slice(0, 1)
                   .map((line) => (
                     <span key={line} className="text-xs text-shell-muted">

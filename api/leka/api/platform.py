@@ -16,7 +16,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 
 from leka.api.dependencies import (
     MembershipResolverDep,
@@ -27,14 +27,20 @@ from leka.api.dependencies import (
     WorkspaceRepositoryDep,
     WorkspaceServiceDep,
 )
+from leka.api.errors import ApiError
 from leka.api.pagination import PageEnvelope, PageParams, SortCatalogue, serve_page
 from leka.core import languages
+from leka.core.errors import ErrorCode
 from leka.db import SortableField, system_scope
 from leka.governance import Permission, Principal, Target, audit_as, require_permission
 from leka.identity import UserRepository
 from leka.platform import (
+    MAX_LOGO_BYTES,
     CurrentWorkspace,
     DeletionScheduled,
+    LogoRefusedError,
+    ObjectNotFoundError,
+    ObjectStoreError,
     Role,
     Workspace,
     WorkspaceCreate,
@@ -43,6 +49,10 @@ from leka.platform import (
     WorkspaceStatus,
     WorkspaceSummary,
     WorkspaceUpdate,
+    drop_logo,
+    keep_logo,
+    logo_of,
+    object_store,
 )
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
@@ -200,6 +210,130 @@ async def configure_current_workspace(
         },
     )
     return WorkspaceRead.model_validate(updated)
+
+
+Admin = Annotated[Principal, Depends(require_permission(Permission.WORKSPACE_UPDATE))]
+Member = Annotated[Principal, Depends(require_permission(Permission.WORKSPACE_READ))]
+LOGO_REFUSED = {
+    "unsupported_type": (status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "A PNG, JPEG or WebP image."),
+    "too_large": (status.HTTP_413_CONTENT_TOO_LARGE, "512 KB at most."),
+    "empty": (status.HTTP_422_UNPROCESSABLE_CONTENT, "The image is empty."),
+    "not_what_it_says": (status.HTTP_422_UNPROCESSABLE_CONTENT, "Not the image its type says."),
+}
+
+
+def _store_down() -> ApiError:
+    return ApiError(
+        status.HTTP_503_SERVICE_UNAVAILABLE,
+        ErrorCode.SERVICE_UNAVAILABLE,
+        "The image could not be kept now: try again.",
+    )
+
+
+@router.put(
+    "/current/logo",
+    response_model=WorkspaceRead,
+    summary="The organisation's logo, given by its admin",
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                media: {"schema": {"type": "string", "format": "binary"}}
+                for media in ("image/png", "image/jpeg", "image/webp")
+            },
+        }
+    },
+)
+async def give_logo(
+    request: Request,
+    principal: Admin,
+    repository: WorkspaceRepositoryDep,
+    db: SessionDep,
+    content_type: Annotated[str, Header(alias="Content-Type")] = "",
+    content_length: Annotated[int | None, Header(alias="Content-Length")] = None,
+) -> WorkspaceRead:
+    """Its bytes the body (2026-10-25): a PNG, JPEG or WebP image, 512 KB at
+    most, its bytes what its type says — 415, 413 or 422 otherwise, nothing
+    kept. Shown in the header instead of its name; the one before removed."""
+    status_code, message = LOGO_REFUSED["too_large"]
+    if content_length is not None and content_length > MAX_LOGO_BYTES:
+        raise ApiError(status_code, ErrorCode.VALIDATION_FAILED, message)
+    payload = b""
+    async for chunk in request.stream():
+        payload += chunk
+        if len(payload) > MAX_LOGO_BYTES:
+            raise ApiError(status_code, ErrorCode.VALIDATION_FAILED, message)
+    workspace = await repository.get(principal.workspace_id)
+    if workspace is None:  # pragma: no cover
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Workspace not found.")
+    try:
+        await keep_logo(workspace, payload, content_type=content_type, store=object_store())
+    except LogoRefusedError as error:
+        code, said = LOGO_REFUSED[error.code]
+        raise ApiError(code, ErrorCode.VALIDATION_FAILED, said) from error
+    except ObjectStoreError as error:
+        raise _store_down() from error
+    audit_as(
+        db,
+        principal,
+        "workspace",
+        "workspace.logo_changed",
+        target=Target("workspace", workspace.id, workspace.name),
+        detail={"type": content_type.split(";")[0].strip().lower(), "bytes": len(payload)},
+    )
+    return WorkspaceRead.model_validate(workspace)
+
+
+@router.delete(
+    "/current/logo",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+    summary="The logo removed: its name again",
+)
+async def remove_logo(
+    principal: Admin, repository: WorkspaceRepositoryDep, db: SessionDep
+) -> Response:
+    workspace = await repository.get(principal.workspace_id)
+    if workspace is None:  # pragma: no cover
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Workspace not found.")
+    try:
+        removed = await drop_logo(workspace, store=object_store())
+    except ObjectStoreError as error:
+        raise _store_down() from error
+    if removed:
+        audit_as(
+            db,
+            principal,
+            "workspace",
+            "workspace.logo_removed",
+            target=Target("workspace", workspace.id, workspace.name),
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/current/logo",
+    response_class=Response,
+    summary="The organisation's logo, for its members",
+    responses={200: {"content": {"image/png": {}, "image/jpeg": {}, "image/webp": {}}}},
+)
+async def read_logo(principal: Member, repository: WorkspaceRepositoryDep) -> Response:
+    """Its image — 404 without one: its name is shown instead."""
+    workspace = await repository.get(principal.workspace_id)
+    said = logo_of(workspace) if workspace is not None else None
+    if said is None:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No logo: its name.")
+    try:
+        payload = b"".join([chunk async for chunk in object_store().get(said["key"])])
+    except ObjectNotFoundError as error:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No logo.") from error
+    except ObjectStoreError as error:
+        raise _store_down() from error
+    return Response(
+        payload,
+        media_type=said["type"],
+        headers={"Cache-Control": "private, max-age=300", "X-Content-Type-Options": "nosniff"},
+    )
 
 
 @router.post("/{workspace_id}/switch", response_model=WorkspaceSummary)

@@ -29,6 +29,12 @@ What these protect:
   review and the files the run read, cleans them and keeps them; the run says it drew; its report
   has no mark; GET /agent-runs/{id}/design gives each mock-up as its page,
   to whoever may read the run — another workspace sees nothing.
+- « Implémenter le design » (2026-10-24: it changed four classes and left
+  the rest « for a later step »): the code change asked from a design
+  review's deliverable is given that review's recommended direction — its
+  mock-up, its changes, the screen today — as it works and as its change is
+  written; an analysis that puts part of it off is asked again; a deferral
+  is told apart from an ordinary sentence.
 """
 
 # ruff: noqa: F811 — fixtures imported to be requested by name.
@@ -45,6 +51,8 @@ from pydantic import ValidationError
 
 from leka.api import agent_runs as agent_runs_api
 from leka.capabilities import correct_design_run, execute_run, redraw_design, sync_catalogue
+from leka.capabilities import runs as runs_module
+from leka.capabilities.deliverable_check import deferred
 from leka.capabilities.deliverables.design import (
     BASE,
     POLICY,
@@ -65,10 +73,18 @@ from leka.capabilities.deliverables.design import (
     without_assets,
 )
 from leka.capabilities.mockups import MARK, proposes, read_files, without_mark
+from leka.core.config import settings
 from leka.platform import LocalObjectStore
 from tests.conftest import FakeIdentity
 from tests.test_agent_runs_api import Script, gemini, leka_gemini, queued, store  # noqa: F401
-from tests.test_code_changes_api import README, REPO, GitHub, _github_source, github  # noqa: F401
+from tests.test_code_changes_api import (  # noqa: F401
+    BEFORE,
+    README,
+    REPO,
+    GitHub,
+    _github_source,
+    github,
+)
 from tests.test_context_engine import model  # noqa: F401
 from tests.test_sources_api import _as, acme, fake_connector  # noqa: F401
 
@@ -223,6 +239,26 @@ def test_the_writer_is_given_the_files_read_within_its_budget() -> None:
 # ── end to end ─────────────────────────────────────────────────────────────
 
 
+def test_the_screen_today_is_drawn_from_its_code_never_from_a_document() -> None:
+    # 2026-10-25: the sidebar removed by LEKA-494 was drawn back, from the
+    # document that still described it.
+    given = read_files(
+        {
+            f"{REPO}:web/components/shell/app-shell.tsx": "<header/>",
+            f"{REPO}:docs/frontend/app-shell.md": "The sidebar…",
+            f"{REPO}:web/components/overview/overview.test.tsx": "expect(…)",
+            f"{REPO}:web/e2e/navigation.spec.ts": "test(…)",
+            f"{REPO}:docs/product/mockups/home.html": "<aside>…",
+            f"{REPO}:README.md": "# Leka",
+            f"{REPO}:web/lib/i18n/dictionaries.ts": "export const fr = {}",
+        }
+    )
+    assert list(given) == [
+        f"{REPO}:web/components/shell/app-shell.tsx",
+        f"{REPO}:web/lib/i18n/dictionaries.ts",
+    ]
+
+
 def _plan(*names: str) -> dict[str, Any]:
     return {
         "screen": "Accueil",
@@ -275,7 +311,7 @@ async def test_the_designer_draws_the_screen_before_and_after(
     # The logo the code shows, in the app's public folder.
     github.extra["public/brand/logo.svg"] = LOGO
     script = leka_gemini(
-        gemini(call={"name": "read_file", "args": {"repository": REPO, "path": "README.md"}}),
+        gemini(call={"name": "read_file", "args": {"repository": REPO, "path": "app/balance.py"}}),
         gemini(REVIEW),
         gemini(json.dumps(_plan("Calme", "Dense"))),
         gemini(json.dumps(TODAY_DRAWN)),
@@ -296,7 +332,9 @@ async def test_the_designer_draws_the_screen_before_and_after(
     assert asked["generationConfig"]["responseMimeType"] == "application/json"
     assert "tools" not in asked
     material = json.loads(asked["contents"][-1]["parts"][0]["text"])
-    assert material["files"] == {f"{REPO}:README.md": README}
+    # The code it read — a document never: it may describe a screen that is
+    # no more (2026-10-25).
+    assert material["files"] == {f"{REPO}:app/balance.py": BEFORE}
     assert MARK not in material["review"]
     assert len(script.asked) == 6
     directions = [json.loads(a["contents"][-1]["parts"][0]["text"]) for a in script.asked[4:]]
@@ -368,25 +406,42 @@ async def test_a_design_not_drawn_says_which_step_and_why(
     leka_gemini: Callable[..., Script],
     github: GitHub,
     store: LocalObjectStore,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _as(identity, acme, "member")
     await _github_source(acme["acme"])
     await sync_catalogue()
+
+    async def queue(workspace_id: uuid.UUID, run_id: uuid.UUID, renders: str) -> bool:
+        return True
+
+    monkeypatch.setattr(runs_module, "queue_redraw", queue)
+    monkeypatch.setattr(agent_runs_api, "queue_redraw", queue)
     cut = gemini('{"css": "h1 {", "body": "<main>')
     cut["candidates"][0]["finishReason"] = "MAX_TOKENS"
-    leka_gemini(gemini(REVIEW), gemini(json.dumps(_plan("Calme"))), cut, cut)
+    plan = gemini(json.dumps(_plan("Calme")))
+    leka_gemini(gemini(REVIEW), plan, cut, cut)
     started = await client.post(
         RUNS,
         json={"key": "design-review", "inputs": {"depot": REPO, "demande": "propose un design"}},
     )
     run_id = started.json()["id"]
     assert await execute_run(acme["acme"], uuid.UUID(run_id)) == {"status": "succeeded"}
+    # Not drawn in its run: drawn again at once (2026-10-25), said which step.
+    detail = (await client.get(f"{RUNS}/{run_id}")).json()
+    assert (detail["design"], detail["drawing"], detail["draw_failed"]) == (None, ["design"], None)
+    [retried] = [e["detail"] for e in detail["events"] if e["kind"] == "render_retried"]
+    assert retried["said"].startswith("aujourd'hui : Cut at its limit")
+    # Twice more, by the worker, and still not: said which step and why.
+    leka_gemini(plan, cut, cut, plan, cut, cut)
+    assert (await redraw_design(acme["acme"], uuid.UUID(run_id)))["error"] == "unanswered"
     detail = (await client.get(f"{RUNS}/{run_id}")).json()
     assert detail["design"] is None
     assert detail["draw_failed"] == "unanswered"
     assert detail["draw_said"].startswith("aujourd'hui : Cut at its limit")
     # Its review proposes a design it does not have: drawable, on asking.
     assert "design" in detail["drawable"]
+    assert (await client.post(f"{RUNS}/{run_id}/design")).status_code == 202
 
 
 @pytest.mark.integration
@@ -409,7 +464,7 @@ async def test_a_design_not_drawn_is_drawn_again_on_asking(
         asked.append((run_id, renders))
         return True
 
-    monkeypatch.setattr(agent_runs_api, "queue_redraw", queue)
+    monkeypatch.setattr(runs_module, "queue_redraw", queue)
     cut = gemini('{"screen": "Acc')
     cut["candidates"][0]["finishReason"] = "MAX_TOKENS"
     leka_gemini(
@@ -427,14 +482,16 @@ async def test_a_design_not_drawn_is_drawn_again_on_asking(
     )
     run_id = started.json()["id"]
     assert await execute_run(acme["acme"], uuid.UUID(run_id)) == {"status": "succeeded"}
-    failed = (await client.get(f"{RUNS}/{run_id}")).json()
-    assert (failed["design"], failed["draw_failed"]) == (None, "unanswered")
-    assert failed["draw_said"].startswith("plan : Cut at its limit")
-
-    again = await client.post(f"{RUNS}/{run_id}/design")
-    assert again.status_code == 202, again.text
-    assert (again.json()["drawing"], again.json()["draw_failed"]) == (["design"], None)
+    # Not drawn in its run: being drawn again at once, by a worker — never
+    # left for a person to ask (2026-10-25).
+    drawing = (await client.get(f"{RUNS}/{run_id}")).json()
+    assert (drawing["design"], drawing["drawing"], drawing["draw_failed"]) == (
+        None,
+        ["design"],
+        None,
+    )
     assert asked == [(uuid.UUID(run_id), "design_mockups")]
+    # Being drawn: not asked twice.
     assert (await client.post(f"{RUNS}/{run_id}/design")).status_code == 409
     done = await redraw_design(acme["acme"], uuid.UUID(run_id))
     assert done["error"] is None
@@ -564,3 +621,123 @@ def test_a_direction_drawn_as_today_is_said_so_with_what_it_changes() -> None:
         f'<div class="grid">{rows.replace("li", "div")}</div></main>',
     )
     assert unchanged(today, redrawn, direction) == []
+
+
+# ── « Implémenter le design »: the mock-up, implemented whole (2026-10-24) ──
+
+
+def test_a_design_put_off_is_told_apart_from_an_ordinary_sentence() -> None:
+    for said in (
+        "Le bandeau unifié est réservé pour une étape suivante.",
+        "La grille sera reprise dans un second temps.",
+        "Phase 1 : la typographie ; le reste dans une prochaine pull request.",
+        "The layout is left for a follow-up step.",
+    ):
+        assert deferred(said), said
+    for said in (
+        "Le bouton suivant ouvre la page.",
+        "Étape 2 : lancer les tests.",
+        "Ce qui n'est pas fait ici : la donnée « tendance » n'existe pas dans l'API.",
+    ):
+        assert deferred(said) == [], said
+
+
+async def test_the_code_change_implements_the_design_it_comes_from_whole(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    leka_gemini: Callable[..., Script],
+    github: GitHub,
+    store: LocalObjectStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _as(identity, acme, "member")
+    await _github_source(acme["acme"])
+    await sync_catalogue()
+    github.extra["public/brand/logo.svg"] = LOGO
+    leka_gemini(
+        gemini(call={"name": "read_file", "args": {"repository": REPO, "path": "README.md"}}),
+        gemini(REVIEW),
+        gemini(json.dumps(_plan("Calme", "Dense"))),
+        gemini(json.dumps(TODAY_DRAWN)),
+        gemini(json.dumps(DRAWN)),
+        gemini(json.dumps(DRAWN)),
+    )
+    review = await client.post(
+        RUNS,
+        json={"key": "design-review", "inputs": {"depot": REPO, "demande": "propose un design"}},
+    )
+    review_id = review.json()["id"]
+    assert await execute_run(acme["acme"], uuid.UUID(review_id)) == {"status": "succeeded"}
+    assert (await client.get(f"{RUNS}/{review_id}")).json()["design"]["proposals"] == [
+        "Calme",
+        "Dense",
+    ]
+
+    # « Implémenter le design », from the review's deliverable — told when
+    # it puts part of it off.
+    monkeypatch.setattr(
+        runs_module, "settings", settings.model_copy(update={"agent_corrections": 1})
+    )
+    halves = (
+        "## Résumé\nLa typographie d'abord.\n## Le problème\nx\n## La modification\n"
+        "Le titre seulement ; le reste est réservé pour une étape suivante.\n## Les risques\nx\n"
+        "## Comment tester\nx\n## Ce qui n'est pas fait ici\nx\n## Plan d'action\n1. x"
+    )
+    whole = halves.replace(
+        "Le titre seulement ; le reste est réservé pour une étape suivante.",
+        "Tout l'écran de la direction Calme : le titre et l'action unique.",
+    )
+    change = {
+        "repository": REPO,
+        "title": "Appliquer la direction Calme",
+        "summary": "L'accueil comme la maquette Calme [0c3bc5ff-a12e-5e92-a5ae-ad6da2029a41].",
+        "files": [
+            {
+                "path": "README.md",
+                "edits": [{"find": "# Payments\n", "replace": "# Payments — Calme\n"}],
+            }
+        ],
+    }
+    script = leka_gemini(
+        gemini(call={"name": "read_file", "args": {"repository": REPO, "path": "README.md"}}),
+        gemini(halves),
+        gemini(whole),
+        gemini(json.dumps(change)),
+    )
+    started = await client.post(
+        RUNS,
+        json={
+            "key": "code-change",
+            "inputs": {
+                "demande": "Implémente dans le code la direction retenue de cette revue de design.",
+                "depot": REPO,
+                "livrable": review_id,
+            },
+        },
+    )
+    assert started.status_code == 202, started.text
+    run_id = started.json()["id"]
+    assert await execute_run(acme["acme"], uuid.UUID(run_id)) == {"status": "succeeded"}
+
+    # It works from the mock-up of the recommended direction — never the
+    # review's words alone.
+    material = json.loads(script.asked[0]["contents"][0]["parts"][0]["text"])
+    target = material["inputs"]["maquette"]
+    assert (target["screen"], target["direction"]) == ("Accueil", "Calme")
+    assert "<h1>Accueil</h1>" in target["mockup"]["html"]
+    assert "transform: scale(0.97)" in target["mockup"]["css"]
+    assert "<script" not in target["mockup"]["html"] and "data:image" not in target["today"]["html"]
+    assert target["changes"][0]["where"]
+    # Part of it put off: asked again, told to do it all.
+    told = json.dumps(script.asked[2], ensure_ascii=False)
+    assert "Part of the design to implement is put off" in told
+    detail = (await client.get(f"{RUNS}/{run_id}")).json()
+    assert detail["output"] == whole
+    assert any(e["kind"] == "design_target" for e in detail["events"])
+    # Its change is written from the mock-up too.
+    writer = json.loads(script.asked[3]["contents"][-1]["parts"][0]["text"])
+    assert writer["inputs"]["maquette"]["direction"] == "Calme"
+    [proposed] = (await client.get("/api/v1/code-changes", params={"run_id": run_id})).json()
+    assert proposed["files"][0]["path"] == "README.md"

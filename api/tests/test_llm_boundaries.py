@@ -21,6 +21,10 @@ from pathlib import Path
 
 LEKA = Path(__file__).resolve().parents[1] / "leka"
 GATEWAY = LEKA / "capabilities" / "gateway"
+# The downloadable architect's own adapters (2026-10-25): it runs on a
+# customer's machine, without LEKA, on the model they configure. LEKA itself
+# never calls them — the platform's dossier asks through the gateway.
+ALONE = LEKA / "architect"
 
 VENDOR_HOSTS = re.compile(
     r"generativelanguage\.googleapis\.com|aiplatform\.googleapis\.com|api\.mistral\.ai"
@@ -57,7 +61,9 @@ def test_no_business_logic_speaks_to_a_vendor() -> None:
     hosts = [
         _where(path)
         for path in _python()
-        if GATEWAY not in path.parents and VENDOR_HOSTS.search(path.read_text(encoding="utf-8"))
+        if GATEWAY not in path.parents
+        and ALONE not in path.parents
+        and VENDOR_HOSTS.search(path.read_text(encoding="utf-8"))
     ]
     assert not hosts, f"a vendor's address outside the gateway: {hosts}"
     sdks = [

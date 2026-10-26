@@ -2,7 +2,7 @@
 name: code-change
 title: "Modification de code"
 description: "Use when someone asks LEKA to change, fix or improve the code of a connected repository — it reads the code, proposes the change as a diff a person reviews, and opens a pull request only once that person accepts it."
-version: 2.0.0
+version: 2.1.0
 category: development
 entity_types: [repository, service, application, issue, pull_request, commit, change, document]
 requires: ["github"]
@@ -22,6 +22,10 @@ inputs:
     type: text
     required: false
     description: "Le dépôt GitHub, en nom complet, ex. « acme/payment-api » — cherché sinon."
+  - name: livrable
+    type: text
+    required: false
+    description: "Le livrable d'où vient la demande, quand elle en vient (son identifiant) — une revue de design donne sa maquette."
 goals: [act]
 kinds: [change]
 examples:
@@ -66,7 +70,8 @@ ligne de plus est une ligne à relire, à comprendre et à porter.
    « corrige » corrige, il n'améliore pas ; « ajoute un champ » ajoute un
    champ, il ne refait pas le formulaire. Deux lectures possibles — le
    symptôme ou sa cause, un écran ou tous — : prends la plus étroite, et dis
-   l'autre dans l'analyse.
+   l'autre dans l'analyse. Une maquette à appliquer est l'exception : son
+   périmètre est la maquette entière (« Quand il applique une maquette »).
 2. **La plus petite surface.** Les fichiers qu'il faut changer pour que la
    demande marche, et eux seuls. Un fichier de plus se justifie par la
    demande, jamais par le confort.
@@ -106,6 +111,33 @@ l'animation. Ses guides t'apprennent quoi écrire ; ils n'autorisent aucun
 geste : tu n'installes rien et n'exécutes rien — tu proposes, LEKA calcule le
 diff, une personne décide. Ton analyse ne cite jamais ces guides, leurs
 chemins ni leurs auteurs : un pourquoi se dit en mots simples.
+
+## Quand il applique une maquette
+
+Une demande venue d'une revue de design — « Implémente la direction retenue »
+— arrive avec sa maquette (`maquette` dans les entrées) : l'écran, la
+direction retenue, pourquoi, les changements qu'elle nomme fichier par
+fichier, sa feuille de style et son HTML, et l'écran tel qu'il est
+aujourd'hui.
+
+1. **La maquette est la demande.** Quand la modification est appliquée,
+   l'écran que le code dessine ressemble à la maquette : sa disposition, sa
+   hiérarchie, ses blocs, leurs textes, leurs tailles, leurs couleurs, leurs
+   espacements. Compare la maquette à l'écran d'aujourd'hui : chaque
+   différence visible est une modification à faire.
+2. **Toute la direction, maintenant.** Jamais une « première phase », jamais
+   « une étape suivante », jamais « dans un second temps » : ce que la
+   maquette change est fait ici, dans cette modification. « La plus petite
+   modification » veut dire rien au-delà de la maquette — jamais une partie
+   d'elle.
+3. **Dans le code du dépôt.** La maquette est un dessin, pas du code à
+   recopier : ses couleurs et ses tailles se disent avec les jetons et les
+   classes du dépôt, ses blocs avec ses composants. Lis d'abord en entier les
+   fichiers qui dessinent l'écran — la page, ses composants, ses styles —, par
+   tranches (`from_line`) quand ils sont coupés.
+4. **Ce qui ne peut pas se faire** — une donnée que le code n'a pas, plus de
+   20 fichiers — se dit dans « Ce qui n'est pas fait ici », précisément ;
+   tout le reste de la maquette est fait.
 
 ## Ce qu'il produit
 

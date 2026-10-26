@@ -4,6 +4,7 @@ The middle of the background loop. Depends on leka.connectors; knows nothing
 about how the graph is queried or how answers are built.
 """
 
+from leka.ingestion.confluence_tree import SyncedSpace, synced_confluence
 from leka.ingestion.enrichment import ENRICHER_VERSION
 from leka.ingestion.enrichment.screens import activity as entity_activity
 from leka.ingestion.enrichment.screens import environment as environment_screen
@@ -109,11 +110,14 @@ from leka.ingestion.schemas import (
     SourceQuality,
     SourceSyncRead,
     SourceSyncs,
+    SourceTreeRead,
     SourceValidation,
     StageState,
     SyncRequested,
     SyncRunRead,
     SyncSummary,
+    TreeNodeRead,
+    TreeSpaceRead,
     ValidationIssueCount,
     WebhookDeliveryRead,
 )
@@ -196,6 +200,7 @@ __all__ = [
     "SourceSyncRead",
     "SourceSyncRepository",
     "SourceSyncs",
+    "SourceTreeRead",
     "SourceValidation",
     "StageState",
     "SyncRequested",
@@ -206,6 +211,9 @@ __all__ = [
     "SyncRunStatus",
     "SyncSummary",
     "SyncTrigger",
+    "SyncedSpace",
+    "TreeNodeRead",
+    "TreeSpaceRead",
     "TwinState",
     "ValidatedRecordRow",
     "ValidationIssueCount",
@@ -225,5 +233,6 @@ __all__ = [
     "provider_of",
     "retention_days",
     "set_protection_policy",
+    "synced_confluence",
     "twin_now",
 ]

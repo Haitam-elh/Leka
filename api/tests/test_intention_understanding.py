@@ -194,6 +194,23 @@ def test_looking_without_a_known_kind_is_investigating() -> None:
     assert understood.goal.said == ["analyser"]
 
 
+def test_a_review_naming_its_migrations_is_a_review_never_a_migration() -> None:
+    # 2026-10-24: « migrations Alembic » made a database review a migration
+    # to plan, stopped on « vers quoi ? ».
+    text = (
+        "Fais une revue de la base de données de LEKA à partir du code de Haitam-elh/Leka : "
+        "modèles, migrations Alembic, requêtes"
+    )
+    understood = understand(text, plan(text, "general", [], subjects=[]))
+    assert understood.goal.code == "investigate"
+    assert understood.goal.said == ["revue"]
+    assert "missing_target" not in {a.kind for a in understood.ambiguities}
+    assert understood.clear
+    # A migration asked is still one.
+    asked = "Comment migrer Billing API vers AWS ?"
+    assert understand(asked, plan(asked, "migration", ["migrer"])).goal.code == "plan_migration"
+
+
 # ── ambiguous ──────────────────────────────────────────────────────────────
 
 

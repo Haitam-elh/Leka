@@ -43,6 +43,7 @@ import {
   typeLabel,
 } from "@/components/environment/parts";
 import { PageContainer } from "@/components/shell/page-container";
+import { SourceLocked, useSourceLock } from "@/components/sources/source-lock";
 import { usePermissions } from "@/components/shell/shell-provider";
 import { AddSourceDialog } from "@/components/sources/add-source-dialog";
 import { SourcesPage } from "@/components/sources/sources-page";
@@ -178,6 +179,36 @@ function real(
     events: eventRows(t, data.events),
     attention: attentionRows(t, data.attention),
   };
+}
+
+/** « Mon environnement », locked under a contract until a source is
+ * connected (2026-10-25): with nothing read, there is nothing to show. */
+export function EnvironmentPage() {
+  const t = useDictionary();
+  const w = t.environment;
+  if (useSourceLock()) {
+    return (
+      <PageContainer>
+        <div className="mb-6 flex flex-col gap-3">
+          <Link
+            href={routes.overview()}
+            className="flex w-fit items-center gap-2 rounded-lg bg-shell-canvas px-3 py-1.5 text-[0.8125rem] font-medium text-brand-navy outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+          >
+            <ArrowLeft className="rtl:-scale-x-100 size-4" aria-hidden="true" />
+            {w.back}
+          </Link>
+          <div>
+            <h1 className="text-[1.875rem] leading-tight font-bold tracking-[-0.02em] text-brand-navy">
+              {w.title}
+            </h1>
+            <p className="mt-1 text-[0.9375rem] text-shell-accent-muted">{w.subtitle}</p>
+          </div>
+        </div>
+        <SourceLocked what="environment" />
+      </PageContainer>
+    );
+  }
+  return <EnvironmentScreen />;
 }
 
 export function EnvironmentScreen() {

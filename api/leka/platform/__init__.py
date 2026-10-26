@@ -7,6 +7,7 @@ authorisation policy and belongs to leka.governance, which imports this.
 Depends on leka.core and leka.db only.
 """
 
+from leka.platform.branding import MAX_LOGO_BYTES, LogoRefusedError, drop_logo, keep_logo, logo_of
 from leka.platform.health import check_backing_services
 from leka.platform.models import (
     Invitation,
@@ -77,6 +78,7 @@ from leka.platform.storage import (
 __all__ = [
     "DELETION_GRACE_PERIOD",
     "INVITATION_LIFETIME",
+    "MAX_LOGO_BYTES",
     "AccountClosure",
     "CurrentUserProvider",
     "CurrentWorkspace",
@@ -91,6 +93,7 @@ __all__ = [
     "InvitationStatus",
     "LastOwnerError",
     "LocalObjectStore",
+    "LogoRefusedError",
     "MemberRead",
     "MemberRoleUpdate",
     "Membership",
@@ -121,10 +124,13 @@ __all__ = [
     "build_object_store",
     "check_backing_services",
     "database_tls",
+    "drop_logo",
     "from_bytes",
     "get_current_user_id",
     "get_session_store",
     "hash_token",
+    "keep_logo",
+    "logo_of",
     "object_key",
     "object_store",
     "platform_posture",

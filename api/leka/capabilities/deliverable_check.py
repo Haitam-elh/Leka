@@ -162,4 +162,43 @@ def unread(deliverable: str, files: Mapping[str, str]) -> list[str]:
     ]
 
 
-__all__ = ["PLAN", "SHARE", "SUMMARY", "Section", "expected", "missing", "sections", "unread"]
+# A design implemented by halves: what of it an analysis puts off — « une
+# étape suivante », « dans un second temps », « a follow-up ».
+_DEFERRED = re.compile(
+    r"(?:(?:étape|etape|phase|itération|iteration|pull request|PR|lot|passe)s?\s+"
+    r"(?:suivantes?|ultérieures?|ulterieures?|prochaines?|future|à venir))"
+    r"|(?:prochaine|seconde|deuxième|deuxieme)\s+(?:étape|etape|phase|pull request|PR|passe)"
+    r"|dans un (?:second|deuxième|deuxieme) temps|ultérieurement|ulterieurement"
+    r"|réservée?s? (?:pour|à) (?:une|la|plus)|reportée?s? (?:à|a|pour)"
+    r"|(?:a |the )?(?:later|next|follow-up|future) (?:step|phase|pull request|PR|iteration|pass)"
+    r"|in a (?:second|follow-up) (?:step|pass|pull request)",
+    re.IGNORECASE,
+)
+
+
+def deferred(deliverable: str) -> list[str]:
+    """What of a design to implement an analysis puts off (2026-10-24: asked
+    to implement the chosen direction, the change did four classes and left
+    the rest « for a later step ») — said to the model, which does it all."""
+    found = _DEFERRED.search(deliverable or "")
+    if found is None:
+        return []
+    return [
+        f"Part of the design to implement is put off (« {found.group(0)} »). The whole chosen "
+        "direction is asked now: change every file its mock-up changes, until the screen in "
+        "the code looks like the mock-up; read a cut file to its end (read_file with "
+        "from_line). Nothing of it is left for a later step."
+    ]
+
+
+__all__ = [
+    "PLAN",
+    "SHARE",
+    "SUMMARY",
+    "Section",
+    "deferred",
+    "expected",
+    "missing",
+    "sections",
+    "unread",
+]

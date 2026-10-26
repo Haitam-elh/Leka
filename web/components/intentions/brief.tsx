@@ -119,7 +119,11 @@ export function BriefView({
           className="rounded-xl border border-state-warning/40 bg-white p-4"
           data-testid="brief-questions"
         >
-          <h2 id="brief-questions" className="mb-3 flex items-center gap-2 text-[1rem] font-semibold text-brand-navy">
+          {/* « Répondre » leads here, from any step: clear of the top bar. */}
+          <h2
+            id="brief-questions"
+            className="mb-3 flex scroll-mt-24 items-center gap-2 text-[1rem] font-semibold text-brand-navy"
+          >
             <MessageCircleQuestion className="size-4 text-state-warning" aria-hidden="true" />
             {w.questions}
           </h2>

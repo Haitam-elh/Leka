@@ -80,8 +80,10 @@ KIND_WORDS: dict[IntentKind, frozenset[str]] = {
         modifications deploye deployee deploiement deploiements deploy deployed deployment
         deployments release releases livraison livre version versions merge merged"""
     ),
+    # Not « migrations »: the plural is a thing of the code — « les migrations
+    # Alembic » of a database review — far more than a move asked (2026-10-24).
     "migration": _said(
-        """migrer migration migrations migrate migrating remplacer replace replacing
+        """migrer migration migrate migrating remplacer replace replacing
         decommissionner decommission plan planifier moderniser modernize upgrade refonte
         deplacer move"""
     ),

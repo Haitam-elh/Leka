@@ -6,7 +6,10 @@
  * pull requests, and says how to allow it otherwise; rejecting sends the
  * comment; an applied change links to its pull request, then follows it
  * to production — its CI, a person's merge, the deployment (2026-10-20);
- * a change refused because its branch moved is written again.
+ * a change refused because its branch moved is written again. Its CI in
+ * red, « Réparer le problème » by who may approve — closed in red, said red
+ * and reopened —, each repair said: what failed, why, what it fixed, its
+ * commit, by which model (2026-10-24).
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -26,6 +29,7 @@ const api = vi.hoisted(() => ({
   follow: vi.fn(),
   undo: vi.fn(),
   rollback: vi.fn(),
+  repair: vi.fn(),
 }));
 const runsApi = vi.hoisted(() => ({ rewriteChange: vi.fn() }));
 vi.mock("@/lib/agent-runs", async (original) => ({
@@ -319,6 +323,121 @@ describe("an applied code change, followed to production", () => {
     expect(await screen.findByTestId("code-change-error")).toHaveTextContent("LEKA n'écrase pas ce travail");
     await user.click(screen.getByRole("button", { name: "Réécrire sur la branche actuelle" }));
     await waitFor(() => expect(runsApi.rewriteChange).toHaveBeenCalledWith("r1"));
+  });
+});
+
+describe("a pull request in red, repaired (2026-10-24)", () => {
+  const applied = {
+    status: "applied" as const,
+    pull_request_number: 423,
+    pull_request_url: "https://github.com/acme/payments/pull/423",
+    branch: "leka/remonter-le-cockpit-2ff1c342",
+  };
+  const failing = {
+    state: "failure" as const,
+    total: 3,
+    passed: 1,
+    pending: 0,
+    failed: ["web — lint, types, build"],
+    failed_url: "https://github.com/acme/payments/actions/runs/1",
+  };
+  const FIX =
+    "--- a/web/components/overview/home-sections.tsx\n+++ b/web/components/overview/home-sections.tsx\n@@ -254,1 +254,1 @@\n-    <section>\n+    <section data-testid=\"overview-now\">\n";
+
+  it("is repaired in one click by who may approve, and says what it fixed", async () => {
+    shell.permissions = ["intention:approve"];
+    const red = change({ ...applied, follow: { stage: "checks_failed", done: false, checks: failing } });
+    const asked = { asked_at: "2026-10-24T16:30:00Z", failed: ["web — lint, types, build"], reopened: false };
+    const pushed = change({
+      ...applied,
+      follow: { stage: "checks", done: false, checks: null },
+      repairs: [
+        {
+          ...asked,
+          state: "pushed",
+          cause: "Le test cherche overview-now, que la modification a retiré.",
+          summary: "La section garde son data-testid.",
+          files: [
+            {
+              path: "web/components/overview/home-sections.tsx",
+              status: "modified",
+              additions: 1,
+              deletions: 1,
+              diff: FIX,
+              why: "",
+            },
+          ],
+          commit: "fa11ed5c0ffee00",
+          model: "gemini-3.8-flash",
+          reopened: false,
+        },
+      ],
+    });
+    api.list.mockResolvedValue([red]);
+    api.follow.mockResolvedValueOnce(red).mockResolvedValue(pushed);
+    api.repair.mockResolvedValue(change({ ...red, repairs: [{ ...asked, state: "running" }] }));
+    const user = userEvent.setup();
+    show();
+    const panel = await screen.findByTestId("code-change-repair");
+    expect(panel).toHaveTextContent("LEKA lit ce qui a échoué sur GitHub");
+    await user.click(within(panel).getByRole("button", { name: "Réparer le problème" }));
+    expect(api.repair).toHaveBeenCalledWith("c1");
+
+    // Read again: what failed, why, what it fixed, where, by which model.
+    const line = await screen.findByTestId("code-change-repair-line");
+    await waitFor(() => expect(line).toHaveAttribute("data-state", "pushed"));
+    expect(line).toHaveTextContent("Réparation 1envoyée sur la branche");
+    expect(line).toHaveTextContent("commit fa11ed5");
+    expect(line).toHaveTextContent("par Gemini 3.8 Flash");
+    expect(line).toHaveTextContent("En échec : web — lint, types, build");
+    expect(line).toHaveTextContent("Cause : Le test cherche overview-now");
+    expect(line).toHaveTextContent("Correction : La section garde son data-testid.");
+    expect(within(line).getByTestId("code-change-repair-file")).toHaveTextContent(
+      "web/components/overview/home-sections.tsx+1−1",
+    );
+    expect(line).toHaveTextContent("La CI repasse sur cette correction.");
+    // Its CI runs again: no more button.
+    expect(within(screen.getByTestId("code-change-repair")).queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("says a pull request closed in red is red, and repairs it reopened", async () => {
+    shell.permissions = ["intention:approve"];
+    api.list.mockResolvedValue([
+      change({ ...applied, follow: { stage: "closed", done: true, checks: failing } }),
+    ]);
+    show();
+    const follow = await screen.findByTestId("code-change-follow");
+    // Never « Passée » for a CI that was red.
+    const checks = within(follow).getByTestId("code-change-step-checks");
+    expect(checks).toHaveAttribute("data-state", "failed");
+    expect(checks).toHaveTextContent("Rouge : web — lint, types, build");
+    expect(within(follow).getByTestId("code-change-repair")).toHaveTextContent("LEKA la rouvre");
+    expect(within(follow).getByRole("button", { name: "Réparer et rouvrir la pull request" })).toBeEnabled();
+  });
+
+  it("is started only by who may approve, three times at most", async () => {
+    shell.permissions = [];
+    const red = change({ ...applied, follow: { stage: "checks_failed", done: false, checks: failing } });
+    api.list.mockResolvedValue([red]);
+    api.follow.mockResolvedValue(red);
+    const { unmount } = show();
+    const panel = await screen.findByTestId("code-change-repair");
+    expect(panel).toHaveTextContent("Une personne qui peut approuver lance la réparation.");
+    expect(within(panel).queryByRole("button")).not.toBeInTheDocument();
+    unmount();
+
+    shell.permissions = ["intention:approve"];
+    const done = { asked_at: "", failed: [], state: "pushed" as const, commit: "abc1234", reopened: false };
+    const thrice = change({
+      ...red,
+      repairs: [1, 2, 3].map((n) => ({ ...done, asked_at: `2026-10-24T1${n}:00:00Z` })),
+    });
+    api.list.mockResolvedValue([thrice]);
+    api.follow.mockResolvedValue(thrice);
+    show();
+    expect(await screen.findByText(/LEKA a déjà réparé cette pull request 3 fois/)).toBeInTheDocument();
+    expect(screen.getAllByTestId("code-change-repair-line")).toHaveLength(3);
+    expect(screen.queryByRole("button", { name: "Réparer le problème" })).not.toBeInTheDocument();
   });
 });
 

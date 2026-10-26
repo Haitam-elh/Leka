@@ -28,6 +28,7 @@ What these protect:
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -310,6 +311,30 @@ def test_clarification_says_whether_its_words_or_its_context_are_in_the_way() ->
     )
     assert blocked.reason == "context_blocked"
     assert {"answer", "ask_again", "cancel"} == set(blocked.controls)
+
+
+def test_a_question_left_is_its_words_and_nothing_to_answer_is_made_precise() -> None:
+    # 2026-10-24: every move says its readiness — a question left was said
+    # « ce sur quoi elle agit doit être précisé », and « Répondre » led nowhere.
+    asked = journey(
+        _facts(
+            S.NEEDS_CLARIFICATION,
+            last="clarification_asked",
+            detail={"ambiguities": ["missing_target"], "readiness": "limited", "critical": []},
+        ),
+        NOW,
+    )
+    assert (asked.reason, asked.next) == ("unclear", "answer")
+    # Its context in the way and no question of its words: its request is
+    # made precise, asked again.
+    stopped = _facts(
+        S.NEEDS_CLARIFICATION,
+        last="clarification_asked",
+        detail={"analysis_id": "a1", "critical": ["Two teams own Billing API."]},
+    )
+    blocked = journey(replace(stopped, asks=False), NOW)
+    assert (blocked.reason, blocked.next) == ("context_blocked", "clarify")
+    assert "ask_again" in blocked.controls
 
 
 # ── the matrix, held to the lifecycle ───────────────────────────────────────

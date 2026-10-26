@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
@@ -220,6 +220,11 @@ class AddOnsRead(_Read):
     every: bool = Field(description="LEKA granted it every agent (its team's, for tests).")
     agents: list[AgentOfferRead]
     bundles: list[BundleOfferRead]
+    dedicated: list[str] = Field(
+        default_factory=list,
+        description="The agents made for this organisation, assigned by LEKA (2026-10-25): "
+        "its own, never sold, never priced.",
+    )
 
 
 class AddOnCheckoutCreate(BaseModel):
@@ -251,3 +256,19 @@ class EntitlementRead(_Read):
     current_period_end: datetime | None = Field(
         default=None, description="When its paid period ends, as Stripe last said it."
     )
+
+
+class ContractContactRead(_Read):
+    name: str | None
+    email: str | None
+
+
+class ContractRead(_Read):
+    """An Enterprise contract (2026-10-25), as « Contrat » shows it: never a
+    price, never credits."""
+
+    type: Literal["enterprise"]
+    organisation: str
+    since: date | None = Field(description="The day the contract started.")
+    members: int = Field(description="Everyone seated in the organisation.")
+    contact: ContractContactRead | None = Field(description="Its dedicated contact at LEKA.")

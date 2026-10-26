@@ -100,6 +100,7 @@ def agent_definition(agent: Agent, lifecycle: Lifecycle) -> Definition:
         renders=head.renders,
         rounds=head.rounds,
         method=head.method,
+        dedicated=head.dedicated,
     )
 
 
