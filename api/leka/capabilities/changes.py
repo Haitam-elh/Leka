@@ -54,7 +54,7 @@ import json
 import posixpath
 import re
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -72,6 +72,7 @@ from leka.capabilities.models import AgentRun, CodeChange
 from leka.capabilities.registry import find
 from leka.connectors import (
     CodeRefusedError,
+    ConnectorError,
     FileChange,
     GitHubCode,
     Source,
@@ -105,8 +106,14 @@ MOST_SHOWN_ALL = 240_000
 # Its thinking counts: a model that thinks hard on the files it is given
 # left too little of 16,000 for the edits (2026-10-18). Each model is held to
 # what it gives back at most (the gateway).
-CHANGE_TOKENS = 48_000
-CHANGE_BUDGET = 8 * 60.0
+CHANGE_TOKENS = 64_000
+# The writer writes what the analysis decided: its model thinks at the
+# standard depth (2026-10-27: thinking deep, Gemini spent 48,000 tokens on one
+# 26 KB page and was cut before its edits, twice).
+CHANGE_TIER = Tier.STANDARD
+# A whole page redone, answered whole, is written in minutes — and asked
+# again when an edit does not land (2026-10-27).
+CHANGE_BUDGET = 20 * 60.0
 # A diff kept, at most, per file.
 MAX_DIFF_CHARS = 120_000
 CONNECTED = (SourceStatus.ACTIVE, SourceStatus.DEGRADED)
@@ -132,7 +139,9 @@ class ProposedFile(BaseModel):
         "entier.",
     )
     content: str | None = Field(
-        default=None, description="Seulement pour un fichier nouveau : son contenu complet."
+        default=None,
+        description="Un fichier nouveau, ou un fichier réécrit en grande partie quand on vous "
+        "l'autorise : son contenu complet, chaque ligne.",
     )
     delete: bool = Field(default=False, description="true pour supprimer le fichier.")
     why: str = Field(default="", description="Pourquoi ce fichier change, en une phrase.")
@@ -352,13 +361,187 @@ files; only the files the analysis says must change.
 - title: a short pull request title in the imperative; summary: what changes \
 and why, for the person who decides, in the language of the inputs.
 Never change a file you were not given: a file the agent did not read is not \
-changed. Answer with the JSON object only.
+changed.
+- The tests stay green: the tests you are given (beside the files) are what \
+the CI runs. What a test reads of a file (a data-testid, a text, a role, an \
+export it imports) is kept on what stands for it now, or that test is changed \
+in this same change to read what the file now holds. Never delete a test, \
+never skip one, never weaken what it checks.
+Answer with the JSON object only.
 
 Never write the em dash « — »: a colon, a comma, a semicolon or \
 parentheses, as the sentence needs."""
 
 
-def change_problems(proposal: ChangeProposal, read: Mapping[str, str]) -> list[str]:
+# A test, as repositories name them: test_x.py, x_test.go, x.test.tsx,
+# x.spec.ts, under tests/ or __tests__/.
+_TEST_PATH = re.compile(
+    r"(^|/)(tests?|__tests__|e2e)/|(^|/)test_[^/]+$|_test\.[a-z]+$|\.(test|spec)\.[a-z]+$"
+)
+# Words a file's name shares with many others: no sign it is the same thing.
+_COMMON = frozenset(
+    {
+        "web",
+        "api",
+        "app",
+        "src",
+        "lib",
+        "components",
+        "index",
+        "main",
+        "test",
+        "tests",
+        "spec",
+        "e2e",
+        "page",
+        "pages",
+        "utils",
+        "util",
+        "types",
+        "common",
+        "shared",
+        "core",
+        "base",
+    }
+)
+# A change whose files to rewrite pass BIG_CHANGE characters is written file
+# by file, ALONGSIDE at once, each answer the size of its file (2026-10-27: a
+# whole home page, two files, answered at once, was cut at 48,000 tokens).
+BIG_CHANGE = 30_000
+ALONGSIDE = 4
+# The tests given beside a change, at most: the closest first.
+MOST_TESTS = 6
+# Answers held to the test ids they keep: past these, the change is kept and
+# the CI, then « Réparer le problème », says the rest.
+ASKED_FOR_IDS = 2
+# What a test reads of a screen, by its test id: getByTestId("x"),
+# [data-testid="x"], data-testid="x".
+_READS_ID = re.compile(r"""(?:ByTestId\(\s*|data-testid=\\?)["'`]([\w:./-]+)["'`]""")
+_HAS_ID = re.compile(r"""data-testid=["']([\w:./-]+)["']""")
+
+
+def is_test(path: str) -> bool:
+    return bool(_TEST_PATH.search(path))
+
+
+def _words(path: str) -> set[str]:
+    stem = path.rpartition("/")[2].split(".")[0]
+    return {w for w in re.split(r"[^a-z0-9]+", stem.lower()) if len(w) > 2 and w not in _COMMON}
+
+
+def _stem(path: str) -> str:
+    name = path.rpartition("/")[2].split(".")[0]
+    return name.removeprefix("test_").removesuffix("_test")
+
+
+def covering_tests(paths: Sequence[str], tree: Sequence[str]) -> list[str]:
+    """The tests that cover `paths` (2026-10-27, #423: a design applied to
+    the home broke the test that read its blocks): first those of the same
+    name (overview.tsx → overview.test.tsx, payments.py → test_payments.py),
+    then those whose name shares a word with one (home-sections.tsx →
+    e2e/home.spec.ts) — MOST_TESTS at most, none of `paths` itself."""
+    code = [p for p in paths if not is_test(p)]
+
+    def near(test: str) -> int:
+        return -max((len(posixpath.commonpath([test, p])) for p in code), default=0)
+
+    tests = sorted((t for t in tree if is_test(t) and t not in paths), key=near)
+    stems = {_stem(p) for p in code}
+    found = [t for t in tests if _stem(t) in stems]
+    words = set().union(*(_words(p) for p in code)) if code else set()
+    found += [t for t in tests if t not in found and _words(t) & words]
+    return found[:MOST_TESTS]
+
+
+def to_rewrite(analysis: str, read: Mapping[str, str]) -> list[str]:
+    """The files given, tests apart, that the analysis names: what it changes."""
+    given = {key.split(":", 1)[-1] for key in read}
+    return [p for p in paths_named(analysis) if p in given and not is_test(p)]
+
+
+def is_big(analysis: str, read: Mapping[str, str]) -> bool:
+    """Too much to rewrite in one answer: more than one file, BIG_CHANGE
+    characters of them."""
+    given = {key.split(":", 1)[-1]: text for key, text in read.items()}
+    paths = to_rewrite(analysis, read)
+    return len(paths) > 1 and sum(len(given[p]) for p in paths) > BIG_CHANGE
+
+
+def _only(proposal: ChangeProposal, paths: Sequence[str]) -> ChangeProposal:
+    kept = [f for f in proposal.files if safe_path(f.path) in paths]
+    return proposal.model_copy(update={"files": kept})
+
+
+# What stands for code left out of a file given whole: « … », « // ... »,
+# « {/* rest unchanged */} » — a file cut, never to be written as it is.
+_ELIDED = re.compile(
+    r"^\s*(?:"
+    # A line that is only an ellipsis.
+    r"(?:…|\.\.\.)\s*$"
+    # A comment that opens on one.
+    r"|(?://|#|/\*|\{/\*|<!--)\s*(?:…|\.\.\.)"
+    # A comment standing for code: « rest of the file », « unchanged ».
+    r"|(?://|#|/\*|\{/\*|<!--)\s*(?:rest of (?:the )?(?:file|code|component|function)"
+    r"|reste du (?:fichier|code)|(?:the )?same as before|existing code|code existant"
+    r"|(?:\w+ )?(?:unchanged|inchangée?s?)\s*(?:\*/\}?|-->)?\s*$)"
+    r")",
+    re.IGNORECASE | re.MULTILINE,
+)
+# A file given whole and this much shorter than it was is taken as cut.
+SHORTEST_WHOLE = 0.4
+
+
+def whole_problems(path: str, before: str, after: str) -> list[str]:
+    """A file given whole in place of its edits (2026-10-27: a page
+    redesigned, written as edits, ran past 48,000 tokens): whole, or said
+    why not."""
+    if _ELIDED.search(after):
+        return [
+            f"{path}: given whole, it stands for code it leaves out (« … », « rest "
+            "unchanged »): write every line, or give edits."
+        ]
+    if before.strip() and len(after) < SHORTEST_WHOLE * len(before):
+        return [
+            f"{path}: given whole, it is {len(after)} characters where it had {len(before)}: "
+            "write every line it keeps, or give edits."
+        ]
+    return []
+
+
+def _ids(text: str) -> set[str]:
+    return set(_HAS_ID.findall(text))
+
+
+def lost_ids(read: Mapping[str, str], after: Mapping[str, str]) -> list[str]:
+    """The test ids a change takes off the screen while a test still reads
+    them — each said with the test (2026-10-27, #423)."""
+    now = {**read, **after}
+    code_now = [t for p, t in now.items() if not is_test(p)]
+    before = set().union(*(_ids(t) for p, t in read.items() if not is_test(p)))
+    # Still named, however: a constant, an id built in a map — not lost.
+    gone = {
+        each
+        for each in before - set().union(*(_ids(t) for t in code_now))
+        if not any(f"{q}{each}{q}" in t for t in code_now for q in "\"'`")
+    }
+    if not gone:
+        return []
+    said: list[str] = []
+    for path, text in read.items():
+        if not is_test(path):
+            continue
+        reads = set(_READS_ID.findall(after.get(path, text))) & gone
+        for each in sorted(reads):
+            said.append(
+                f'{path} still reads data-testid "{each}", which this change removes: keep it '
+                "on the element that stands for it now, or change that test in this same change."
+            )
+    return said
+
+
+def change_problems(
+    proposal: ChangeProposal, read: Mapping[str, str], *, ids: bool = True
+) -> list[str]:
     """Why a change cannot be applied as written — said to the model, which
     writes it again (2026-10-25: edits that did not land left the change
     unwritten until a person asked again). Each edit held to the file as
@@ -367,18 +550,37 @@ def change_problems(proposal: ChangeProposal, read: Mapping[str, str]) -> list[s
         return ["No file is changed: write the edits the analysis proposes."]
     given = {key.split(":", 1)[-1]: text for key, text in read.items()}
     problems: list[str] = []
+    after: dict[str, str] = {}
     for each in proposal.files:
         # A path outside the repository is left out, never asked again for.
         path = safe_path(each.path)
-        if path is None or not each.edits or path not in given:
+        if path is None:
             continue
-        _after, why = apply_edits(given[path], each.edits)
+        if path not in given:
+            if each.content is not None and not each.delete:
+                after[path] = each.content
+            continue
+        if each.delete:
+            after[path] = ""
+            continue
+        if not each.edits:
+            if each.content is not None:
+                problems += whole_problems(path, given[path], each.content)
+                after[path] = each.content
+            continue
+        changed, why = apply_edits(given[path], each.edits)
         if why is not None:
             where = "there more than once" if why == "ambiguous" else "not in the file"
             problems.append(
-                f"{path}: an edit's `find` is {where} as you were given it — copy whole "
+                f"{path}: an edit's `find` is {where} as you were given it: copy whole "
                 "lines exactly, enough of them to appear once."
             )
+        elif changed is not None:
+            after[path] = changed
+    # The tests given beside it stay green (2026-10-27, #423) — asked
+    # ASKED_FOR_IDS times at most: past that, the CI says it.
+    if ids:
+        problems += lost_ids(given, after)
     return problems
 
 
@@ -398,15 +600,39 @@ def shown(read: Mapping[str, str]) -> dict[str, str]:
     return given
 
 
+BY_FILE_RULES = """This change is written file by file, each apart and at \
+the same time: write ONLY the files named in `only` (none when they do not \
+change); the analysis says what the others hold after, and what this one uses \
+of them (names, props, exports, test ids) is that. `changed`, when given, \
+holds files as they are once changed: a test is adapted to them, its edits \
+copied from `files`. A file this change reworks through most of its lines \
+(a screen redesigned) is given whole in `content` instead of edits: every \
+line of it as it stands after, never « … » nor a comment standing for code \
+left out."""
+
+
 def change_messages(
     definition: Definition,
     inputs: Mapping[str, object],
     analysis: str,
     read: Mapping[str, str] | None = None,
+    *,
+    only: Sequence[str] = (),
+    changed: Mapping[str, str] | None = None,
 ) -> list[Message]:
     system = f"{CHANGE_RULES}\n\n---\n\n{definition.instructions or ''}"
+    if only:
+        system = f"{CHANGE_RULES}\n\n{BY_FILE_RULES}\n\n---\n\n{definition.instructions or ''}"
     # The files it read, keyed « owner/repo:path »: what the edits copy from.
-    material = {"inputs": dict(inputs), "analysis": analysis, "files": shown(read or {})}
+    material: dict[str, object] = {
+        "inputs": dict(inputs),
+        "analysis": analysis,
+        "files": shown(read or {}),
+    }
+    if only:
+        material["only"] = list(only)
+    if changed:
+        material["changed"] = shown(changed)
     return [
         Message.system(system),
         Message.user(json.dumps(material, ensure_ascii=False, default=str)),
@@ -491,10 +717,16 @@ async def code_for(
     session: AsyncSession, workspace_id: uuid.UUID, repository: str
 ) -> tuple[Source, GitHubCode] | None:
     """The workspace's GitHub source whose scope holds this repository, and
-    its code — None when none does."""
+    its code — None when none does. A source that does not open (its
+    credentials gone) is passed over, never the end of the search
+    (2026-10-27: one source without its token hid the one that had it)."""
     service = SourceService(session, workspace_id, actor_user_id=None)
     for source in await github_sources(session, workspace_id):
-        code = await open_code(await service.open_connector(source))
+        try:
+            code = await open_code(await service.open_connector(source))
+        except ConnectorError as error:
+            logger.warning("code_source_not_opened", source=str(source.id), code=str(error)[:120])
+            continue
         if code.in_scope(repository):
             return source, code
     return None
@@ -640,6 +872,32 @@ def _kept(
     )
 
 
+async def _with_tests(
+    code: GitHubCode, repository: str, base: str, read: Mapping[str, str]
+) -> dict[str, str]:
+    """What the writer is given, and the tests of it (covering_tests) — read here,
+    whatever the agent read: a change keeps them green or changes them."""
+    given = dict(read)
+    paths = [key.split(":", 1)[-1] for key in given]
+    if not paths or not any(not is_test(p) for p in paths):
+        return given
+    try:
+        tree, _more = await code.paths(repository, base)
+    except CodeRefusedError:
+        return given
+    except Exception:
+        logger.exception("change_tests_not_listed", repository=repository)
+        return given
+    for path in covering_tests(paths, tree):
+        try:
+            text = await code.read(repository, path, base)
+        except CodeRefusedError:
+            continue
+        if text is not None:
+            given[f"{repository}:{path}"] = text
+    return given
+
+
 async def propose_change(
     session: AsyncSession,
     run: AgentRun,
@@ -692,6 +950,7 @@ async def propose_change(
                     continue
                 if text is not None:
                     read[f"{repository}:{path}"] = text
+        read = await _with_tests(code, repository, base, read)
     request = Request(
         purpose=f"agent:{definition.key}:change"[:100],
         messages=change_messages(
@@ -700,21 +959,56 @@ async def propose_change(
             analysis,
             read,
         ),
-        tier=Tier.DEEP,
+        tier=CHANGE_TIER,
         max_tokens=CHANGE_TOKENS,
         ref=f"agent_run:{run.id}",
     )
     failed: Proposed | None = None
+    verified = [0]
+    inputs = {**run.inputs, "maquette": target} if target else run.inputs
+
+    def verify(proposal: ChangeProposal) -> list[str]:
+        verified[0] += 1
+        return change_problems(proposal, read or {}, ids=verified[0] <= ASKED_FOR_IDS)
+
+    deadline = asyncio.get_running_loop().time() + budget
+    usage: dict[str, Any] = {}
     try:
-        answered = await asyncio.wait_for(
-            Gateway(session, run.workspace_id).structured(
-                request,
-                ChangeProposal,
-                replace(needs_of(definition), tools=False),
-                verify=lambda proposal: change_problems(proposal, read or {}),
-            ),
-            timeout=budget,
-        )
+        if is_big(analysis, read or {}):
+            proposal = await asyncio.wait_for(
+                _by_file(session, run, definition, inputs, analysis, read or {}, usage),
+                timeout=budget,
+            )
+        else:
+            try:
+                answered = await asyncio.wait_for(
+                    Gateway(session, run.workspace_id).structured(
+                        request,
+                        ChangeProposal,
+                        replace(needs_of(definition), tools=False),
+                        verify=verify,
+                    ),
+                    timeout=budget,
+                )
+            except NoModelError as error:
+                # Cut at its limit: too much at once — written file by file.
+                if not _cut(error) or not to_rewrite(analysis, read or {}):
+                    raise
+                logger.info("change_written_by_file", run=str(run.id))
+                left = deadline - asyncio.get_running_loop().time()
+                proposal = await asyncio.wait_for(
+                    _by_file(session, run, definition, inputs, analysis, read or {}, usage),
+                    timeout=max(left, 60.0),
+                )
+            else:
+                proposal = answered.value
+                done = answered.completion
+                usage = {
+                    "provider": done.provider,
+                    "model": done.model,
+                    "tokens_in": done.usage.tokens_in,
+                    "tokens_out": done.usage.tokens_out,
+                }
     except NoModelError as error:
         # Why, as it was: no model at all, or models that answered and were
         # not kept — never all said « no model » (2026-10-18).
@@ -729,14 +1023,6 @@ async def propose_change(
         failed = Proposed(None, "error")
     if failed is not None:
         return _from_diff_else(session, run, analysis, found, base, from_diff, failed)
-    proposal = answered.value
-    done = answered.completion
-    usage = {
-        "provider": done.provider,
-        "model": done.model,
-        "tokens_in": done.usage.tokens_in,
-        "tokens_out": done.usage.tokens_out,
-    }
     written = await code_for(session, run.workspace_id, proposal.repository.strip())
     if written is None:
         return _from_diff_else(
@@ -764,6 +1050,115 @@ async def propose_change(
     session.add(change)
     await session.flush()
     return Proposed(change, None, usage, skipped)
+
+
+async def _all[T](asked: Sequence[Awaitable[T]]) -> list[T]:
+    """Each at once: the first to fail stops the others, and is raised."""
+    tasks = [asyncio.ensure_future(each) for each in asked]
+    try:
+        return list(await asyncio.gather(*tasks))
+    except BaseException:
+        for task in tasks:
+            task.cancel()
+        raise
+
+
+def _cut(error: NoModelError) -> bool:
+    return any("Cut at its limit" in (a.error or "") for a in error.attempts)
+
+
+async def _by_file(
+    session: AsyncSession,
+    run: AgentRun,
+    definition: Definition,
+    inputs: Mapping[str, object],
+    analysis: str,
+    read: Mapping[str, str],
+    usage: dict[str, Any],
+) -> ChangeProposal:
+    """A change too big for one answer, written file by file (2026-10-27):
+    each file the analysis names, alongside, every file given to each; the
+    new files it names, apart; then each test given, adapted to the files as
+    they now are. One file not written fails it all: never half a change."""
+    given = {key.split(":", 1)[-1]: text for key, text in read.items()}
+    code = to_rewrite(analysis, read) or [p for p in given if not is_test(p)][:MAX_FILES]
+    new = [p for p in paths_named(analysis) if p not in given]
+    needs = replace(needs_of(definition), tools=False)
+    limit = asyncio.Semaphore(ALONGSIDE)
+    # Nothing held while the files are written, each in its own session.
+    await session.commit()
+
+    async def one(
+        paths: Sequence[str],
+        changed: Mapping[str, str] | None = None,
+        also: Callable[[ChangeProposal], list[str]] | None = None,
+    ) -> ChangeProposal:
+        request = Request(
+            purpose=f"agent:{definition.key}:change-file"[:100],
+            messages=change_messages(
+                definition, inputs, analysis, read, only=paths, changed=changed
+            ),
+            tier=CHANGE_TIER,
+            max_tokens=CHANGE_TOKENS,
+            ref=f"agent_run:{run.id}",
+        )
+
+        def verify(proposal: ChangeProposal) -> list[str]:
+            mine = _only(proposal, paths)
+            return change_problems(mine, read, ids=False) + (also(mine) if also else [])
+
+        async with limit, session_factory() as own:
+            try:
+                answered = await Gateway(own, run.workspace_id).structured(
+                    request, ChangeProposal, needs, verify=verify
+                )
+            finally:
+                await own.commit()
+        done = answered.completion
+        usage["provider"], usage["model"] = done.provider, done.model
+        usage["tokens_in"] = int(usage.get("tokens_in", 0)) + done.usage.tokens_in
+        usage["tokens_out"] = int(usage.get("tokens_out", 0)) + done.usage.tokens_out
+        return _only(answered.value, paths)
+
+    written = await _all([one([path]) for path in code] + ([one(new)] if new else []))
+    files = [f for each in written for f in each.files]
+    after: dict[str, str] = {}
+    for each in files:
+        path = safe_path(each.path)
+        if path is None:
+            continue
+        if path in given and each.edits:
+            changed, _why = apply_edits(given[path], each.edits)
+            if changed is not None:
+                after[path] = changed
+        elif each.delete:
+            after[path] = ""
+        elif each.content is not None:
+            after[path] = each.content
+    tests = [p for p in given if is_test(p)]
+    if after and tests:
+
+        def kept_ids(path: str) -> Callable[[ChangeProposal], list[str]]:
+            asked_ids = [0]
+
+            def check(proposal: ChangeProposal) -> list[str]:
+                asked_ids[0] += 1
+                if asked_ids[0] > ASKED_FOR_IDS:
+                    return []
+                now = dict(after)
+                for each in proposal.files:
+                    if each.edits and safe_path(each.path) == path:
+                        test, _why = apply_edits(given[path], each.edits)
+                        if test is not None:
+                            now[path] = test
+                return [p for p in lost_ids(given, now) if p.startswith(f"{path} ")]
+
+            return check
+
+        adapted = await _all([one([t], after, kept_ids(t)) for t in tests])
+        files += [f for each in adapted for f in each.files]
+    first = written[0]
+    return first.model_copy(update={"files": files[:MAX_FILES]})
 
 
 def _from_diff_else(

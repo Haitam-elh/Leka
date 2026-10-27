@@ -84,10 +84,20 @@ from leka.platform import DecryptionError, secret_box
 logger = structlog.get_logger(__name__)
 
 TIMEOUTS = {Tier.FAST: 30.0, Tier.STANDARD: 90.0, Tier.DEEP: 300.0}
+# A long answer takes longer to write: past its tier's wait, a second for
+# every TOKENS_A_SECOND tokens it may hold (2026-10-27: a whole page's
+# change, answered whole, was cut at 300 s — twice).
+TOKENS_A_SECOND = 60
 # Models tried for one request, at most: past three, the failure is not
 # the model's.
 MOST_MODELS = 3
 LONGEST_WAIT = 10.0
+
+
+def wait_of(request: Request) -> float:
+    """How long a model is waited for, `request` its answer's size."""
+    return max(TIMEOUTS[request.tier], request.max_tokens / TOKENS_A_SECOND)
+
 
 Sleep = Callable[[float], Awaitable[None]]
 ToolHandler = Callable[[Mapping[str, Any]], Awaitable[str]]
@@ -324,12 +334,12 @@ class Gateway:
         """Whether a model can answer what is needed, here."""
         return bool((await self.routing(needs)).routes)
 
-    def _client(self, endpoint: Endpoint, tier: Tier) -> httpx.AsyncClient:
+    def _client(self, endpoint: Endpoint, wait: float) -> httpx.AsyncClient:
         transport = self._transport
         if transport is None and endpoint.owner == "workspace":
             # A customer-given address: public https only.
             transport = PublicTransport()
-        return httpx.AsyncClient(transport=transport, timeout=TIMEOUTS[tier])
+        return httpx.AsyncClient(transport=transport, timeout=wait)
 
     # ── asking ──────────────────────────────────────────────────────────────
 
@@ -427,7 +437,7 @@ class Gateway:
         )
         for attempt in range(1, self._retries + 2):
             try:
-                async with self._client(route.endpoint, request.tier) as client:
+                async with self._client(route.endpoint, wait_of(call.request)) as client:
                     done = await vendor.complete(call, client)
                 if not done.text.strip() and not done.tool_calls:
                     raise ProviderError("An empty answer.", retryable=True)
@@ -526,7 +536,8 @@ class Gateway:
                 ) from error
             problems = list(verify(value)) if verify is not None else []
             if problems:
-                raise InvalidOutputError(f"Not what was asked: {'; '.join(problems)[:300]}")
+                # Every problem said, so each is corrected at once.
+                raise InvalidOutputError(f"Not what was asked: {'; '.join(problems)[:2000]}")
             read["value"] = value
             read["text"] = done.text
 

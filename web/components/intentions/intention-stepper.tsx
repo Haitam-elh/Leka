@@ -92,8 +92,10 @@ export function IntentionStepper({
     >
       {/* Room inside the scroller for a disc's ring and halo (6px): a
           scroller clips what overflows it, the top of the open step's ring
-          with it (2026-10-14). */}
-      <ol className="flex min-w-[42rem] items-start px-2 py-2">
+          with it (2026-10-14). On a phone the five steps fit the screen,
+          their titles smaller and their hints left out (2026-10-27: at
+          390px the last two were off-screen, the third cut). */}
+      <ol className="flex items-start px-2 py-2 sm:min-w-[42rem]">
         {STEPS.map((step, i) => {
           const skipped = last !== undefined && i > last;
           const finished = !skipped && (i < at || (i === at && done));
@@ -119,16 +121,16 @@ export function IntentionStepper({
             </span>
           );
           const label = (
-            <span className="mt-2 flex flex-col items-center text-center">
+            <span className="mt-2 flex flex-col items-center px-0.5 text-center">
               <span
                 // The step on screen reads as an open tab — violet, underlined —
                 // apart from where the intention stands, the filled disc
                 // (LEKA-438: on Analyse, the disc at Décision read as "here").
-                className={`text-[0.875rem] font-semibold ${open ? "text-brand-violet underline decoration-2 underline-offset-[6px]" : here || finished ? "text-brand-navy" : "text-shell-muted"}`}
+                className={`text-[0.75rem] leading-tight font-semibold sm:text-[0.875rem] ${open ? "text-brand-violet underline decoration-2 underline-offset-[6px]" : here || finished ? "text-brand-navy" : "text-shell-muted"}`}
               >
                 {t[step].title}
               </span>
-              <span className="text-[0.75rem] text-shell-muted">
+              <span className="hidden text-[0.75rem] text-shell-muted sm:block">
                 {skipped ? t.skipped : t[step].hint}
               </span>
             </span>
