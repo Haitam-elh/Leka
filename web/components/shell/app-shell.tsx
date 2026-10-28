@@ -51,7 +51,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     // — a label only screen readers read, a menu — is held inside them. Not
     // held, it is placed against the document, makes it taller than the
     // window, and the whole frame scrolls away, white below (2026-10-14).
-    <div className="relative flex h-screen overflow-hidden bg-shell-page">
+    <div className="relative flex h-dvh overflow-hidden bg-shell-page">
       <SkipLink />
 
       <div className="flex min-w-0 flex-1 flex-col">

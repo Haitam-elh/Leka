@@ -24,7 +24,7 @@ interface AppHeaderProps {
 }
 
 const ICON_BUTTON =
-  "rounded-lg p-2 text-shell-nav transition-colors outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40";
+  "rounded-lg p-2 text-shell-nav transition-colors outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40 active:scale-[0.97] transition-transform duration-150";
 
 /**
  * The header of the sprint's mockups (LEKA-455): the logo, the way home, on
