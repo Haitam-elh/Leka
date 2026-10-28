@@ -96,7 +96,8 @@ export function PageHeader({ title, subtitle, breadcrumb, actions }: PageHeaderP
             <p className="mt-1 text-[0.9375rem] text-shell-accent-muted md:text-[1.0625rem]">{subtitle}</p>
           )}
         </div>
-        {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+        {/* On a phone they wrap, never past the screen's edge (2026-10-27). */}
+        {actions && <div className="flex max-w-full shrink-0 flex-wrap items-center gap-2">{actions}</div>}
       </div>
     </div>
   );

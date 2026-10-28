@@ -27,16 +27,18 @@ export function SiteHeader() {
   const t = useDictionary().auth.site;
   const link = "text-[15px] font-medium tracking-[-0.012em] whitespace-nowrap text-site-slate transition-colors hover:text-site-ink";
   // A phone holds one action beside the logo (LEKA-450: both widened the
-  // page to 471px): the sign-up on /login, the sign-in everywhere else.
+  // page to 471px): the sign-up on /login, the sign-in everywhere else. A
+  // tablet holds the actions, not the links (2026-10-27: at 768px the four
+  // links pushed « Essayer gratuitement » 170px past the edge).
   const onLogin = usePathname() === "/login";
 
   return (
     <header className="sticky top-0 z-10 border-b border-site-rule bg-white/85 backdrop-blur">
-      <div className="mx-auto flex h-[68px] w-[min(1240px,calc(100%-48px))] items-center gap-4 sm:gap-12">
+      <div className="mx-auto flex h-[68px] w-[min(1240px,calc(100%-48px))] items-center gap-4 sm:gap-8 xl:gap-12">
         <a href="/" aria-label={t.home} className="flex-none">
           <Image src="/leka-logo.svg" alt="LEKA" width={80} height={19} unoptimized priority />
         </a>
-        <nav aria-label={t.navigation} className="me-auto hidden gap-6 md:flex">
+        <nav aria-label={t.navigation} className="me-auto hidden gap-6 lg:flex">
           <a href="/#environnement" className={link}>
             {t.platform}
           </a>
@@ -50,11 +52,11 @@ export function SiteHeader() {
             {t.security}
           </a>
         </nav>
-        <div className="ms-auto flex items-center gap-3 sm:gap-4 md:ms-0">
+        <div className="ms-auto flex items-center gap-3 sm:gap-4 lg:ms-0">
           <LanguageButton className="h-[38px] px-2 text-[15px] max-sm:[&>span]:hidden font-medium text-site-slate hover:text-site-ink" />
           {/* The demo folds on a phone. Creating an account was found only
               under « Se connecter » (2026-10-14): on /login it is said first. */}
-          <a href="/demo.html?type=demo" className={`hidden lg:inline ${link}`}>
+          <a href="/demo.html?type=demo" className={`hidden xl:inline ${link}`}>
             {t.demo}
           </a>
           <Link href="/login" className={`${onLogin ? "hidden sm:inline" : ""} ${link}`}>

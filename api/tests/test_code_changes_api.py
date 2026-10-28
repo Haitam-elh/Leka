@@ -52,6 +52,7 @@ from leka.api import code_changes as code_changes_api
 from leka.capabilities import CodeChange, execute_run, rewrite_change, sync_catalogue
 from leka.capabilities import runs as runs_module
 from leka.capabilities.changes import (
+    ChangeProposal,
     Edit,
     ProposedFile,
     RepairProposal,
@@ -59,7 +60,9 @@ from leka.capabilities.changes import (
     before_of,
     body_of,
     branch_of,
+    change_problems,
     cited_paths,
+    covering_tests,
     diff_of,
     edits_from_diff,
     follow_pull_requests,
@@ -71,6 +74,7 @@ from leka.capabilities.changes import (
     reversed_diff,
     safe_path,
     stage_of,
+    whole_problems,
 )
 from leka.capabilities.code_tools import MOST_CHARS, lines_of
 from leka.connectors import SourceKind, SourceService
@@ -211,6 +215,8 @@ class GitHub:
         self.annotations: dict[int, list[dict[str, Any]]] = {}
         self.logs: dict[int, str] = {}
         self.branch_moved = False
+        # More files of the branch, listed and read: its tests (2026-10-27).
+        self.listed: dict[str, str] = {}
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -222,7 +228,7 @@ class GitHub:
             return httpx.Response(200, text=self.logs[int(path.split("/")[-1])])
         assert request.headers["authorization"].startswith("Bearer ghp_")
         base = f"/repos/{REPO}"
-        files = {"app/balance.py": BEFORE, "README.md": README}
+        files = {"app/balance.py": BEFORE, "README.md": README} | self.listed
         if request.method == "GET" and path == base:
             return httpx.Response(200, json={"default_branch": "main"})
         if request.method == "GET" and path == f"{base}/git/trees/main":
@@ -428,6 +434,137 @@ COMPOSER = (
 )
 
 
+def test_the_tests_of_a_change_are_found_by_name_the_closest_first() -> None:
+    # 2026-10-27 (#423): a design applied to the home broke the tests that
+    # read its blocks, never given to the writer.
+    tree = [
+        "web/components/overview/overview.tsx",
+        "web/components/overview/overview.test.tsx",
+        "web/components/overview/home-sections.tsx",
+        "web/components/overview/home-sections.test.tsx",
+        "web/e2e/home.spec.ts",
+        "web/e2e/billing.spec.ts",
+        "web/components/legacy/overview.test.tsx",
+        "web/lib/utils.test.ts",
+        "api/tests/test_payments.py",
+        "api/leka/payments.py",
+    ]
+    changed = ["web/components/overview/overview.tsx", "web/components/overview/home-sections.tsx"]
+    assert covering_tests(changed, tree) == [
+        # Its own name, beside it first.
+        "web/components/overview/overview.test.tsx",
+        "web/components/overview/home-sections.test.tsx",
+        "web/components/legacy/overview.test.tsx",
+        # A word of its name: the screen's journey.
+        "web/e2e/home.spec.ts",
+    ]
+    assert covering_tests(["api/leka/payments.py"], tree) == ["api/tests/test_payments.py"]
+    # A test given is never given twice; a common word (utils) is no sign.
+    assert covering_tests(["web/lib/utils.ts", "web/lib/utils.test.ts"], tree) == []
+    many = [f"web/e2e/home-{n}.spec.ts" for n in range(10)]
+    assert len(covering_tests(["web/app/home.tsx"], many)) == 6
+
+
+HOME = (
+    "export function Home() {\n"
+    "  return (\n"
+    "    <main>\n"
+    '      <section data-testid="home-environment">Env</section>\n'
+    '      <section data-testid="home-latest">Latest</section>\n'
+    "    </main>\n"
+    "  );\n"
+    "}\n"
+)
+HOME_TEST = (
+    'it("shows the home", () => {\n'
+    "  render(<Home />);\n"
+    '  expect(screen.getByTestId("home-environment")).toBeTruthy();\n'
+    "  expect(page.locator('[data-testid=\"home-latest\"]')).toBeVisible();\n"
+    "});\n"
+)
+
+
+def _home_change(*files: dict[str, Any]) -> ChangeProposal:
+    return ChangeProposal.model_validate(
+        {"repository": REPO, "title": "Accueil", "summary": "Accueil plus clair", "files": files}
+    )
+
+
+def test_a_change_that_takes_off_what_a_test_reads_is_asked_again() -> None:
+    read = {f"{REPO}:web/home.tsx": HOME, f"{REPO}:web/home.test.tsx": HOME_TEST}
+    env = '      <section data-testid="home-environment">Env</section>\n'
+    latest = {
+        "find": '      <section data-testid="home-latest">Latest</section>\n',
+        "replace": '      <ol data-testid="home-latest">Latest</ol>\n',
+    }
+    redone: dict[str, Any] = {
+        "path": "web/home.tsx",
+        "edits": [{"find": env, "replace": '      <aside className="env">Env</aside>\n'}, latest],
+    }
+    [said] = change_problems(_home_change(redone), read)
+    assert said.startswith('web/home.test.tsx still reads data-testid "home-environment"')
+    # Told it, the writer may keep the id on what stands for it now...
+    kept = {
+        "path": "web/home.tsx",
+        "edits": [
+            {"find": env, "replace": '      <aside data-testid="home-environment">Env</aside>\n'},
+            latest,
+        ],
+    }
+    assert change_problems(_home_change(kept), read) == []
+    # ...or change the test in the same change...
+    test_changed = {
+        "path": "web/home.test.tsx",
+        "edits": [
+            {
+                "find": '  expect(screen.getByTestId("home-environment")).toBeTruthy();\n',
+                "replace": '  expect(screen.getByText("Env")).toBeTruthy();\n',
+            }
+        ],
+    }
+    assert change_problems(_home_change(redone, test_changed), read) == []
+    # ...or move the block to a new file, or name its id in a constant.
+    moved = {
+        "path": "web/env.tsx",
+        "content": 'const E = <aside data-testid="home-environment" />;\n',
+    }
+    assert change_problems(_home_change(redone, moved), read) == []
+    named = {
+        "path": "web/home.tsx",
+        "edits": [{"find": env, "replace": "      <aside data-testid={ENV}>Env</aside>\n"}, latest],
+    }
+    constant = {"path": "web/ids.ts", "content": 'export const ENV = "home-environment";\n'}
+    assert change_problems(_home_change(named, constant), read) == []
+    # Asked enough: the change is kept, the CI says the rest.
+    assert change_problems(_home_change(redone), read, ids=False) == []
+    # A file deleted takes its ids with it.
+    gone = {"path": "web/home.tsx", "delete": True}
+    assert len(change_problems(_home_change(gone), read)) == 2
+
+
+def test_a_file_given_whole_is_whole_or_said_cut() -> None:
+    # 2026-10-27: a page redesigned, written as edits, ran past its tokens:
+    # given whole instead — every line, never a « … » standing for code.
+    before = "".join(f"const line{n} = {n};\n" for n in range(40))
+    after = before.replace("line3 =", "renamed3 =") + "export { line1, ...rest };\n"
+    assert whole_problems("web/a.tsx", before, after) == []
+    # Legitimate code is no sign: a spread, a comment that says something.
+    assert whole_problems("web/a.tsx", before, after + "  ...props,\n# unchanged since v2\n") == []
+    for cut in [
+        "  // ...\n",
+        "      {/* rest of the component unchanged */}\n",
+        "…\n",
+        "# unchanged\n",
+    ]:
+        [said] = whole_problems("web/a.tsx", before, after + cut)
+        assert said.startswith("web/a.tsx: given whole, it stands for code it leaves out")
+    [said] = whole_problems("web/a.tsx", before, before[:100])
+    assert "write every line it keeps" in said
+    # Said by the check every answer goes through.
+    whole = _home_change({"path": "web/home.tsx", "content": HOME[:40]})
+    assert any("given whole" in p for p in change_problems(whole, {f"{REPO}:web/home.tsx": HOME}))
+
+
 def test_an_analysis_diff_becomes_edits_that_land_on_the_file() -> None:
     [proposed] = edits_from_diff(HIS_DIFF)
     assert proposed.path == "web/components/intentions/intention-composer.tsx"
@@ -496,6 +633,34 @@ def test_a_file_is_read_whole_or_by_ranges_and_says_which() -> None:
 
 
 # ── end to end ─────────────────────────────────────────────────────────────
+
+
+async def test_a_source_that_does_not_open_is_passed_over_for_one_that_does(
+    acme: dict[str, uuid.UUID], github: GitHub
+) -> None:
+    # 2026-10-27: a GitHub source without its token, listed first, ended the
+    # search — the agent read no code although another source had it.
+    from leka.capabilities.changes import code_for
+    from leka.connectors import Source, SourceStatus
+
+    with workspace_scope(acme["acme"]):
+        async with session_factory() as session:
+            session.add(
+                Source(
+                    workspace_id=acme["acme"],
+                    kind=SourceKind.GITHUB,
+                    name="GitHub sans jeton",
+                    status=SourceStatus.ACTIVE,
+                    config={"repositories": [REPO]},
+                )
+            )
+            await session.commit()
+    working = await _github_source(acme["acme"])
+    with workspace_scope(acme["acme"]):
+        async with session_factory() as session:
+            found = await code_for(session, acme["acme"], REPO)
+    assert found is not None
+    assert found[0].id == working
 
 
 async def test_a_change_is_proposed_diffed_and_accepted_as_a_pull_request(
@@ -830,16 +995,16 @@ async def test_a_change_not_written_says_why_as_it_was(
     )
     run_id = started.json()["id"]
     assert await execute_run(acme["acme"], uuid.UUID(run_id)) == {"status": "succeeded"}
-    assert script.asked[2]["generationConfig"]["maxOutputTokens"] == 48_000
+    assert script.asked[2]["generationConfig"]["maxOutputTokens"] == 64_000
     run = (await client.get(f"{RUNS}/{run_id}")).json()
     [retried] = [e["detail"] for e in run["events"] if e["kind"] == "render_retried"]
     assert retried["code"] == "unanswered"
-    assert "Cut at its limit of 48000 tokens" in (retried["said"] or "")
+    assert "Cut at its limit of 64000 tokens" in (retried["said"] or "")
     leka_gemini(cut, cut, cut, cut)
     assert (await rewrite_change(acme["acme"], uuid.UUID(run_id)))["error"] == "unanswered"
     run = (await client.get(f"{RUNS}/{run_id}")).json()
     assert run["draw_failed"] == "unanswered"
-    assert "Cut at its limit of 48000 tokens" in (run["draw_said"] or "")
+    assert "Cut at its limit of 64000 tokens" in (run["draw_said"] or "")
 
 
 async def test_the_analysis_own_diff_is_the_change_no_model_asked_again(
@@ -916,6 +1081,120 @@ async def test_a_run_without_its_files_kept_reads_those_its_analysis_names(
     assert done["error"] is None
     material = json.loads(script.asked[0]["contents"][-1]["parts"][0]["text"])
     assert material["files"] == {f"{REPO}:app/balance.py": BEFORE}
+
+
+async def test_the_writer_is_given_the_tests_of_what_it_changes(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    leka_gemini: Callable[..., Script],
+    github: GitHub,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # 2026-10-27 (#423): what the agent did not read of the tests, the
+    # writer is given all the same — the change keeps them green.
+    _as(identity, acme, "member")
+    await _github_source(acme["acme"])
+    await sync_catalogue()
+    covering = "from app.balance import balance\n\ndef test_balance():\n    assert balance\n"
+    github.listed = {"tests/test_balance.py": covering, "web/e2e/home.spec.ts": "test()\n"}
+
+    async def queue(workspace_id: uuid.UUID, run_id: uuid.UUID) -> bool:
+        return True
+
+    monkeypatch.setattr(agent_runs_api, "queue_change", queue)
+    monkeypatch.setattr(runs_module, "queue_redraw", queue_redraw_none)
+    script = leka_gemini(
+        gemini(call={"name": "read_file", "args": {"repository": REPO, "path": "app/balance.py"}}),
+        gemini("# Analyse\n\nLe solde ignore les paiements en attente."),
+        gemini(json.dumps(_proposal())),
+    )
+    started = await client.post(
+        RUNS,
+        json={"key": "code-change", "inputs": {"demande": "Corrige le solde", "depot": REPO}},
+    )
+    assert await execute_run(acme["acme"], uuid.UUID(started.json()["id"])) == {
+        "status": "succeeded"
+    }
+    material = json.loads(script.asked[2]["contents"][-1]["parts"][0]["text"])
+    assert material["files"] == {
+        f"{REPO}:app/balance.py": BEFORE,
+        f"{REPO}:tests/test_balance.py": covering,
+    }
+
+
+async def test_a_change_too_big_for_one_answer_is_written_file_by_file(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    leka_gemini: Callable[..., Script],
+    github: GitHub,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # 2026-10-27: a whole home page, answered at once, was cut at its token
+    # limit twice — written file by file, then its tests adapted to it.
+    _as(identity, acme, "member")
+    await _github_source(acme["acme"])
+    await sync_catalogue()
+    covering = "from app.balance import balance\n\ndef test_balance():\n    assert balance\n"
+    github.listed = {"app/ledger.py": LEDGER, "tests/test_balance.py": covering}
+
+    async def queue(workspace_id: uuid.UUID, run_id: uuid.UUID) -> bool:
+        return True
+
+    monkeypatch.setattr(agent_runs_api, "queue_change", queue)
+    monkeypatch.setattr(runs_module, "queue_redraw", queue_redraw_none)
+    cut = gemini('{"repository": "acme/pay')
+    cut["candidates"][0]["finishReason"] = "MAX_TOKENS"
+    both = _proposal()
+    both["files"] = [
+        both["files"][0],
+        # Reworked through: given whole, every line (2026-10-27).
+        {"path": "app/ledger.py", "content": LEDGER_AFTER},
+    ]
+    test = {
+        "repository": REPO,
+        "title": "x",
+        "summary": "y",
+        "files": [
+            {
+                "path": "tests/test_balance.py",
+                "edits": [
+                    {"find": "    assert balance\n", "replace": "    assert balance(A) == 0\n"}
+                ],
+            }
+        ],
+    }
+    script = leka_gemini(
+        gemini(call={"name": "read_file", "args": {"repository": REPO, "path": "app/balance.py"}}),
+        gemini(call={"name": "read_file", "args": {"repository": REPO, "path": "app/ledger.py"}}),
+        gemini("# Analyse\n\n`app/balance.py` et `app/ledger.py` ignorent les paiements."),
+        cut,
+        cut,
+        # Each file apart, alongside: each answer kept for its own file only.
+        gemini(json.dumps(both)),
+        gemini(json.dumps(both)),
+        gemini(json.dumps(test)),
+    )
+    started = await client.post(
+        RUNS,
+        json={"key": "code-change", "inputs": {"demande": "Corrige le solde", "depot": REPO}},
+    )
+    run_id = started.json()["id"]
+    assert await execute_run(acme["acme"], uuid.UUID(run_id)) == {"status": "succeeded"}
+    asked = [json.loads(a["contents"][-1]["parts"][0]["text"]) for a in script.asked[5:]]
+    assert sorted(a["only"] for a in asked[:2]) == [["app/balance.py"], ["app/ledger.py"]]
+    assert asked[2]["only"] == ["tests/test_balance.py"]
+    assert asked[2]["changed"]["app/ledger.py"] == LEDGER_AFTER
+    [change] = (await client.get(API, params={"run_id": run_id})).json()
+    assert [f["path"] for f in change["files"]] == [
+        "app/balance.py",
+        "app/ledger.py",
+        "tests/test_balance.py",
+    ]
+    assert change["title"] == "Déduire les paiements en attente du solde"
 
 
 # ── accepted later, then followed (2026-10-20) ──────────────────────────────

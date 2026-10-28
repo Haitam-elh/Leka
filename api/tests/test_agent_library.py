@@ -747,7 +747,7 @@ def test_the_code_change_proposes_the_smallest_change_and_says_the_rest() -> Non
     # literally, the fewest files, nothing changed on the way, every line
     # justified; what it saw beyond, said and left alone.
     change = {d.key: d for d in catalogue()}["code-change"]
-    assert change.version == "2.1.0"
+    assert change.version == "2.2.0"
     said = change.instructions or ""
     assert "## Sa méthode" in said
     for step in (

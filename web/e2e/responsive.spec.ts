@@ -11,9 +11,9 @@ import { signIn } from "./sign-in";
  * question mark alone on one. Nothing overflowed — which is why a check for
  * overflow alone passed them.
  *
- * Below 1024px is out of scope: the product is used at a desk. The shell
- * still folds into a drawer there (shell.spec.ts), so it is usable, not
- * designed for.
+ * And on a tablet and a phone (2026-10-27): every screen within the
+ * screen's width, nothing pushed past its edge — the steps of an intention
+ * all on screen, the site's header whole before signing in.
  */
 
 const WIDTHS = [1024, 1280, 1440, 1920] as const;
@@ -74,5 +74,77 @@ test("the composer's hints stay on one line at the narrowest size", async ({ pag
     expect(box, text).not.toBeNull();
     // One line of 12px text is about 16px tall; the regression was 48.
     expect(box!.height, `"${text}" wraps`).toBeLessThan(24);
+  }
+});
+
+/** The screens a phone and a tablet open, each whole within their width. */
+const SMALL = [390, 768] as const;
+const EVERY = [
+  "/overview",
+  "/intentions",
+  "/intentions/new",
+  "/environment",
+  "/environment/graph",
+  "/sources",
+  "/capabilities",
+  "/activity",
+  "/approvals",
+  "/architecte",
+  "/billing",
+  "/billing/plans",
+  "/governance",
+  "/notifications",
+  "/settings",
+  "/team",
+] as const;
+
+/** How far the page, or anything in it outside a scroller, passes the right edge. */
+async function pastTheEdge(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const width = document.documentElement.clientWidth;
+    const scrolled = (element: Element): boolean => {
+      for (let at = element.parentElement; at && at !== document.body; at = at.parentElement) {
+        if (getComputedStyle(at).overflowX !== "visible") return true;
+      }
+      return false;
+    };
+    const past = Array.from(document.querySelectorAll("main *, header *"))
+      .filter((element) => {
+        const box = element.getBoundingClientRect();
+        return box.width > 0 && box.right > width + 1 && !scrolled(element);
+      })
+      .map((element) => `${element.tagName.toLowerCase()} «${(element.textContent ?? "").trim().slice(0, 40)}»`);
+    if (document.documentElement.scrollWidth > width) past.unshift(`the page, by ${document.documentElement.scrollWidth - width}px`);
+    return past.slice(0, 5);
+  });
+}
+
+for (const width of SMALL) {
+  test(`every screen is whole on a ${width}px screen`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await signIn(page);
+    for (const path of EVERY) {
+      await page.goto(path);
+      await expect(page.getByRole("heading", { level: 1 }), path).toBeVisible();
+      expect(await pastTheEdge(page), `${path} at ${width}px`).toEqual([]);
+    }
+    // The five steps of an intention, every one on screen.
+    await page.goto("/intentions/new");
+    for (const step of ["intention", "analysis", "results", "decision", "action"]) {
+      const box = await page.getByTestId(`intention-step-${step}`).boundingBox();
+      expect(box, step).not.toBeNull();
+      expect(box!.x + box!.width, `${step} at ${width}px`).toBeLessThanOrEqual(width);
+    }
+  });
+}
+
+test("the site's header is whole before signing in, from a phone to a laptop", async ({ page }) => {
+  for (const width of [390, 768, 1024, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    for (const path of ["/login", "/register"]) {
+      await page.goto(path);
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      expect(await pastTheEdge(page), `${path} at ${width}px`).toEqual([]);
+    }
   }
 });

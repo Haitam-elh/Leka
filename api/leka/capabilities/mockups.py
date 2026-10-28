@@ -83,7 +83,37 @@ NO_MODEL = {"none": "no_model", "timeout": "timeout", "limited": "limited", "blo
 MOST_FILE = 40_000
 MOST_FILES = 160_000
 
-DESIGN_RULES = """You are LEKA's mock-up writer for the agent whose \
+# Where LEKA shows a mock-up: its simulator, at three widths (2026-10-27: a
+# desktop drawing, shown on a phone, ran off its edge).
+RESPONSIVE = """Responsive: LEKA shows it at 1280, 768 and 390 pixels wide, \
+the viewport first. One style sheet holds at all three: widths fluid \
+(percentages, max-width, minmax), never a fixed width a phone cannot hold; \
+grids that fold (repeat(auto-fit, minmax(…, 1fr)), or media queries at \
+1024px and 640px); a side navigation that becomes a top bar on a phone; text \
+that wraps; tables and charts in their own overflow-x: auto box. On a phone \
+a card's title and its action stack, a row of buttons, badges or chips wraps \
+(flex-wrap), a flex child shrinks (min-width: 0): nothing is cut at the \
+screen's edge, and overflow is never hidden to mask it. Nothing is ever \
+wider than the screen."""
+
+# What a product's screen is held to (2026-10-27: « l'agent design doit
+# fournir un meilleur design »).
+CRAFT = """Finished like a real product: spacing from one scale (4, 8, 12, 16, \
+24, 32, 48px), more space between groups than inside one; a type scale of \
+five sizes at most, the page title the largest, body text 14 to 16px, \
+line-height 1.5 for text and 1.2 for titles, weights 400, 500 and 600; one \
+grid, edges aligned, cards side by side with the same padding and height; \
+colour from the repository's tokens, neutrals for most of the screen, one \
+accent for the primary action and what is active, a state colour only for a \
+state; text contrast 4.5:1 at least; one radius scale, a shadow only on what \
+floats, borders and fills by role (not every block a card); icons one inline \
+SVG set, the same stroke, 16 to 20px, never an emoji. What matters most is \
+seen first: secondary text smaller and muted, never the same weight as the \
+title. Never the em dash « — » in what the screen says: a colon, a comma or \
+« · »."""
+
+DESIGN_RULES = (
+    """You are LEKA's mock-up writer for the agent whose \
 instructions follow. From its review and from the source files it read — and \
 from nothing else — draw the screen its proposal is about, as one JSON object:
 - screen: the screen's name; viewport: "desktop", or "mobile" when the \
@@ -114,10 +144,13 @@ HTML inside <body>. No script, no event handler, no external resource — no \
 are inline SVG, images are CSS shapes or inline SVG, fonts are named with a \
 system fallback. What the code takes from data when it runs — a name, a \
 count, a date — is a plausible example shaped like the code's types, the \
-same in before and in every proposal. Self-contained, laid out for the \
-viewport's width, at most 40 000 characters of body each, in the language \
-the screen speaks.
-Answer with the JSON object only."""
+same in before and in every proposal. Self-contained, at most 40 000 \
+characters of body each, in the language the screen speaks.
+Answer with the JSON object only.
+
+"""
+    + RESPONSIVE
+)
 
 PLAN_RULES = """You are LEKA's mock-up planner for the agent whose \
 instructions follow. From its review and the source files it read — and from \
@@ -130,7 +163,9 @@ review proposes for a phone.
 - directions: the proposals the review makes — one to three, in its order, \
 each its name, its axis, when it is the right choice, what it costs, and \
 changes: what it changes on the screen, element by element, with the values \
-(sizes, colours, spacing, order, texts) — what a drawer needs to draw it. \
+(sizes, colours, spacing, order, texts) — what a drawer needs to draw it — \
+and how it holds on a tablet and a phone: what folds, what moves, in which \
+order. \
 Asked for a new design or a redesign, each direction changes what is SEEN — \
 layout, hierarchy, density, what comes first — never only a value: one that \
 leaves the screen looking as it is today is no direction.
@@ -140,21 +175,26 @@ or two sentences.
 before, after, why — as the review states them.
 Answer with the JSON object only."""
 
-DRAW_RULES = """You are LEKA's mock-up drawer for the agent whose \
+DRAW_RULES = (
+    """You are LEKA's mock-up drawer for the agent whose \
 instructions follow. Draw ONE screen, as one JSON object {"css": …, "body": …}: \
 css, its complete style sheet; body, the HTML inside <body>. No script, no \
 event handler, no external resource — no <link>, no @import, no url() but \
 data: —, no link that leads anywhere: icons are inline SVG, images are CSS \
 shapes or inline SVG, fonts are named with a system fallback. What the code \
 takes from data when it runs — a name, a count, a date — is a plausible \
-example shaped like the code's types. Self-contained, laid out for the \
-viewport's width, at most 40 000 characters of body, in the language the \
-screen speaks, as finished as a real product screen. An image the code shows \
+example shaped like the code's types. Self-contained, at most 40 000 \
+characters of body, in the language the screen speaks, as finished as a real \
+product screen. An image the code shows \
 from the repository — its logo above all, an icon file, an illustration — is \
 never redrawn by hand: write <img data-asset="…" alt="…" width="…" \
 height="…"> with its path as the code gives it (src="/brand/leka-wordmark.png" \
 gives data-asset="/brand/leka-wordmark.png"); LEKA puts the real image there.
-Answer with the JSON object only."""
+Answer with the JSON object only.
+
+"""
+    + RESPONSIVE
+)
 
 CORRECT = """Correct the mock-up given in `mockup` as asked in `correction` — that \
 and nothing else: everything not asked stays exactly as it is, the same \
@@ -175,7 +215,8 @@ were given do not draw. A block shown only under a condition — a first-steps \
 card, an empty state, an error — is drawn only when the review says this \
 workspace shows it."""
 
-PROPOSED = """Draw the direction named in `direction`, starting from `today` — the \
+PROPOSED = (
+    """Draw the direction named in `direction`, starting from `today` — the \
 screen as it is drawn now: the same content, the same example data, no \
 feature, figure or text the code does not have — redrawn as the direction \
 changes it: every change it lists, visibly. Never `today` given back. It \
@@ -185,7 +226,11 @@ every pressable element with press feedback (:active { transform: \
 scale(0.97) } with transition: transform 160ms cubic-bezier(0.23, 1, 0.32, \
 1)), hover only inside @media (hover: hover) and (pointer: fine), entrances \
 eased out under 300 ms and never from scale(0), @media \
-(prefers-reduced-motion: reduce) honoured."""
+(prefers-reduced-motion: reduce) honoured.
+
+"""
+    + CRAFT
+)
 
 # A review's proposal, said by its heading when the mark was left out.
 _PROPOSAL = re.compile(

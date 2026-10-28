@@ -388,8 +388,9 @@ export function ArchitectureFigures({ data }: { data: Architecture | undefined }
     (state) => (health?.[state] ?? 0) > 0 || (!twin && state !== "unmonitored"),
   ) as (keyof Words["health"])[];
 
+  // Two side by side on a phone (2026-10-27: one per row took a screen).
   return (
-    <ul className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+    <ul className="grid grid-cols-2 gap-2.5 lg:grid-cols-3 xl:grid-cols-6">
       {tiles.map((tile) => (
         <li
           key={tile.id}
@@ -1114,7 +1115,9 @@ function Canvas({
       {/* The mockup's head (LEKA-459): what it is, then its size. */}
       <div className="mb-3 flex flex-wrap items-start gap-3">
         <IconTile icon={Network} tone="violet" className="size-9" />
-        <div className="min-w-0 flex-1">
+        {/* Its zoom goes under it on a phone, never squeezing it to a word
+            a line (2026-10-27). */}
+        <div className="min-w-[min(12rem,100%)] flex-1">
           <h2 className="text-[1.0625rem] font-semibold tracking-[-0.01em] text-brand-navy">{w.mapTitle}</h2>
           <p className="text-[0.8125rem] text-shell-muted">{w.mapSubtitle}</p>
         </div>

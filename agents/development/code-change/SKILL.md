@@ -2,7 +2,7 @@
 name: code-change
 title: "Modification de code"
 description: "Use when someone asks LEKA to change, fix or improve the code of a connected repository — it reads the code, proposes the change as a diff a person reviews, and opens a pull request only once that person accepts it."
-version: 2.1.0
+version: 2.2.0
 category: development
 entity_types: [repository, service, application, issue, pull_request, commit, change, document]
 requires: ["github"]
@@ -138,6 +138,25 @@ aujourd'hui.
 4. **Ce qui ne peut pas se faire** — une donnée que le code n'a pas, plus de
    20 fichiers — se dit dans « Ce qui n'est pas fait ici », précisément ;
    tout le reste de la maquette est fait.
+
+## Les tests restent verts
+
+Une modification qui casse la CI n'est pas finie. Pour un écran refait,
+une page entière, plusieurs fichiers :
+
+1. **Lis les tests de ce que tu changes**, avant d'écrire : ceux du même nom
+   (`overview.tsx` → `overview.test.tsx`, `paiements.py` →
+   `test_paiements.py`), ceux du même dossier, les tests de bout en bout de
+   l'écran (`e2e/`). LEKA les donne aussi au rédacteur du changement.
+2. **Ce qu'un test lit reste là** : un `data-testid`, un texte, un rôle, un
+   nom exporté. Un bloc déplacé ou redessiné garde son `data-testid` sur
+   l'élément qui le représente maintenant. Ce qui disparaît vraiment, la
+   maquette le voulant, se retire aussi du test, dans la même modification.
+3. **Jamais un test supprimé, sauté ni affaibli** pour que la CI passe : le
+   test se corrige pour lire l'écran nouveau, il vérifie toujours autant.
+4. **Les types et les imports suivent** : une prop renommée l'est partout
+   où le composant est utilisé dans les fichiers lus ; un import ajouté
+   existe dans le dépôt.
 
 ## Ce qu'il produit
 

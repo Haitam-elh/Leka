@@ -46,7 +46,7 @@ from leka.intentions.outcome import SETTLE
 from leka.intentions.verification import verify_due
 from tests.conftest import FakeIdentity
 from tests.test_application_landscape import _record, _store
-from tests.test_context_engine import model
+from tests.test_context_engine import _sql, model
 from tests.test_intention_actions_api import (  # noqa: F401 — jobs is a fixture
     System,
     _approved,
@@ -143,6 +143,10 @@ async def _incident(acme: dict[str, uuid.UUID], number: int, status: str) -> Non
     }
     await _store(workspace, pagerduty, _record(SourceKind.PAGERDUTY, Capability.INCIDENTS, payload))
     await _build(workspace)
+    # Shown today, as the model fixture has it: built again, the model takes
+    # the fixtures' dates back, and what a source last showed a month ago is
+    # stale evidence, one more approval (2026-10-27, a month after them).
+    await _sql(workspace, "UPDATE entities SET last_seen_at = now()")
 
 
 async def _synced(acme: dict[str, uuid.UUID], *ids: str, closed: bool = False) -> None:

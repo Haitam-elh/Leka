@@ -184,6 +184,16 @@ def ask(purpose: str = "test", **more: Any) -> Request:
     return Request(purpose=purpose, messages=[Message.user("Why is payment-api down?")], **more)
 
 
+def test_a_long_answer_is_waited_for_as_long_as_it_takes_to_write() -> None:
+    # 2026-10-27: a whole page's change, cut at 300 s twice.
+    from leka.capabilities.gateway.service import TIMEOUTS, wait_of
+
+    short = Request(purpose="t", messages=[Message.user("x")], tier=Tier.FAST, max_tokens=500)
+    assert wait_of(short) == TIMEOUTS[Tier.FAST]
+    deep = Request(purpose="t", messages=[Message.user("x")], tier=Tier.DEEP, max_tokens=48_000)
+    assert wait_of(deep) == 800.0 > TIMEOUTS[Tier.DEEP]
+
+
 async def test_the_default_answers_and_the_call_is_kept_with_what_it_cost(
     workspace: uuid.UUID,
 ) -> None:
