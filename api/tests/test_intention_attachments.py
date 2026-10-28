@@ -38,6 +38,7 @@ from leka.intentions.attachments import purge
 from leka.platform import storage
 from leka.platform.storage import LocalObjectStore
 from tests.conftest import FakeIdentity
+from tests.test_agent_runs_api import leka_gemini  # noqa: F401 — a fixture
 from tests.test_context_engine import model
 from tests.test_intention_analysis_api import queued  # noqa: F401 — a fixture
 from tests.test_sources_api import _as, acme, fake_connector  # noqa: F401 — fixtures
@@ -287,3 +288,98 @@ async def test_files_never_asked_with_are_purged_after_a_day(
     assert {r.name for r in await _rows(acme["acme"])} == {"attached.txt", "recent.txt"}
     assert not await store.exists(gone.storage_key)
     _ = recent
+
+
+def _pdf_saying(*lines: str) -> bytes:
+    import io
+
+    from reportlab.pdfgen import canvas
+
+    out = io.BytesIO()
+    page = canvas.Canvas(out)
+    for number, line in enumerate(lines):
+        page.drawString(72, 760 - 20 * number, line)
+    page.showPage()
+    page.save()
+    return out.getvalue()
+
+
+async def test_its_files_are_read_once_and_given_to_the_agent_that_works_for_it(
+    client: AsyncClient,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[tuple[uuid.UUID, str]],
+    store: LocalObjectStore,
+    leka_gemini: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # 2026-10-28, Haitam: « que le LLM et LEKA lisent bien le fichier ».
+    # Before, a file joined to an intention was kept and shown, read by no
+    # model.
+    import json
+
+    from leka.capabilities import execute_run, sync_catalogue
+    from leka.capabilities import runs as runs_module
+    from tests.test_agent_runs_api import gemini
+
+    async def nothing(*_: Any) -> bool:
+        return True
+
+    monkeypatch.setattr(runs_module, "queue_redraw", nothing)
+    incident = await _uploaded(
+        client,
+        _pdf_saying("Rapport d'incident", "Le paiement échoue avec l'erreur E-4021."),
+        name="incident.pdf",
+        content_type="application/pdf",
+    )
+    notes = await _uploaded(client, name="notes.txt")
+    asked = await client.post(
+        API, json={"text": ASKED, "attachments": [incident["id"], notes["id"]]}
+    )
+    assert asked.status_code == 201, asked.text
+    intention = asked.json()["intention"]
+    await sync_catalogue()
+    script = leka_gemini(gemini("# Diagnostic\n\nL'erreur E-4021 vient du paiement."))
+    started = await client.post(
+        "/api/v1/agent-runs",
+        json={
+            "key": "debug-assistant",
+            "inputs": {"symptome": "Le paiement échoue"},
+            "intention_id": intention["id"],
+        },
+    )
+    assert started.status_code == 202, started.text
+    run_id = uuid.UUID(started.json()["id"])
+    assert (await execute_run(acme["acme"], run_id))["status"] == "succeeded"
+    material = json.loads(script.asked[0]["contents"][-1]["parts"][0]["text"])
+    pdf, text = material["attachments"]
+    assert (pdf["id"], pdf["name"], pdf["read"]) == ("attachment:1", "incident.pdf", "pdf")
+    assert "E-4021" in pdf["text"]
+    assert text["read"] == "text" and "Relevé des lenteurs de paiement" in text["text"]
+    assert "read by LEKA" in material["attachments_note"]
+    # Read once, kept with the file for every model after.
+    kept = {row.name: (row.read_as, row.text or "") for row in await _rows(acme["acme"])}
+    assert kept["incident.pdf"][0] == "pdf" and "E-4021" in kept["incident.pdf"][1]
+    # The run says it was given them.
+    run = (await client.get(f"/api/v1/agent-runs/{run_id}")).json()
+    [given] = [e["detail"] for e in run["events"] if e["kind"] == "attachments"]
+    assert given["files"] == [
+        {"name": "incident.pdf", "read": "pdf"},
+        {"name": "notes.txt", "read": "text"},
+    ]
+
+
+def test_an_analysis_is_given_the_files_its_question_came_with() -> None:
+    from leka.capabilities import ContextItem, ContextPack
+    from leka.intentions.attachments import with_attached
+    from leka.intentions.writing import with_files
+
+    attached = [{"id": "attachment:1", "name": "incident.pdf", "read": "pdf", "text": "E-4021"}]
+    said = with_files({"question": "Pourquoi ?"}, attached)
+    assert said["attachments"] == attached and "attachment:N" in said["attachments_note"]
+    assert with_files({"question": "Pourquoi ?"}, []) == {"question": "Pourquoi ?"}
+    pack = with_attached(
+        ContextPack((ContextItem("entity:1", "service", "Billing API"),)), attached
+    )
+    # Its files first, by their id: what the analysis may cite.
+    assert [item.id for item in pack.items] == ["attachment:1", "entity:1"]

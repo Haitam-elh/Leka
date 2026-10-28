@@ -64,6 +64,10 @@ dependencies = [
     # 2026-10-10 for the application architect's deliverables.
     "python-pptx>=1.0.2,<2",
     "reportlab>=4.2.5,<5",
+    # The text of a PDF joined to an intention, for the model to read it
+    # (2026-10-28, Haitam: « que le LLM et LEKA lisent bien le fichier »).
+    # Pure Python; a scanned page goes to Tesseract (the image's OCR).
+    "pypdf>=5,<7",
 ]
 
 [project.optional-dependencies]

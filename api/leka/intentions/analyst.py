@@ -38,7 +38,7 @@ skeleton — its risk, its recommendations; the analyst is its intelligence.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -57,7 +57,7 @@ from leka.capabilities import (
 from leka.intelligence import LIBRARY
 from leka.intentions.analysis import Answer, Asked, Evidence, Point, Result, SourceRef
 from leka.intentions.skills import READS
-from leka.intentions.writing import Written, known_ids, material
+from leka.intentions.writing import Written, known_ids, material, with_files
 
 # What the analyst asks of a model: tools, a structured answer, good analysis.
 NEEDS = Needs(structured=True, tools=True, quality=2)
@@ -239,6 +239,7 @@ async def answer(
     context: ContextPack,
     *,
     now: datetime,
+    attached: Sequence[Mapping[str, object]] = (),
 ) -> tuple[Execution, Answer | None, tuple[Evidence, ...]]:
     """The question answered by LEKA's analyst, through the runtime with
     LEKA's reads: its answer and the evidence it cites — none, said why,
@@ -248,21 +249,23 @@ async def answer(
     reading.keep(watched.cited)
     pack = ContextPack.of(context.items, ref=context.ref, characters=CONTEXT_CHARACTERS)
 
+    files = frozenset(str(each["id"]) for each in attached)
+
     def known() -> frozenset[str]:
-        return known_ids(result, pack) | frozenset(reading.read)
+        return known_ids(result, pack) | frozenset(reading.read) | files
 
     def check(written: Any, _given: ContextPack) -> list[str]:
         if not isinstance(written, Written) or not written.answer.strip():
             return ["no answer"]
         points, _ = grounded(written, known())
-        held = bool(result.findings or result.causes or reading.read)
+        held = bool(result.findings or result.causes or reading.read or attached)
         return [] if points or not held else ["it cites nothing it read or was given"]
 
     done = await runtime.run(
         Task(
             purpose="capability.synthesis",
             instructions=PLATFORM,
-            input=given(asked, result, now, watched.said()),
+            input=with_files(given(asked, result, now, watched.said()), attached),
             context=pack,
             output=Written,
             check=check,

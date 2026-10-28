@@ -87,6 +87,7 @@ from leka.intentions.analysis import (
 from leka.intentions.analyst import NEEDS as ANALYST
 from leka.intentions.analyst import answer as analyst_answer
 from leka.intentions.approval import DecisionService
+from leka.intentions.attachments import attached_texts, with_attached
 from leka.intentions.capabilities import CAPABILITIES
 from leka.intentions.decisions import Target
 from leka.intentions.explain import ContextRead, SourceState, explain
@@ -673,6 +674,10 @@ async def _write(
                 runtime = LLMRuntime(session, workspace_id)
                 try:
                     answer: Answer | None = None
+                    # The files it was asked with, read, given (2026-10-28).
+                    attached = await attached_texts(session, workspace_id, asked.id)
+                    if attached:
+                        pack = with_attached(pack, attached)
                     if await runtime.ready(ANALYST):
                         skills = SkillRuntime(
                             session,
@@ -684,10 +689,10 @@ async def _write(
                             now=now,
                         )
                         done, answer, read = await analyst_answer(
-                            runtime, skills, asked, result, pack, now=now
+                            runtime, skills, asked, result, pack, now=now, attached=attached
                         )
                     if answer is None:
-                        done, answer = await write(runtime, asked, result, pack)
+                        done, answer = await write(runtime, asked, result, pack, attached)
                 finally:
                     await session.commit()
     except Exception:

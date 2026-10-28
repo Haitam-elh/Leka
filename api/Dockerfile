@@ -55,8 +55,12 @@ ENV PYTHONUNBUFFERED=1 \
 # curl is the healthcheck. It is the one thing worth 2 MB here: without it the
 # container reports healthy as long as the process exists, which is exactly
 # the failure /api/v1/health was written to catch.
+# Tesseract (French, English) reads an image or a scanned page joined to an
+# intention, and poppler's pdftoppm draws that page for it (2026-10-28): on
+# the box, nothing sent out, nothing paid — about 40 MB.
 RUN apt-get update \
     && apt-get install --no-install-recommends -y curl \
+       tesseract-ocr tesseract-ocr-fra tesseract-ocr-eng poppler-utils \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --uid 10001 leka
 

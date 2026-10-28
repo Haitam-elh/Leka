@@ -230,6 +230,12 @@ class IntentionAttachment(Base, WorkspaceScopedMixin):
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
     checksum_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     storage_key: Mapped[str] = mapped_column(String(500), nullable=False)
+    # What it says, read once for every model after (2026-10-28): its text —
+    # PDF, OCR, Office —, how it was read (text, pdf, pdf+ocr, ocr, office,
+    # unreadable), and why not when it could not be. None: not read yet.
+    text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    read_as: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    read_why: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
 
 ANALYSIS_STATUSES = (

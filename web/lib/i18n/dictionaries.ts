@@ -371,7 +371,8 @@ const fr = {
         "image/jpeg": "JPEG",
       },
       errors: {
-        file_type_refused: "Format non pris en charge : texte, CSV, Markdown, JSON, PDF, PNG ou JPEG.",
+        file_type_refused:
+          "Format non pris en charge : texte, CSV, Markdown, JSON, PDF, PNG, JPEG, Word, Excel ou PowerPoint.",
         file_content_mismatch: "Son contenu ne correspond pas à son format.",
         file_too_large: "Trop volumineux : 10 Mo au maximum.",
         file_empty: "Le fichier est vide.",
@@ -9552,7 +9553,8 @@ const en: Dictionary = {
         "image/jpeg": "JPEG",
       },
       errors: {
-        file_type_refused: "Unsupported format: text, CSV, Markdown, JSON, PDF, PNG or JPEG.",
+        file_type_refused:
+          "Unsupported format: text, CSV, Markdown, JSON, PDF, PNG, JPEG, Word, Excel or PowerPoint.",
         file_content_mismatch: "Its content does not match its format.",
         file_too_large: "Too large: 10 MB at most.",
         file_empty: "The file is empty.",

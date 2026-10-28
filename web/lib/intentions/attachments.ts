@@ -6,7 +6,9 @@ import type { components } from "@/lib/api-types";
  * their ids then carried by the intention (leka.intentions.attachments).
  *
  * What LEKA reads, the server says the same: text, CSV, Markdown, JSON,
- * PDF, PNG, JPEG — ten megabytes each, five to an intention. The server
+ * PDF, PNG, JPEG, Word, Excel, PowerPoint — ten megabytes each, five to an
+ * intention. Their text is what the model reads: a scanned page or an image
+ * by OCR (leka.platform.extraction). The server
  * also reads what the bytes are; the screen says it first, so a file is
  * refused before it travels.
  */
@@ -27,6 +29,9 @@ const BY_EXTENSION: Record<string, string> = {
   png: "image/png",
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 };
 const ACCEPTED_TYPES = new Set(Object.values(BY_EXTENSION));
 
