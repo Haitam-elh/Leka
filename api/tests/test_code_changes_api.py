@@ -40,6 +40,7 @@ import json
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from typing import Any
 
 import httpx
@@ -57,15 +58,20 @@ from leka.capabilities.changes import (
     ProposedFile,
     RepairProposal,
     apply_edits,
+    assertions_of,
     before_of,
     body_of,
     branch_of,
+    broken,
+    change_messages,
     change_problems,
     cited_paths,
+    completed,
     covering_tests,
     diff_of,
     edits_from_diff,
     follow_pull_requests,
+    lost_ids,
     on_base,
     paths_named,
     repair_change,
@@ -542,6 +548,27 @@ def test_a_change_that_takes_off_what_a_test_reads_is_asked_again() -> None:
     assert len(change_problems(_home_change(gone), read)) == 2
 
 
+def test_a_change_that_takes_off_a_class_or_an_address_a_test_checks_is_asked_again() -> None:
+    # 2026-10-28: Mistral dropped a grid's class and a link's address that
+    # two tests checked — said, as a test id is.
+    code = '<ul className="grid xl:grid-cols-6"><a href="/environment">Env</a></ul>\n'
+    test = (
+        'expect(screen.getByTestId("grid")).toHaveClass("xl:grid-cols-6");\n'
+        'expect(link).toHaveAttribute("href", "/environment");\n'
+        'expect(screen.getByText("Rien")).toBeTruthy();\n'
+    )
+    read = {"web/home.tsx": code, "web/home.test.tsx": test}
+    after = {"web/home.tsx": '<ul className="grid xl:grid-cols-3"><a href="/env">Env</a></ul>\n'}
+    said = lost_ids(read, after)
+    assert [line.split(", which")[0] for line in said] == [
+        'web/home.test.tsx still checks "/environment"',
+        'web/home.test.tsx still checks "xl:grid-cols-6"',
+    ]
+    # What the code never wrote (a text from elsewhere) is not its to keep.
+    assert not any('"Rien"' in line for line in said)
+    assert lost_ids(read, {}) == []
+
+
 def test_a_file_given_whole_is_whole_or_said_cut() -> None:
     # 2026-10-27: a page redesigned, written as edits, ran past its tokens:
     # given whole instead — every line, never a « … » standing for code.
@@ -563,6 +590,66 @@ def test_a_file_given_whole_is_whole_or_said_cut() -> None:
     # Said by the check every answer goes through.
     whole = _home_change({"path": "web/home.tsx", "content": HOME[:40]})
     assert any("given whole" in p for p in change_problems(whole, {f"{REPO}:web/home.tsx": HOME}))
+
+
+def test_the_writer_is_told_what_each_test_checks() -> None:
+    # 2026-10-28: Mistral dropped a link and an href two tests read — told
+    # them line by line, a writer keeps them.
+    test = (
+        'it("links", () => {\n'
+        "  render(<Home />);\n"
+        '  const card = screen.getByTestId("home-environment");\n'
+        '  expect(within(card).getByRole("link", { name: "Mon environnement" })).toHaveAttribute(\n'
+        '    "href",\n'
+        "  );\n"
+        "});\n"
+    )
+    assert assertions_of(test) == [
+        'const card = screen.getByTestId("home-environment");',
+        'expect(within(card).getByRole("link", { name: "Mon environnement" })).toHaveAttribute(',
+    ]
+    definition = SimpleNamespace(instructions="")
+    read = {f"{REPO}:web/home.tsx": HOME, f"{REPO}:web/home.test.tsx": test}
+    [_system, user] = change_messages(definition, {}, "analyse", read)  # type: ignore[arg-type]
+    material = json.loads(user.content)
+    assert material["tests_read"] == {"web/home.test.tsx": assertions_of(test)}
+
+
+def test_a_change_that_breaks_a_file_s_structure_is_asked_again() -> None:
+    # 2026-10-28: Mistral's edits cut a JSX block — a « } » lost, the page
+    # no longer parsed. Said where, before anything is proposed.
+    tsx = (
+        "export function A() {\n"
+        "  const re = /[)]+/g;\n"
+        '  return <p title="a)">{`x ${1}`} L\'environnement</p>;\n'
+        "}\n"
+    )
+    assert broken("web/a.tsx", tsx, tsx) is None
+    cut = tsx.replace("}\n", "", 1)
+    assert broken("web/a.tsx", tsx, cut) == "the « { » opened at line 1 is never closed"
+    assert broken("app/x.py", "def f():\n    return 1\n", "def f(:\n") is not None
+    assert broken("app/x.json", '{"a": 1}', '{"a": 1') is not None
+    # A file that did not hold together is not judged.
+    assert broken("web/a.tsx", "}{", "}") is None
+    # Said to the writer of the edit that cut the block.
+    edits = _home_change({"path": "web/home.tsx", "edits": [{"find": "  );\n", "replace": ""}]})
+    [said] = change_problems(edits, {f"{REPO}:web/home.tsx": HOME})
+    assert said.startswith("web/home.tsx: a « } » at line 7 closes nothing open")
+
+
+def test_what_a_model_leaves_out_leka_says_itself() -> None:
+    # 2026-10-28: Mistral left the repository out of every answer — all
+    # refused, the weakest model kept. LEKA knows it: the answer is taken.
+    bare = ChangeProposal.model_validate({"files": [{"path": "app/balance.py", "edits": []}]})
+    run = SimpleNamespace(inputs={"demande": "Corrige le solde\naffiché"})
+    analysis = "Le solde ignore les paiements en attente.\n\n```diff\n-a\n+b\n```"
+    done = completed(bare, run, analysis, None, {f"{REPO}:app/balance.py": BEFORE})  # type: ignore[arg-type]
+    assert (done.repository, done.title) == (REPO, "Corrige le solde")
+    assert done.summary.startswith("Le solde ignore les paiements en attente.")
+    said = ChangeProposal.model_validate(
+        {"repository": "a/b", "title": "T", "summary": "S", "files": []}
+    )
+    assert completed(said, run, analysis, REPO, {}) == said  # type: ignore[arg-type]
 
 
 def test_an_analysis_diff_becomes_edits_that_land_on_the_file() -> None:
@@ -589,6 +676,46 @@ def test_an_edit_copied_with_other_indentation_lands_with_the_file_s() -> None:
     text = "def f():\n    if x:\n        return 1\n"
     edit = Edit(find="if x:\n    return 1", replace="if x:\n    return 2")
     assert apply_edits(text, [edit]) == ("def f():\n    if x:\n        return 2\n", None)
+
+
+def test_a_text_is_found_in_a_long_file_and_a_path_said_with_its_repository_is_its_own() -> None:
+    # 2026-10-28: a label in a 750 KB dictionary, refused even by ranges —
+    # found by what is looked for; and « owner/repo:path » copied as a path.
+    from leka.capabilities.code_tools import found_in
+
+    text = "".join(f'  key{n}: "Valeur {n}",\n' for n in range(1, 30_001))
+    text += '    history: "Historique des analyses",\n'
+    found = found_in(text, "historique des ANALYSES")
+    assert found["found"] == [{"line": 30_001, "text": 'history: "Historique des analyses",'}]
+    assert (found["lines"], found["more"]) == (30_001, False)
+    assert found_in(text, "Valeur")["more"] is True
+    # A key's path, written nowhere whole in a nested dictionary: its last part.
+    nested = 'export const fr = {\n  overview: {\n    home: {\n      history: "Mes analyses",\n'
+    by_key = found_in(nested, "overview.home.history")
+    assert (by_key["by"], by_key["found"]) == (
+        "history:",
+        [{"line": 4, "text": 'history: "Mes analyses",'}],
+    )
+    proposed = ProposedFile.model_validate({"path": f"{REPO}:app/balance.py", "edits": []})
+    assert proposed.path == "app/balance.py"
+
+
+def test_a_long_file_is_shown_to_the_writer_where_the_analysis_changes_it() -> None:
+    # 2026-10-28: the writer was shown the first 60 KB of a 750 KB dictionary;
+    # what to change may be anywhere in it.
+    from leka.capabilities.changes import MOST_SHOWN, shown
+
+    text = "".join(f'  key{n}: "Valeur {n}",\n' for n in range(1, 40_001))
+    analysis = (
+        "```diff\n--- a/lib/fr.ts\n+++ b/lib/fr.ts\n@@\n"
+        '-  key30000: "Valeur 30000",\n+  key30000: "Mes analyses",\n```'
+    )
+    given = shown({f"{REPO}:lib/fr.ts": text}, analysis)[f"{REPO}:lib/fr.ts"]
+    assert given.startswith("[… lignes 1 à ")
+    assert 'key30000: "Valeur 30000",' in given
+    assert len(given) < MOST_SHOWN + 100
+    # Said nothing of where: its top.
+    assert shown({f"{REPO}:lib/fr.ts": text})[f"{REPO}:lib/fr.ts"].startswith("  key1: ")
 
 
 def test_a_file_is_read_whole_or_by_ranges_and_says_which() -> None:

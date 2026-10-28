@@ -259,6 +259,88 @@ def json_of(text: str) -> str:
     return fenced.group(1) if fenced else text.strip()
 
 
+# The words a JSON schema frames itself with — and the request's own
+# wrapper around it: an answer given inside them is that frame around the
+# answer, not the answer.
+_FRAME = frozenset(
+    {
+        "$schema",
+        "$defs",
+        "definitions",
+        "type",
+        "description",
+        "properties",
+        "required",
+        "additionalProperties",
+        "name",
+        "schema",
+        "json_schema",
+        "strict",
+    }
+)
+# What describes one field in a schema: a field given as such holds its
+# value in `default`, `value` or `example` — or, a list, in `items`.
+_NODE = frozenset(
+    {
+        "type",
+        "description",
+        "title",
+        "default",
+        "value",
+        "example",
+        "examples",
+        "items",
+        "enum",
+        "format",
+        "anyOf",
+        "$ref",
+        "minLength",
+        "maxLength",
+        "minItems",
+        "maxItems",
+    }
+)
+
+
+def _valued(node: Any) -> Any:
+    if not isinstance(node, dict) or not node or not set(node) <= _NODE:
+        return node
+    for key in ("value", "default", "example"):
+        if key in node:
+            return node[key]
+    items = node.get("items")
+    return items if isinstance(items, list) else node
+
+
+def unframed(text: str) -> list[str]:
+    """The answer some models give inside the schema's own frame, taken out
+    of it (2026-10-28: Mistral, nearly every time, each answer refused):
+    its fields beside the frame, {"properties": {the answer}}, or each field
+    as the schema describes it with its value in it — every reading that
+    may be it, the likeliest first; none when it is not so framed."""
+    try:
+        said = json.loads(text)
+    except ValueError:
+        return []
+    for _ in range(3):
+        if not isinstance(said, dict) or "properties" in said or not set(said) <= _FRAME:
+            break
+        said = said.get("schema") or said.get("json_schema")
+    if not isinstance(said, dict) or not isinstance(said.get("properties"), dict):
+        return []
+    beside = {k: v for k, v in said.items() if k not in _FRAME}
+    inside = said["properties"]
+    valued = {k: _valued(v) for k, v in inside.items()}
+    readings = [{**valued, **beside}, inside, valued, beside]
+    seen: list[str] = []
+    for reading in readings:
+        if reading:
+            dumped = json.dumps(reading, ensure_ascii=False)
+            if dumped not in seen:
+                seen.append(dumped)
+    return seen
+
+
 class Gateway:
     def __init__(
         self,
@@ -518,22 +600,33 @@ class Gateway:
         that does not match is asked again, then of the next model."""
         read: dict[str, Any] = {}
 
+        def invalid(error: ValidationError, done: Completion) -> InvalidOutputError:
+            # Cut at its token limit, thinking included: said as such,
+            # never as a wrong shape (2026-10-18).
+            if str(done.finish or "").upper() in CUT:
+                return InvalidOutputError(
+                    f"Cut at its limit of {request.max_tokens} tokens, thinking included."
+                )
+            errors = error.errors()
+            where = ".".join(str(p) for p in errors[0]["loc"]) if errors else ""
+            said = errors[0]["msg"] if errors else "invalid"
+            return InvalidOutputError(f"Not the shape asked ({where or 'answer'}: {said}).")
+
         def check(done: Completion) -> None:
+            text = json_of(done.text)
+            value: T | None = None
             try:
-                value = model.model_validate_json(json_of(done.text))
+                value = model.model_validate_json(text)
             except ValidationError as error:
-                # Cut at its token limit, thinking included: said as such,
-                # never as a wrong shape (2026-10-18).
-                if str(done.finish or "").upper() in CUT:
-                    raise InvalidOutputError(
-                        f"Cut at its limit of {request.max_tokens} tokens, thinking included."
-                    ) from error
-                errors = error.errors()
-                where = ".".join(str(p) for p in errors[0]["loc"]) if errors else ""
-                said = errors[0]["msg"] if errors else "invalid"
-                raise InvalidOutputError(
-                    f"Not the shape asked ({where or 'answer'}: {said})."
-                ) from error
+                # Given inside the schema's own frame: the answer within.
+                for reading in unframed(text):
+                    try:
+                        value = model.model_validate_json(reading)
+                        break
+                    except ValidationError:
+                        continue
+                if value is None:
+                    raise invalid(error, done) from error
             problems = list(verify(value)) if verify is not None else []
             if problems:
                 # Every problem said, so each is corrected at once.

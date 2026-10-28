@@ -50,7 +50,14 @@ from leka.capabilities.catalogue import CatalogueService, Entry, needs_of
 from leka.capabilities.code_tools import CODE_NAMES, CODE_TOOLS, code_handlers
 from leka.capabilities.dedicated import own_definition
 from leka.capabilities.definition import Definition, check_input
-from leka.capabilities.deliverable_check import deferred, missing, unread
+from leka.capabilities.deliverable_check import (
+    deferred,
+    elsewhere,
+    invented,
+    missing,
+    repeats,
+    unread,
+)
 from leka.capabilities.delivery import draw, organisation_of
 from leka.capabilities.dossier import draw_dossier, perimeter_of, summary_of, wants_dossier
 from leka.capabilities.gateway import (
@@ -133,9 +140,22 @@ FINAL_RENDER = frozenset(
 )
 # How long a run may take, all of it: its context, its tools, its model.
 RUN_BUDGET = 15 * 60.0
+# The hosts of code: an agent that needs one of them, and nothing else, rests
+# its answer on the code it reads (2026-10-28).
+CODE_HOSTS = frozenset({"github", "gitlab", "bitbucket"})
+
+
+def needs_code(definition: Definition) -> bool:
+    """Whether an agent's answer rests on code it must read: every source it
+    may need is a code host."""
+    return any(group and set(group) <= CODE_HOSTS for group in definition.sources)
+
+
 # A run found running this long had its worker go away; one queued this
-# long, its job — said failed, never left « en cours » (2026-10-14).
-ABANDONED = timedelta(minutes=30)
+# long, its job — said failed, never left « en cours » (2026-10-14). An hour:
+# an analysis, then a designer's screens drawn by a slower model, take more
+# than half of one (2026-10-28).
+ABANDONED = timedelta(minutes=60)
 FORGOTTEN = timedelta(minutes=45)
 # What an agent may write, at most: a deck's worth of markdown — its thinking
 # counts: a security review was cut mid-sentence at 16,000 (2026-10-20). Each
@@ -612,7 +632,32 @@ async def _run(
                         language=language or "fr",
                         framed=framed(definition),
                     ),
+                    # Never a model caught in a loop (2026-10-28).
+                    *repeats(text),
                     *(unread(text, read.get("files", {})) if reads_code else []),
+                    # The repository asked, not another (2026-10-28).
+                    *(
+                        elsewhere(
+                            " ".join(str(v) for v in (run.inputs or {}).values()),
+                            read.get("files", {}),
+                            read.get("paths", {}),
+                        )
+                        if reads_code
+                        else []
+                    ),
+                    # Read before it is described; nothing named it never saw
+                    # (2026-10-28).
+                    *(
+                        invented(
+                            text,
+                            read.get("files", {}),
+                            read.get("paths", {}),
+                            read.get("pulls", {}),
+                            reads_code=needs_code(definition),
+                        )
+                        if reads_code
+                        else []
+                    ),
                     # A design implemented whole, never by halves.
                     *(deferred(text) if target is not None else []),
                 ],

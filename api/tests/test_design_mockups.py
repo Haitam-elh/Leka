@@ -741,3 +741,15 @@ async def test_the_code_change_implements_the_design_it_comes_from_whole(
     assert writer["inputs"]["maquette"]["direction"] == "Calme"
     [proposed] = (await client.get("/api/v1/code-changes", params={"run_id": run_id})).json()
     assert proposed["files"][0]["path"] == "README.md"
+
+
+def test_a_mock_up_holds_on_a_phone_whatever_its_model_wrote() -> None:
+    # 2026-10-28: Mistral's lines kept on one line pushed every card 137 px
+    # past a 390 px screen; its lists kept their bullets, its links their
+    # underline. Its own style first wins; on a phone, nothing passes the edge.
+    from leka.capabilities.deliverables.design import BASE, PHONE, DesignMockup, page
+
+    shown = page(DesignMockup(name="Accueil", css=".x{white-space:nowrap}", body="<p>x</p>"))
+    assert shown.index(BASE) < shown.index(".x{white-space:nowrap}") < shown.index(PHONE)
+    assert "list-style:none" in BASE and "text-decoration:inherit" in BASE
+    assert PHONE.startswith("@media (max-width:640px)") and "white-space:normal!important" in PHONE

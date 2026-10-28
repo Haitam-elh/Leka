@@ -459,7 +459,17 @@ def output_of(text: str, format_: str) -> str | None:
         except ValueError:
             return None
         return json.dumps(parsed, ensure_ascii=False) if isinstance(parsed, dict) else None
-    return said
+    # Never the em dash a person reads as a machine's (2026-10-28: Mistral
+    # writes it whatever it is told): outside code, the punctuation it means.
+    from leka.capabilities.deliverables.deck import plain
+
+    lines: list[str] = []
+    code = False
+    for line in said.split("\n"):
+        fence = line.lstrip().startswith("```")
+        lines.append(line if code or fence else plain(line))
+        code = code != fence
+    return "\n".join(lines)
 
 
 @dataclass(frozen=True)

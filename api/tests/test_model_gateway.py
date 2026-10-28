@@ -310,6 +310,28 @@ async def test_a_busy_provider_is_tried_again_then_the_fallback_answers(
     assert calls[0].error == "503: overloaded"
 
 
+async def test_an_answer_given_inside_its_schema_s_frame_is_taken(workspace: uuid.UUID) -> None:
+    # 2026-10-28: Mistral answered inside the schema's own frame, nearly every
+    # time — {"description": …, "properties": {the answer}} — and each was refused.
+    framed = {"description": "Le verdict", "properties": {"goal": "act", "confidence": 0.7}}
+    script = Script({MISTRAL: [chat(json.dumps(framed))]})
+    no_google = {**KEYS, "google": None}
+    read = await _ask(
+        workspace, script, lambda g: g.structured(ask(tier=Tier.FAST), Verdict), keys=no_google
+    )
+    assert read.value == Verdict(goal="act", confidence=0.7)
+    from leka.capabilities.gateway.service import unframed
+
+    # Its fields beside the frame, or each given as the schema describes it.
+    beside = {"type": "object", "properties": {"goal": {"type": "string"}}, "goal": "act"}
+    assert json.loads(unframed(json.dumps(beside))[0])["goal"] == "act"
+    described = {"properties": {"goal": {"type": "string", "default": "act"}, "confidence": 0.7}}
+    assert json.loads(unframed(json.dumps(described))[0]) == {"goal": "act", "confidence": 0.7}
+    # An answer that is no frame gives nothing to read again.
+    assert unframed(json.dumps({"goal": "x", "confidence": 1})) == []
+    assert unframed("not json") == []
+
+
 async def test_a_structured_answer_is_checked_and_asked_again(workspace: uuid.UUID) -> None:
     script = Script(
         {

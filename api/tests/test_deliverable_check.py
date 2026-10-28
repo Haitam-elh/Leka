@@ -182,3 +182,64 @@ def test_a_line_cited_is_a_line_read() -> None:
     assert "api/app/errors.py:100 (never read)" in told
     assert "main.py:103" not in told and "supabase" not in told and "schema-health" not in told
     assert unread("`main.py:103`, `api/app/intentions.py:12-14`", read) == []
+
+
+def test_an_agent_that_reads_code_reads_it_and_names_only_what_it_saw() -> None:
+    # 2026-10-28: Mistral, asked how acme/frontend is organised, read no file
+    # and described `app/main.py`, `requirements.txt` — none of them there.
+    from leka.capabilities.deliverable_check import invented
+
+    said = "Le point d'entrée est `app/main.py`, les dépendances `requirements.txt`."
+    [nothing] = invented(said, {}, {}, {}, reads_code=True)
+    assert nothing.startswith("No file of the repository was read")
+    # An agent that may answer from elsewhere (a document) need not read code
+    # — but names no file it never saw (2026-10-28: a performance analysis
+    # described `app/routes/payments.py`, read by no one).
+    [named] = invented(said, {}, {}, {}, reads_code=False)
+    assert "app/main.py, requirements.txt." in named
+    assert invented("Le service est lent depuis hier.", {}, {}, {}, reads_code=False) == []
+    files = {"acme/web:src/app/page.tsx": "x"}
+    listed = {"acme/web": ["src/app/page.tsx", "package.json", "src/lib/api.ts"]}
+    pulls = {"acme/web#7": {"files": [{"path": "src/lib/new.ts"}]}}
+    fine = "Lire `src/app/page.tsx:3`, `package.json`, `lib/api.ts` et `src/lib/new.ts`."
+    assert invented(fine, files, listed, pulls, reads_code=True) == []
+    [unseen] = invented(said + fine, files, listed, pulls, reads_code=True)
+    assert "app/main.py, requirements.txt." in unseen
+
+
+def test_a_model_caught_in_a_loop_is_told_so() -> None:
+    # 2026-10-28: « Je vais lister les fichiers dans `public`. », ten times,
+    # delivered as the deliverable.
+    from leka.capabilities.deliverable_check import repeats
+
+    looped = "Le fichier est trop long. " + "Je vais lister les fichiers dans `public`. " * 6
+    [said] = repeats(looped)
+    assert "Je vais lister les fichiers dans `public`." in said
+    assert repeats("## Résumé\n\nUne phrase.\n\n## Risques\n\nAucun risque connu ici.") == []
+
+
+def test_an_agent_asked_about_one_repository_reads_that_one() -> None:
+    # 2026-10-28: asked how acme/frontend is organised, Mistral read and
+    # described acme/backend.
+    from leka.capabilities.deliverable_check import elsewhere
+
+    read = {"acme/backend:leka/api/intentions.py": "x"}
+    [said] = elsewhere("Explique le code de acme/frontend", read, {})
+    assert said.startswith("You were asked about acme/frontend and read acme/backend")
+    assert elsewhere("Explique le code de acme/frontend", read, {"acme/frontend": ["a.ts"]}) == []
+    # A path is no repository; nothing read, nothing said.
+    assert elsewhere("Corrige components/overview dans le dépôt", read, {}) == []
+    assert elsewhere("Explique acme/frontend", {}, {}) == []
+
+
+def test_a_deliverable_says_no_em_dash_outside_its_code() -> None:
+    # 2026-10-28: Mistral writes « — » whatever it is told; a person reads
+    # it as a machine's. Its code is left as it is.
+    from leka.capabilities.runtime import output_of
+
+    said = (
+        "# Architecture — Billing API\n\nSert Checkout — et Ledger.\n```py\nx = 1  # a — b\n```\n"
+    )
+    assert output_of(said, "markdown") == (
+        "# Architecture : Billing API\n\nSert Checkout : et Ledger.\n```py\nx = 1  # a — b\n```"
+    )

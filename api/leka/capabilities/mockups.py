@@ -73,9 +73,11 @@ MARK = "<!-- leka-design -->"
 PLAN_TOKENS = 16_000
 DRAW_TOKENS = 48_000
 # Each step's time: the plan, then today, then the directions at once —
-# within the half hour after which a running run is said abandoned.
+# within the hour after which a running run is said abandoned.
 PLAN_BUDGET = 3 * 60.0
-DRAW_BUDGET = 5 * 60.0
+# A model slower than Gemini (Mistral, 2026-10-28) draws a whole screen in
+# more than five minutes.
+DRAW_BUDGET = 12 * 60.0
 DESIGN_BUDGET = PLAN_BUDGET + 2 * DRAW_BUDGET
 # A gateway's reason for no answer, as the design's error.
 NO_MODEL = {"none": "no_model", "timeout": "timeout", "limited": "limited", "blocked": "refused"}
@@ -432,6 +434,10 @@ async def propose_design(
         )
     except _NotDrawnError as failed:
         return Designed(None, failed.code, usage, _said("plan", failed.said))
+    if not plan.screen.strip():
+        asked = run.inputs or {}
+        named = str(asked.get("perimetre") or asked.get("demande") or "").strip()
+        plan = plan.model_copy(update={"screen": named.split("\n")[0][:120] or "Écran"})
     planned = {**material, "screen": plan.screen, "viewport": plan.viewport}
     try:
         today = await _asked(

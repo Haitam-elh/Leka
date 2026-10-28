@@ -78,7 +78,7 @@ async def test_an_incident_is_routed_to_the_investigator_and_investigated(
     assert "incident-investigation" in routed.json()["selected"]
 
     billing = str(model[BILLING])
-    report = f"# Post-mortem — Billing API\n\nCheckout dépend de Billing API [{billing}]."
+    report = f"# Post-mortem : Billing API\n\nCheckout dépend de Billing API [{billing}]."
     script = leka_gemini(
         gemini(call={"name": "dependencies", "args": {"id": billing, "direction": "used_by"}}),
         gemini(call={"name": "what_happened", "args": {"id": billing, "days": 7}}),

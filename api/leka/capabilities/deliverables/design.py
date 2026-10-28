@@ -134,7 +134,8 @@ class DesignPlan(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="ignore")
 
-    screen: str = Field(max_length=120, description="L'écran dessiné, ex. « Agents ».")
+    # Left out by a model, LEKA names it from the request (2026-10-28).
+    screen: str = Field(default="", max_length=120, description="L'écran dessiné, ex. « Agents ».")
     viewport: Literal["desktop", "mobile"] = Field(default="desktop")
     directions: list[DesignDirection] = Field(min_length=1, max_length=MOST_PROPOSALS)
     recommended: int = Field(default=0, ge=0)
@@ -355,6 +356,23 @@ BASE = (
     "Arial,sans-serif;font-size:14px;line-height:1.5;color:#1f2433;background:#fff;"
     "-webkit-font-smoothing:antialiased}"
     "img,svg{max-width:100%}button,input,select,textarea{font:inherit}"
+    # What an application's own reset gives, and a model forgets (2026-10-28:
+    # Mistral's screens showed list bullets, underlined links, bare buttons):
+    # its own style comes after and wins.
+    "ul,ol{list-style:none;margin:0;padding:0}a{color:inherit;text-decoration:inherit}"
+    "h1,h2,h3,h4,h5,h6,p,figure,blockquote{margin:0}"
+    "button{background:transparent;border:0;padding:0;color:inherit;cursor:pointer}"
+)
+# After its own style, on a phone: nothing wider than what holds it, text
+# that wraps (2026-10-28: Mistral's lines kept on one line, `nowrap`, pushed
+# every card 137 px past a 390 px screen).
+PHONE = (
+    "@media (max-width:640px){body *:not(svg):not(svg *){min-width:0!important;"
+    "max-width:100%!important}body *:not(pre):not(code):not(svg):not(svg *){"
+    "white-space:normal!important;overflow-wrap:break-word}"
+    # A row that cannot hold its items wraps them, never squeezes its text
+    # to a letter a line.
+    "body *{flex-wrap:wrap}}"
 )
 
 
@@ -379,7 +397,8 @@ def page(mockup: DesignMockup, *, language: str = "fr") -> str:
         f'<meta http-equiv="Content-Security-Policy" content="{POLICY}">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
         f"<title>{html.escape(mockup.name)}</title>"
-        f"<style>{BASE}</style><style>{clean_css(mockup.css)}</style></head>"
+        f"<style>{BASE}</style><style>{clean_css(mockup.css)}</style>"
+        f"<style>{PHONE}</style></head>"
         f"<body>{clean_body(mockup.body)}</body></html>"
     )
 
@@ -402,6 +421,7 @@ def summary(proposal: DesignProposal, key: str) -> dict[str, object]:
 __all__ = [
     "BASE",
     "MOST_PROPOSALS",
+    "PHONE",
     "POLICY",
     "DesignChange",
     "DesignDirection",
