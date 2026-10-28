@@ -48,6 +48,7 @@ reviews and merges.
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import difflib
 import json
@@ -60,7 +61,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -133,6 +134,14 @@ class ProposedFile(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
     path: str = Field(description="Le chemin du fichier dans le dépôt, ex. « api/app/main.py ».")
+
+    @field_validator("path")
+    @classmethod
+    def _own(cls, path: str) -> str:
+        """The path alone — a model copies « owner/repo:path » as it was
+        shown the files (2026-10-28: every file then « not found »)."""
+        return re.sub(r"^[\w.-]+/[\w.-]+:", "", path.strip())
+
     edits: list[Edit] = Field(
         default_factory=list,
         description="Un fichier qui existe : ses remplacements, dans l'ordre — jamais le fichier "
@@ -152,12 +161,16 @@ class ChangeProposal(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="ignore")
 
-    repository: str = Field(description="Le dépôt, en nom complet : « owner/repo ».")
+    # What LEKA knows already, it says itself when a model leaves it out
+    # (2026-10-28: Mistral forgot the repository, every answer refused).
+    repository: str = Field(default="", description="Le dépôt, en nom complet : « owner/repo ».")
     base_branch: str = Field(
         default="", description="La branche lue et visée ; vide : sa branche par défaut."
     )
-    title: str = Field(description="Le titre de la pull request, court, à l'impératif.")
-    summary: str = Field(description="Ce qui change et pourquoi, pour la personne qui décide.")
+    title: str = Field(default="", description="Le titre de la pull request, court, à l'impératif.")
+    summary: str = Field(
+        default="", description="Ce qui change et pourquoi, pour la personne qui décide."
+    )
     files: list[ProposedFile] = Field(description="Chaque fichier modifié, ajouté ou supprimé.")
 
 
@@ -366,7 +379,11 @@ changed.
 the CI runs. What a test reads of a file (a data-testid, a text, a role, an \
 export it imports) is kept on what stands for it now, or that test is changed \
 in this same change to read what the file now holds. Never delete a test, \
-never skip one, never weaken what it checks.
+never skip one, never weaken what it checks. `tests_read` lists, test by \
+test, the lines that check something: each link and its href, role and \
+accessible name, text, test id, class and attribute they read stays on the \
+screen as it is (the element kept, with its role, name and href) unless the \
+analysis removes it; then that test changes with it, in this same change.
 Answer with the JSON object only.
 
 Never write the em dash « — »: a colon, a comma, a semicolon or \
@@ -420,6 +437,20 @@ _READS_ID = re.compile(r"""(?:ByTestId\(\s*|data-testid=\\?)["'`]([\w:./-]+)["'`
 _HAS_ID = re.compile(r"""data-testid=["']([\w:./-]+)["']""")
 
 
+# A line of a test that checks something: an expectation, a query.
+_CHECKS = re.compile(
+    r"\b(?:expect|assert|(?:get|getAll|find|findAll|query|queryAll)By\w+|locator|getBy\w+)\s*\("
+)
+MOST_CHECKS = 80
+
+
+def assertions_of(test: str) -> list[str]:
+    """What a test checks, line by line, as written: what the writer keeps
+    (2026-10-28: Mistral dropped a link and an href two tests read)."""
+    lines = (line.strip() for line in test.split("\n"))
+    return list(dict.fromkeys(line for line in lines if _CHECKS.search(line)))[:MOST_CHECKS]
+
+
 def is_test(path: str) -> bool:
     return bool(_TEST_PATH.search(path))
 
@@ -451,6 +482,107 @@ def covering_tests(paths: Sequence[str], tree: Sequence[str]) -> list[str]:
     words = set().union(*(_words(p) for p in code)) if code else set()
     found += [t for t in tests if t not in found and _words(t) & words]
     return found[:MOST_TESTS]
+
+
+# What opens, and what closes it, in code with braces.
+_PAIRS = {")": "(", "]": "[", "}": "{"}
+_BRACED = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".css", ".scss", ".java", ".go", ".cs")
+# What may come before a quote that opens a string — not an apostrophe in
+# JSX text (« L'environnement »).
+_BEFORE_STRING = set("=(,:[{?!&|+-*/%<>;")
+
+
+def _braces(text: str) -> str | None:
+    """Where the brackets of code stop matching — strings, template literals
+    and comments passed over — or None when they all match."""
+    stack: list[tuple[str, int]] = []
+    line, i, n = 1, 0, len(text)
+    last = ""
+    while i < n:
+        c = text[i]
+        if c == "\n":
+            line += 1
+        if text.startswith("//", i):
+            i = text.find("\n", i)
+            i = n if i < 0 else i
+            continue
+        if text.startswith("/*", i):
+            end = text.find("*/", i + 2)
+            end = n if end < 0 else end + 2
+            line += text.count("\n", i, end)
+            i = end
+            continue
+        # A regular expression where a value starts: /…/flags, its own
+        # brackets passed over.
+        if c == "/" and (last in _BEFORE_STRING or last == "") and not text.startswith("/>", i):
+            j, kind = i + 1, False
+            while j < n and text[j] != "\n" and (text[j] != "/" or kind):
+                if text[j] == "\\":
+                    j += 1
+                elif text[j] == "[":
+                    kind = True
+                elif text[j] == "]":
+                    kind = False
+                j += 1
+            if j < n and text[j] == "/":
+                i, last = j + 1, "/"
+                while i < n and text[i].isalpha():
+                    i += 1
+                continue
+        if c in '"`' or (c == "'" and (last in _BEFORE_STRING or last == "")):
+            j = i + 1
+            while j < n and text[j] != c:
+                if text[j] == "\\":
+                    j += 1
+                elif c != "`" and text[j] == "\n":
+                    break
+                j += 1
+            line += text.count("\n", i, min(j, n))
+            i, last = j + 1, c
+            continue
+        if c in "([{":
+            stack.append((c, line))
+        elif c in ")]}":
+            if not stack or stack[-1][0] != _PAIRS[c]:
+                return f"a « {c} » at line {line} closes nothing open"
+            stack.pop()
+        if not c.isspace():
+            last = c
+        i += 1
+    if stack:
+        opened, at = stack[-1]
+        return f"the « {opened} » opened at line {at} is never closed"
+    return None
+
+
+def broken(path: str, before: str, after: str) -> str | None:
+    """Whether a change leaves a file that held together broken — Python
+    parsed, JSON read, code with braces matched — said where (2026-10-28:
+    Mistral's edits cut a JSX block, a « } » lost). A file that did not
+    hold together before is not judged."""
+    if path.endswith(".py"):
+        try:
+            ast.parse(before)
+        except SyntaxError:
+            return None
+        try:
+            ast.parse(after)
+        except SyntaxError as error:
+            return f"it no longer parses: {error.msg} at line {error.lineno}"
+        return None
+    if path.endswith(".json"):
+        try:
+            json.loads(before)
+        except ValueError:
+            return None
+        try:
+            json.loads(after)
+        except ValueError as error:
+            return f"it is no longer JSON: {error}"
+        return None
+    if path.endswith(_BRACED) and _braces(before) is None:
+        return _braces(after)
+    return None
 
 
 def to_rewrite(analysis: str, read: Mapping[str, str]) -> list[str]:
@@ -512,41 +644,67 @@ def _ids(text: str) -> set[str]:
     return set(_HAS_ID.findall(text))
 
 
+# A value a test checks, quoted in its line: a class, an address, a label
+# the code writes.
+_QUOTED = re.compile(r"""(["'`])((?:(?!\1)[^\\\n]|\\.){3,120})\1""")
+
+
+def _checked(test: str) -> set[str]:
+    """The quoted values a test's checks name — never a template."""
+    return {
+        value
+        for line in assertions_of(test)
+        for _quote, value in _QUOTED.findall(line)
+        if "${" not in value
+    }
+
+
 def lost_ids(read: Mapping[str, str], after: Mapping[str, str]) -> list[str]:
-    """The test ids a change takes off the screen while a test still reads
-    them — each said with the test (2026-10-27, #423)."""
+    """What a change takes out of the code while a test still checks it —
+    a test id (2026-10-27, #423), and any value a test names that the code
+    wrote: a class, an address, a label (2026-10-28: Mistral dropped a link's
+    href and a grid's class, two tests red) — each said with its test."""
     now = {**read, **after}
     code_now = [t for p, t in now.items() if not is_test(p)]
-    before = set().union(*(_ids(t) for p, t in read.items() if not is_test(p)))
+    code_before = [t for p, t in read.items() if not is_test(p)]
+    before = set().union(*(_ids(t) for t in code_before))
     # Still named, however: a constant, an id built in a map — not lost.
     gone = {
         each
         for each in before - set().union(*(_ids(t) for t in code_now))
         if not any(f"{q}{each}{q}" in t for t in code_now for q in "\"'`")
     }
-    if not gone:
-        return []
     said: list[str] = []
     for path, text in read.items():
         if not is_test(path):
             continue
-        reads = set(_READS_ID.findall(after.get(path, text))) & gone
+        test = after.get(path, text)
+        reads = set(_READS_ID.findall(test)) & gone
         for each in sorted(reads):
             said.append(
                 f'{path} still reads data-testid "{each}", which this change removes: keep it '
                 "on the element that stands for it now, or change that test in this same change."
             )
+        values = _checked(test) - reads - before
+        for each in sorted(values):
+            if any(each in t for t in code_before) and not any(each in t for t in code_now):
+                said.append(
+                    f'{path} still checks "{each}", which this change takes out of the code: '
+                    "keep it where it stands for the same thing now, or change that test in this "
+                    "same change."
+                )
     return said
 
 
 def change_problems(
-    proposal: ChangeProposal, read: Mapping[str, str], *, ids: bool = True
+    proposal: ChangeProposal, read: Mapping[str, str], *, ids: bool = True, empty: bool = False
 ) -> list[str]:
     """Why a change cannot be applied as written — said to the model, which
     writes it again (2026-10-25: edits that did not land left the change
     unwritten until a person asked again). Each edit held to the file as
-    the writer was given it; a change of no file is none."""
-    if not proposal.files:
+    the writer was given it; a change of no file is none — unless `empty`:
+    a test adapted that still holds as it is (2026-10-28)."""
+    if not proposal.files and not empty:
         return ["No file is changed: write the edits the analysis proposes."]
     given = {key.split(":", 1)[-1]: text for key, text in read.items()}
     problems: list[str] = []
@@ -577,6 +735,14 @@ def change_problems(
             )
         elif changed is not None:
             after[path] = changed
+    # Each file still holds together (2026-10-28).
+    for path, text in after.items():
+        why = broken(path, given.get(path, ""), text) if path in given else None
+        if why and text:
+            problems.append(
+                f"{path}: {why} once your edits are applied — copy whole blocks in `find`, "
+                "and give each `replace` every bracket its block closes."
+            )
     # The tests given beside it stay green (2026-10-27, #423) — asked
     # ASKED_FOR_IDS times at most: past that, the CI says it.
     if ids:
@@ -584,18 +750,41 @@ def change_problems(
     return problems
 
 
-def shown(read: Mapping[str, str]) -> dict[str, str]:
+def _anchor(path: str, text: str, analysis: str) -> int:
+    """Where in a long file the analysis' change is: the first line its diff
+    copies for that file — 0, its top, when it says none."""
+    for each in edits_from_diff(analysis):
+        if each.path.strip("/") != path and not path.endswith(f"/{each.path.strip('/')}"):
+            continue
+        for edit in each.edits:
+            for line in edit.find.split("\n"):
+                found = text.find(line.strip()) if len(line.strip()) >= 8 else -1
+                if found >= 0:
+                    return found
+    return 0
+
+
+def shown(read: Mapping[str, str], analysis: str = "") -> dict[str, str]:
     """The files the agent read, as the writer is shown them: each whole up
     to MOST_SHOWN, all up to MOST_SHOWN_ALL — the last ones read left out
-    first, said so."""
+    first, said so. A file longer, around where the analysis changes it
+    (2026-10-28: a label 47 KB into a 750 KB dictionary)."""
     given: dict[str, str] = {}
     left = MOST_SHOWN_ALL
     for name, text in read.items():
         if left <= 0:
             given[name] = "[non montré : trop de fichiers lus]"
             continue
-        cut = text[: min(MOST_SHOWN, left)]
-        given[name] = cut if len(cut) == len(text) else cut + "\n[… coupé]"
+        room = min(MOST_SHOWN, left)
+        start = 0
+        if len(text) > room:
+            at = _anchor(name.split(":", 1)[-1], text, analysis)
+            start = max(0, min(at - room // 2, len(text) - room))
+            start = text.rfind("\n", 0, start) + 1 if start else 0
+        cut = text[start : start + room]
+        head = f"[… lignes 1 à {text.count(chr(10), 0, start)} non montrées]\n" if start else ""
+        tail = "" if start + len(cut) >= len(text) else "\n[… coupé]"
+        given[name] = head + cut + tail
         left -= len(cut)
     return given
 
@@ -627,8 +816,15 @@ def change_messages(
     material: dict[str, object] = {
         "inputs": dict(inputs),
         "analysis": analysis,
-        "files": shown(read or {}),
+        "files": shown(read or {}, analysis),
     }
+    checked = {
+        key.split(":", 1)[-1]: assertions_of(text)
+        for key, text in (read or {}).items()
+        if is_test(key.split(":", 1)[-1])
+    }
+    if any(checked.values()):
+        material["tests_read"] = {path: lines for path, lines in checked.items() if lines}
     if only:
         material["only"] = list(only)
     if changed:
@@ -684,6 +880,10 @@ async def repositories_here(session: AsyncSession, workspace_id: uuid.UUID) -> l
             continue
         try:
             scope = await (await service.open_connector(source)).list_scope()
+        except ConnectorError as error:
+            # Its credentials gone: said in a line, the next source read.
+            logger.warning("repositories_not_listed", source=str(source.id), code=str(error)[:120])
+            continue
         except Exception:
             logger.warning("repositories_not_listed", source=str(source.id), exc_info=True)
             continue
@@ -1023,6 +1223,7 @@ async def propose_change(
         failed = Proposed(None, "error")
     if failed is not None:
         return _from_diff_else(session, run, analysis, found, base, from_diff, failed)
+    proposal = completed(proposal, run, analysis, found[2] if found else None, read or {})
     written = await code_for(session, run.workspace_id, proposal.repository.strip())
     if written is None:
         return _from_diff_else(
@@ -1061,6 +1262,27 @@ async def _all[T](asked: Sequence[Awaitable[T]]) -> list[T]:
         for task in tasks:
             task.cancel()
         raise
+
+
+def completed(
+    proposal: ChangeProposal,
+    run: AgentRun,
+    analysis: str,
+    repository: str | None,
+    read: Mapping[str, str],
+) -> ChangeProposal:
+    """What a model left out and LEKA knows, said by LEKA: the repository
+    the change was read from, a title from the request, a summary from the
+    analysis (2026-10-28)."""
+    named = repository or next((key.split(":", 1)[0] for key in read if ":" in key), "")
+    asked = str((run.inputs or {}).get("demande") or "").strip().split("\n")[0]
+    return proposal.model_copy(
+        update={
+            "repository": proposal.repository.strip() or named,
+            "title": proposal.title.strip() or asked[:120] or "Modification proposée",
+            "summary": proposal.summary.strip() or _summary_of(analysis),
+        }
+    )
 
 
 def _cut(error: NoModelError) -> bool:
@@ -1105,7 +1327,9 @@ async def _by_file(
 
         def verify(proposal: ChangeProposal) -> list[str]:
             mine = _only(proposal, paths)
-            return change_problems(mine, read, ids=False) + (also(mine) if also else [])
+            # A test that still holds is left as it is: no file is an answer.
+            problems = change_problems(mine, read, ids=False, empty=changed is not None)
+            return problems + (also(mine) if also else [])
 
         async with limit, session_factory() as own:
             try:
@@ -2104,8 +2328,9 @@ class RepairProposal(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
     cause: str = Field(
+        default="",
         description="Ce qui a échoué et pourquoi, en une ou deux phrases, pour la personne qui "
-        "décide."
+        "décide.",
     )
     summary: str = Field(default="", description="Ce que la réparation change, en une phrase.")
     files: list[ProposedFile] = Field(

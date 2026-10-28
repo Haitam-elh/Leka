@@ -43,6 +43,8 @@ from leka.connectors.github.connector import API_VERSION, FULL_NAME, GitHubConne
 
 # A file LEKA reads, or writes, at most.
 MAX_FILE_BYTES = 200_000
+# A file too long to be given at once, read whole all the same up to this.
+MAX_LONG_BYTES = 5_000_000
 # A lock file LEKA reads whole, at most: read by the server, never given to
 # a model as it is (2026-10-22: the dependency analysis).
 MAX_LOCK_BYTES = 20_000_000
@@ -322,7 +324,10 @@ class GitHubCode:
         if not isinstance(found, dict) or found.get("type") != "file":
             raise CodeRefusedError("not_found", f"{path} n'est pas un fichier.")
         if int(found.get("size") or 0) > MAX_FILE_BYTES:
-            raise CodeRefusedError("too_large", f"{path} est trop gros pour être lu ici.")
+            # Read whole all the same, up to MAX_LONG_BYTES: a dictionary of
+            # labels, a generated file — what a change edits (2026-10-28: a
+            # label in a 750 KB dictionary, every change to it refused).
+            return await self.read_whole(repository, path, ref, most=MAX_LONG_BYTES)
         try:
             return base64.b64decode(str(found.get("content") or "")).decode("utf-8")
         except (ValueError, UnicodeDecodeError) as error:
@@ -533,9 +538,21 @@ class GitHubCode:
             if change.content is None:
                 entry["sha"] = None
             else:
-                if len(change.content.encode()) > MAX_FILE_BYTES:
+                size = len(change.content.encode())
+                if size > MAX_LONG_BYTES:
                     raise CodeRefusedError("too_large", f"{change.path} est trop gros.")
-                entry["content"] = change.content
+                if size > MAX_FILE_BYTES:
+                    # A long file goes as its own blob, then by its sha
+                    # (2026-10-28: a dictionary of labels, 750 KB).
+                    blob = await client.post(
+                        f"/repos/{name}/git/blobs",
+                        json={"content": change.content, "encoding": "utf-8"},
+                    )
+                    if blob.status_code != 201:
+                        raise self._refused(blob, change.path)
+                    entry["sha"] = str(blob.json()["sha"])
+                else:
+                    entry["content"] = change.content
             tree_entries.append(entry)
         tree = await client.post(
             f"/repos/{name}/git/trees",

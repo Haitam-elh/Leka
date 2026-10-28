@@ -222,7 +222,7 @@ async def test_the_architect_runs_end_to_end(
     store: LocalObjectStore,
 ) -> None:
     await _ready(acme)
-    deck = f"# Architecture — Billing API\n\nBilling API [{model[BILLING]}] sert Checkout."
+    deck = f"# Architecture : Billing API\n\nBilling API [{model[BILLING]}] sert Checkout."
     content = drawn_deck(app_view=False)
     script = leka_gemini(
         gemini(call={"name": "search_entities", "args": {"query": "billing"}}),
@@ -375,7 +375,7 @@ async def test_a_report_alone_then_its_deck_drawn_after_it_never_run_again(
     """2026-10-16: launched without asking for files, the architect gave its
     report alone. Its deck is drawn after it, from what it delivered."""
     await _ready(acme)
-    analysis = f"# Architecture — Billing API\n\nBilling API [{model[BILLING]}] sert Checkout."
+    analysis = f"# Architecture : Billing API\n\nBilling API [{model[BILLING]}] sert Checkout."
     content = drawn_deck(app_view=False)
     leka_gemini(gemini(analysis), gemini(content.model_dump_json()))
     asked: list[tuple[uuid.UUID, list[str]]] = []
@@ -433,7 +433,7 @@ async def test_files_drawn_after_never_left_waiting_failed_or_lost(
     """2026-10-16: « en préparation » stayed forever. A deck the model cannot
     write ends it, said why; a request lost (no worker) is asked again."""
     await _ready(acme)
-    analysis = "# Architecture — Billing API\n\nRien de plus dans les sources."
+    analysis = "# Architecture : Billing API\n\nRien de plus dans les sources."
     leka_gemini(gemini(analysis), *[gemini("Voici le deck : pas de JSON.")] * 10)
 
     async def files(workspace_id: uuid.UUID, run_id: uuid.UUID, formats: list[str]) -> bool:
@@ -482,7 +482,7 @@ async def test_a_deck_the_model_cannot_write_never_fails_the_run(
     store: LocalObjectStore,
 ) -> None:
     await _ready(acme)
-    analysis = "# Architecture — Billing API\n\nRien de plus dans les sources."
+    analysis = "# Architecture : Billing API\n\nRien de plus dans les sources."
     leka_gemini(gemini(analysis), *[gemini("Voici le deck : pas de JSON.")] * 10)
     started = await _start(client)
     assert await _run(acme, started["id"]) == {"status": "succeeded"}
@@ -510,7 +510,7 @@ async def test_an_agent_that_keeps_reading_answers_with_what_it_read(
     with what it read — never a failed run for having looked too much."""
     await _ready(acme)
     asking = gemini(call={"name": "search_entities", "args": {"query": "billing"}})
-    analysis = "# Architecture — Billing API\n\nCe que les sources disent."
+    analysis = "# Architecture : Billing API\n\nCe que les sources disent."
     script = leka_gemini(
         *[asking] * (ROUNDS - 1),
         gemini(analysis),
@@ -548,7 +548,7 @@ async def test_a_model_that_ignores_no_more_tools_is_asked_with_none_declared(
     with no tool declared, what it read given as text — and it answers."""
     await _ready(acme)
     asking = gemini(call={"name": "search_entities", "args": {"query": "billing"}})
-    analysis = "# Architecture — Billing API\n\nCe que les sources disent."
+    analysis = "# Architecture : Billing API\n\nCe que les sources disent."
     script = leka_gemini(
         *[asking] * ROUNDS,
         gemini(analysis),

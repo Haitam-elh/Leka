@@ -19,6 +19,7 @@ that names them (`tools:`), never by default.
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from collections.abc import Mapping
 from typing import Any
@@ -63,7 +64,10 @@ READ_FILE = AgentTool(
     description=(
         "The text of one file of a connected GitHub repository, on a branch — with how many "
         "lines it has and whether you were given all of them. A long file is read by ranges "
-        "of lines (from_line, to_line)."
+        "of lines (from_line, to_line). To find where a text is in a file, however long (a "
+        "label in a dictionary, a function's name), give `find`: the lines that hold it, "
+        "with their numbers — then read around them. A label is found best by the words "
+        "people see on the screen."
     ),
     parameters={
         "type": "object",
@@ -73,6 +77,10 @@ READ_FILE = AgentTool(
             "branch": {"type": "string", "description": "The branch; its default when empty."},
             "from_line": {"type": "integer", "description": "The first line to read (1)."},
             "to_line": {"type": "integer", "description": "The last line to read (its last)."},
+            "find": {
+                "type": "string",
+                "description": "A text to look for: the lines that hold it, not the file.",
+            },
         },
         "required": ["repository", "path"],
     },
@@ -158,6 +166,36 @@ def _line(said: object, default: int) -> int:
         return default
 
 
+# Lines given for a text looked for, at most; and how long a file may be to
+# be read by ranges when it is too long to be read whole (2026-10-28: the
+# labels of a 750 KB dictionary, refused even by ranges).
+MOST_FOUND = 40
+MOST_LONG = 5_000_000
+
+
+def found_in(text: str, wanted: str) -> dict[str, object]:
+    """The lines of a file that hold a text — case aside — with their
+    numbers: where to read around."""
+    needle = wanted.strip().lower()
+    lines = text.splitlines()
+    hits = [(n, line) for n, line in enumerate(lines, 1) if needle and needle in line.lower()]
+    said: dict[str, object] = {}
+    # A key's path in a nested dictionary (overview.home.history) is written
+    # nowhere whole: its last part, as a key (« history: »), is (2026-10-28).
+    last = needle.rsplit(".", 1)[-1]
+    if not hits and "." in needle and last:
+        key = re.compile(rf"(?:^|[\s{{,]){re.escape(last)}\s*[:=]")
+        hits = [(n, line) for n, line in enumerate(lines, 1) if key.search(line.lower())]
+        said["by"] = f"{last}:"
+    return {
+        "lines": len(lines),
+        "find": wanted,
+        **said,
+        "found": [{"line": n, "text": line.strip()[:300]} for n, line in hits[:MOST_FOUND]],
+        "more": len(hits) > MOST_FOUND,
+    }
+
+
 def lines_of(text: str, arguments: Mapping[str, Any]) -> dict[str, object]:
     """A file's lines as the model is given them: those asked (all by
     default), within MOST_CHARS — with how many it has, which ones it got,
@@ -219,7 +257,8 @@ def code_handlers(
     once per run, its credentials decrypted for this run only. What it read
     goes into `kept`: `listed` (repository → its pulls), `pulls`
     (repository#number → the pull and its files), `files`
-    (repository:path → the file's text)."""
+    (repository:path → the file's text), `paths` (repository → the files
+    list_files showed)."""
     seen: dict[str, Any] = kept if kept is not None else {}
     # Here, not at the top: changes.py reads the catalogue, which reads the
     # registry, which reads these tools' names.
@@ -247,6 +286,9 @@ def code_handlers(
             paths, more = await found.paths(repository, branch, str(arguments.get("path") or ""))
         except CodeRefusedError as refused:
             return Answer(_said({"error": refused.code}), "refused", refused.code)
+        # What it saw listed: the files it may name (2026-10-28).
+        listed = seen.setdefault("paths", {}).setdefault(repository, [])
+        listed.extend(p for p in paths if p not in listed)
         cut = more or len(paths) > MOST_PATHS
         return Answer(
             _said(
@@ -276,11 +318,31 @@ def code_handlers(
             return Answer(_said({"error": "no_repository"}), "refused", "out_of_scope")
         try:
             branch = await branch_of(found, repository, arguments.get("branch"))
-            text = await found.read(repository, path, branch)
+            try:
+                text = await found.read(repository, path, branch)
+            except CodeRefusedError as refused:
+                # Too long to be given whole: read whole here, given by
+                # ranges or by what is looked for.
+                if refused.code != "too_large":
+                    raise
+                text = await found.read_whole(repository, path, branch, most=MOST_LONG)
         except CodeRefusedError as refused:
             return Answer(_said({"error": refused.code}), "refused", refused.code)
         if text is None:
             return Answer(_said({"error": "not_found"}), "refused", "not_found")
+        wanted = str(arguments.get("find") or "").strip()
+        if wanted:
+            return Answer(
+                _said(
+                    {
+                        "repository": repository,
+                        "branch": branch,
+                        "path": path,
+                        **found_in(text, wanted),
+                    }
+                ),
+                "ok",
+            )
         # What it read, kept with the run: the designer's mock-ups are drawn
         # from it (mockups.py).
         seen.setdefault("files", {})[f"{repository}:{path}"] = text
