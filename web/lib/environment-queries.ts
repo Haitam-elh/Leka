@@ -54,6 +54,20 @@ export function useMonitoring() {
   return useQuery({ queryKey: ["monitoring"] as const, queryFn: monitoring.get });
 }
 
+/** What LEKA went through overnight (2026-10-29). */
+export function useNightReview() {
+  return useQuery({ queryKey: ["monitoring", "night"] as const, queryFn: monitoring.night });
+}
+
+/** Gone through again now: what it found, shown at once. */
+export function useNightReviewAgain() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: monitoring.nightAgain,
+    onSuccess: (review) => client.setQueryData(["monitoring", "night"], review),
+  });
+}
+
 /** An alert taken in hand (LEKA-463), the watch read again. */
 export function useAcknowledge() {
   const client = useQueryClient();

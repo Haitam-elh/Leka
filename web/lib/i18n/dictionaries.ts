@@ -4126,6 +4126,38 @@ const fr = {
    * entity resolution and enrichment made of the sources.
    */
   environment: {
+    /** The night review (2026-10-29): what LEKA went through overnight. */
+    night: {
+      title: "Revue de la nuit",
+      again: "Relancer maintenant",
+      failed: "La revue n'a pas pu être relancée : réessayez.",
+      first: "LEKA passe tout en revue chaque nuit à 3 h 30. Pas encore de revue : lancez la première maintenant.",
+      checkedNight:
+        "Le {when}, LEKA a passé en revue {things} éléments, {sources} {sources|source|sources}, {alerts} {alerts|alerte|alertes} et {findings} {findings|constat|constats}.",
+      checkedAsked:
+        "Relancée {when} : {things} éléments, {sources} {sources|source|sources}, {alerts} {alerts|alerte|alertes} et {findings} {findings|constat|constats} passés en revue.",
+      toLook: "{count} {count|point|points} à regarder",
+      nothing: "Rien à signaler",
+      allGood: "Tout va bien : rien n'attend personne ce matin.",
+      analyse: "Analyser",
+      see: "Voir",
+      more: "Voir les {count} autres",
+      fewer: "Voir moins",
+      ask: "Pourquoi {name} est {trouble} ?",
+      severities: { high: "Important", medium: "À voir", low: "Mineur" },
+      points: {
+        alert: "{name} : {trouble}",
+        troubles: { unavailable: "indisponible", degraded: "dégradé", source_failing: "source en échec" },
+        source: "Source « {name} » : {why}",
+        whys: { error: "en erreur", degraded: "lecture en échec", unread: "non lue depuis plus de 24 h" },
+        findings: "{count} {count|constat important|constats importants} de LEKA",
+        findingsOn: "{count} {count|constat important|constats importants} de LEKA, sur {names}",
+        decisions: "{count} {count|décision attend|décisions attendent} votre validation",
+        conflicts: "{count} {count|conflit|conflits} de connaissance à trancher",
+        change: "La pull request #{number} est rouge : {name}",
+        runs: "{count} {count|exécution d'agent a|exécutions d'agent ont} échoué depuis hier",
+      },
+    },
     /** The Digital Twin (LEKA-442). */
     twin: {
       legend: "États des éléments",
@@ -13217,6 +13249,38 @@ const en: Dictionary = {
     },
   },
   environment: {
+    /** The night review (2026-10-29): what LEKA went through overnight. */
+    night: {
+      title: "Night review",
+      again: "Run it now",
+      failed: "The review could not be run again: try again.",
+      first: "LEKA goes through everything every night at 3:30. No review yet: run the first one now.",
+      checkedNight:
+        "On {when}, LEKA went through {things} things, {sources} {sources|source|sources}, {alerts} {alerts|alert|alerts} and {findings} {findings|finding|findings}.",
+      checkedAsked:
+        "Run again {when}: {things} things, {sources} {sources|source|sources}, {alerts} {alerts|alert|alerts} and {findings} {findings|finding|findings} gone through.",
+      toLook: "{count} {count|point|points} to look at",
+      nothing: "Nothing to report",
+      allGood: "All good: nothing is waiting for anyone this morning.",
+      analyse: "Analyse",
+      see: "See",
+      more: "See the {count} others",
+      fewer: "See fewer",
+      ask: "Why is {name} {trouble}?",
+      severities: { high: "Important", medium: "To look at", low: "Minor" },
+      points: {
+        alert: "{name}: {trouble}",
+        troubles: { unavailable: "unavailable", degraded: "degraded", source_failing: "source failing" },
+        source: "Source « {name} »: {why}",
+        whys: { error: "in error", degraded: "reading failed", unread: "not read for over 24 h" },
+        findings: "{count} important {count|finding|findings} from LEKA",
+        findingsOn: "{count} important {count|finding|findings} from LEKA, on {names}",
+        decisions: "{count} {count|decision waits|decisions wait} for your approval",
+        conflicts: "{count} knowledge {count|conflict|conflicts} to settle",
+        change: "Pull request #{number} is red: {name}",
+        runs: "{count} agent {count|run has|runs have} failed since yesterday",
+      },
+    },
     twin: {
       legend: "Element states",
       states: {

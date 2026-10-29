@@ -27,6 +27,9 @@ export type TwinCoverage = components["schemas"]["TwinCoverageRead"];
 export type TwinFreshness = components["schemas"]["TwinFreshnessRead"];
 export type Monitoring = components["schemas"]["MonitoringRead"];
 export type Alert = components["schemas"]["AlertRead"];
+/** What LEKA went through overnight, and what it found (2026-10-29). */
+export type NightReview = components["schemas"]["NightReviewRead"];
+export type NightPoint = components["schemas"]["NightPointRead"];
 
 /** The worst first: what a list sorts by, what a legend says in order. */
 export const TWIN_STATES: readonly TwinStateName[] = [
@@ -133,4 +136,8 @@ export const monitoring = {
   /** Taken in hand (LEKA-463): by whom, when — the first only. */
   acknowledge: (id: string) =>
     apiFetch<Alert>(`/monitoring/alerts/${encodeURIComponent(id)}/acknowledge`, { method: "POST" }),
+  /** The last night review — null before the first. */
+  night: () => apiFetch<NightReview | null>("/monitoring/night-review"),
+  /** Gone through again now. */
+  nightAgain: () => apiFetch<NightReview>("/monitoring/night-review", { method: "POST" }),
 };
