@@ -747,8 +747,12 @@ def test_the_code_change_proposes_the_smallest_change_and_says_the_rest() -> Non
     # literally, the fewest files, nothing changed on the way, every line
     # justified; what it saw beyond, said and left alone.
     change = {d.key: d for d in catalogue()}["code-change"]
-    assert change.version == "2.2.0"
+    assert change.version == "2.3.0"
     said = change.instructions or ""
+    # 2026-10-29 (#446): the repository's rules read first, its data never
+    # invented, rounds enough to read a whole screen.
+    assert "**Ses règles d'abord**" in said and "**Les données restent réelles.**" in said
+    assert change.rounds == 30
     assert "## Sa méthode" in said
     for step in (
         "La demande, prise à la lettre",

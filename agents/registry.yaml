@@ -69,7 +69,7 @@ agents:
 
   - path: development/code-change/SKILL.md
     name: code-change
-    version: 2.2.0
+    version: 2.3.0
     status: active
 
   - path: development/code-review/SKILL.md

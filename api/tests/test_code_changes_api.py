@@ -1225,7 +1225,15 @@ async def test_the_writer_is_given_the_tests_of_what_it_changes(
     await _github_source(acme["acme"])
     await sync_catalogue()
     covering = "from app.balance import balance\n\ndef test_balance():\n    assert balance\n"
-    github.listed = {"tests/test_balance.py": covering, "web/e2e/home.spec.ts": "test()\n"}
+    # And the repository's own rules, at its root and in the folder of what
+    # it changes (2026-10-29: #446 broke a rule no file it was given said).
+    github.listed = {
+        "tests/test_balance.py": covering,
+        "web/e2e/home.spec.ts": "test()\n",
+        "AGENTS.md": "# Rules\n\nEvery amount is in cents.\n",
+        "app/CLAUDE.md": "Never print in app/.\n",
+        "web/AGENTS.md": "Words come from the dictionaries.\n",
+    }
 
     async def queue(workspace_id: uuid.UUID, run_id: uuid.UUID) -> bool:
         return True
@@ -1249,6 +1257,12 @@ async def test_the_writer_is_given_the_tests_of_what_it_changes(
         f"{REPO}:app/balance.py": BEFORE,
         f"{REPO}:tests/test_balance.py": covering,
     }
+    # Only those of where it changes: not web/'s.
+    assert material["repository_rules"] == (
+        "## AGENTS.md\n\n# Rules\n\nEvery amount is in cents.\n\n"
+        "## app/CLAUDE.md\n\nNever print in app/."
+    )
+    assert set(material["inputs"]) == {"demande", "depot"}
 
 
 async def test_a_change_too_big_for_one_answer_is_written_file_by_file(
@@ -1934,6 +1948,16 @@ def test_a_repair_whose_edits_do_not_land_is_asked_again_told_why() -> None:
     assert problems[0].startswith("app/ledger.py: an edit's `find` is not in the file")
     assert problems[1].startswith("app/other.py: you were not given this file")
 
+    # Nothing in it: never read as « nothing to fix ».
+    assert repair_problems(RepairProposal(), read)[0].startswith("Say what failed")
+    # Nothing to fix, where a test fails in the code: asked again, quoted.
+    failing = [{"name": "web", "log": "x\n FAIL  lib/i18n/hardcoded.test.ts > words\ny"}]
+    [told] = repair_problems(RepairProposal(cause="Rien à corriger."), read, failing)
+    assert "FAIL  lib/i18n/hardcoded.test.ts > words" in told
+    # A runner that stopped: outside the code, said so, accepted.
+    stopped = [{"name": "web", "log": "##[error]The runner has received a shutdown signal."}]
+    assert repair_problems(RepairProposal(cause="Le runner s'est arrêté."), read, stopped) == []
+
 
 TEST_LEDGER = (
     "from app.ledger import lines\n\n\ndef test_line_2():\n    assert lines()[1] == 'line 2'\n"
@@ -2127,15 +2151,43 @@ async def test_a_repair_says_why_it_wrote_nothing_and_what_it_may_not_do(
     change_id = await _applied_in_red(client, identity, acme, github)
     repair = f"{API}/{change_id}/repair"
 
-    # The cause is not in the code: said, nothing written.
+    # A test failing in the code, answered empty — or « nothing to fix »:
+    # asked again, the failing lines quoted (2026-10-29: Mistral answered
+    # empty twice, read as « rien à corriger dans le code »).
     assert (await client.post(repair)).status_code == 202
     outside = {"cause": "Le runner n'a pas démarré : rien à corriger dans le code.", "files": []}
+    script = leka_gemini(gemini("{}"), gemini(json.dumps(_fix())))
+    assert (await repair_change(acme["acme"], change_id))["state"] == "pushed"
+    assert len(script.asked) == 2
+    told = json.dumps(script.asked[1], ensure_ascii=False)
+    assert "The checks fail in the repository's code" in told
+    assert "FAILED tests/test_ledger.py::test_line_2" in told
+
+    # Nothing of what failed can be read (a token without Actions read): said
+    # how to let LEKA read it, no model asked blind.
+    github.annotations[11] = [
+        {"path": ".github", "annotation_level": "failure", "message": "Process completed."}
+    ]
+    logs = dict(github.logs)
+    github.logs.clear()
+    assert (await client.post(repair)).status_code == 202
+    blind = leka_gemini(gemini(json.dumps(_fix())))
+    assert (await repair_change(acme["acme"], change_id))["state"] == "failed"
+    assert blind.asked == []
+    said = (await client.get(f"{API}/{change_id}")).json()["repairs"][-1]
+    assert said["error"] == "unread" and "« Actions : lecture »" in said["said"]
+
+    # The cause is not in the code — a runner that stopped: said, nothing
+    # written.
+    github.logs[11] = "##[error]The runner has received a shutdown signal."
+    assert (await client.post(repair)).status_code == 202
     leka_gemini(gemini(json.dumps(outside)))
     pushed = len(github.writes())
     assert (await repair_change(acme["acme"], change_id))["state"] == "outside"
     assert github.writes()[pushed:] == []
     said = (await client.get(f"{API}/{change_id}")).json()["repairs"][-1]
     assert (said["state"], said["cause"]) == ("outside", outside["cause"])
+    github.logs.update(logs)
 
     # Its branch moved meanwhile: said, never forced.
     assert (await client.post(repair)).status_code == 202

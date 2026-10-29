@@ -151,9 +151,10 @@ async def test_a_record_is_protected_before_it_is_kept(
         "secrets": {},
         "personal_data": {},
     }
-    # No copy of it outlives the original.
+    # No copy of it outlives the original — the card as written: « 4111 »
+    # alone turns up in a time or an id now and then (2026-10-29, #448 red).
     assert await _holding(source, KEY) == 0
-    assert await _holding(source, "4111") == 0
+    assert await _holding(source, "4111 1111 1111 1111") == 0
     # Its original: a week at most, not the thirty days Slack's are kept.
     soon = datetime.now(UTC) + timedelta(days=7, minutes=5)
     assert await _expiry(source, _key(said)) <= soon
