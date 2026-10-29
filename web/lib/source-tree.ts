@@ -22,6 +22,8 @@ export function useSourceTree(sourceId: string | null) {
     queryKey: ["sources", "tree", sourceId],
     queryFn: () => sourceTree.read(sourceId as string),
     enabled: Boolean(sourceId),
+    // Asked of the connected service itself: once, not on a timer.
+    refetchInterval: false,
   });
 }
 

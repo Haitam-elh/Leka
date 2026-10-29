@@ -230,6 +230,33 @@ describe("an intention's brief", () => {
     expect(screen.getByRole("button", { name: "Billing API v1" })).toBeInTheDocument();
   });
 
+  it("says when words answered did not settle it, and asks again — never ticked", () => {
+    // 2026-10-29: « Sur quoi faut-il agir ? » answered in words, ticked, and nothing moved.
+    show(
+      <BriefView
+        brief={brief({
+          questions: [
+            question({
+              kind: "action_without_target",
+              said: "An action is asked, on nothing LEKA knows: on what?",
+              options: ["deploy"],
+              choices: [],
+              free: true,
+              answer: { question: "action_without_target", value: "le code dans GitHub", unknown: false },
+            }),
+          ],
+        })}
+        understanding={UNDERSTOOD}
+        onAnswer={vi.fn()}
+      />,
+    );
+    expect(screen.queryByTestId("brief-answer")).not.toBeInTheDocument();
+    expect(screen.getByTestId("brief-unsettled")).toHaveTextContent(
+      "Votre réponse « le code dans GitHub » ne nomme rien que LEKA connaît",
+    );
+    expect(screen.getByTestId("brief-words")).toBeInTheDocument();
+  });
+
   it("says what follows: go on with its limits, or block", () => {
     const { rerender } = show(
       <BriefView

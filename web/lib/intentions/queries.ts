@@ -1,6 +1,7 @@
 "use client";
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 
 import { agentRunKeys } from "@/lib/agent-runs-queries";
 import { ApiError } from "@/lib/api";
@@ -14,6 +15,7 @@ import {
   intentions,
 } from "@/lib/intentions/api";
 import { working } from "@/lib/intentions/journey";
+import { LIVE_EVERY } from "@/lib/live";
 
 export const intentionKeys = {
   all: ["intentions"] as const,
@@ -50,7 +52,7 @@ export function useIntentions(
     refetchInterval: (query) =>
       query.state.data?.pages.some((page) => page.data.some((row) => working(row.journey)))
         ? WHILE_WORKING * 3
-        : false,
+        : LIVE_EVERY,
   });
 }
 
@@ -63,7 +65,7 @@ export function useMyActiveIntentions(enabled = true) {
     queryFn: () => intentions.list({ phase: "active", filters: { mine: true }, limit: 50 }),
     enabled,
     refetchInterval: (query) =>
-      query.state.data?.data.some((row) => working(row.journey)) ? WHILE_WORKING * 2 : false,
+      query.state.data?.data.some((row) => working(row.journey)) ? WHILE_WORKING * 2 : LIVE_EVERY,
   });
 }
 
@@ -80,8 +82,26 @@ export function useIntention(id: string) {
     queryKey: intentionKeys.one(id),
     queryFn: () => intentions.one(id),
     enabled: Boolean(id),
-    refetchInterval: (query) => (working(query.state.data?.journey) ? WHILE_WORKING : false),
+    refetchInterval: (query) => (working(query.state.data?.journey) ? WHILE_WORKING : LIVE_EVERY),
   });
+}
+
+/** Everything on screen read again the moment the intention changes —
+ * answered, asked again, analysed, decided — not at the next tick
+ * (2026-10-29: answered, its page stayed as it was until reloaded). */
+export function useFollowIntention(intention: IntentionDetail | undefined) {
+  const client = useQueryClient();
+  const id = intention?.id;
+  const mark = intention ? `${intention.version}:${intention.status}:${intention.updated_at}` : null;
+  const seen = useRef<string | null>(null);
+  useEffect(() => {
+    if (!id || !mark) return;
+    if (seen.current !== null && seen.current !== mark) {
+      const itself = JSON.stringify(intentionKeys.one(id));
+      void client.invalidateQueries({ predicate: (q) => JSON.stringify(q.queryKey) !== itself });
+    }
+    seen.current = mark;
+  }, [client, id, mark]);
 }
 
 export function useIntentionHistory(id: string) {
@@ -137,7 +157,7 @@ export function useIntentionAnalysis(
       }
     },
     enabled: Boolean(id),
-    refetchInterval: (query) => (live(query.state.data) ? WHILE_RUNNING : false),
+    refetchInterval: (query) => (live(query.state.data) ? WHILE_RUNNING : LIVE_EVERY),
   });
 }
 
@@ -200,7 +220,7 @@ export function useIntentionOffer(
     queryFn: () => intentions.offer(id, agents),
     enabled: Boolean(id) && enabled,
     placeholderData: (previous) => previous,
-    refetchInterval: following ? 3_000 : false,
+    refetchInterval: following ? 3_000 : LIVE_EVERY,
   });
 }
 

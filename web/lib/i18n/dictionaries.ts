@@ -3397,6 +3397,30 @@ const fr = {
     progress: "{done} sur {count}",
     separate: "par une autre personne que le demandeur",
     proposals: "Actions proposées",
+    // What each action does, said plainly (2026-10-29: « on comprend pas
+    // vraiment pourquoi on cliquerait sur valider »).
+    effect: "Si vous validez, LEKA pourra {effect}{where}.",
+    effectWhere: " en {environment}",
+    effectNothing: "ce qui est visé",
+    effects: {
+      restart: "redémarrer {targets} : il s'arrête puis repart, une courte coupure est possible",
+      rollback: "remettre {targets} dans sa version précédente",
+      deploy: "mettre en service la dernière version de {targets}",
+      scale: "changer la capacité de {targets} (nombre d'instances ou taille)",
+      stop: "arrêter {targets} : il ne répond plus jusqu'à ce qu'il soit relancé",
+      fix: "appliquer une correction sur {targets}",
+      update: "mettre à jour {targets}",
+      migrate: "migrer {targets} vers sa nouvelle cible",
+      document: "écrire la documentation de {targets}",
+      notify: "prévenir les personnes concernées par {targets}",
+      ticket: "ouvrir un ticket pour {targets}",
+      other: "faire « {action} » sur {targets}",
+    },
+    choice: {
+      title: "Ce que votre choix change",
+      approve: "Valider : ces actions pourront être lancées à l'étape Action. Rien ne s'exécute avant, et chaque étape est suivie.",
+      reject: "Refuser : rien n'est fait, l'intention est close. Vous pourrez reformuler la demande.",
+    },
     on: "sur {names}",
     inEnvironment: "en {environment}",
     reversible: {
@@ -7603,6 +7627,8 @@ const fr = {
         no_goal: "LEKA ne sait pas encore ce que vous cherchez à obtenir.",
       },
       suggestions: "Elle pourrait concerner : {titles}",
+      more: "Voir {count} {count|autre compétence|autres compétences}",
+      fewer: "Voir moins",
       score: "score {score}",
       chosen: "choisie",
       weak: "trop faible",
@@ -8052,6 +8078,10 @@ const fr = {
       unknown: "Je ne sais pas",
       answered: "Votre réponse : {answer}",
       answeredUnknown: "Vous ne savez pas",
+      unsettled:
+        "Votre réponse « {answer} » ne suffit pas encore à LEKA : précisez-la, ou reformulez la demande.",
+      unsettledTarget:
+        "Votre réponse « {answer} » ne nomme rien que LEKA connaît. Écrivez le nom tel qu'il apparaît dans Mon environnement (un service, une application, un dépôt…), ou choisissez ci-dessous.",
       yours: "Vos précisions",
       change: "Modifier",
       decisions: {
@@ -12484,6 +12514,28 @@ const en: Dictionary = {
     progress: "{done} of {count}",
     separate: "by someone other than the asker",
     proposals: "Proposed actions",
+    effect: "If you approve, LEKA may {effect}{where}.",
+    effectWhere: " in {environment}",
+    effectNothing: "what is targeted",
+    effects: {
+      restart: "restart {targets}: it stops then starts again, a short outage is possible",
+      rollback: "put {targets} back on its previous version",
+      deploy: "put the latest version of {targets} into service",
+      scale: "change the capacity of {targets} (instances or size)",
+      stop: "stop {targets}: it no longer answers until it is started again",
+      fix: "apply a fix to {targets}",
+      update: "update {targets}",
+      migrate: "migrate {targets} to its new target",
+      document: "write the documentation of {targets}",
+      notify: "notify the people concerned by {targets}",
+      ticket: "open a ticket for {targets}",
+      other: "do « {action} » on {targets}",
+    },
+    choice: {
+      title: "What your choice changes",
+      approve: "Approve: these actions may be launched at the Action step. Nothing runs before, and each step is followed.",
+      reject: "Reject: nothing is done, the intention is closed. You can reword the request.",
+    },
     on: "on {names}",
     inEnvironment: "in {environment}",
     reversible: {
@@ -16569,6 +16621,8 @@ const en: Dictionary = {
         no_goal: "LEKA cannot tell yet what you want to achieve.",
       },
       suggestions: "It could be about: {titles}",
+      more: "See {count} more {count|skill|skills}",
+      fewer: "See fewer",
       score: "score {score}",
       chosen: "chosen",
       weak: "too weak",
@@ -17005,6 +17059,9 @@ const en: Dictionary = {
       unknown: "I don't know",
       answered: "Your answer: {answer}",
       answeredUnknown: "You don't know",
+      unsettled: "Your answer « {answer} » is not enough for LEKA yet: say more, or reword the request.",
+      unsettledTarget:
+        "Your answer « {answer} » names nothing LEKA knows. Write the name as it appears in My environment (a service, an application, a repository…), or choose below.",
       yours: "What you said",
       change: "Change",
       decisions: {

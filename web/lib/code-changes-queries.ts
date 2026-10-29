@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { codeChanges } from "@/lib/code-changes";
+import { LIVE_EVERY } from "@/lib/live";
 
 export const codeChangeKeys = {
   all: ["code-changes"] as const,
@@ -17,7 +18,7 @@ export function useCodeChanges(intentionId: string, following: boolean) {
     queryKey: codeChangeKeys.intention(intentionId),
     queryFn: () => codeChanges.list(intentionId),
     enabled: Boolean(intentionId),
-    refetchInterval: following ? 4000 : false,
+    refetchInterval: following ? 4000 : LIVE_EVERY,
   });
 }
 
@@ -29,7 +30,7 @@ export function useRunCodeChanges(runId: string | null, writing = false) {
     queryFn: () => codeChanges.forRun(runId ?? ""),
     enabled: Boolean(runId),
     refetchInterval: (query) =>
-      writing || (query.state.data ?? []).some((change) => change.status === "proposed") ? 4000 : false,
+      writing || (query.state.data ?? []).some((change) => change.status === "proposed") ? 4000 : LIVE_EVERY,
   });
 }
 

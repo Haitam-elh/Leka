@@ -64,7 +64,7 @@ from leka.intentions.oversight import ExceptionAsk, OversightRefusedError, Overs
 from leka.intentions.processing import queue_analysis
 from leka.intentions.reading import ModelReading
 from leka.intentions.repository import IntentionFilters, IntentionRepository
-from leka.intentions.routing import query_of, route_intention
+from leka.intentions.routing import query_of, route_intention, routing_now
 from leka.intentions.schemas import (
     ActionEndpointCreate,
     ActionEndpointCreated,
@@ -273,6 +273,7 @@ __all__ = [
     "readiness",
     "refined",
     "route_intention",
+    "routing_now",
     "rules_step",
     "timeline",
     "understand",

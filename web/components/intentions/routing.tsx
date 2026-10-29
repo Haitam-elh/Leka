@@ -2,6 +2,7 @@
 
 import { Compass, RefreshCw } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 
 import { AgentRuns, RunAgent, suggestedInputs } from "@/components/capabilities/agent-runs";
 import { CodeChanges } from "@/components/capabilities/code-changes";
@@ -25,6 +26,10 @@ import { useIntention, useIntentionRouting, useRouteAgain } from "@/lib/intentio
  * left out, said why; or LEKA's own analysis when nothing else fits; or what
  * to ask when the intention is not clear. Routed again on demand.
  */
+
+/** The best ones shown, the rest on demand (2026-10-29: thirty, with their
+ * signals, ran down the page). */
+const SHOWN = 5;
 
 const TONES: Record<Routing["outcome"], TileTone> = {
   routed: "success",
@@ -75,6 +80,7 @@ export function RoutingPanel({ intentionId }: { intentionId: string }) {
   const w = t.intentions.routing;
   const { data } = useIntentionRouting(intentionId);
   const again = useRouteAgain(intentionId);
+  const [all, setAll] = useState(false);
   if (!data) return null;
   const titles = new Map(
     [...data.candidates, ...data.excluded].map((c) => [c.key, titleOf(t, c)] as const),
@@ -112,25 +118,18 @@ export function RoutingPanel({ intentionId }: { intentionId: string }) {
             <Pill tone={TONES[data.outcome]}>{w.outcomes[data.outcome]}</Pill>
             <span className="text-[0.875rem] text-brand-navy">{headline}</span>
           </div>
-          {data.outcome === "clarify" && (data.questions.length || data.suggestions.length) ? (
-            <div className="text-[0.8125rem]" data-testid="routing-clarify">
-              {data.questions.map((q) => (
-                <p key={q} className="text-brand-navy">
-                  {q}
-                </p>
-              ))}
-              {data.suggestions.length ? (
-                <p className="text-shell-muted">
-                  {fill(w.suggestions, {
-                    titles: data.suggestions.map((k) => titles.get(k) ?? k).join(", "),
-                  })}
-                </p>
-              ) : null}
-            </div>
+          {/* What to answer is asked once, in the brief, in its asker's
+              language: never the router's own words here. */}
+          {data.outcome === "clarify" && data.suggestions.length ? (
+            <p className="text-[0.8125rem] text-shell-muted" data-testid="routing-clarify">
+              {fill(w.suggestions, {
+                titles: data.suggestions.map((k) => titles.get(k) ?? k).join(", "),
+              })}
+            </p>
           ) : null}
           {data.candidates.length ? (
             <ol className="space-y-2 text-[0.8125rem]" data-testid="routing-candidates">
-              {data.candidates.map((c) => (
+              {(all ? data.candidates : data.candidates.slice(0, SHOWN)).map((c) => (
                 <li key={c.key} data-key={c.key} className="flex flex-col">
                   <span className="flex flex-wrap items-center gap-2">
                     <Link
@@ -147,6 +146,16 @@ export function RoutingPanel({ intentionId }: { intentionId: string }) {
                 </li>
               ))}
             </ol>
+          ) : null}
+          {data.candidates.length > SHOWN ? (
+            <button
+              type="button"
+              onClick={() => setAll(!all)}
+              className="self-start text-[0.8125rem] font-medium text-brand-violet hover:underline"
+              data-testid="routing-more"
+            >
+              {all ? w.fewer : fill(w.more, { count: data.candidates.length - SHOWN })}
+            </button>
           ) : null}
           {data.excluded.length ? (
             <div>

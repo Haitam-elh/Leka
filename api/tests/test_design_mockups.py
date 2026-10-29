@@ -919,3 +919,49 @@ def test_a_design_s_screen_is_found_by_its_route_and_its_put_off_said() -> None:
     )
     [said] = put_off(later)
     assert said.endswith("The mock-up is implemented whole in this change.")
+
+
+def test_a_mock_up_s_sample_content_is_never_shipped_as_data() -> None:
+    # 2026-10-29, #446: the home redesigned, its decisions written into the
+    # code, « Schéma API Paiements », « Confiance 95 % ».
+    from leka.capabilities.changes import ChangeProposal, invented
+
+    shipped = (
+        "type DecisionItem = { id: string; title: string; description: string };\n"
+        "const DECISIONS: DecisionItem[] = [\n"
+        "  {\n"
+        '    id: "pay-api",\n'
+        '    title: "Schéma API Paiements",\n'
+        '    description: "Modifications proposées par l\'agent Contrats : Confiance 95 %",\n'
+        "  },\n"
+        "  {\n"
+        '    id: "pg-conflict",\n'
+        '    title: "Conflit version PostgreSQL",\n'
+        '    description: "Incohérence détectée entre Dockerfile et Helm chart",\n'
+        "  },\n"
+        "];\n"
+    )
+    proposal = ChangeProposal.model_validate(
+        {
+            "files": [
+                {"path": "web/components/overview/operational-overview.tsx", "content": shipped}
+            ]
+        }
+    )
+    [said] = invented(proposal, {})
+    assert said.startswith(
+        "web/components/overview/operational-overview.tsx: DECISIONS writes 2 records"
+    )
+    assert "Schéma API Paiements" in said
+    # Read from the data, or held before the change: not its doing.
+    read = (
+        'const rows = data.map((d) => ({ id: d.id, title: d.title }));\nconst NAV = ["a", "b"];\n'
+    )
+    ok = ChangeProposal.model_validate({"files": [{"path": "web/a.tsx", "content": read}]})
+    assert invented(ok, {}) == []
+    assert invented(proposal, {"web/components/overview/operational-overview.tsx": shipped}) == []
+    # A test's fixtures are a test's.
+    fixture = ChangeProposal.model_validate(
+        {"files": [{"path": "web/a.test.tsx", "content": shipped}]}
+    )
+    assert invented(fixture, {}) == []

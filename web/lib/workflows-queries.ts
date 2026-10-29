@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { LIVE_EVERY } from "@/lib/live";
 import { RUNNING, workflows, type WorkflowRunCreate } from "@/lib/workflows";
 
 export const workflowKeys = {
@@ -28,7 +29,7 @@ export function useWorkflowRuns(key: string) {
     queryFn: () => workflows.runs(key),
     enabled: Boolean(key),
     refetchInterval: (query) =>
-      query.state.data?.some((run) => RUNNING.has(run.status)) ? FOLLOW_MS : false,
+      query.state.data?.some((run) => RUNNING.has(run.status)) ? FOLLOW_MS : LIVE_EVERY,
   });
 }
 
@@ -38,7 +39,7 @@ export function useWorkflowRun(id: string | null) {
     queryFn: () => workflows.run(id ?? ""),
     enabled: Boolean(id),
     refetchInterval: (query) =>
-      query.state.data && RUNNING.has(query.state.data.status) ? FOLLOW_MS : false,
+      query.state.data && RUNNING.has(query.state.data.status) ? FOLLOW_MS : LIVE_EVERY,
   });
 }
 

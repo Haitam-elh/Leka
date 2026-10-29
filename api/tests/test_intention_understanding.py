@@ -455,6 +455,55 @@ def test_a_plan_does_not_hide_an_action_asked_with_it() -> None:
 @pytest.mark.parametrize(
     "text",
     [
+        # 2026-10-29: stopped on « Déployer : sur quoi ? », then a pull
+        # request was offered to deploy.
+        "je souhaite que me propose un design similaire du fichier joint, et que tu me propose "
+        "la modification de code a appliqué pour la déployer directement sur leka",
+        "Propose une modification de code pour corriger Billing API",
+        "Écris un script pour redémarrer Billing API",
+        "Propose a code change to deploy Billing API",
+    ],
+)
+def test_what_a_proposal_is_for_is_not_asked(text: str) -> None:
+    understood = understand(text, plan(text, "general", [], subjects=[]))
+    assert not [a for a in understood.actions if a.changes_systems]
+    assert understood.goal.code != "act"
+    assert "action_without_target" not in blocking(understood)
+    # Something to make: a request, never a question — the code change is
+    # offered to it.
+    assert understood.mode == "request"
+
+
+@pytest.mark.parametrize(
+    ("text", "code"),
+    [
+        ("Propose un correctif, puis redémarre Billing API", "restart"),
+        ("Je te propose de redémarrer Billing API", "restart"),
+        ("Déploie Billing API pour corriger le bug", "deploy"),
+    ],
+)
+def test_a_proposal_does_not_hide_an_action_asked_with_it(text: str, code: str) -> None:
+    understood = understand(text, plan(text, "general", []))
+    assert code in [a.code for a in understood.actions]
+
+
+def test_an_action_is_offered_only_what_can_be_acted_on() -> None:
+    text = "Déploie la nouvelle version"
+    maybe = [
+        {"id": str(BILLING), "name": "Billing API", "type": "service"},
+        {"id": str(PAYMENT), "name": "Feature/code change to prod", "type": "pull_request"},
+    ]
+    no_subject = gap(
+        "no_subject", maybe=[m["name"] for m in maybe], maybe_things=maybe, tried=["version"]
+    )
+    understood = understand(text, plan(text, "general", [], subjects=[], gaps=[no_subject]))
+    [asked] = [a for a in understood.ambiguities if a.kind == "action_without_target"]
+    assert [c.label for c in asked.choices] == ["Billing API"]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
         "Est-ce que Billing API a été redémarrée récemment ?",
         "Qui a redémarré Billing API ?",
         "Has Billing API been restarted this week?",

@@ -11,6 +11,7 @@ import {
 } from "@/lib/actions";
 import { decisionKeys } from "@/lib/decisions-queries";
 import { intentionKeys } from "@/lib/intentions/queries";
+import { LIVE_EVERY } from "@/lib/live";
 
 export const planKeys = {
   all: ["plans"] as const,
@@ -27,7 +28,7 @@ export function usePlans(intentionId: string) {
     queryKey: planKeys.of(intentionId),
     queryFn: () => plans.of(intentionId),
     enabled: Boolean(intentionId),
-    refetchInterval: (query) => (isLive(query.state.data?.[0]) ? WHILE_RUNNING : false),
+    refetchInterval: (query) => (isLive(query.state.data?.[0]) ? WHILE_RUNNING : LIVE_EVERY),
   });
 }
 
