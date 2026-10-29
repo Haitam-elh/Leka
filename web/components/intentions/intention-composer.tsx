@@ -9,12 +9,13 @@ import {
   Loader2,
   type LucideIcon,
   Mic,
+  MicOff,
   Send,
   ShieldCheck,
   Sparkle,
   Sparkles,
 } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 
 import { cn } from "cn";
@@ -26,11 +27,11 @@ import {
 } from "@/components/intentions/attachments";
 import { useConfirm } from "@/components/interactions/confirm";
 import { useCurrentWorkspace } from "@/components/shell/shell-provider";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { canDictate, useDictation } from "@/lib/dictation";
 import { fill } from "@/lib/i18n/dictionaries";
-import { useDictionary } from "@/lib/i18n/locale-provider";
+import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import { INTENTION_MAX, INTENTION_MIN } from "@/lib/validation/intentions";
 
 /**
@@ -54,10 +55,12 @@ import { INTENTION_MAX, INTENTION_MIN } from "@/lib/validation/intentions";
  * paragraph. Cleared on submission and on a confirmed abandon. Every access
  * is wrapped: private browsing refuses storage, and the composer has to
  * work anyway.
+ *
+ * SPOKEN, IT IS WRITTEN (2026-10-29). « Dictée » listens through the
+ * browser's own speech recognition and writes what is said after what is
+ * typed (lib/dictation): said again to stop. Where the browser cannot, no
+ * button: a promise it could never keep.
  */
-
-/** Dictation is designed and not built. The flag is what says so. */
-const DICTATION_ENABLED = false;
 
 function draftKeyFor(workspaceId: string | undefined): string {
   return `leka.intention.draft.${workspaceId ?? "unknown"}`;
@@ -89,12 +92,6 @@ export function clearDraft(workspaceId: string | undefined): void {
   }
 }
 
-/** True when the browser could dictate, whether or not we have built it. */
-function canDictate(): boolean {
-  if (typeof window === "undefined") return false;
-  return "SpeechRecognition" in window || "webkitSpeechRecognition" in window;
-}
-
 export function IntentionComposer({
   name = "text",
   variant = "full",
@@ -120,12 +117,22 @@ export function IntentionComposer({
   className?: string;
 }) {
   const t = useDictionary();
+  const { format } = useLocale();
   const confirm = useConfirm();
   const workspace = useCurrentWorkspace();
   const { setValue, getValues } = useFormContext();
   const value = (useWatch({ name }) as string | undefined) ?? "";
   const box = useRef<HTMLTextAreaElement | null>(null);
   const [dictatable, setDictatable] = useState(false);
+  const dictation = useDictation({
+    language: format,
+    text: useCallback(() => (getValues(name) as string | undefined) ?? "", [getValues, name]),
+    onText: useCallback(
+      (said: string) =>
+        setValue(name, said.slice(0, INTENTION_MAX), { shouldDirty: true, shouldValidate: false }),
+      [name, setValue],
+    ),
+  });
 
   // Read after mount: the server has no sessionStorage, and a value that
   // differed between the two would be a hydration error rather than a draft.
@@ -212,6 +219,48 @@ export function IntentionComposer({
     });
   }
 
+  const w = t.composer.dictation;
+  const dictateButton = dictatable ? (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      aria-pressed={dictation.listening}
+      aria-label={compact ? (dictation.listening ? w.stop : t.composer.dictate) : undefined}
+      title={w.how}
+      onClick={() => (dictation.listening ? dictation.stop() : dictation.start())}
+      data-testid="intention-dictate"
+      className={cn(
+        dictation.listening && "bg-state-danger-soft text-state-danger hover:bg-state-danger-soft",
+        compact && "size-9 shrink-0 rounded-full p-0",
+      )}
+    >
+      {dictation.listening ? (
+        <MicOff className="size-4" aria-hidden="true" />
+      ) : (
+        <Mic className="size-4" aria-hidden="true" />
+      )}
+      {compact ? null : dictation.listening ? w.stop : t.composer.dictate}
+    </Button>
+  ) : null;
+  // Said while it listens, and why it stopped short.
+  const dictationSaid = dictation.listening ? w.listening : dictation.problem ? w.problems[dictation.problem] : "";
+  const dictationStatus = (
+    <p
+      aria-live="polite"
+      data-testid="dictation-status"
+      className={cn(
+        "flex items-center gap-1.5 text-xs empty:hidden",
+        dictation.problem && !dictation.listening ? "text-state-danger" : "text-shell-muted",
+      )}
+    >
+      {dictation.listening ? (
+        <span className="size-2 animate-pulse rounded-full bg-state-danger" aria-hidden="true" />
+      ) : null}
+      {dictationSaid}
+    </p>
+  );
+
   if (compact) {
     // The home's hero (LEKA-456, the sprint's mockup): the question as the
     // page's title, a white field — the spark, the paperclip, a round
@@ -253,6 +302,7 @@ export function IntentionComposer({
               data-testid="intention-input"
               className="min-h-[52px] flex-1 resize-none border-0 bg-transparent px-1 py-3 text-base shadow-none placeholder:text-shell-muted focus-visible:ring-0"
             />
+            {dictateButton}
             {files ? <AttachmentPicker files={files} compact /> : null}
             <Button
               type="button"
@@ -271,6 +321,7 @@ export function IntentionComposer({
             </Button>
           </div>
           {files ? <AttachmentList files={files} className="mt-2 ps-1" /> : null}
+          <div className="mt-1.5 ps-4">{dictationStatus}</div>
           {/* Only while it is true: a disabled button that does not say why
               reads as broken. */}
           <p
@@ -347,6 +398,7 @@ export function IntentionComposer({
           />
 
           {files ? <AttachmentList files={files} className="mt-2" /> : null}
+          <div className="mt-2">{dictationStatus}</div>
 
           {/* Wraps as two groups rather than squeezing words: at 1024px, with
               the rail, "⌘↵ pour lancer" used to break over three lines. */}
@@ -357,13 +409,7 @@ export function IntentionComposer({
                 {/* Hidden outright where the browser could not do it anyway:
                     a permanently disabled button on a machine that will never
                     support it is a promise that cannot be kept. */}
-                {dictatable ? (
-                  <Button type="button" variant="ghost" size="sm" disabled={!DICTATION_ENABLED}>
-                    <Mic className="size-4" aria-hidden="true" />
-                    {t.composer.dictate}
-                    <Badge variant="secondary">{t.composer.soon}</Badge>
-                  </Button>
-                ) : null}
+                {dictateButton}
               </>
             )}
 
