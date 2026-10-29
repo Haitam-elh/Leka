@@ -22,6 +22,8 @@ from leka.identity.email import (
     SmtpEmailSender,
     build_email_sender,
 )
+from leka.identity.email_layout import layout as branded_layout
+from leka.identity.email_layout import paragraphs as email_paragraphs
 from leka.identity.language import spoken_language, workspace_language
 from leka.identity.messages import email_language
 from leka.identity.messages import invitation as invitation_message
@@ -104,10 +106,12 @@ __all__ = [
     "UserRead",
     "UserRepository",
     "WorkspaceMembershipRead",
+    "branded_layout",
     "build_email_sender",
     "configure_identity",
     "current_user_id",
     "email_language",
+    "email_paragraphs",
     "invitation_message",
     "load_session",
     "password_is_breached",

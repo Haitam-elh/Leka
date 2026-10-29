@@ -8916,6 +8916,10 @@ const fr = {
       "agent.run_succeeded": { title: "Agent terminé", body: "{agent} a rendu son livrable." },
       "agent.run_failed": { title: "Agent en échec", body: "{agent} n'a pas abouti." },
       "alert.triggered": { title: "Alerte : {name}", body: "{name} : {trouble} ({certainty})." },
+      "alert.night_review": {
+        title: "Revue de la nuit : {count} {count|point|points} à regarder",
+        body: "LEKA a tout passé en revue cette nuit : le détail est dans Mon environnement.",
+      },
       "alert.reopened": { title: "Alerte rouverte : {name}", body: "{name} : {trouble} à nouveau." },
       "alert.acknowledged": { title: "Alerte prise en charge", body: "{name} : prise en charge par {by}." },
       "alert.resolved": {
@@ -17888,6 +17892,10 @@ const en: Dictionary = {
       "agent.run_succeeded": { title: "Agent done", body: "{agent} delivered." },
       "agent.run_failed": { title: "Agent failed", body: "{agent} did not succeed." },
       "alert.triggered": { title: "Alert: {name}", body: "{name}: {trouble} ({certainty})." },
+      "alert.night_review": {
+        title: "Night review: {count} {count|point|points} to look at",
+        body: "LEKA went through everything overnight: the detail is in My environment.",
+      },
       "alert.reopened": { title: "Alert reopened: {name}", body: "{name}: {trouble} again." },
       "alert.acknowledged": { title: "Alert taken in hand", body: "{name}: taken in hand by {by}." },
       "alert.resolved": {

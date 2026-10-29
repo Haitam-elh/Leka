@@ -163,6 +163,8 @@ SCHEDULE: tuple[Scheduled, ...] = (
     # What LEKA went through overnight, for the morning (2026-10-29): 02:30
     # UTC, 03:30 in Paris.
     Scheduled("night-review", "leka.monitoring.night.run_night_reviews", cron="30 2 * * *"),
+    # Its report, e-mailed in the morning: 06:00 UTC, 07:00 in Paris.
+    Scheduled("morning-report", "leka.notifications.morning.run_morning_reports", cron="0 6 * * *"),
     # The operational alerts (LEKA-408), judged every five minutes. On the low
     # queue like every sweep — behind one, it is late: the API judges them
     # too (main.py), every five minutes whatever the queues and the worker do.

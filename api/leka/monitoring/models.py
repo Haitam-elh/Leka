@@ -221,3 +221,6 @@ class NightReview(Base, WorkspaceScopedMixin):
     asked_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    # When the morning's report of it was sent (notifications/morning.py):
+    # once, never twice.
+    reported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

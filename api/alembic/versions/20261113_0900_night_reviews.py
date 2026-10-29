@@ -39,6 +39,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("asked_by", sa.UUID(), nullable=True),
+        sa.Column("reported_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("workspace_id", sa.UUID(), nullable=False),
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
         sa.Column(
