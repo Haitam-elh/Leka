@@ -59,6 +59,15 @@ export function useNightReview() {
   return useQuery({ queryKey: ["monitoring", "night"] as const, queryFn: monitoring.night });
 }
 
+/** What LEKA is working on, now: followed closely while there is some. */
+export function useWorkingNow() {
+  return useQuery({
+    queryKey: ["monitoring", "now"] as const,
+    queryFn: monitoring.now,
+    refetchInterval: (query) => ((query.state.data ?? []).length ? 4_000 : LIVE_EVERY),
+  });
+}
+
 /** Gone through again now: what it found, shown at once. */
 export function useNightReviewAgain() {
   const client = useQueryClient();

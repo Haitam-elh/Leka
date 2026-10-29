@@ -21,18 +21,20 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from leka.capabilities import CodeChange
-from leka.connectors import Source, SourceStatus
+from leka.connectors import Source, SourceStatus, SyncStatus
 from leka.db import session_factory, system_scope, workspace_scope
 from leka.monitoring import MonitoringAlert, NightReview
 from leka.monitoring.night import review_every_workspace
 from tests.conftest import FakeIdentity
 from tests.test_context_engine import model
+from tests.test_intention_analysis_api import queued  # noqa: F401 — a fixture
 from tests.test_sources_api import _as, _create, acme, fake_connector  # noqa: F401 — fixtures
 
 pytestmark = pytest.mark.integration
 
 _ = model  # a fixture, requested by name
 API = "/api/v1/monitoring/night-review"
+ASKED = "Qui est responsable de Billing API ?"
 
 
 async def _troubles(workspace_id: uuid.UUID, source_id: uuid.UUID) -> None:
@@ -134,3 +136,50 @@ async def test_the_night_reviews_every_workspace(
     [change] = [p for p in row.points if p["kind"] == "change"]
     assert (change["severity"], change["name"]) == ("high", "Déduire les paiements en attente")
     assert change["params"] == {"number": 7}
+
+
+async def test_what_leka_works_on_now_each_with_its_step_and_where(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[uuid.UUID],
+) -> None:
+    _as(identity, acme, "admin")
+    assert (await client.get("/api/v1/monitoring/now")).json() == []
+    asked = await client.post("/api/v1/intentions", json={"text": ASKED})
+    assert asked.status_code == 201, asked.text
+    intention = asked.json()["intention"]["id"]
+    created: dict[str, Any] = await _create(client)
+    with workspace_scope(acme["acme"]):
+        async with session_factory() as session:
+            source = await session.get(Source, uuid.UUID(created["id"]))
+            assert source is not None
+            source.sync_status = SyncStatus.RUNNING
+            session.add(
+                CodeChange(
+                    workspace_id=acme["acme"],
+                    id=uuid.uuid4(),
+                    source_id=source.id,
+                    repository="acme/payments",
+                    base_branch="main",
+                    title="Déduire les paiements en attente",
+                    status="applied",
+                    pull_request_number=7,
+                    repairs=[{"state": "running", "asked_at": datetime.now(UTC).isoformat()}],
+                )
+            )
+            await session.commit()
+    now = (await client.get("/api/v1/monitoring/now")).json()
+    by = {item["kind"]: item for item in now}
+    assert (by["intention"]["step"], by["intention"]["href"]) == (
+        "analysing",
+        f"/intentions/{intention}",
+    )
+    assert by["source"]["step"] == "reading" and by["source"]["href"] == f"/sources/{created['id']}"
+    assert (by["repair"]["step"], by["repair"]["title"]) == (
+        "repairing",
+        "Déduire les paiements en attente",
+    )
+    _as(identity, acme, "other_admin")
+    assert (await client.get("/api/v1/monitoring/now")).json() == []

@@ -432,6 +432,23 @@ const fr = {
     refused: "Connectez d'abord une source (Confluence, par exemple) : LEKA répond à partir d'elle.",
   },
   overview: {
+    /** « LEKA travaille sur… » (2026-10-29). */
+    live: {
+      title: "LEKA travaille sur…",
+      more: "… et {count} de plus en cours.",
+      steps: {
+        analysing: "analyse en cours",
+        executing: "actions en cours",
+        verifying: "vérifie le résultat",
+        queued: "en file d'attente",
+        working: "au travail",
+        writing_change: "écrit le changement",
+        drawing_design: "dessine les maquettes",
+        drawing_files: "prépare les livrables",
+        reading: "lecture de la source",
+        repairing: "répare la pull request",
+      },
+    },
     /** The home's blocks of the sprint's mockup (LEKA-456). */
     home: {
       environment: "Mon environnement",
@@ -9685,6 +9702,23 @@ const en: Dictionary = {
     refused: "Connect a source first (Confluence, for instance): LEKA answers from it.",
   },
   overview: {
+    /** « LEKA is working on… » (2026-10-29). */
+    live: {
+      title: "LEKA is working on…",
+      more: "… and {count} more under way.",
+      steps: {
+        analysing: "analysing",
+        executing: "acting",
+        verifying: "checking the result",
+        queued: "queued",
+        working: "at work",
+        writing_change: "writing the change",
+        drawing_design: "drawing the mock-ups",
+        drawing_files: "preparing the deliverables",
+        reading: "reading the source",
+        repairing: "repairing the pull request",
+      },
+    },
     home: {
       environment: "My environment",
       health: {

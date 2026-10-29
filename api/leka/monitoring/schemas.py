@@ -199,3 +199,15 @@ class NightReviewRead(BaseModel):
     trigger: Literal["night", "asked"]
     checked: dict[str, int]
     points: list[NightPointRead]
+
+
+class WorkingRead(BaseModel):
+    """One piece of work under way (monitoring/now.py)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    kind: Literal["intention", "agent", "source", "repair"]
+    title: str
+    step: str
+    since: datetime | None = None
+    href: str
