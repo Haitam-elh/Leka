@@ -53714,6 +53714,9 @@ export interface operations {
                 "application/pdf": string;
                 "image/png": string;
                 "image/jpeg": string;
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": string;
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation": string;
             };
         };
         responses: {
@@ -54609,6 +54612,9 @@ export interface operations {
                     "application/pdf": unknown;
                     "image/png": unknown;
                     "image/jpeg": unknown;
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation": unknown;
                 };
             };
             /** @description The request could not be understood. */
