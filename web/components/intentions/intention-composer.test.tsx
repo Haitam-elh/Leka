@@ -8,7 +8,7 @@
  * spends the customer's money without a deliberate act.
  */
 
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -243,5 +243,83 @@ describe("attachments", () => {
       fr.composer.files.errors.file_type_refused,
     );
     expect(sent.upload).not.toHaveBeenCalled();
+  });
+});
+
+/** The browser's speech recognition, played by the test: what it hears is
+ * what `hear` says. */
+class FakeRecognition {
+  static last: FakeRecognition | null = null;
+  lang = "";
+  continuous = false;
+  interimResults = false;
+  onresult: ((event: unknown) => void) | null = null;
+  onerror: ((event: { error: string }) => void) | null = null;
+  onend: (() => void) | null = null;
+  results: { isFinal: boolean; 0: { transcript: string } }[] = [];
+  start = vi.fn(() => {
+    FakeRecognition.last = this;
+  });
+  stop = vi.fn(() => this.onend?.());
+  abort = vi.fn();
+
+  hear(transcript: string, isFinal: boolean) {
+    const at = this.results.findIndex((r) => !r.isFinal);
+    const index = at >= 0 ? at : this.results.length;
+    this.results[index] = { isFinal, 0: { transcript } };
+    this.onresult?.({ resultIndex: index, results: this.results });
+  }
+}
+
+describe("dictation (2026-10-29: « Bientôt » no more)", () => {
+  beforeEach(() => {
+    FakeRecognition.last = null;
+    (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition = FakeRecognition;
+  });
+
+  it("writes what is said after what was typed, as it is said, and stops on asking", async () => {
+    const user = userEvent.setup();
+    mount({ prefilled: "Bonjour." });
+    const dictate = await screen.findByTestId("intention-dictate");
+    expect(dictate).toHaveTextContent(fr.composer.dictate);
+    expect(dictate).not.toHaveTextContent("Bientôt");
+
+    await user.click(dictate);
+    const heard = FakeRecognition.last;
+    expect(heard).not.toBeNull();
+    expect(heard?.lang).toMatch(/^fr/);
+    expect(dictate).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("dictation-status")).toHaveTextContent(fr.composer.dictation.listening);
+
+    // Heard so far, then final: replaced, never written twice.
+    act(() => heard?.hear("pourquoi le paiement", false));
+    expect(box()).toHaveValue("Bonjour. pourquoi le paiement");
+    act(() => heard?.hear("pourquoi le paiement est lent", true));
+    act(() => heard?.hear("depuis hier", true));
+    expect(box()).toHaveValue("Bonjour. pourquoi le paiement est lent depuis hier");
+
+    await user.click(dictate);
+    expect(heard?.stop).toHaveBeenCalled();
+    expect(dictate).toHaveAttribute("aria-pressed", "false");
+    expect(dictate).toHaveTextContent(fr.composer.dictate);
+  });
+
+  it("says why it stopped short: the microphone refused", async () => {
+    const user = userEvent.setup();
+    mount();
+    await user.click(await screen.findByTestId("intention-dictate"));
+    act(() => {
+      FakeRecognition.last?.onerror?.({ error: "not-allowed" });
+      FakeRecognition.last?.onend?.();
+    });
+    expect(screen.getByTestId("dictation-status")).toHaveTextContent(
+      fr.composer.dictation.problems.denied,
+    );
+  });
+
+  it("is not offered where the browser cannot listen", () => {
+    delete (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition;
+    mount();
+    expect(screen.queryByTestId("intention-dictate")).not.toBeInTheDocument();
   });
 });
