@@ -46,6 +46,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.architect import DossierError
 from leka.background import JobQueue, enqueue_job
+from leka.capabilities.attached import attached_to
 from leka.capabilities.catalogue import CatalogueService, Entry, needs_of
 from leka.capabilities.code_tools import CODE_NAMES, CODE_TOOLS, code_handlers
 from leka.capabilities.dedicated import own_definition
@@ -599,6 +600,11 @@ async def _run(
     target = await design_target(session, run) if definition.renders == "code_change" else None
     if target is not None:
         steps.add("design_target", screen=target["screen"], direction=target["direction"])
+    # The files its intention was asked with, read — by OCR when an image or
+    # a scanned page —, given whichever model answers (2026-10-28).
+    attached = await attached_to(session, workspace_id, run.intention_id)
+    if attached:
+        steps.add("attachments", files=[{"name": a["name"], "read": a["read"]} for a in attached])
     request = Request(
         purpose=f"agent:{definition.key}"[:100],
         messages=messages(
@@ -608,6 +614,7 @@ async def _run(
             tools=given,
             language=language,
             organisation=await organisation_of(session, workspace_id),
+            attached=attached,
         ),
         tier=Tier.DEEP,
         max_tokens=MAX_TOKENS,

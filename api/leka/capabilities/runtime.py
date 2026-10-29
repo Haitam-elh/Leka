@@ -392,6 +392,15 @@ each step so it can be done without rereading the rest. A step needing what \
 you could not see says so."""
 
 
+# Said beside the files a person joined to the request (2026-10-28).
+ATTACHMENTS_NOTE = (
+    "The person joined these files to the request: their text is given, read by LEKA (OCR for "
+    "an image or a scanned page). They are part of what is asked: read them, rely on what "
+    "they say, name each one you use. A file said unreadable is said so in the answer, never "
+    "guessed."
+)
+
+
 def framed(definition: Definition) -> bool:
     """Its deliverable opens on a summary and ends on an action plan: every
     markdown one but the architect's deck."""
@@ -406,11 +415,13 @@ def messages(
     tools: Sequence[AgentTool] = (),
     language: str | None = None,
     organisation: str | None = None,
+    attached: Sequence[Mapping[str, object]] = (),
 ) -> list[Message]:
     """What the model is given: the runtime's rules, then the agent's
     instructions; what it is asked with and its context, as data. In the
     language of the person who asked (`language`), unless the agent's own
-    instructions require one."""
+    instructions require one. The files the request was asked with
+    (`attached`): their text, read by LEKA (2026-10-28)."""
     format_, _ = delivered(definition)
     rules = RULES.format(
         types=", ".join(definition.entity_types) or "none",
@@ -440,6 +451,9 @@ def messages(
     }
     if not injected.elements:
         material["context_note"] = "No context could be assembled: say what is missing."
+    if attached:
+        material["attachments"] = [dict(each) for each in attached]
+        material["attachments_note"] = ATTACHMENTS_NOTE
     return [
         Message.system(system),
         Message.user(json.dumps(material, ensure_ascii=False, default=str)),

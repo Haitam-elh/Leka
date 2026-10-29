@@ -8,8 +8,11 @@ in the same transaction: an intention that cannot be kept keeps nothing.
 Nothing is said attached that was not kept.
 
 What is accepted is what LEKA can read — text, CSV, Markdown, JSON, PDF,
-PNG, JPEG — judged by what the bytes are, not only by what the browser
-says: a PDF begins as one, an image as one, a text is UTF-8. Ten megabytes
+PNG, JPEG, Word, Excel, PowerPoint — judged by what the bytes are, not only
+by what the browser says: a PDF begins as one, an image as one, an Office
+file is a zip, a text is UTF-8. What it says is read once, the first time a
+model needs it (`texts_of`, extraction.py) — its text, by OCR when it is an
+image or a scanned page —, and kept with it. Ten megabytes
 each at most, five to an intention. A file nobody asked with is removed
 within a day (purge, hourly): uploaded, then abandoned, it is nobody's.
 
@@ -22,14 +25,17 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 
 import structlog
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from leka.capabilities import ContextItem, ContextPack, read_attached_with
 from leka.db import WorkspaceScopedRepository, session_factory, system_scope
 from leka.intentions.models import IntentionAttachment
+from leka.platform import DOCX, MOST_ALL, PPTX, XLSX, text_of
 from leka.platform.storage import ObjectNotFoundError, ObjectStoreError, object_store
 
 logger = structlog.get_logger(__name__)
@@ -43,6 +49,9 @@ ACCEPTED: dict[str, str] = {
     "application/pdf": "pdf",
     "image/png": "png",
     "image/jpeg": "jpg",
+    DOCX: "docx",
+    XLSX: "xlsx",
+    PPTX: "pptx",
 }
 MAX_BYTES = 10 * 1024 * 1024
 MAX_FILES = 5
@@ -88,6 +97,8 @@ def looks_like(content_type: str, head: bytes) -> bool:
         return head.startswith(b"\x89PNG\r\n\x1a\n")
     if content_type == "image/jpeg":
         return head.startswith(b"\xff\xd8\xff")
+    if content_type in (DOCX, XLSX, PPTX):
+        return head.startswith(b"PK\x03\x04")
     # A text: UTF-8, no NUL. A character cut at the end of what was read is
     # not a refusal.
     if b"\x00" in head:
@@ -265,6 +276,64 @@ def read(row: IntentionAttachment) -> AsyncIterator[bytes]:
     return object_store().get(row.storage_key)
 
 
+async def attached_texts(
+    session: AsyncSession, workspace_id: uuid.UUID, intention_id: uuid.UUID | None
+) -> list[dict[str, object]]:
+    """What the files an intention was asked with say (texts_of), for an
+    agent or an analysis about it — nothing for a run asked alone."""
+    if intention_id is None:
+        return []
+    rows = await AttachmentRepository(session, workspace_id).of_intention(intention_id)
+    given = await texts_of(rows)
+    await session.flush()
+    return given
+
+
+async def texts_of(rows: Sequence[IntentionAttachment]) -> list[dict[str, object]]:
+    """What an intention's files say, as a model is given them — each read
+    the first time (its text, by OCR when an image or a scanned page) and
+    kept on its row; all within MOST_ALL. A file that could not be read is
+    said so, never left out silently (2026-10-28)."""
+    given: list[dict[str, object]] = []
+    left = MOST_ALL
+    for row in rows:
+        if row.read_as is None:
+            try:
+                data = b"".join([chunk async for chunk in read(row)])
+            except (ObjectNotFoundError, ObjectStoreError):
+                logger.warning("attachment_bytes_missing", attachment=str(row.id))
+                given.append(
+                    {
+                        "id": f"attachment:{len(given) + 1}",
+                        "name": row.name,
+                        "type": row.content_type,
+                        "read": "missing",
+                    }
+                )
+                continue
+            found = await asyncio.to_thread(text_of, row.content_type, data)
+            row.text, row.read_as, row.read_why = found.text, found.how, found.why
+            logger.info(
+                "attachment_read", attachment=str(row.id), how=found.how, chars=len(found.text)
+            )
+        text = (row.text or "")[: max(left, 0)]
+        left -= len(text)
+        said: dict[str, object] = {
+            "id": f"attachment:{len(given) + 1}",
+            "name": row.name,
+            "type": row.content_type,
+            "read": row.read_as,
+        }
+        if row.read_as == "unreadable":
+            said["why"] = row.read_why
+        else:
+            said["text"] = text
+            if len(text) < len(row.text or ""):
+                said["cut"] = True
+        given.append(said)
+    return given
+
+
 async def purge(*, now: datetime | None = None) -> int:
     """Files uploaded and never asked with, past a day: removed, bytes and
     row — across every workspace."""
@@ -301,3 +370,21 @@ async def purge(*, now: datetime | None = None) -> int:
 def run_purge() -> dict[str, int]:
     """Entry point for the schedule."""
     return {"removed": asyncio.run(purge())}
+
+
+def with_attached(pack: ContextPack, attached: Sequence[Mapping[str, object]]) -> ContextPack:
+    """The context of an analysis, its files first — each by its id, to cite;
+    their text goes with the task, too long for the context (2026-10-28)."""
+    items = tuple(
+        ContextItem(
+            id=str(each["id"]),
+            kind="attachment",
+            text=f"Fichier joint « {each['name']} » : son texte est dans « attachments ».",
+        )
+        for each in attached
+    )
+    return ContextPack((*items, *pack.items), pack.ref, pack.left_out)
+
+
+# What an agent run about an intention is given of its files (runs.py).
+read_attached_with(attached_texts)

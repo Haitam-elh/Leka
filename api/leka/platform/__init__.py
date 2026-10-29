@@ -8,6 +8,7 @@ Depends on leka.core and leka.db only.
 """
 
 from leka.platform.branding import MAX_LOGO_BYTES, LogoRefusedError, drop_logo, keep_logo, logo_of
+from leka.platform.extraction import DOCX, MOST_ALL, PPTX, XLSX, Extracted, ocr_ready, text_of
 from leka.platform.health import check_backing_services
 from leka.platform.models import (
     Invitation,
@@ -77,13 +78,18 @@ from leka.platform.storage import (
 
 __all__ = [
     "DELETION_GRACE_PERIOD",
+    "DOCX",
     "INVITATION_LIFETIME",
     "MAX_LOGO_BYTES",
+    "MOST_ALL",
+    "PPTX",
+    "XLSX",
     "AccountClosure",
     "CurrentUserProvider",
     "CurrentWorkspace",
     "DecryptionError",
     "DeletionScheduled",
+    "Extracted",
     "Invitation",
     "InvitationAcceptance",
     "InvitationCreate",
@@ -133,9 +139,11 @@ __all__ = [
     "logo_of",
     "object_key",
     "object_store",
+    "ocr_ready",
     "platform_posture",
     "reset_object_store",
     "secret_box",
     "slugify",
+    "text_of",
     "workspace_prefix",
 ]

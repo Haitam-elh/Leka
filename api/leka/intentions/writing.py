@@ -24,6 +24,7 @@ model, or none answering: no answer, said, and the analysis is what it was.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -160,7 +161,31 @@ def grounded(
     return points, bool(points) or not held
 
 
-def task_of(asked: Asked, result: Result, context: ContextPack) -> Task:
+# Said with the files a person joined to the question (2026-10-28).
+FILES_NOTE = (
+    "The person joined these files to the question: their text is given, read by LEKA (OCR "
+    "for an image or a scanned page). They are part of what is asked: read them, rely on "
+    "what they say, cite each by its id (attachment:N). A file said unreadable is said so."
+)
+
+
+def with_files(said: dict[str, Any], attached: Sequence[Mapping[str, object]]) -> dict[str, Any]:
+    """What a synthesis is given, and the files the question came with."""
+    if not attached:
+        return said
+    return {
+        **said,
+        "attachments": [dict(each) for each in attached],
+        "attachments_note": FILES_NOTE,
+    }
+
+
+def task_of(
+    asked: Asked,
+    result: Result,
+    context: ContextPack,
+    attached: Sequence[Mapping[str, object]] = (),
+) -> Task:
     """The synthesis, as the LLM runtime is given it: the analysis to say,
     the context it was made from to rest on, the shape — and the check that
     it rests on what they hold."""
@@ -174,7 +199,7 @@ def task_of(asked: Asked, result: Result, context: ContextPack) -> Task:
     return Task(
         purpose="capability.synthesis",
         instructions=SYSTEM,
-        input=material(asked, result),
+        input=with_files(material(asked, result), attached),
         context=context,
         output=Written,
         check=check,
@@ -195,10 +220,11 @@ async def write(
     asked: Asked,
     result: Result,
     context: ContextPack = ContextPack(),
+    attached: Sequence[Mapping[str, object]] = (),
 ) -> tuple[Execution, Answer | None]:
     """The answer, written and checked by the runtime — none, said why, when
     no model wrote one it could keep."""
-    done = await runtime.run(task_of(asked, result, context))
+    done = await runtime.run(task_of(asked, result, context, attached))
     if not done.ok:
         return done, None
     written: Written = done.value

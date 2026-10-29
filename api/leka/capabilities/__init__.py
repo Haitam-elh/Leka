@@ -10,6 +10,7 @@ an agent sends are loaded from, and where LEKA talks to a language model
 The agents themselves live in agents/, as content (architecture rule 8).
 """
 
+from leka.capabilities.attached import attached_to, read_attached_with
 from leka.capabilities.catalogue import (
     CatalogueService,
     Entry,
@@ -478,6 +479,7 @@ __all__ = [
     "WorkspaceModelUpdate",
     "agent_definition",
     "all_skills",
+    "attached_to",
     "availability",
     "capability_resource",
     "catalogue",
@@ -526,6 +528,7 @@ __all__ = [
     "queue_repair",
     "queue_run",
     "queue_workflow",
+    "read_attached_with",
     "read_deliverable",
     "read_design",
     "read_index",
