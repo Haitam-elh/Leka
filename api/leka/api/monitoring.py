@@ -20,6 +20,10 @@
     PUT    /monitoring/channels/{key}   Slack, Teams or Discord connected by
                                         its webhook (LEKA-496): checked, kept
                                         encrypted, shown by its hint only
+    GET    /monitoring/night-review     what LEKA went through overnight
+                                        and the points it found (null: none
+                                        yet)
+    POST   /monitoring/night-review     gone through again now
     DELETE /monitoring/channels/{key}   disconnected
     POST   /monitoring/channels/{key}/test  a message sent now: where it
                                         stands said
@@ -56,9 +60,12 @@ from leka.monitoring import (
     ChannelRead,
     MonitoringEntitlementRead,
     MonitoringRead,
+    NightReviewRead,
     WatchableRead,
     WebhookConnect,
     entitled,
+    latest_night_review,
+    night_review,
     webhooks,
 )
 from leka.monitoring import rules as alert_rules
@@ -88,6 +95,21 @@ async def monitoring(session: SessionDep, principal: Reader) -> MonitoringRead:
         open=[a for a in alerts if a.status == "open"],
         ended=[a for a in alerts if a.status != "open"],
     )
+
+
+@router.get("/night-review", response_model=NightReviewRead | None)
+async def night(session: SessionDep, principal: Reader) -> NightReviewRead | None:
+    """The last night review: what LEKA went through, what it found to look
+    at (2026-10-29). None before the first."""
+    found = await latest_night_review(session)
+    return NightReviewRead.model_validate(found) if found is not None else None
+
+
+@router.post("/night-review", response_model=NightReviewRead)
+async def night_again(session: SessionDep, principal: Reader) -> NightReviewRead:
+    """Gone through again now, for whoever reads the environment."""
+    row = await night_review(session, principal.workspace_id, trigger="asked", by=principal.user_id)
+    return NightReviewRead.model_validate(row)
 
 
 @router.post("/alerts/{alert_id}/acknowledge", response_model=AlertRead)

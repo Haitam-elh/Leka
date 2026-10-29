@@ -197,3 +197,27 @@ class ChannelEndpoint(Base, WorkspaceScopedMixin):
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+
+
+class NightReview(Base, WorkspaceScopedMixin):
+    """What LEKA went through overnight, and what it found to look at
+    (2026-10-29, after Polsia's « travaille pendant que vous dormez »):
+    each review kept — when, how many of each thing it read (`checked`),
+    and its points, the most serious first, each with where to see it and
+    what to ask of LEKA about it (monitoring/night.py)."""
+
+    __tablename__ = "night_reviews"
+    __table_args__ = (
+        CheckConstraint("trigger IN ('night', 'asked')", name="trigger"),
+        Index("ix_night_reviews_workspace_at", "workspace_id", "at"),
+    )
+
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    trigger: Mapped[str] = mapped_column(String(10), nullable=False)
+    checked: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    points: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    asked_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
