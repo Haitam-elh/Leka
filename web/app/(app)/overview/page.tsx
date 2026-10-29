@@ -1,7 +1,7 @@
 "use client";
 
-import { Overview } from "@/components/overview/overview";
+import { OperationalOverview } from "@/components/overview/operational-overview";
 
 export default function Page() {
-  return <Overview />;
+  return <OperationalOverview />;
 }
