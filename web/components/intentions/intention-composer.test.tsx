@@ -8,7 +8,7 @@
  * spends the customer's money without a deliberate act.
  */
 
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -39,6 +39,23 @@ vi.mock("@/lib/intentions/attachments", async (original) => ({
   uploadAttachment: sent.upload,
   removeAttachment: sent.remove,
 }));
+
+// A voice recorded and written (2026-10-29): the microphone and LEKA's
+// transcription, played by the test.
+const voice = vi.hoisted(() => ({
+  can: false,
+  start: vi.fn(),
+  transcribe: vi.fn(),
+}));
+vi.mock("@/lib/recorder", async (original) => ({
+  ...(await original<typeof import("@/lib/recorder")>()),
+  canRecord: () => voice.can,
+  startRecording: voice.start,
+}));
+vi.mock("@/lib/intentions/api", async (original) => {
+  const real = await original<typeof import("@/lib/intentions/api")>();
+  return { ...real, intentions: { ...real.intentions, transcribe: voice.transcribe } };
+});
 
 const errors = vi.hoisted(() => ({ calls: [] as { title: string }[] }));
 vi.mock("@/lib/notify", () => ({
@@ -246,79 +263,72 @@ describe("attachments", () => {
   });
 });
 
-/** The browser's speech recognition, played by the test: what it hears is
- * what `hear` says. */
-class FakeRecognition {
-  static last: FakeRecognition | null = null;
-  lang = "";
-  continuous = false;
-  interimResults = false;
-  onresult: ((event: unknown) => void) | null = null;
-  onerror: ((event: { error: string }) => void) | null = null;
-  onend: (() => void) | null = null;
-  results: { isFinal: boolean; 0: { transcript: string } }[] = [];
-  start = vi.fn(() => {
-    FakeRecognition.last = this;
-  });
-  stop = vi.fn(() => this.onend?.());
-  abort = vi.fn();
-
-  hear(transcript: string, isFinal: boolean) {
-    const at = this.results.findIndex((r) => !r.isFinal);
-    const index = at >= 0 ? at : this.results.length;
-    this.results[index] = { isFinal, 0: { transcript } };
-    this.onresult?.({ resultIndex: index, results: this.results });
-  }
-}
-
-describe("dictation (2026-10-29: « Bientôt » no more)", () => {
+describe("dictation (2026-10-29: « Bientôt », then nothing written, no more)", () => {
   beforeEach(() => {
-    FakeRecognition.last = null;
-    (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition = FakeRecognition;
+    voice.can = true;
+    voice.start.mockReset();
+    voice.transcribe.mockReset();
   });
 
-  it("writes what is said after what was typed, as it is said, and stops on asking", async () => {
+  it("records, then writes what was said after what was typed", async () => {
     const user = userEvent.setup();
+    const recorded = new Blob(["RIFF"], { type: "audio/wav" });
+    const stop = vi.fn(async () => recorded);
+    voice.start.mockResolvedValue({ stop, cancel: vi.fn() });
+    voice.transcribe.mockResolvedValue({ text: "pourquoi le paiement est lent depuis hier" });
     mount({ prefilled: "Bonjour." });
+
     const dictate = await screen.findByTestId("intention-dictate");
     expect(dictate).toHaveTextContent(fr.composer.dictate);
     expect(dictate).not.toHaveTextContent("Bientôt");
-
     await user.click(dictate);
-    const heard = FakeRecognition.last;
-    expect(heard).not.toBeNull();
-    expect(heard?.lang).toMatch(/^fr/);
+    expect(voice.start).toHaveBeenCalled();
     expect(dictate).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByTestId("dictation-status")).toHaveTextContent(fr.composer.dictation.listening);
-
-    // Heard so far, then final: replaced, never written twice.
-    act(() => heard?.hear("pourquoi le paiement", false));
-    expect(box()).toHaveValue("Bonjour. pourquoi le paiement");
-    act(() => heard?.hear("pourquoi le paiement est lent", true));
-    act(() => heard?.hear("depuis hier", true));
-    expect(box()).toHaveValue("Bonjour. pourquoi le paiement est lent depuis hier");
+    expect(screen.getByTestId("dictation-status")).toHaveTextContent("LEKA vous écoute (0:00)");
 
     await user.click(dictate);
-    expect(heard?.stop).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(box()).toHaveValue("Bonjour. pourquoi le paiement est lent depuis hier"),
+    );
+    expect(stop).toHaveBeenCalled();
+    expect(voice.transcribe).toHaveBeenCalledWith(recorded, expect.stringMatching(/^fr/));
     expect(dictate).toHaveAttribute("aria-pressed", "false");
-    expect(dictate).toHaveTextContent(fr.composer.dictate);
   });
 
-  it("says why it stopped short: the microphone refused", async () => {
+  it("says why it stopped short: the microphone refused, nothing heard, LEKA unable", async () => {
     const user = userEvent.setup();
+    const { RecordingRefused } = await import("@/lib/recorder");
+    voice.start.mockRejectedValueOnce(new RecordingRefused("denied"));
     mount();
-    await user.click(await screen.findByTestId("intention-dictate"));
-    act(() => {
-      FakeRecognition.last?.onerror?.({ error: "not-allowed" });
-      FakeRecognition.last?.onend?.();
-    });
-    expect(screen.getByTestId("dictation-status")).toHaveTextContent(
+    const dictate = await screen.findByTestId("intention-dictate");
+    await user.click(dictate);
+    expect(await screen.findByTestId("dictation-status")).toHaveTextContent(
       fr.composer.dictation.problems.denied,
+    );
+
+    voice.start.mockResolvedValue({ stop: vi.fn(async () => new Blob(["x"])), cancel: vi.fn() });
+    voice.transcribe.mockResolvedValueOnce({ text: "  " });
+    await user.click(dictate);
+    await user.click(dictate);
+    await waitFor(() =>
+      expect(screen.getByTestId("dictation-status")).toHaveTextContent(
+        fr.composer.dictation.problems.no_speech,
+      ),
+    );
+
+    const { ApiError } = await import("@/lib/api");
+    voice.transcribe.mockRejectedValueOnce(new ApiError(503, "/intentions/transcriptions", "down"));
+    await user.click(dictate);
+    await user.click(dictate);
+    await waitFor(() =>
+      expect(screen.getByTestId("dictation-status")).toHaveTextContent(
+        fr.composer.dictation.problems.unavailable,
+      ),
     );
   });
 
-  it("is not offered where the browser cannot listen", () => {
-    delete (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition;
+  it("is not offered where the browser cannot record", () => {
+    voice.can = false;
     mount();
     expect(screen.queryByTestId("intention-dictate")).not.toBeInTheDocument();
   });

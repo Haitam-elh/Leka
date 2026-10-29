@@ -165,6 +165,13 @@ export const intentions = {
     return apiFetch<IntentionPage>(`${BASE}?${query.toString()}`);
   },
   counts: () => apiFetch<IntentionCounts>(`${BASE}/counts`),
+  /** What was dictated (WAV), written by LEKA's provider (2026-10-29). */
+  transcribe: (audio: Blob, language: string) =>
+    apiFetch<{ text: string }>(`${BASE}/transcriptions?language=${encodeURIComponent(language)}`, {
+      method: "POST",
+      body: audio,
+      headers: { "Content-Type": "audio/wav" },
+    }),
   one: (id: string) => apiFetch<IntentionDetail>(`${BASE}/${id}`),
   history: (id: string) => apiFetch<IntentionEvent[]>(`${BASE}/${id}/history`),
   cancel: (id: string, reason?: string) =>
