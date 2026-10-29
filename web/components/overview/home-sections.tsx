@@ -111,6 +111,7 @@ export function EnvironmentCard() {
         <h2
           id="home-environment"
           className="text-[0.9375rem] font-semibold text-brand-navy"
+          data-testid="home-environment-title"
         >
           {w.environment}
         </h2>
@@ -119,7 +120,7 @@ export function EnvironmentCard() {
           aria-hidden="true"
         />
       </Link>
-      <div className="mt-3 flex items-center gap-3">
+      <div className="mt-3 flex items-center gap-3" data-testid="home-environment-health">
         <div className="relative size-14 shrink-0">
           <svg
             viewBox="0 0 36 36"
@@ -150,12 +151,12 @@ export function EnvironmentCard() {
           </span>
         </div>
         <div className="min-w-0 space-y-1.5">
-          <Pill tone={HEALTH_TONE[health]} dot data-testid="home-health">
+          <Pill tone={HEALTH_TONE[health]} dot data-testid="home-health-pill">
             {none ? w.noSource : w.health[health]}
           </Pill>
           <p
             className="text-[0.6875rem] leading-snug text-shell-muted"
-            data-testid="home-last-sync"
+            data-testid="home-last-sync-text"
           >
             <span className="block">{w.lastSync}</span>
             {last ? (
@@ -177,7 +178,7 @@ export function EnvironmentCard() {
         <Link
           href={routes.sources()}
           className="mt-3 block rounded text-center text-xs font-medium text-state-danger outline-none hover:underline focus-visible:ring-3 focus-visible:ring-brand-violet/40"
-          data-testid="home-sources-failing"
+          data-testid="home-sources-failing-link"
         >
           {fill(w.sourcesFailing, { count: failing })}
         </Link>
@@ -187,7 +188,7 @@ export function EnvironmentCard() {
       <Link
         href={routes.environment()}
         className="mt-2 block rounded text-center text-xs text-shell-nav-active outline-none hover:underline focus-visible:ring-3 focus-visible:ring-brand-violet/40"
-        data-testid="home-health-explained"
+        data-testid="home-health-explained-link"
       >
         {t.environment.overall.understand}
       </Link>
@@ -232,13 +233,14 @@ export function AgentsSection() {
     <section
       className="mt-10"
       aria-labelledby="home-agents"
-      data-testid="home-agents"
+      data-testid="home-agents-section"
     >
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2
             id="home-agents"
             className="text-xl font-bold tracking-[-0.01em] text-brand-navy"
+            data-testid="home-agents-title"
           >
             {w.agents}
           </h2>
@@ -246,14 +248,14 @@ export function AgentsSection() {
             {isEnterprise(offers) ? w.agentsBodyContract : w.agentsBody}
           </p>
         </div>
-        <Link href={routes.capabilities()} className={LINK}>
+        <Link href={routes.capabilities()} className={LINK} data-testid="home-agents-all-link">
           {isEnterprise(offers) ? w.allAgentsOnly : w.allAgents}
           <ArrowRight className="rtl:-scale-x-100 size-4" aria-hidden="true" />
         </Link>
       </div>
       <ul
         className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"
-        data-testid="home-agents-grid"
+        data-testid="home-agents-grid-list"
       >
         {/* One row, at every width: as many as its columns. */}
         {row.map(({ agent, fit }) => {
@@ -270,13 +272,13 @@ export function AgentsSection() {
                 CARD,
                 "relative flex flex-col p-3.5 hover:border-brand-violet/40 max-md:nth-[n+3]:hidden md:max-lg:nth-[n+4]:hidden lg:max-xl:nth-[n+5]:hidden",
               )}
-              data-testid="home-agent"
+              data-testid={`home-agent-${agent.key}`}
               data-key={agent.key}
               data-fit={fit ?? undefined}
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2" data-testid={`home-agent-${agent.key}-market`}>
                 <MarketTile market={market} label={marketName} />
-                <span className="min-w-0 truncate text-xs text-shell-muted" data-testid="home-agent-market">
+                <span className="min-w-0 truncate text-xs text-shell-muted" data-testid={`home-agent-${agent.key}-market-text`}>
                   {marketName}
                 </span>
               </div>
@@ -285,7 +287,7 @@ export function AgentsSection() {
                 <Link
                   href={routes.capability(agent.key)}
                   className="rounded outline-none after:absolute after:inset-0 after:rounded-2xl hover:underline focus-visible:ring-3 focus-visible:ring-brand-violet/40"
-                  data-testid="home-agent-open"
+                  data-testid={`home-agent-${agent.key}-open-link`}
                 >
                   {agentTitle(t, agent.key, agent.title)}
                 </Link>
@@ -295,16 +297,16 @@ export function AgentsSection() {
               </p>
               {/* Why it is here: what it reads, against what is connected. */}
               {fit === "connected" || fit === "to_connect" ? (
-                <p className="mt-2 text-xs text-shell-muted" data-testid="home-agent-fit">
+                <p className="mt-2 text-xs text-shell-muted" data-testid={`home-agent-${agent.key}-fit`}>
                   {w.fit[fit]}
                 </p>
               ) : null}
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5" data-testid={`home-agent-${agent.key}-state-price`}>
                 <AgentStateSaid agentKey={agent.key} />
                 {payable ? (
                   <span
                     className="text-xs font-semibold whitespace-nowrap tabular-nums text-brand-navy"
-                    data-testid="home-agent-price"
+                    data-testid={`home-agent-${agent.key}-price`}
                   >
                     {euros(agent.monthly_price, format)}
                     <span className="font-normal text-shell-muted">
@@ -314,7 +316,7 @@ export function AgentsSection() {
                   </span>
                 ) : null}
               </div>
-              <div className="mt-2.5">
+              <div className="mt-2.5" data-testid={`home-agent-${agent.key}-action`}>
                 <AgentCardAction agentKey={agent.key} />
               </div>
             </li>
@@ -338,10 +340,10 @@ export function DedicatedAgentsSection() {
   if (!keys.length) return null;
   const summaries = t.catalogue.summaries as Record<string, string>;
   return (
-    <section className="mt-8" aria-labelledby="home-dedicated" data-testid="home-dedicated">
+    <section className="mt-8" aria-labelledby="home-dedicated" data-testid="home-dedicated-section">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 id="home-dedicated" className="text-lg font-bold tracking-[-0.01em] text-brand-navy">
+          <h2 id="home-dedicated" className="text-lg font-bold tracking-[-0.01em] text-brand-navy" data-testid="home-dedicated-title">
             {w.title}
           </h2>
           {organisation ? (
@@ -352,7 +354,7 @@ export function DedicatedAgentsSection() {
         <Link
           href={`${routes.capabilities()}#dedicated`}
           className={LINK}
-          data-testid="home-dedicated-all"
+          data-testid="home-dedicated-all-link"
         >
           {w.seeAll}
           <ArrowRight className="rtl:-scale-x-100 size-4" aria-hidden="true" />
@@ -360,37 +362,37 @@ export function DedicatedAgentsSection() {
       </div>
       {/* One line each (2026-10-25, Karim: « ça prend la moitié de la page
           pour rien »): what it is, what it does, its actions. */}
-      <ul className="mt-3 flex flex-col gap-2">
+      <ul className="mt-3 flex flex-col gap-2" data-testid="home-dedicated-list">
         {keys.map((key) => {
           const capability = catalogue?.find((c) => c.key === key);
           return (
             <li
               key={key}
               className={cn(CARD, "flex flex-wrap items-center gap-x-4 gap-y-2 border-brand-violet/30 px-4 py-3")}
-              data-testid="home-dedicated-agent"
+              data-testid={`home-dedicated-agent-${key}`}
               data-key={key}
             >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand-violet-soft text-shell-nav-active">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand-violet-soft text-shell-nav-active" data-testid={`home-dedicated-agent-${key}-icon`}>
                 <Network className="size-4.5" aria-hidden="true" />
               </span>
-              <div className="min-w-0 flex-1 basis-60">
+              <div className="min-w-0 flex-1 basis-60" data-testid={`home-dedicated-agent-${key}-content`}>
                 <h3 className="text-[0.9375rem] font-semibold text-brand-navy">
-                  <Link href={routes.capability(key)} className="rounded hover:underline">
+                  <Link href={routes.capability(key)} className="rounded hover:underline" data-testid={`home-dedicated-agent-${key}-title-link`}>
                     {agentTitle(t, key, capability?.title ?? key)}
                   </Link>
                 </h3>
-                <p className="truncate text-[0.8125rem] text-shell-muted" title={summaries[key] ?? capability?.summary ?? ""}>
+                <p className="truncate text-[0.8125rem] text-shell-muted" title={summaries[key] ?? capability?.summary ?? ""} data-testid={`home-dedicated-agent-${key}-summary`}>
                   {summaries[key] ?? capability?.summary ?? ""}
                 </p>
               </div>
               {/* Its actions wrap on a phone, never wider than the screen. */}
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-2" data-testid={`home-dedicated-agent-${key}-actions`}>
                 <AgentStateSaid agentKey={key} />
                 <Link
                   // The architect on a Confluence space (2026-10-25): its perimeter chosen first.
                   href={key === "application-architecture" ? routes.architect() : `${routes.capability(key)}#use`}
                   className={buttonVariants({ size: "sm" })}
-                  data-testid="home-dedicated-launch"
+                  data-testid={`home-dedicated-agent-${key}-launch-link`}
                 >
                   <Rocket aria-hidden="true" />
                   {w.launch}
@@ -412,10 +414,10 @@ export function DedicatedAgentsSection() {
  * to the agents and bundles is above. */
 export function HomeBundles() {
   return (
-    <div className="mt-10" data-testid="home-bundles-cards">
-      <Bundles />
-    </div>
-  );
+  <div className="mt-10" data-testid="home-bundles-section">
+    <Bundles />
+  </div>
+);
 }
 
 /** « Dernières analyses »: the four latest intentions, where each stands. */
@@ -425,30 +427,31 @@ export function LatestAnalyses() {
   const list = useIntentions(null, "");
   const rows = list.data?.pages.flatMap((page) => page.data).slice(0, 4) ?? [];
   if (list.isPending || rows.length === 0) return null;
-  return (
-    <section
-      className="mt-10"
-      aria-labelledby="home-latest"
-      data-testid="home-latest"
-    >
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2
-            id="home-latest"
-            className="text-xl font-bold tracking-[-0.01em] text-brand-navy"
-          >
-            {w.latest}
-          </h2>
-          <p className="mt-1 text-[0.875rem] text-shell-muted">
-            {w.latestBody}
-          </p>
-        </div>
-        <Link href={routes.intentions()} className={LINK}>
-          {w.allHistory}
-          <ArrowRight className="rtl:-scale-x-100 size-4" aria-hidden="true" />
-        </Link>
+return (
+  <section
+    className="mt-10"
+    aria-labelledby="home-latest"
+    data-testid="home-latest-section"
+  >
+    <div className="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h2
+          id="home-latest"
+          className="text-xl font-bold tracking-[-0.01em] text-brand-navy"
+          data-testid="home-latest-title"
+        >
+          {w.latest}
+        </h2>
+        <p className="mt-1 text-[0.875rem] text-shell-muted" data-testid="home-latest-subtitle">
+          {w.latestBody}
+        </p>
       </div>
-      <ul className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <Link href={routes.intentions()} className={LINK} data-testid="home-latest-all-link">
+        {w.allHistory}
+        <ArrowRight className="rtl:-scale-x-100 size-4" aria-hidden="true" />
+      </Link>
+    </div>
+    <ul className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-testid="home-latest-list">
         {rows.map((intention) => (
           <li key={intention.id}>
             <Link

@@ -721,7 +721,6 @@ export function Overview() {
           <EnvironmentCard />
         </div>
       </div>
-      {/* LEKA-488: one row of agents, the bundles, then the latest analyses. */}
       <DedicatedAgentsSection />
       <AgentsSection />
       <HomeBundles />

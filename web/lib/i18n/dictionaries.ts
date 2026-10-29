@@ -463,6 +463,8 @@ const fr = {
         "Choisis pour votre environnement : d'abord ceux qui fonctionnent avec vos sources connectées, puis ceux inclus dans votre formule.",
       agentsBodyContract:
         "Choisis pour votre environnement : d'abord ceux qui fonctionnent avec vos sources connectées. Tous sont inclus dans votre contrat.",
+      allAgents: "Voir tous les agents et bundles",
+      allAgentsOnly: "Voir tous les agents",
       /** Made for this organisation (2026-10-25): first on its home. */
       dedicated: {
         title: "Agents dédiés",
@@ -481,6 +483,7 @@ const fr = {
       latest: "Dernières analyses",
       latestBody: "Vos demandes et analyses récentes.",
       allHistory: "Voir tout l'historique",
+      history: "Historique des analyses",
     },
     /** What needs someone first, and whether what LEKA sees can be trusted (LEKA-442). */
     twin: {
