@@ -139,7 +139,9 @@ FINAL_RENDER = frozenset(
     {"no_model", "refused", "limited", "no_repository", "out_of_scope", "not_found"}
 )
 # How long a run may take, all of it: its context, its tools, its model.
-RUN_BUDGET = 15 * 60.0
+# An agent reading code round after round with a slower model (30 rounds,
+# 2026-10-29: a design review cut at 15 minutes) has more time.
+RUN_BUDGET = 25 * 60.0
 # The hosts of code: an agent that needs one of them, and nothing else, rests
 # its answer on the code it reads (2026-10-28).
 CODE_HOSTS = frozenset({"github", "gitlab", "bitbucket"})

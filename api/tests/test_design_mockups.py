@@ -753,3 +753,169 @@ def test_a_mock_up_holds_on_a_phone_whatever_its_model_wrote() -> None:
     assert shown.index(BASE) < shown.index(".x{white-space:nowrap}") < shown.index(PHONE)
     assert "list-style:none" in BASE and "text-decoration:inherit" in BASE
     assert PHONE.startswith("@media (max-width:640px)") and "white-space:normal!important" in PHONE
+
+
+async def test_a_design_is_implemented_in_its_screen_never_by_its_analysis_few_lines(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    leka_gemini: Callable[..., Script],
+    github: GitHub,
+    store: LocalObjectStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # 2026-10-29: « Implémenter le design » of the home merged four classes
+    # of the shell, its analysis' own diff — the home, untouched, « a second
+    # step » for the rest. A design is its screen redrawn, by the writer.
+    _as(identity, acme, "member")
+    await _github_source(acme["acme"])
+    await sync_catalogue()
+    home = "web/components/overview/overview.tsx"
+    github.listed[home] = "export function Overview() {\n  return <main>Accueil</main>;\n}\n"
+    plan = {**_plan("Calme", "Dense"), "screen": "Accueil (/overview)"}
+    leka_gemini(
+        gemini(call={"name": "read_file", "args": {"repository": REPO, "path": home}}),
+        gemini(REVIEW),
+        gemini(json.dumps(plan)),
+        gemini(json.dumps(TODAY_DRAWN)),
+        gemini(json.dumps(DRAWN)),
+        gemini(json.dumps(DRAWN)),
+    )
+    review = await client.post(
+        RUNS,
+        json={"key": "design-review", "inputs": {"depot": REPO, "demande": "propose un design"}},
+    )
+    review_id = review.json()["id"]
+    assert await execute_run(acme["acme"], uuid.UUID(review_id)) == {"status": "succeeded"}
+
+    analysis = (
+        "## Résumé\nL'accueil Calme.\n## Le problème\nx\n## La modification\n"
+        "```diff\n--- a/web/components/overview/overview.tsx\n"
+        "+++ b/web/components/overview/overview.tsx\n@@\n"
+        '-  return <main>Accueil</main>;\n+  return <main className="calme">Accueil</main>;\n'
+        "```\n## Les risques\nx\n## Comment tester\nx\n## Ce qui n'est pas fait ici\nx\n"
+        "## Plan d'action\n1. x"
+    )
+    redrawn = {
+        "files": [
+            {
+                "path": home,
+                "edits": [
+                    {
+                        "find": "  return <main>Accueil</main>;\n",
+                        "replace": (
+                            '  return (\n    <main className="accueil">\n'
+                            "      <h1>Accueil</h1>\n      <button>Lancer</button>\n"
+                            "    </main>\n  );\n"
+                        ),
+                    }
+                ],
+            }
+        ]
+    }
+    script = leka_gemini(
+        gemini(call={"name": "read_file", "args": {"repository": REPO, "path": home}}),
+        gemini(analysis),
+        gemini(json.dumps(redrawn)),
+    )
+    started = await client.post(
+        RUNS,
+        json={
+            "key": "code-change",
+            "inputs": {
+                "demande": "Implémente dans le code la direction retenue de cette revue de design.",
+                "depot": REPO,
+                "livrable": review_id,
+            },
+        },
+    )
+    run_id = started.json()["id"]
+    assert await execute_run(acme["acme"], uuid.UUID(run_id)) == {"status": "succeeded"}
+    # The writer was asked, the screen's file its to write, with the mock-up.
+    material = json.loads(script.asked[2]["contents"][-1]["parts"][0]["text"])
+    assert material["only"] == [home]
+    assert material["inputs"]["maquette"]["screen"] == "Accueil (/overview)"
+    assert f"{REPO}:{home}" in material["inputs"]["maquette"]["files"]
+    [change] = (await client.get("/api/v1/code-changes", params={"run_id": run_id})).json()
+    [changed] = change["files"]
+    # The screen redrawn as the writer wrote it — not the analysis' line.
+    assert changed["path"] == home
+    assert '<main className="accueil">' in changed["diff"]
+    assert 'className="calme"' not in changed["diff"]
+
+
+def test_a_design_s_screen_is_found_by_its_route_and_its_put_off_said() -> None:
+    from leka.capabilities.changes import ChangeProposal, put_off, screen_files
+
+    read = {
+        f"{REPO}:web/app/(app)/overview/page.tsx": "x",
+        f"{REPO}:web/components/overview/overview.tsx": "x" * 100,
+        f"{REPO}:web/components/overview/home-sections.tsx": "x" * 50,
+        f"{REPO}:web/components/overview/overview.test.tsx": "x",
+        f"{REPO}:web/components/ui/button.tsx": "x",
+    }
+    assert screen_files({"screen": "Accueil (/overview)"}, read) == [
+        "web/components/overview/overview.tsx",
+        "web/components/overview/home-sections.tsx",
+        "web/app/(app)/overview/page.tsx",
+    ]
+    assert screen_files({"screen": "Accueil"}, read) == []
+    # No route said, its name holds the folder's (2026-10-29).
+    assert screen_files({"screen": "Accueil (page d'overview)"}, read)[0] == (
+        "web/components/overview/overview.tsx"
+    )
+    from leka.capabilities.changes import redrawn_enough
+
+    # The screen's own file: a class or two is no redesign (2026-10-29).
+    page = "".join(f'<div className="row-{n}">{n}</div>\n' for n in range(300))
+    two = ChangeProposal.model_validate(
+        {
+            "files": [
+                {
+                    "path": "web/home.tsx",
+                    "edits": [
+                        {
+                            "find": '<div className="row-1">1</div>\n',
+                            "replace": '<div className="x">1</div>\n',
+                        }
+                    ],
+                }
+            ]
+        }
+    )
+    [said] = redrawn_enough("web/home.tsx", page, two)
+    assert "this changes 2 of its lines" in said and "at least 20 lines" in said
+    whole = ChangeProposal.model_validate(
+        {"files": [{"path": "web/home.tsx", "content": page.replace("row-", "bloc-")}]}
+    )
+    assert redrawn_enough("web/home.tsx", page, whole) == []
+    from leka.capabilities.changes import unknown_names
+
+    # A label's key no file holds: invented, the code would not build
+    # (2026-10-29: Mistral's « t.overview.firstSteps.step1Title »).
+    steps = "const w = t.overview.firstSteps;\nreturn <p>{t.overview.firstSteps.step1}</p>;\n"
+    invented = {"web/home.tsx": "<h3>{t.overview.firstSteps.step1Title}</h3>\n"}
+    [said] = unknown_names({"web/steps.tsx": steps}, invented)
+    assert said.startswith("web/home.tsx uses t.overview.firstSteps.step1Title, which none")
+    kept = {"web/home.tsx": "<h3>{t.overview.firstSteps.step1}</h3>\n"}
+    assert unknown_names({"web/steps.tsx": steps}, kept) == []
+    # A name of another object entirely is not judged.
+    assert unknown_names({"web/steps.tsx": steps}, {"web/home.tsx": "x = a.b.c;\n"}) == []
+    from leka.capabilities.changes import unimported
+
+    # A component rendered, never imported (2026-10-29: <Button> in the home).
+    home = 'import { Card } from "@/ui/card";\nexport const H = () => <Card />;\n'
+    used = home.replace("<Card />", "<Card><Button>Lancer</Button></Card>")
+    [said] = unimported({"web/home.tsx": home}, {"web/home.tsx": used})
+    assert said.startswith("web/home.tsx renders <Button> without importing it")
+    imported = 'import { Button } from "@/ui/button";\n' + used
+    assert unimported({"web/home.tsx": home}, {"web/home.tsx": imported}) == []
+    # A type's parameter, a component held in a variable: no tag of its own.
+    held = "const ref = useRef<HTMLDivElement>(null);\nconst Icon = icons[kind];\n<Icon />;\n"
+    assert unimported({}, {"web/a.tsx": held}) == []
+    later = ChangeProposal.model_validate(
+        {"summary": "La grille est isolée pour une seconde étape.", "files": []}
+    )
+    [said] = put_off(later)
+    assert said.endswith("The mock-up is implemented whole in this change.")

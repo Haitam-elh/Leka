@@ -1324,6 +1324,57 @@ async def test_a_change_too_big_for_one_answer_is_written_file_by_file(
     assert change["title"] == "Déduire les paiements en attente du solde"
 
 
+async def test_a_file_no_model_can_write_is_left_out_said_the_others_kept(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    leka_gemini: Callable[..., Script],
+    github: GitHub,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # 2026-10-29: a shared card.tsx failed eight answers, and with it the
+    # whole redesign. Left out, said; the rest written.
+    _as(identity, acme, "member")
+    await _github_source(acme["acme"])
+    await sync_catalogue()
+    github.listed = {"app/ledger.py": LEDGER}
+
+    async def queue(workspace_id: uuid.UUID, run_id: uuid.UUID) -> bool:
+        return True
+
+    monkeypatch.setattr(agent_runs_api, "queue_change", queue)
+    monkeypatch.setattr(runs_module, "queue_redraw", queue_redraw_none)
+    cut = gemini('{"repository": "acme/pay')
+    cut["candidates"][0]["finishReason"] = "MAX_TOKENS"
+    both = _proposal()
+    both["files"] = [
+        both["files"][0],
+        {"path": "app/ledger.py", "edits": [{"find": "line 99\n", "replace": "x\n"}]},
+    ]
+    leka_gemini(
+        gemini(call={"name": "read_file", "args": {"repository": REPO, "path": "app/balance.py"}}),
+        gemini(call={"name": "read_file", "args": {"repository": REPO, "path": "app/ledger.py"}}),
+        gemini("# Analyse\n\n`app/balance.py` et `app/ledger.py` ignorent les paiements."),
+        cut,
+        cut,
+        # Each file apart: the ledger's edit never lands, asked twice.
+        gemini(json.dumps(both)),
+        gemini(json.dumps(both)),
+        gemini(json.dumps(both)),
+    )
+    started = await client.post(
+        RUNS,
+        json={"key": "code-change", "inputs": {"demande": "Corrige le solde", "depot": REPO}},
+    )
+    run_id = started.json()["id"]
+    assert await execute_run(acme["acme"], uuid.UUID(run_id)) == {"status": "succeeded"}
+    [change] = (await client.get(API, params={"run_id": run_id})).json()
+    assert [f["path"] for f in change["files"]] == ["app/balance.py"]
+    # Said to whoever decides: which file, and why.
+    assert "`app/ledger.py` (aucun modèle n'a su l'écrire, le reste est fait)" in change["summary"]
+
+
 # ── accepted later, then followed (2026-10-20) ──────────────────────────────
 
 

@@ -55,7 +55,7 @@ import json
 import posixpath
 import re
 import uuid
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -68,6 +68,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from leka.background import JobQueue, enqueue_job
 from leka.capabilities.catalogue import needs_of
 from leka.capabilities.definition import Definition
+from leka.capabilities.deliverable_check import deferred
 from leka.capabilities.gateway import Gateway, Message, Needs, NoModelError, Request, Tier
 from leka.capabilities.models import AgentRun, CodeChange
 from leka.capabilities.registry import find
@@ -100,6 +101,7 @@ NO_MODEL = {
 SKIPPED_SAID = {
     "not_found": "le texte à remplacer n'y est pas",
     "ambiguous": "le texte à remplacer y est plusieurs fois",
+    "not_written": "aucun modèle n'a su l'écrire, le reste est fait",
 }
 # What the writer is shown of the files the agent read: each, and all.
 MOST_SHOWN = 60_000
@@ -384,6 +386,13 @@ test, the lines that check something: each link and its href, role and \
 accessible name, text, test id, class and attribute they read stays on the \
 screen as it is (the element kept, with its role, name and href) unless the \
 analysis removes it; then that test changes with it, in this same change.
+- `maquette`, when given, is the design this change implements: the screen \
+it names looks like its mock-up once changed (its blocks, their order, \
+sizes, colours, spacing), whole, in this change. Never a part of it, never \
+« a later step », whatever the analysis says.
+- Use only names the files you were given hold: a label's key (t.home.title), \
+a component's prop or variant, an import, a CSS class or token. A name none of \
+them holds does not exist: the code would not build.
 Answer with the JSON object only.
 
 Never write the em dash « — »: a colon, a comma, a semicolon or \
@@ -747,6 +756,8 @@ def change_problems(
     # ASKED_FOR_IDS times at most: past that, the CI says it.
     if ids:
         problems += lost_ids(given, after)
+        problems += unknown_names(given, {p: t for p, t in after.items() if p in given})
+        problems += unimported(given, after)
     return problems
 
 
@@ -1121,11 +1132,15 @@ async def propose_change(
     found = await _repository_of(session, run, analysis)
     from_diff: tuple[list[dict[str, object]], list[dict[str, str]]] = ([], [])
     base = ""
+    # A design to implement is its mock-up, whole: never the few lines of a
+    # diff its analysis held (2026-10-29: four classes of the shell changed,
+    # the home untouched, « a second step » for the rest).
+    designing = target is not None
     if found is not None:
         source, code, repository = found
         try:
             base = await code.default_branch(repository)
-            proposed = edits_from_diff(analysis)
+            proposed = [] if designing else edits_from_diff(analysis)
             if proposed:
                 from_diff = await _changed(code, repository, base, proposed)
         except CodeRefusedError as refused:
@@ -1150,6 +1165,8 @@ async def propose_change(
                     continue
                 if text is not None:
                     read[f"{repository}:{path}"] = text
+        if designing:
+            read = await _with_screen(code, repository, base, dict(read), target or {})
         read = await _with_tests(code, repository, base, read)
     request = Request(
         purpose=f"agent:{definition.key}:change"[:100],
@@ -1169,14 +1186,27 @@ async def propose_change(
 
     def verify(proposal: ChangeProposal) -> list[str]:
         verified[0] += 1
-        return change_problems(proposal, read or {}, ids=verified[0] <= ASKED_FOR_IDS)
+        problems = change_problems(proposal, read or {}, ids=verified[0] <= ASKED_FOR_IDS)
+        return problems + (put_off(proposal) if designing else [])
 
     deadline = asyncio.get_running_loop().time() + budget
     usage: dict[str, Any] = {}
+    left_out: list[str] = []
     try:
-        if is_big(analysis, read or {}):
+        screen = screen_files(target or {}, read or {}) if designing else []
+        if screen or is_big(analysis, read or {}):
             proposal = await asyncio.wait_for(
-                _by_file(session, run, definition, inputs, analysis, read or {}, usage),
+                _by_file(
+                    session,
+                    run,
+                    definition,
+                    inputs,
+                    analysis,
+                    read or {},
+                    usage,
+                    screen=screen,
+                    left_out=left_out,
+                ),
                 timeout=budget,
             )
         else:
@@ -1197,7 +1227,16 @@ async def propose_change(
                 logger.info("change_written_by_file", run=str(run.id))
                 left = deadline - asyncio.get_running_loop().time()
                 proposal = await asyncio.wait_for(
-                    _by_file(session, run, definition, inputs, analysis, read or {}, usage),
+                    _by_file(
+                        session,
+                        run,
+                        definition,
+                        inputs,
+                        analysis,
+                        read or {},
+                        usage,
+                        left_out=left_out,
+                    ),
                     timeout=max(left, 60.0),
                 )
             else:
@@ -1234,6 +1273,7 @@ async def propose_change(
     try:
         base = proposal.base_branch.strip() or await code.default_branch(repository)
         files, skipped = await _changed(code, repository, base, proposal.files)
+        skipped += [{"path": path, "why": "not_written"} for path in left_out]
     except CodeRefusedError as refused:
         logger.warning("change_not_read", run=str(run.id), code=refused.code)
         return Proposed(None, refused.code, usage)
@@ -1251,17 +1291,6 @@ async def propose_change(
     session.add(change)
     await session.flush()
     return Proposed(change, None, usage, skipped)
-
-
-async def _all[T](asked: Sequence[Awaitable[T]]) -> list[T]:
-    """Each at once: the first to fail stops the others, and is raised."""
-    tasks = [asyncio.ensure_future(each) for each in asked]
-    try:
-        return list(await asyncio.gather(*tasks))
-    except BaseException:
-        for task in tasks:
-            task.cancel()
-        raise
 
 
 def completed(
@@ -1285,6 +1314,184 @@ def completed(
     )
 
 
+def put_off(proposal: ChangeProposal) -> list[str]:
+    """A design implemented by halves, as its writer says it: « a second
+    step », « later » (2026-10-29)."""
+    said = " ".join([proposal.summary, *(f.why for f in proposal.files)])
+    return [
+        f"{problem} The mock-up is implemented whole in this change." for problem in deferred(said)
+    ]
+
+
+# What of the file that draws a screen its mock-up's redesign changes, at
+# least: its lines, and a share of them (2026-10-29: « implemented », three
+# lines of the home changed).
+LEAST_REDRAWN = 20
+LEAST_SHARE = 0.05
+
+
+# A dotted name in code: t.overview.home.title, words.firstSteps.step1.
+_DOTTED = re.compile(r"(?<![\w.$])([A-Za-z_]\w*(?:\??\.[A-Za-z_]\w*){2,})")
+_CODE_FILES = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".vue", ".svelte")
+
+
+# A component a JSX file renders — not a type's parameter, which follows a
+# name (useRef<HTMLDivElement>).
+_RENDERS = re.compile(r"(?<![\w.])<([A-Z][A-Za-z0-9_]*)(?=[\s/>])")
+
+
+def _unbound(text: str) -> set[str]:
+    """The components a file renders that it names nowhere else — no import,
+    no definition, no variable, no parameter: bound to nothing."""
+    tags = set(_RENDERS.findall(text))
+    bare = re.sub(r"</?[A-Z][A-Za-z0-9_]*(?=[\s/>])", "", text)
+    return {name for name in tags if not re.search(rf"\b{re.escape(name)}\b", bare)}
+
+
+def unimported(read: Mapping[str, str], after: Mapping[str, str]) -> list[str]:
+    """Components a change renders that its file neither imports nor makes —
+    newly (2026-10-29: Mistral rendered <Button> in the home, never imported:
+    « Cannot find name 'Button' »)."""
+    said: list[str] = []
+    for path, text in after.items():
+        if not path.endswith((".tsx", ".jsx")):
+            continue
+        missing = sorted(_unbound(text) - _unbound(read.get(path, "")))
+        if missing:
+            said.append(
+                f"{path} renders {', '.join(f'<{n}>' for n in missing)} without importing it: "
+                "import each from where the code you were given imports it, or use a "
+                "component this file already has."
+            )
+    return said
+
+
+def unknown_names(read: Mapping[str, str], after: Mapping[str, str]) -> list[str]:
+    """Dotted names a change writes that no file it was given holds, rooted
+    where the code already reads names (`t.overview.firstSteps.step1Title`
+    where only `…step1` is): invented — the code would not build (2026-10-29:
+    Mistral's home redesign, eleven keys its dictionaries do not have)."""
+    given = "\n".join(read.values())
+    held = {m.replace("?.", ".") for m in _DOTTED.findall(given)}
+    roots = {name.split(".")[0] for name in held}
+    said: list[str] = []
+    for path, text in after.items():
+        if not path.endswith(_CODE_FILES):
+            continue
+        new = {m.replace("?.", ".") for m in _DOTTED.findall(text)} - held
+        invented = sorted(
+            name
+            for name in new
+            if name.split(".")[0] in roots
+            # Its parent is a name the code reads: a key added to it.
+            and (
+                (parent := name.rsplit(".", 1)[0]) in held
+                or any(h.startswith(parent + ".") for h in held)
+            )
+        )
+        if invented:
+            said.append(
+                f"{path} uses {', '.join(invented[:8])}, which none of the files you were given "
+                "holds: these names do not exist and the code would not build. Use the names "
+                "the code already reads (its labels' keys, its components' props and variants)."
+            )
+    return said
+
+
+def after_of(proposal: ChangeProposal, given: Mapping[str, str]) -> dict[str, str]:
+    """The files a proposal changes, as they read once changed."""
+    after: dict[str, str] = {}
+    for each in proposal.files:
+        path = safe_path(each.path)
+        if path is None:
+            continue
+        if each.edits and path in given:
+            changed = apply_edits(given[path], each.edits)[0]
+            if changed is not None:
+                after[path] = changed
+        elif each.content is not None:
+            after[path] = each.content
+    return after
+
+
+def redrawn_enough(path: str, before: str, proposal: ChangeProposal) -> list[str]:
+    """The screen's own file changed as a redesign changes it — not a class
+    or two — or said to the model, which writes it again."""
+    after = before
+    for each in proposal.files:
+        if safe_path(each.path) != path:
+            continue
+        if each.content is not None and not each.edits:
+            after = each.content
+        elif each.edits:
+            after = apply_edits(before, each.edits)[0] or before
+    changed = sum(
+        1
+        for line in difflib.unified_diff(before.splitlines(), after.splitlines(), lineterm="", n=0)
+        if line[:1] in "+-" and not line.startswith(("+++", "---"))
+    )
+    lines = len(before.splitlines())
+    # Never more than half a small file.
+    least = min(max(LEAST_REDRAWN, int(lines * LEAST_SHARE)), max(1, lines // 2))
+    if changed >= least:
+        return []
+    return [
+        f"{path} draws the screen the mock-up redraws, and this changes {changed} of its "
+        f"lines: the mock-up redraws its layout (its blocks, their order, sizes, colours, "
+        f"spacing). Rewrite the parts of its markup the mock-up changes, at least {least} "
+        "lines, or give the file whole in `content`, so that the screen looks like the "
+        "mock-up — whole, now."
+    ]
+
+
+_ROUTE = re.compile(r"\(\s*/([\w/\[\]().-]*)\s*\)")
+
+
+def screen_files(target: Mapping[str, object], read: Mapping[str, str]) -> list[str]:
+    """The files that draw the screen a design redraws: those read whose path
+    holds its route's words (« Accueil (/overview) » → overview/page.tsx,
+    components/overview/…) — tests apart, the largest first."""
+    named = str(target.get("screen") or "")
+    found = _ROUTE.search(named)
+    words = [w for w in re.split(r"[/()\[\]]+", found.group(1)) if w] if found else []
+    # No route said (« Accueil (page d'overview) », 2026-10-29): the words of
+    # its name a path holds as a folder or a file.
+    if not words:
+        words = [w for w in re.findall(r"[a-z][a-z0-9-]{3,}", named.lower()) if w not in _COMMON]
+    if not words:
+        return []
+    given = {key.split(":", 1)[-1]: text for key, text in read.items()}
+    files = [
+        path
+        for path in given
+        if not is_test(path)
+        and any(w in path.split("/") or path.split("/")[-1].split(".")[0] == w for w in words)
+    ]
+    return sorted(files, key=lambda p: -len(given[p]))
+
+
+async def _with_screen(
+    code: GitHubCode,
+    repository: str,
+    base: str,
+    read: dict[str, str],
+    target: Mapping[str, object],
+) -> dict[str, str]:
+    """What the writer is given, and the files the design review read —
+    the screen's own (2026-10-29)."""
+    for key in target.get("files") or []:  # type: ignore[attr-defined]
+        name, _, path = str(key).partition(":")
+        if name != repository or key in read or not path:
+            continue
+        try:
+            text = await code.read(repository, path, base)
+        except CodeRefusedError:
+            continue
+        if text is not None:
+            read[str(key)] = text
+    return read
+
+
 def _cut(error: NoModelError) -> bool:
     return any("Cut at its limit" in (a.error or "") for a in error.attempts)
 
@@ -1297,13 +1504,20 @@ async def _by_file(
     analysis: str,
     read: Mapping[str, str],
     usage: dict[str, Any],
+    *,
+    screen: Sequence[str] = (),
+    left_out: list[str] | None = None,
 ) -> ChangeProposal:
     """A change too big for one answer, written file by file (2026-10-27):
     each file the analysis names, alongside, every file given to each; the
     new files it names, apart; then each test given, adapted to the files as
-    they now are. One file not written fails it all: never half a change."""
+    they now are. One file not written fails it all: never half a change.
+    A design implemented (`screen`, its screen's files): each of them too,
+    the largest — its layout — changed or the change refused (2026-10-29)."""
     given = {key.split(":", 1)[-1]: text for key, text in read.items()}
-    code = to_rewrite(analysis, read) or [p for p in given if not is_test(p)][:MAX_FILES]
+    named = to_rewrite(analysis, read) or ([] if screen else [p for p in given if not is_test(p)])
+    code = list(dict.fromkeys([*screen, *named]))[:MAX_FILES]
+    main = max(screen, key=lambda p: len(given.get(p, "")), default=None)
     new = [p for p in paths_named(analysis) if p not in given]
     needs = replace(needs_of(definition), tools=False)
     limit = asyncio.Semaphore(ALONGSIDE)
@@ -1325,10 +1539,23 @@ async def _by_file(
             ref=f"agent_run:{run.id}",
         )
 
+        tries = [0]
+
         def verify(proposal: ChangeProposal) -> list[str]:
+            tries[0] += 1
             mine = _only(proposal, paths)
-            # A test that still holds is left as it is: no file is an answer.
-            problems = change_problems(mine, read, ids=False, empty=changed is not None)
+            # A test that still holds is left as it is: no file is an answer;
+            # a screen's file but its main one, too.
+            free = changed is not None or (paths[0] in screen and paths[0] != main)
+            problems = change_problems(mine, read, ids=False, empty=free)
+            if main is not None and paths == [main]:
+                problems += redrawn_enough(main, given.get(main, ""), mine)
+            # Names the files given do not hold: asked twice, then the CI says.
+            if tries[0] <= ASKED_FOR_IDS:
+                written = after_of(mine, given)
+                problems += unknown_names(given, written) + unimported(given, written)
+            if screen:
+                problems += put_off(mine)
             return problems + (also(mine) if also else [])
 
         async with limit, session_factory() as own:
@@ -1344,7 +1571,24 @@ async def _by_file(
         usage["tokens_out"] = int(usage.get("tokens_out", 0)) + done.usage.tokens_out
         return _only(answered.value, paths)
 
-    written = await _all([one([path]) for path in code] + ([one(new)] if new else []))
+    # Each file alongside; one no model could write is left out, said
+    # (`left_out`), the others kept — unless it is the screen's own, or none
+    # was written (2026-10-29: a shared card.tsx failed eight answers, and
+    # with it the home redesigned).
+    asked = [[path] for path in code] + ([new] if new else [])
+    results = await asyncio.gather(*(one(paths) for paths in asked), return_exceptions=True)
+    written: list[ChangeProposal] = []
+    for paths, result in zip(asked, results, strict=True):
+        if isinstance(result, ChangeProposal):
+            written.append(result)
+            continue
+        if not isinstance(result, NoModelError | TimeoutError) or paths == [main]:
+            raise result
+        logger.warning("change_file_not_written", run=str(run.id), paths=paths)
+        if left_out is not None:
+            left_out.extend(paths)
+    if not written:
+        raise next(r for r in results if isinstance(r, BaseException))
     files = [f for each in written for f in each.files]
     after: dict[str, str] = {}
     for each in files:
@@ -1379,8 +1623,17 @@ async def _by_file(
 
             return check
 
-        adapted = await _all([one([t], after, kept_ids(t)) for t in tests])
-        files += [f for each in adapted for f in each.files]
+        adapted = await asyncio.gather(
+            *(one([t], after, kept_ids(t)) for t in tests), return_exceptions=True
+        )
+        for test, result in zip(tests, adapted, strict=True):
+            if isinstance(result, ChangeProposal):
+                files += result.files
+            elif isinstance(result, NoModelError | TimeoutError):
+                if left_out is not None:
+                    left_out.append(test)
+            else:
+                raise result
     first = written[0]
     return first.model_copy(update={"files": files[:MAX_FILES]})
 
