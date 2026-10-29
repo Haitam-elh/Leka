@@ -130,8 +130,10 @@ REDRAWN = {"code_change": (CHANGE_JOB, "change"), "design_mockups": (DESIGN_JOB,
 MOST_READ_KEPT = 60
 # The files a deck may be drawn as.
 DECK_FILES = ("pdf", "pptx")
-# Asked longer ago and still not drawn: lost (a worker gone) — asked again.
-DRAWING_LOST = timedelta(minutes=20)
+# Asked longer ago and still not drawn: lost (a worker gone) — asked again;
+# past a design's own budget, its plan and two drawings told what is wrong
+# a few times (mockups.DESIGN_BUDGET, 2026-10-29).
+DRAWING_LOST = timedelta(minutes=45)
 # What stops a change or a design for good — no model here, an AI control's
 # refusal, a quota, no repository to write on: said, never done again by
 # itself. Anything else — a model out of time, edits that did not land — is

@@ -456,14 +456,14 @@ async def test_files_drawn_after_never_left_waiting_failed_or_lost(
     assert (after["drawing"], after["draw_failed"]) == ([], "unanswered")
     assert after["drawable"] == ["pdf", "pptx"]
 
-    # Asked, and no worker ever drew it: lost after 20 minutes — asked again.
+    # Asked, and no worker ever drew it: lost after DRAWING_LOST (45 minutes) — asked again.
     again = await client.post(f"{API}/{started['id']}/files", json={"formats": ["pdf"]})
     assert again.status_code == 202 and again.json()["draw_failed"] is None
     assert (await _detail(client, started["id"]))["drawing"] == ["pdf"]
     await _sql(
         acme["acme"],
         "UPDATE agent_runs SET detail = detail || "
-        "jsonb_build_object('drawing_since', (now() - interval '25 minutes')::text) "
+        "jsonb_build_object('drawing_since', (now() - interval '50 minutes')::text) "
         "WHERE id = :id",
         id=uuid.UUID(started["id"]),
     )

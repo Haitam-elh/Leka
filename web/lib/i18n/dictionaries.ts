@@ -2020,6 +2020,8 @@ const fr = {
       tooMany: "LEKA a déjà réparé cette pull request {count} fois : regardez l'échec sur GitHub avant d'aller plus loin.",
       asked: "Réparation lancée : LEKA lit l'échec.",
       running: "LEKA lit l'échec de la CI et écrit la correction : quelques minutes.",
+      runningSince:
+        "LEKA lit l'échec de la CI et écrit la correction : lancée {ago}, 20 minutes au plus. Le résultat s'affiche ici tout seul.",
       n: "Réparation {n}",
       by: "par {model}",
       states: {
@@ -7444,11 +7446,11 @@ const fr = {
       drawFailed: "Le PDF et le PowerPoint n'ont pas pu être générés : {why}.",
       drawAgain: "Réessayer",
       changeWriting:
-        "LEKA écrit le changement proposé : il s'affichera ici, avant / après, dans quelques minutes.",
+        "LEKA écrit le changement proposé, puis le relit et le corrige : il s'affichera ici tout seul, avant / après, en 5 à 20 minutes selon le modèle.",
       changeFailed: "L'analyse est là, mais LEKA n'a pas pu écrire le changement : {why}.",
       changeAgain: "Réessayer d'écrire le changement",
       designDrawing:
-        "LEKA dessine les maquettes, aujourd'hui et chaque proposition : elles s'afficheront ici dans quelques minutes.",
+        "LEKA dessine les maquettes, aujourd'hui et chaque proposition : elles s'afficheront ici toutes seules, en 10 à 30 minutes selon le modèle.",
       designFailed: "La revue est là, mais LEKA n'a pas pu dessiner les maquettes : {why}.",
       designAgain: "Redessiner les maquettes",
       designNotDrawn: "La revue propose un design, mais ses maquettes n'ont pas été dessinées.",
@@ -11145,6 +11147,8 @@ const en: Dictionary = {
       tooMany: "LEKA already fixed this pull request {count} times: look at the failure on GitHub before going further.",
       asked: "Fix started: LEKA reads the failure.",
       running: "LEKA reads the CI failure and writes the fix: a few minutes.",
+      runningSince:
+        "LEKA reads the CI failure and writes the fix: started {ago}, 20 minutes at most. The result shows here by itself.",
       n: "Fix {n}",
       by: "by {model}",
       states: {
@@ -16411,11 +16415,12 @@ const en: Dictionary = {
       drawing: "PDF and PowerPoint being drawn: they will show here in a few minutes.",
       drawFailed: "The PDF and the PowerPoint could not be drawn: {why}.",
       drawAgain: "Try again",
-      changeWriting: "LEKA is writing the proposed change: it will show here, before / after, in a few minutes.",
+      changeWriting:
+        "LEKA is writing the proposed change, then reading it again and fixing it: it will show here by itself, before / after, in 5 to 20 minutes depending on the model.",
       changeFailed: "The analysis is here, but LEKA could not write the change: {why}.",
       changeAgain: "Write the change again",
       designDrawing:
-        "LEKA is drawing the mock-ups, today and each proposal: they will show here in a few minutes.",
+        "LEKA is drawing the mock-ups, today and each proposal: they will show here by themselves, in 10 to 30 minutes depending on the model.",
       designFailed: "The review is here, but LEKA could not draw the mock-ups: {why}.",
       designAgain: "Draw the mock-ups again",
       designNotDrawn: "The review proposes a design, but its mock-ups were not drawn.",

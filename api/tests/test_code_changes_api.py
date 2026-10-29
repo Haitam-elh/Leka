@@ -51,8 +51,10 @@ from sqlalchemy import text
 from leka.api import agent_runs as agent_runs_api
 from leka.api import code_changes as code_changes_api
 from leka.capabilities import CodeChange, execute_run, rewrite_change, sync_catalogue
+from leka.capabilities import changes as changes_module
 from leka.capabilities import runs as runs_module
 from leka.capabilities.changes import (
+    CHANGE_CORRECTIONS,
     ChangeProposal,
     Edit,
     ProposedFile,
@@ -91,6 +93,9 @@ from tests.conftest import FakeIdentity
 from tests.test_agent_runs_api import Script, gemini, leka_gemini, queued  # noqa: F401
 from tests.test_context_engine import model  # noqa: F401
 from tests.test_sources_api import _as, acme, fake_connector  # noqa: F401
+
+# How many times a model writing code is asked before it is given up.
+TRIES = CHANGE_CORRECTIONS + 1
 
 pytestmark = pytest.mark.integration
 
@@ -1044,8 +1049,8 @@ async def test_a_change_not_written_the_first_time_is_written_again_at_once(
     leka_gemini(
         gemini(call={"name": "read_file", "args": {"repository": REPO, "path": "app/balance.py"}}),
         gemini("# Analyse\n\nLe solde ignore les paiements en attente."),
-        gemini(json.dumps(wrong)),
-        gemini(json.dumps(wrong)),
+        # Told what is wrong, CHANGE_CORRECTIONS times, before it is given up.
+        *(gemini(json.dumps(wrong)) for _ in range(TRIES)),
     )
     started = await client.post(
         RUNS,
@@ -1080,7 +1085,7 @@ async def test_a_change_not_written_the_first_time_is_written_again_at_once(
     leka_gemini(
         gemini(call={"name": "read_file", "args": {"repository": REPO, "path": "app/balance.py"}}),
         gemini("# Analyse\n\nLe solde ignore les paiements en attente."),
-        *(gemini(json.dumps(wrong)) for _ in range(6)),
+        *(gemini(json.dumps(wrong)) for _ in range(3 * TRIES)),
     )
     assert await execute_run(acme["acme"], uuid.UUID(other)) == {"status": "succeeded"}
     assert (await rewrite_change(acme["acme"], uuid.UUID(other)))["error"] == "unanswered"
@@ -1338,6 +1343,75 @@ async def test_a_change_too_big_for_one_answer_is_written_file_by_file(
     assert change["title"] == "Déduire les paiements en attente du solde"
 
 
+async def test_a_big_change_is_read_again_and_its_defects_fixed_before_anyone_sees_it(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    leka_gemini: Callable[..., Script],
+    github: GitHub,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # 2026-10-29: « qu'il travaille plus de temps s'il faut pour tout bien
+    # réaliser » — a large change read again by a reviewer; what it finds,
+    # where it is, fixed by the writer; what it invents, never followed.
+    _as(identity, acme, "member")
+    await _github_source(acme["acme"])
+    await sync_catalogue()
+    github.listed = {"app/ledger.py": LEDGER}
+    monkeypatch.setattr(changes_module, "BIG_CHANGE", 10)
+
+    async def queue(workspace_id: uuid.UUID, run_id: uuid.UUID) -> bool:
+        return True
+
+    monkeypatch.setattr(agent_runs_api, "queue_change", queue)
+    monkeypatch.setattr(runs_module, "queue_redraw", queue_redraw_none)
+    both = _proposal()
+    both["files"] = [both["files"][0], {"path": "app/ledger.py", "content": LEDGER_AFTER}]
+    found = {
+        "problems": [
+            {"path": "app/ledger.py", "line": "line 2 changed", "why": "Elle doit dire fixed."},
+            {"path": "app/ledger.py", "line": "a line that is not there", "why": "Inventé."},
+        ]
+    }
+    fix = {
+        "repository": REPO,
+        "files": [
+            {
+                "path": "app/ledger.py",
+                "edits": [{"find": "line 2 changed\n", "replace": "line 2 fixed\n"}],
+            }
+        ],
+    }
+    script = leka_gemini(
+        gemini(call={"name": "read_file", "args": {"repository": REPO, "path": "app/balance.py"}}),
+        gemini(call={"name": "read_file", "args": {"repository": REPO, "path": "app/ledger.py"}}),
+        gemini("# Analyse\n\n`app/balance.py` et `app/ledger.py` ignorent les paiements."),
+        # Each file apart, alongside.
+        gemini(json.dumps(both)),
+        gemini(json.dumps(both)),
+        # Read again: one defect where it is, one invented; fixed; read again, clean.
+        gemini(json.dumps(found)),
+        gemini(json.dumps(fix)),
+        gemini(json.dumps({"problems": []})),
+    )
+    started = await client.post(
+        RUNS,
+        json={"key": "code-change", "inputs": {"demande": "Corrige le solde", "depot": REPO}},
+    )
+    run_id = started.json()["id"]
+    assert await execute_run(acme["acme"], uuid.UUID(run_id)) == {"status": "succeeded"}
+    asked = [json.loads(a["contents"][-1]["parts"][0]["text"]) for a in script.asked[3:]]
+    reviewing = asked[2]
+    assert reviewing["changed"]["app/ledger.py"] == LEDGER_AFTER and "files" not in reviewing
+    fixing = asked[3]
+    assert [p["line"] for p in fixing["review"]] == ["line 2 changed"]
+    assert fixing["only"] == ["app/ledger.py"]
+    [change] = (await client.get(API, params={"run_id": run_id})).json()
+    ledger = next(f for f in change["files"] if f["path"] == "app/ledger.py")
+    assert "+line 2 fixed" in ledger["diff"] and "line 2 changed" not in ledger["diff"]
+
+
 async def test_a_file_no_model_can_write_is_left_out_said_the_others_kept(
     client: AsyncClient,
     identity: FakeIdentity,
@@ -1372,10 +1446,8 @@ async def test_a_file_no_model_can_write_is_left_out_said_the_others_kept(
         gemini("# Analyse\n\n`app/balance.py` et `app/ledger.py` ignorent les paiements."),
         cut,
         cut,
-        # Each file apart: the ledger's edit never lands, asked twice.
-        gemini(json.dumps(both)),
-        gemini(json.dumps(both)),
-        gemini(json.dumps(both)),
+        # Each file apart: the ledger's edit never lands, asked TRIES times.
+        *(gemini(json.dumps(both)) for _ in range(1 + TRIES)),
     )
     started = await client.post(
         RUNS,
