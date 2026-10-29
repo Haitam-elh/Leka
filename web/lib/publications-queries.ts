@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { LIVE_EVERY } from "@/lib/live";
 import { type PublicationKind, publications } from "@/lib/publications";
 
 export const publicationKeys = {
@@ -16,7 +17,7 @@ export function useRunPublications(runId: string | null) {
     queryFn: () => publications.forRun(runId ?? ""),
     enabled: Boolean(runId),
     refetchInterval: (query) =>
-      (query.state.data ?? []).some((each) => each.status === "drafting") ? 3000 : false,
+      (query.state.data ?? []).some((each) => each.status === "drafting") ? 3000 : LIVE_EVERY,
   });
 }
 

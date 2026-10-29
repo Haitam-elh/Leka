@@ -3,8 +3,9 @@
 
 What these protect: an intention asked is routed when it is first read —
 who owns Billing API to LEKA's ownership analysis, on its goal and kind,
-its context read; the routing is kept and read back, routed again only when
-asked, a new decision beside the earlier; words routed alone the same way.
+its context read; the routing is kept and read back, routed again when
+asked or once the intention is asked again, a new decision beside the
+earlier; words routed alone the same way.
 The architect, matched, is left out while it cannot run here — no source,
 no model — said why, LEKA's own taking its place; once it can, it is routed
 to, saying what to ask before it runs. Another workspace's intention is not
@@ -101,6 +102,19 @@ async def test_an_intention_is_routed_kept_and_routed_again(
     assert rerouted.status_code == 200
     assert rerouted.json()["id"] != routing["id"]
     assert await _kept(acme["acme"]) == 2
+    assert rerouted.json()["query"]["intention_version"] == 1
+
+    # Asked again — answered, reworded: routed again when read, never left
+    # as it was (2026-10-29).
+    asked = await client.post(
+        f"{API}/intentions/{intention}/ask", json={"text": "Qu'a changé sur Billing API ?"}
+    )
+    assert asked.status_code == 200, asked.text
+    now = (await client.get(f"{API}/intentions/{intention}/routing")).json()
+    assert now["id"] != rerouted.json()["id"]
+    assert (now["query"]["intention_version"], now["query"]["goal"]) == (2, "find_change")
+    assert (await client.get(f"{API}/intentions/{intention}/routing")).json()["id"] == now["id"]
+    assert await _kept(acme["acme"]) == 3
 
     _as(identity, acme, "other_admin")
     assert (await client.get(f"{API}/intentions/{intention}/routing")).status_code == 404

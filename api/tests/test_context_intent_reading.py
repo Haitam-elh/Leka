@@ -180,6 +180,24 @@ def test_what_it_names_by_name_key_or_every_word_and_what_it_guesses() -> None:
     ]
 
 
+def test_a_repository_is_named_by_its_name_without_its_owner() -> None:
+    # 2026-10-29: « déployer sur leka » named nothing, its repository
+    # Haitam-elh/Leka unknown by that name.
+    leka = _brief("Haitam-elh/Leka", EntityType.REPOSITORY)
+    found = named("propose la modification pour la déployer sur leka", [leka])
+    assert [(n.entity.name, n.confidence, n.said) for n in found] == [
+        ("Haitam-elh/Leka", 0.8, "leka")
+    ]
+    # Only a repository: « leka » is at most a guess of a pull request « Fix/leka ».
+    guessed = named("sur leka", [_brief("Fix/leka", EntityType.PULL_REQUEST)])
+    assert all(n.confidence < 0.8 for n in guessed)
+    # Nor by a word too short to be a name.
+    assert all(
+        n.confidence < 0.8
+        for n in named("le go de l'api", [_brief("acme/go", EntityType.REPOSITORY)])
+    )
+
+
 def _readable(*capabilities: str) -> Readable:
     return Readable(uuid.uuid4(), "GitHub", "github", frozenset(capabilities))
 

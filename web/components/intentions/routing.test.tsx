@@ -166,7 +166,7 @@ describe("where an intention goes", () => {
     expect(screen.queryByTestId("agent-run-form")).not.toBeInTheDocument();
   });
 
-  it("says what to ask when it is not clear, and what it could mean", async () => {
+  it("says what it could mean when it is not clear — the question asked once, in the brief", async () => {
     api.routing.mockResolvedValue(
       routing({
         outcome: "clarify",
@@ -179,8 +179,23 @@ describe("where an intention goes", () => {
     );
     show();
     const asked = await screen.findByTestId("routing-clarify");
-    expect(asked).toHaveTextContent("Which payment: payment-api or payment-worker?");
+    // The router's own words, in English, never shown (2026-10-29).
+    expect(screen.getByTestId("intention-routing")).not.toHaveTextContent("Which payment");
     expect(asked).toHaveTextContent("Elle pourrait concerner : Responsabilités");
+  });
+
+  it("shows the best five, the others on demand", async () => {
+    const user = userEvent.setup();
+    const many = Array.from({ length: 8 }, (_, i) =>
+      candidate({ key: `agent-${i}`, title: `Agent ${i}`, selected: false }),
+    );
+    api.routing.mockResolvedValue(routing({ outcome: "fallback", selected: [], candidates: many }));
+    show();
+    const ranked = await screen.findByTestId("routing-candidates");
+    expect(within(ranked).getAllByRole("listitem")).toHaveLength(5);
+    await user.click(screen.getByTestId("routing-more"));
+    expect(screen.getByTestId("routing-more")).toHaveTextContent("Voir moins");
+    expect(within(screen.getByTestId("routing-candidates")).getAllByRole("listitem")).toHaveLength(8);
   });
 
   it("routes again on demand", async () => {

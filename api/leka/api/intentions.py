@@ -63,7 +63,7 @@ from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
 from leka.api.pagination import PageEnvelope, PageParams, SortCatalogue, serve_page
 from leka.billing import is_enterprise
-from leka.capabilities import CapabilityRouter, RoutingRead, routing_read
+from leka.capabilities import RoutingRead, routing_read
 from leka.connectors import SourceRepository
 from leka.context import (
     ContextArchivedError,
@@ -115,6 +115,7 @@ from leka.intentions import (
     queue_analysis,
     result_lock,
     route_intention,
+    routing_now,
 )
 from leka.intentions import agents as agent_steps
 from leka.intentions.attachments import (
@@ -623,17 +624,15 @@ async def context(
 async def routing(intention_id: uuid.UUID, session: SessionDep, principal: Reader) -> RoutingRead:
     """Where it was last routed, and why (LEKA-398): every capability it
     could go to, ranked by its signals; every one it cannot, said why; or
-    LEKA's own analysis, or what to ask. Never routed yet: routed now, for
-    whoever reads it."""
-    found = await CapabilityRouter(session, principal.workspace_id).latest(intention_id)
-    if found is None:
-        found = await route_intention(
-            session,
-            principal.workspace_id,
-            intention_id,
-            permissions=frozenset(p.value for p in principal.permissions),
-            by=principal.user_id,
-        )
+    LEKA's own analysis, or what to ask. Never routed yet, or asked again
+    since — answered, reworded: routed now, for whoever reads it."""
+    found = await routing_now(
+        session,
+        principal.workspace_id,
+        intention_id,
+        permissions=frozenset(p.value for p in principal.permissions),
+        by=principal.user_id,
+    )
     if found is None:
         raise _missing()
     return routing_read(found)

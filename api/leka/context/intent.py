@@ -505,6 +505,18 @@ def named(text: str, candidates: Iterable[EntityBrief]) -> list[Named]:
         if f" {name} " in folded or f" {fold(entity.key)} " in folded:
             found.append(Named(entity, 1.0, entity.name))
             taken |= set(name.split())
+    # A repository by its name without its owner — unless a name as written
+    # took those words: « Billing API » is the service, not acme/billing-api.
+    for entity in things:
+        short = _short(entity)
+        if (
+            short
+            and f" {short} " in folded
+            and not set(short.split()) <= taken
+            and entity.id not in {n.entity.id for n in found}
+        ):
+            found.append(Named(entity, NAMED, short))
+            taken |= set(short.split())
     exact = {n.entity.id for n in found}
     left = [word for word in fold(text).split() if word not in taken]
     vocabulary = set(left) | set(expanded(w for w in words(text) if w not in taken))
@@ -522,6 +534,16 @@ def named(text: str, candidates: Iterable[EntityBrief]) -> list[Named]:
         elif share >= PARTIAL and len(parts) > 1:
             found.append(Named(entity, PARTIAL, " ".join(covered)))
     return sorted(found, key=lambda n: (-n.confidence, n.entity.name.casefold(), str(n.entity.id)))
+
+
+def _short(entity: EntityBrief) -> str | None:
+    """A repository's name without its owner — « leka » of « Haitam-elh/Leka »:
+    what the people who work on it call it (2026-10-29: « déployer sur
+    leka » named nothing)."""
+    if entity.type.value != "repository" or "/" not in entity.name:
+        return None
+    short = fold(entity.name.rsplit("/", 1)[-1])
+    return short if len(short) > 2 and short not in STOPWORDS else None
 
 
 def _held(part: str, vocabulary: set[str]) -> bool:

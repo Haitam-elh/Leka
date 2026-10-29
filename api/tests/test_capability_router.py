@@ -201,6 +201,14 @@ def test_a_question_never_goes_to_what_proposes_actions_a_request_does() -> None
     assert [c.key for c in routed.selected] == ["restart-planner"]
     assert codes(routed.selected[0]) == ["goal", "words", "mode"]
 
+    # Asked to make something, nothing changed now: not a question either
+    # (2026-10-29).
+    proposal = RouteQuery(
+        text="Propose un plan pour redémarrer auth-service", goal="investigate", mode="request"
+    )
+    made = route(proposal, EVERYTHING, able())
+    assert "restart-planner" not in [c.key for c in made.excluded]
+
 
 def test_retired_never_deprecated_said() -> None:
     old = replace(OWNERSHIP, key="old-ownership", lifecycle=Lifecycle.DEPRECATED)

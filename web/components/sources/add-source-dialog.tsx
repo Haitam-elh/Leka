@@ -622,6 +622,8 @@ function ScopeStep({
     queryFn: () => sources.scopeOptions(source.id),
     retry: false,
     staleTime: 0,
+    // Asked of the connected service itself: once, not on a timer.
+    refetchInterval: false,
   });
   const save = useSourceMutation((scope: string[] | null) =>
     sources.update(source.id, { config: { ...source.config, [scopeField]: scope } }),

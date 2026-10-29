@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AgentRun } from "@/lib/agent-runs";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
+import { LIVE_EVERY } from "@/lib/live";
 import { makeQueryClient } from "@/lib/query";
 
 const runs = vi.hoisted(() => ({ forIntention: vi.fn() }));
@@ -87,11 +88,15 @@ describe("the agents at work on an intention", () => {
     );
   });
 
-  it("is not read again when nothing works on it", async () => {
+  it("is read again at the calm pace when nothing works on it", async () => {
     runs.forIntention.mockResolvedValue([]);
     show(false);
-    await vi.advanceTimersByTimeAsync(10_000);
+    // Not at the pace of a run at work…
+    await vi.advanceTimersByTimeAsync(LIVE_EVERY - 1_000);
     expect(runs.forIntention).toHaveBeenCalledTimes(1);
+    // …yet never left as first read (2026-10-29).
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(runs.forIntention).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -72,9 +72,34 @@ async def route_intention(
             resolution=ResolutionRepository(session, workspace_id),
             sources=SourceRepository(session, workspace_id),
         ).assembled(intention.context_id)
-    return await CapabilityRouter(session, workspace_id).route(
+    row = await CapabilityRouter(session, workspace_id).route(
         query_of(intention, understood, context),
         permissions=permissions,
         by=by,
         subject_id=intention.id,
+    )
+    # Which version of what was asked it routed: another, routed again.
+    row.query = {**row.query, "intention_version": intention.version}
+    return row
+
+
+async def routing_now(
+    session: AsyncSession,
+    workspace_id: uuid.UUID,
+    intention_id: uuid.UUID,
+    *,
+    permissions: frozenset[str],
+    by: uuid.UUID | None,
+) -> CapabilityRouting | None:
+    """Where it goes as it now stands: the routing kept while what was asked
+    is the same, routed again once it is not — answered, asked again
+    (2026-10-29: answered, it stayed « À préciser » until routed by hand)."""
+    intention = await IntentionRepository(session, workspace_id).intention(intention_id)
+    if intention is None:
+        return None
+    found = await CapabilityRouter(session, workspace_id).latest(intention_id)
+    if found is not None and found.query.get("intention_version") == intention.version:
+        return found
+    return await route_intention(
+        session, workspace_id, intention_id, permissions=permissions, by=by
     )

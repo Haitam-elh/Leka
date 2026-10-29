@@ -149,7 +149,7 @@ def signals_of(definition: Definition, query: RouteQuery) -> tuple[Signal, ...]:
     if d.sources and all(set(group) & query.context_sources for group in d.sources):
         read = sorted({k for group in d.sources for k in group} & query.context_sources)
         found.append(Signal("context_sources", WEIGHTS["context_sources"], ", ".join(read)))
-    if d.mode == "proposes_action" and query.acting:
+    if d.mode == "proposes_action" and (query.acting or query.mode == "request"):
         found.append(Signal("mode", WEIGHTS["mode"], "request"))
     if d.lifecycle is Lifecycle.DEPRECATED:
         found.append(Signal("deprecated", WEIGHTS["deprecated"]))
@@ -166,8 +166,10 @@ def needs_inputs(definition: Definition) -> tuple[str, ...]:
 
 def policed(definition: Definition, query: RouteQuery, able: Availability) -> Availability:
     """Its availability, with what LEKA's policies forbid for this
-    intention: a question never goes to what proposes actions."""
-    if definition.mode == "proposes_action" and not query.acting:
+    intention: a question never goes to what proposes actions — a request
+    to make something does (2026-10-29: « propose-moi la modification de
+    code » never reached the code change)."""
+    if definition.mode == "proposes_action" and not query.acting and query.mode != "request":
         policy = Reason("policy", {"rule": "proposes_actions_to_a_question"})
         return Availability(False, (*able.reasons, policy), able.notes)
     return able

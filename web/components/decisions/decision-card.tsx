@@ -246,6 +246,20 @@ function OnBehalf({ id }: { id: string }) {
   );
 }
 
+/** "Si vous validez, LEKA pourra redémarrer Billing API … en production." */
+export function effectSaid(t: Dictionary, proposal: DecisionProposal): string {
+  const w = t.decisions;
+  const effects = w.effects as Record<string, string>;
+  const targets = proposal.targets.map((target) => target.name).join(", ") || w.effectNothing;
+  return fill(w.effect, {
+    effect: fill(effects[proposal.action] ?? effects.other, {
+      targets,
+      action: actionWord(t, proposal.action),
+    }),
+    where: proposal.environment ? fill(w.effectWhere, { environment: proposal.environment }) : "",
+  });
+}
+
 function ProposalLine({ proposal }: { proposal: DecisionProposal }) {
   const t = useDictionary();
   const w = t.decisions;
@@ -273,6 +287,9 @@ function ProposalLine({ proposal }: { proposal: DecisionProposal }) {
           </>
         ) : null}
         {proposal.environment ? ` · ${fill(w.inEnvironment, { environment: proposal.environment })}` : null}
+      </p>
+      <p className="mt-1 text-[0.8125rem] text-brand-navy" data-testid="decision-effect">
+        {effectSaid(t, proposal)}
       </p>
       <div className="mt-1.5 flex flex-wrap gap-1.5">
         <Pill tone={reversible === "no" ? "danger" : reversible === "yes" ? "success" : "neutral"}>
@@ -649,10 +666,18 @@ export function DecisionCard({ decision, className }: { decision: Decision; clas
         </ul>
       </div>
       {decision.open ? (
-        <p className="flex items-start gap-2 rounded-lg bg-shell-highlight px-3 py-2 text-[0.8125rem] text-brand-navy">
+        <div
+          className="flex items-start gap-2 rounded-lg bg-shell-highlight px-3 py-2 text-[0.8125rem] text-brand-navy"
+          data-testid="decision-choice"
+        >
           <ShieldCheck className="mt-0.5 size-4 shrink-0 text-shell-nav-active" aria-hidden="true" />
-          {w.control}
-        </p>
+          <div className="flex flex-col gap-1">
+            <p className="font-semibold">{w.choice.title}</p>
+            <p>{w.choice.approve}</p>
+            <p>{w.choice.reject}</p>
+            <p className="text-shell-muted">{w.control}</p>
+          </div>
+        </div>
       ) : null}
       <Actions decision={decision} />
       <div>

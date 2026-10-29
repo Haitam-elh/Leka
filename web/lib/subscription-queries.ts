@@ -9,7 +9,7 @@ export function useSubscription() {
 }
 
 export function usePricing() {
-  return useQuery({ queryKey: ["pricing"], queryFn: subscription.pricing, staleTime: 5 * 60_000 });
+  return useQuery({ queryKey: ["pricing"], queryFn: subscription.pricing, staleTime: 5 * 60_000, refetchInterval: false });
 }
 
 /** Opens Stripe's page — Checkout or the portal — in this tab. */

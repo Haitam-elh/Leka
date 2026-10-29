@@ -695,7 +695,7 @@
    "standing": 1,
    "synthesis": 1
   },
-  "commit": "a768738a",
+  "commit": "81b5db55",
   "company_model_version": 9,
   "dataset_sha256": "9395fa0a808d005485c9a11c467305f7817e0e5d1a9625498b32bcf58b890370",
   "dataset_version": 4,
@@ -703,13 +703,13 @@
   "prompts": {
    "analyst": "a36b71a2bd1ce1e6",
    "proposal": "286edb9146027e96",
-   "reading": "d86e769f887bc575",
+   "reading": "a4d2461669464e15",
    "synthesis": "4183013624fe0ae9"
   },
   "read_by": [
    "rules"
   ],
-  "understanding_version": 6
+  "understanding_version": 7
  },
  "summary": {
   "cases": 71,
