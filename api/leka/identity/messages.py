@@ -21,6 +21,7 @@ from html import escape
 from leka.core import languages
 from leka.core.config import settings
 from leka.identity.email import EmailMessage
+from leka.identity.email_layout import MUTED, VIOLET, layout, paragraphs
 from leka.identity.links import invitation_link, reset_link, verification_link
 
 # Every word, by language. Each language has the same keys —
@@ -153,25 +154,24 @@ def _html(
     button: str | None = None,
     link: str | None = None,
 ) -> str:
-    paragraphs = "".join(f'<p style="margin:0 0 16px">{escape(line)}</p>' for line in lines)
-    action = ""
+    """In LEKA's dress (email_layout): the button, and its link written out
+    beneath it for the clients that strip buttons; the signature."""
+    after = ""
     if button and link:
         safe = escape(link, quote=True)
-        action = (
-            f'<p style="margin:24px 0"><a href="{safe}" style="background:#071143;color:#ffffff;'
-            f'padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600">'
-            f"{escape(button)}</a></p>"
-            '<p style="margin:0 0 16px;font-size:13px;color:#5f6480">'
+        after = (
+            f'<p style="margin:0 0 16px;font-size:13px;color:{MUTED}">'
             f"{escape(words['fallback'])}<br>"
-            f'<a href="{safe}" style="color:#4e0af4;word-break:break-all">{escape(link)}</a></p>'
+            f'<a href="{safe}" style="color:{VIOLET};word-break:break-all">{escape(link)}</a></p>'
         )
-    return (
-        f'<div lang="{escape(language, quote=True)}" dir="{languages.direction(language)}" '
-        'style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;'
-        'font-size:15px;line-height:1.6;color:#262952;max-width:520px">'
-        f'<h1 style="font-size:20px;color:#071143;margin:0 0 16px">{escape(title)}</h1>'
-        f"{paragraphs}{action}"
-        f'<p style="margin:24px 0 0;color:#5f6480">{escape(words["signature"])}</p></div>'
+    after += f'<p style="margin:20px 0 0;color:{MUTED}">{escape(words["signature"])}</p>'
+    return layout(
+        title,
+        paragraphs(lines),
+        language=language,
+        preheader=lines[0] if lines else title,
+        action=(button, link) if button and link else None,
+        after=after,
     )
 
 
