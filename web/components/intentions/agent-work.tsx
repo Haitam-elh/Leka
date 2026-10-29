@@ -31,10 +31,19 @@ const TONES = {
   cancelled: "neutral",
 } as const;
 
-function inputsSaid(run: AgentRun): string {
-  return Object.values(run.inputs)
+// An id given as an input (the deliverable a change implements): nobody's to read.
+const AN_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// What is said of what it was asked, at most (2026-10-29: « Implémenter le
+// design » carried the whole review, a wall of text under the agent).
+export const MOST_SAID = 180;
+
+export function inputsSaid(run: Pick<AgentRun, "inputs">): string {
+  const said = Object.values(run.inputs)
     .filter((value): value is string => typeof value === "string" && value.trim() !== "")
+    .filter((value) => !AN_ID.test(value.trim()))
+    .map((value) => value.trim().split("\n")[0] ?? "")
     .join(" · ");
+  return said.length > MOST_SAID ? `${said.slice(0, MOST_SAID).trimEnd()}…` : said;
 }
 
 export function AgentWork({ intentionId, live = false }: { intentionId: string; live?: boolean }) {
@@ -95,7 +104,7 @@ export function AgentWork({ intentionId, live = false }: { intentionId: string; 
                     {statuses[run.status] ?? run.status}
                   </Pill>
                 </p>
-                <p className="text-[0.8125rem] text-shell-muted" dir="auto">
+                <p className="line-clamp-2 text-[0.8125rem] text-shell-muted" dir="auto">
                   {inputsSaid(run)}
                 </p>
                 {run.status === "failed" && run.error ? (

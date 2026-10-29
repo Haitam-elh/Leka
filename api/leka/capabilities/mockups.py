@@ -158,7 +158,8 @@ PLAN_RULES = """You are LEKA's mock-up planner for the agent whose \
 instructions follow. From its review and the source files it read — and from \
 nothing else — plan the screens its proposal draws, as one JSON object, \
 without a line of HTML:
-- screen: the screen's name and its route — the page the request names, \
+- screen: the screen's name, then its route in parentheses, as \
+« Accueil (/overview) » — the page the request names, \
 found by its route and its navigation entry, never a component of another \
 page carrying the same words; viewport: "desktop", or "mobile" when the \
 review proposes for a phone.
@@ -608,6 +609,8 @@ def _said(step: str, said: str | None) -> str:
 # What of a design a code change is given to implement it, at most: the
 # direction's mock-up, and the screen today to tell what moves.
 MOST_TARGET = 40_000
+# The review's files a change implementing it reads again, at most.
+MOST_FILES_KEPT = 40
 MOST_TODAY = 20_000
 
 
@@ -638,6 +641,8 @@ async def design_target(session: AsyncSession, run: AgentRun) -> dict[str, objec
     if proposal is None or not proposal.after:
         return None
     chosen = proposal.after[min(proposal.recommended, len(proposal.after) - 1)]
+    kept = (source.detail or {}).get("read_files")
+    files = [str(f) for f in kept] if isinstance(kept, list) else []
     return {
         "screen": proposal.screen,
         "viewport": proposal.viewport,
@@ -647,6 +652,10 @@ async def design_target(session: AsyncSession, run: AgentRun) -> dict[str, objec
         "changes": [c.model_dump() for c in proposal.changes],
         "mockup": _drawn(chosen.css, chosen.body, MOST_TARGET),
         "today": _drawn(proposal.before.css, proposal.before.body, MOST_TODAY),
+        # The files the review read: the screen's own, which the change
+        # redraws (2026-10-29: the change read only the shell, and changed
+        # four classes of it — the home, untouched).
+        "files": files[:MOST_FILES_KEPT],
     }
 
 

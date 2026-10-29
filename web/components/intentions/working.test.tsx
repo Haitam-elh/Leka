@@ -103,7 +103,7 @@ describe("what LEKA is doing, now", () => {
     const working = screen.getByTestId("working");
     expect(working).toHaveAttribute("data-phase", "failed");
     expect(within(working).getByRole("heading")).toHaveTextContent("Le traitement n'a pas abouti");
-    expect(working).toHaveTextContent("Échec : trop longue");
+    expect(working).toHaveTextContent("Échec : trop longue, relancez-la");
     expect(working).not.toHaveTextContent("Vous pouvez quitter cette page");
     expect(working.querySelector(".animate-spin")).toBeNull();
   });

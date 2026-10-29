@@ -94,3 +94,17 @@ describe("the agents at work on an intention", () => {
     expect(runs.forIntention).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("what an agent was asked, said in brief", () => {
+  it("says its first line, no id, at most a short sentence", async () => {
+    const { inputsSaid, MOST_SAID } = await import("@/components/intentions/agent-work");
+    // 2026-10-29: « Implémenter le design » carried the whole review — a
+    // wall of text under the agent, and the review's id at its end.
+    const review = `Implémente dans le code la direction retenue.\n${"Toute la revue. ".repeat(400)}`;
+    const said = inputsSaid({
+      inputs: { demande: review, depot: "Haitam-elh/Leka", livrable: "3bd085c3-06bc-403b-ad9f-0002cf3c860f" },
+    });
+    expect(said).toBe("Implémente dans le code la direction retenue. · Haitam-elh/Leka");
+    expect(inputsSaid({ inputs: { demande: "x".repeat(400) } })).toHaveLength(MOST_SAID + 1);
+  });
+});
