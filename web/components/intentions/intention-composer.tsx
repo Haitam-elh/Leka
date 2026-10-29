@@ -228,14 +228,18 @@ export function IntentionComposer({
       aria-pressed={dictation.listening}
       aria-label={compact ? (dictation.listening ? w.stop : t.composer.dictate) : undefined}
       title={w.how}
-      onClick={() => (dictation.listening ? dictation.stop() : dictation.start())}
+      disabled={dictation.writing}
+      aria-busy={dictation.writing || undefined}
+      onClick={() => void (dictation.listening ? dictation.stop() : dictation.start())}
       data-testid="intention-dictate"
       className={cn(
         dictation.listening && "bg-state-danger-soft text-state-danger hover:bg-state-danger-soft",
         compact && "size-9 shrink-0 rounded-full p-0",
       )}
     >
-      {dictation.listening ? (
+      {dictation.writing ? (
+        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+      ) : dictation.listening ? (
         <MicOff className="size-4" aria-hidden="true" />
       ) : (
         <Mic className="size-4" aria-hidden="true" />
@@ -244,14 +248,25 @@ export function IntentionComposer({
     </Button>
   ) : null;
   // Said while it listens, and why it stopped short.
-  const dictationSaid = dictation.listening ? w.listening : dictation.problem ? w.problems[dictation.problem] : "";
+  // Said while it listens — for how long — while LEKA writes it, and why
+  // it stopped short.
+  const elapsed = `${Math.floor(dictation.seconds / 60)}:${String(dictation.seconds % 60).padStart(2, "0")}`;
+  const dictationSaid = dictation.listening
+    ? fill(w.listening, { time: elapsed })
+    : dictation.writing
+      ? w.writing
+      : dictation.problem
+        ? w.problems[dictation.problem]
+        : "";
   const dictationStatus = (
     <p
       aria-live="polite"
       data-testid="dictation-status"
       className={cn(
         "flex items-center gap-1.5 text-xs empty:hidden",
-        dictation.problem && !dictation.listening ? "text-state-danger" : "text-shell-muted",
+        dictation.problem && !dictation.listening && !dictation.writing
+          ? "text-state-danger"
+          : "text-shell-muted",
       )}
     >
       {dictation.listening ? (

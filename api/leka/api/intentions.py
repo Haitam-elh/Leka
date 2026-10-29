@@ -63,7 +63,14 @@ from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
 from leka.api.pagination import PageEnvelope, PageParams, SortCatalogue, serve_page
 from leka.billing import is_enterprise
-from leka.capabilities import CapabilityRouter, RoutingRead, routing_read
+from leka.capabilities import (
+    MAX_AUDIO_BYTES,
+    CapabilityRouter,
+    NoModelError,
+    RoutingRead,
+    routing_read,
+    transcribe,
+)
 from leka.connectors import SourceRepository
 from leka.context import (
     ContextArchivedError,
@@ -330,6 +337,61 @@ async def remove_attachment(
             status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such file of yours to remove."
         )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+class TranscriptRead(BaseModel):
+    """What was said, written."""
+
+    text: str
+
+
+@router.post(
+    "/transcriptions",
+    response_model=TranscriptRead,
+    summary="An intention dictated, written",
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {"audio/wav": {"schema": {"type": "string", "format": "binary"}}},
+        }
+    },
+)
+async def transcription(
+    request: Request,
+    principal: Asker,
+    language: Annotated[str | None, Query(max_length=35)] = None,
+    content_length: Annotated[int | None, Header(alias="Content-Length")] = None,
+) -> TranscriptRead:
+    """What its asker said into the box (2026-10-29: the browser's own
+    recognition wrote nothing in some browsers): the recording, WAV, two
+    minutes at most, written by the first provider LEKA can reach. Nothing
+    of it is kept. 413 past 10 MB, 503 when no provider can write it."""
+    if content_length is not None and content_length > MAX_AUDIO_BYTES:
+        raise ApiError(
+            status.HTTP_413_CONTENT_TOO_LARGE, ErrorCode.VALIDATION_FAILED, "Too long a recording."
+        )
+    audio = bytearray()
+    async for chunk in request.stream():
+        audio += chunk
+        if len(audio) > MAX_AUDIO_BYTES:
+            raise ApiError(
+                status.HTTP_413_CONTENT_TOO_LARGE,
+                ErrorCode.VALIDATION_FAILED,
+                "Too long a recording.",
+            )
+    if not audio:
+        raise ApiError(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, ErrorCode.VALIDATION_FAILED, "Nothing recorded."
+        )
+    try:
+        said = await transcribe(bytes(audio), language=language)
+    except NoModelError as error:
+        raise ApiError(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            ErrorCode.SERVICE_UNAVAILABLE,
+            "The recording could not be written now: try again.",
+        ) from error
+    return TranscriptRead(text=said.text)
 
 
 @router.post("", response_model=IntentionCreated, status_code=status.HTTP_201_CREATED)
