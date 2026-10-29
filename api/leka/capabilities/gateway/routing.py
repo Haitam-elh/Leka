@@ -68,7 +68,8 @@ class Needs:
 class Route:
     endpoint: Endpoint
     profile: Profile
-    # own, task (LEKA-491), default, fallback, alternative
+    # own, own_stronger (its provider's best, for what its own model cannot
+    # do), task (LEKA-491), default, fallback, alternative
     why: str
 
 
@@ -164,6 +165,16 @@ def route(
 
     if own is not None:
         offer(own.endpoint, own.model, "own")
+        if not routes:
+            # Its own model cannot do this step — a code change, a mock-up
+            # drawn, asked of a mid-range model (2026-10-29: Mistral Medium):
+            # the strongest of the same provider that can, on the same key.
+            for stronger in sorted(
+                of_provider(own.endpoint.provider), key=lambda p: _rank(p, Prefer.QUALITY)
+            ):
+                if stronger.model != own.model and needs.unmet(stronger) is None:
+                    offer(own.endpoint, stronger.model, "own_stronger")
+                    break
         if own.exclusive:
             passed.append(Passed("leka", "*", "exclusive"))
             return Routing(tuple(routes), tuple(passed))

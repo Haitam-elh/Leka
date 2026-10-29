@@ -24,7 +24,7 @@ import { cn } from "cn";
 
 import { Card, type TileTone } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
-import { exactDate } from "@/components/knowledge/time";
+import { exactDate, timeAgo } from "@/components/knowledge/time";
 import { usePermissions } from "@/components/shell/shell-provider";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
@@ -451,7 +451,11 @@ function RepairPanel({ change, red, closed }: { change: CodeChange; red: boolean
       {running ? (
         <p className="flex items-center gap-2 text-[0.8125rem] text-brand-violet" role="status">
           <Loader2 className={cn("size-4 shrink-0", SPINNING)} aria-hidden="true" />
-          {w.running}
+          {/* When it started, and how long it may take: never « a few
+              minutes » for twenty (2026-10-29). */}
+          {repairs.at(-1)?.asked_at
+            ? fill(w.runningSince, { ago: timeAgo(t, String(repairs.at(-1)?.asked_at)) })
+            : w.running}
         </p>
       ) : red ? (
         <div className="flex flex-col gap-2 rounded-md border border-state-danger/30 bg-white p-3">

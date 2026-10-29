@@ -67,6 +67,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.background import JobQueue, enqueue_job
 from leka.capabilities.catalogue import needs_of
+from leka.capabilities.code_names import (
+    held_said,
+    imported_by,
+    invented_variants,
+    unknown_imports,
+    variants_of,
+    written_twice,
+)
 from leka.capabilities.definition import Definition
 from leka.capabilities.deliverable_check import deferred
 from leka.capabilities.gateway import Gateway, Message, Needs, NoModelError, Request, Tier
@@ -393,6 +401,10 @@ sizes, colours, spacing), whole, in this change. Never a part of it, never \
 - Use only names the files you were given hold: a label's key (t.home.title), \
 a component's prop or variant, an import, a CSS class or token. A name none of \
 them holds does not exist: the code would not build.
+- `names_held`, when given, says for each module the files import what it \
+exports and the variants its components take: use only those names and \
+variants — one not listed does not exist, and an import of a file that is \
+not there breaks the build.
 - `repository_rules`, when given, are the repository's own rules for whoever \
 changes its code (its AGENTS.md, CLAUDE.md, contributing guide): the change \
 follows every one of them. Its checks enforce them: a rule broken is a red CI. \
@@ -449,7 +461,16 @@ ALONGSIDE = 4
 MOST_TESTS = 6
 # Answers held to the test ids they keep: past these, the change is kept and
 # the CI, then « Réparer le problème », says the rest.
-ASKED_FOR_IDS = 2
+ASKED_FOR_IDS = 3
+# How many times a model writing code is told what is wrong and asks again,
+# before the next model is (2026-10-29: told once, then given up on — each
+# correction said precisely, a weaker model gets there in a few).
+CHANGE_CORRECTIONS = 4
+# What writing code asks of a model, at least: the best a provider has
+# (profiles' quality 3) — a workspace's own mid-range model hands this step
+# to its provider's strongest (2026-10-29: Mistral Medium's redesign, twelve
+# tests red, a key written twice).
+HARD_QUALITY = 3
 # What a test reads of a screen, by its test id: getByTestId("x"),
 # [data-testid="x"], data-testid="x".
 _READS_ID = re.compile(r"""(?:ByTestId\(\s*|data-testid=\\?)["'`]([\w:./-]+)["'`]""")
@@ -754,7 +775,8 @@ def change_problems(
             )
         elif changed is not None:
             after[path] = changed
-    # Each file still holds together (2026-10-28).
+    # Each file still holds together (2026-10-28), no key written twice
+    # (2026-10-29, #450).
     for path, text in after.items():
         why = broken(path, given.get(path, ""), text) if path in given else None
         if why and text:
@@ -762,6 +784,8 @@ def change_problems(
                 f"{path}: {why} once your edits are applied — copy whole blocks in `find`, "
                 "and give each `replace` every bracket its block closes."
             )
+        elif text:
+            problems += written_twice(given.get(path, ""), text, path)
     # The tests given beside it stay green (2026-10-27, #423) — asked
     # ASKED_FOR_IDS times at most: past that, the CI says it.
     if ids:
@@ -829,12 +853,16 @@ def change_messages(
     *,
     only: Sequence[str] = (),
     changed: Mapping[str, str] | None = None,
+    review: Sequence[Mapping[str, str]] = (),
 ) -> list[Message]:
     system = f"{CHANGE_RULES}\n\n---\n\n{definition.instructions or ''}"
     if only:
         system = f"{CHANGE_RULES}\n\n{BY_FILE_RULES}\n\n---\n\n{definition.instructions or ''}"
+    if review:
+        system = f"{CHANGE_RULES}\n\n{FIX_RULES}\n\n---\n\n{definition.instructions or ''}"
     given = dict(inputs)
     rules = given.pop(RULES_INPUT, None)
+    names = given.pop(NAMES_INPUT, None)
     # The files it read, keyed « owner/repo:path »: what the edits copy from.
     material: dict[str, object] = {
         "inputs": given,
@@ -843,6 +871,8 @@ def change_messages(
     }
     if rules:
         material["repository_rules"] = rules
+    if names:
+        material["names_held"] = names
     checked = {
         key.split(":", 1)[-1]: assertions_of(text)
         for key, text in (read or {}).items()
@@ -854,6 +884,8 @@ def change_messages(
         material["only"] = list(only)
     if changed:
         material["changed"] = shown(changed)
+    if review:
+        material["review"] = [dict(r) for r in review]
     return [
         Message.system(system),
         Message.user(json.dumps(material, ensure_ascii=False, default=str)),
@@ -1176,6 +1208,235 @@ async def repository_rules(
     return "\n\n".join(said)
 
 
+# ── a change read again before anyone sees it (2026-10-29) ───────────────────
+
+REVIEW_RULES = """You review a code change before a person sees it, as the \
+strictest engineer of the team would before it reaches the CI. You are given \
+what was asked (`inputs`, `analysis`), the repository's rules \
+(`repository_rules`), what the modules the files import hold (`names_held`), \
+what the tests read (`tests_read`), and each file the change touches as it \
+reads once changed (`changed`). List only real defects: what would break the \
+build, a test or a rule of the repository, or leave what was asked undone:
+- a name, an import, a prop, a variant, a label's key or a type that none of \
+the files given holds;
+- something a test reads that the change took away or renamed;
+- a rule of `repository_rules` broken: text written into a component, \
+records invented as data, a generated file edited;
+- what was asked left undone, or done by half;
+- code that does not hold together: a block not closed, a name used before it \
+is defined, a function called with what it does not take.
+Never style, taste or what could be nicer: defects only.
+Each problem: `path`; `line`, one line copied exactly from that file in \
+`changed`, where the defect is; `why`, what is wrong and what it must be, in \
+one sentence. None: `problems` empty.
+Answer with the JSON object only."""
+
+FIX_RULES = """`review` lists defects found in this change, file by file, \
+with the line where each is: fix every one in the files named in `only`, by \
+edits on those files as `files` gives them now. Change nothing else."""
+
+# Read again at most this many times; skipped with less time left than this.
+REVIEWS = 2
+LEAST_TO_REVIEW = 90.0
+
+
+class ReviewProblem(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    path: str = ""
+    line: str = ""
+    why: str = ""
+
+
+class ChangeReview(BaseModel):
+    """What the reviewer found."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    problems: list[ReviewProblem] = Field(default_factory=list)
+
+
+def grounded(review: ChangeReview, after: Mapping[str, str]) -> list[ReviewProblem]:
+    """The problems found where they are said to be: a file the change
+    touches, a line it holds — the others dropped, never followed (a
+    reviewer that invents a defect is not obeyed)."""
+    kept: list[ReviewProblem] = []
+    for problem in review.problems:
+        path = safe_path(re.sub(r"^[\w.-]+/[\w.-]+:", "", problem.path.strip()))
+        line = problem.line.strip()
+        if (
+            path is not None
+            and path in after
+            and line in after[path]
+            and line
+            and problem.why.strip()
+        ):
+            kept.append(problem.model_copy(update={"path": path, "line": line}))
+    return kept[:MAX_FILES]
+
+
+# The names the files given may use, how they travel with a writer's inputs.
+NAMES_INPUT = "_names_held"
+
+
+@dataclass(frozen=True)
+class Held:
+    """What the files a change touches may use: the repository's files
+    (None when it lists too many to say), what each module they import
+    holds, the variants its components take."""
+
+    tree: frozenset[str] | None = None
+    said: dict[str, str] = field(default_factory=dict)
+    variants: dict[str, dict[str, list[str]]] = field(default_factory=dict)
+
+    def problems(self, after: Mapping[str, str], new: Sequence[str] = ()) -> list[str]:
+        """An import of no file, a variant no module declares."""
+        if self.tree is None:
+            return []
+        return unknown_imports(after, self.tree, new) + invented_variants(
+            after, self.tree, self.variants
+        )
+
+
+async def held_names(code: GitHubCode, repository: str, ref: str, read: Mapping[str, str]) -> Held:
+    """What the modules the files read import hold (code_names): read here,
+    a few lines each, MOST_IMPORTED at most (2026-10-29: variants and
+    imports invented, the CI red)."""
+    given = {key.split(":", 1)[-1]: text for key, text in read.items()}
+    try:
+        tree, more = await code.paths(repository, ref)
+    except CodeRefusedError:
+        return Held()
+    except Exception:
+        logger.exception("change_names_not_listed", repository=repository)
+        return Held()
+    listed = frozenset(tree)
+
+    async def one(path: str) -> tuple[str, str | None]:
+        try:
+            return path, await code.read(repository, path, ref)
+        except CodeRefusedError:
+            return path, None
+
+    modules = await asyncio.gather(*(one(p) for p in imported_by(given, listed)))
+    said: dict[str, str] = {}
+    variants: dict[str, dict[str, list[str]]] = {}
+    for path, text in [*modules, *given.items()]:
+        if not text:
+            continue
+        if path not in given and (line := held_said(text)):
+            said[path] = line
+        if declared := variants_of(text):
+            variants[path] = declared
+    return Held(None if more else listed, said, variants)
+
+
+async def reviewed(
+    session: AsyncSession,
+    run: AgentRun,
+    definition: Definition,
+    inputs: Mapping[str, object],
+    analysis: str,
+    read: Mapping[str, str],
+    proposal: ChangeProposal,
+    held: Held,
+    *,
+    deadline: float,
+) -> tuple[ChangeProposal, int]:
+    """The change read again by a reviewer, its defects fixed by the writer,
+    REVIEWS times at most while time is left (2026-10-29: « qu'il travaille
+    plus de temps s'il faut pour tout bien réaliser »): what a weaker model
+    misses the first time, it is shown. Whatever fails here, the change as
+    it was. How many defects were fixed, besides."""
+    given = {key.split(":", 1)[-1]: text for key, text in read.items()}
+    repository = next((key.split(":", 1)[0] for key in read if ":" in key), "")
+    needs = replace(needs_of(definition), tools=False, quality=HARD_QUALITY)
+    fixed = 0
+    loop = asyncio.get_running_loop()
+    for _ in range(REVIEWS):
+        after = {p: t for p, t in after_of(proposal, given).items() if t}
+        if not after or deadline - loop.time() < LEAST_TO_REVIEW:
+            break
+        material = json.loads(change_messages(definition, inputs, analysis, read)[1].content)
+        material.pop("files", None)
+        material["changed"] = shown(after)
+        try:
+            answered = await asyncio.wait_for(
+                Gateway(session, run.workspace_id).structured(
+                    Request(
+                        purpose=f"agent:{definition.key}:review"[:100],
+                        messages=[
+                            Message.system(REVIEW_RULES),
+                            Message.user(json.dumps(material, ensure_ascii=False, default=str)),
+                        ],
+                        tier=CHANGE_TIER,
+                        max_tokens=8000,
+                        ref=f"agent_run:{run.id}",
+                    ),
+                    ChangeReview,
+                    needs,
+                ),
+                timeout=max(30.0, deadline - loop.time() - 30),
+            )
+        except Exception:
+            logger.warning("change_not_reviewed", run=str(run.id), exc_info=True)
+            break
+        problems = grounded(answered.value, after)
+        logger.info("change_reviewed", run=str(run.id), problems=len(problems))
+        if not problems:
+            break
+        paths = list(dict.fromkeys(p.path for p in problems))
+        now = {f"{repository}:{p}": t for p, t in after.items()} | {
+            k: t for k, t in read.items() if is_test(k.split(":", 1)[-1])
+        }
+
+        def verify(
+            fix: ChangeProposal, now: Mapping[str, str] = now, paths: Sequence[str] = paths
+        ) -> list[str]:
+            mine = _only(fix, paths)
+            written = after_of(mine, {k.split(":", 1)[-1]: t for k, t in now.items()})
+            return change_problems(mine, now) + held.problems(written)
+
+        try:
+            answer = await asyncio.wait_for(
+                Gateway(session, run.workspace_id).structured(
+                    Request(
+                        purpose=f"agent:{definition.key}:review-fix"[:100],
+                        messages=change_messages(
+                            definition,
+                            inputs,
+                            analysis,
+                            now,
+                            only=paths,
+                            review=[p.model_dump() for p in problems],
+                        ),
+                        tier=CHANGE_TIER,
+                        max_tokens=CHANGE_TOKENS,
+                        ref=f"agent_run:{run.id}",
+                    ),
+                    ChangeProposal,
+                    needs,
+                    verify=verify,
+                    corrections=CHANGE_CORRECTIONS,
+                ),
+                timeout=max(30.0, deadline - loop.time() - 30),
+            )
+        except Exception:
+            logger.warning("change_review_not_fixed", run=str(run.id), exc_info=True)
+            break
+        now_texts = {k.split(":", 1)[-1]: t for k, t in now.items()}
+        fixed_texts = after_of(_only(answer.value, paths), now_texts)
+        if not fixed_texts:
+            break
+        files = [f for f in proposal.files if safe_path(f.path) not in fixed_texts]
+        files += [
+            ProposedFile(path=p, content=t, why="relu et corrigé") for p, t in fixed_texts.items()
+        ]
+        proposal = proposal.model_copy(update={"files": files})
+        fixed += len(problems)
+    return proposal, fixed
+
+
 async def propose_change(
     session: AsyncSession,
     run: AgentRun,
@@ -1238,11 +1499,15 @@ async def propose_change(
         rules = await repository_rules(
             code, repository, base, [key.split(":", 1)[-1] for key in read]
         )
+        held = await held_names(code, repository, base, read)
     else:
         rules = ""
+        held = Held()
     inputs: dict[str, object] = {**run.inputs, "maquette": target} if target else dict(run.inputs)
     if rules:
         inputs[RULES_INPUT] = rules
+    if held.said:
+        inputs[NAMES_INPUT] = held.said
     request = Request(
         purpose=f"agent:{definition.key}:change"[:100],
         messages=change_messages(definition, inputs, analysis, read),
@@ -1258,6 +1523,13 @@ async def propose_change(
     def verify(proposal: ChangeProposal) -> list[str]:
         verified[0] += 1
         problems = change_problems(proposal, read or {}, ids=verified[0] <= ASKED_FOR_IDS)
+        if verified[0] <= ASKED_FOR_IDS:
+            new = [
+                f.path
+                for f in proposal.files
+                if f.content is not None and f.path not in given_files
+            ]
+            problems += held.problems(after_of(proposal, given_files), new)
         if designing:
             problems += put_off(proposal) + invented(proposal, given_files)
         return problems
@@ -1279,6 +1551,7 @@ async def propose_change(
                     usage,
                     screen=screen,
                     left_out=left_out,
+                    held=held,
                 ),
                 timeout=budget,
             )
@@ -1288,8 +1561,9 @@ async def propose_change(
                     Gateway(session, run.workspace_id).structured(
                         request,
                         ChangeProposal,
-                        replace(needs_of(definition), tools=False),
+                        replace(needs_of(definition), tools=False, quality=HARD_QUALITY),
                         verify=verify,
+                        corrections=CHANGE_CORRECTIONS,
                     ),
                     timeout=budget,
                 )
@@ -1309,6 +1583,7 @@ async def propose_change(
                         read or {},
                         usage,
                         left_out=left_out,
+                        held=held,
                     ),
                     timeout=max(left, 60.0),
                 )
@@ -1336,6 +1611,20 @@ async def propose_change(
     if failed is not None:
         return _from_diff_else(session, run, analysis, found, base, from_diff, failed)
     proposal = completed(proposal, run, analysis, found[2] if found else None, read or {})
+    if designing or is_big(analysis, read or {}):
+        # A redesign, a change of several large files: read again before
+        # anyone sees it, its defects fixed (2026-10-29).
+        proposal, usage["reviewed"] = await reviewed(
+            session,
+            run,
+            definition,
+            inputs,
+            analysis,
+            read or {},
+            proposal,
+            held,
+            deadline=deadline,
+        )
     written = await code_for(session, run.workspace_id, proposal.repository.strip())
     if written is None:
         return _from_diff_else(
@@ -1623,6 +1912,7 @@ async def _by_file(
     *,
     screen: Sequence[str] = (),
     left_out: list[str] | None = None,
+    held: Held = Held(),
 ) -> ChangeProposal:
     """A change too big for one answer, written file by file (2026-10-27):
     each file the analysis names, alongside, every file given to each; the
@@ -1635,7 +1925,7 @@ async def _by_file(
     code = list(dict.fromkeys([*screen, *named]))[:MAX_FILES]
     main = max(screen, key=lambda p: len(given.get(p, "")), default=None)
     new = [p for p in paths_named(analysis) if p not in given]
-    needs = replace(needs_of(definition), tools=False)
+    needs = replace(needs_of(definition), tools=False, quality=HARD_QUALITY)
     limit = asyncio.Semaphore(ALONGSIDE)
     # Nothing held while the files are written, each in its own session.
     await session.commit()
@@ -1670,6 +1960,7 @@ async def _by_file(
             if tries[0] <= ASKED_FOR_IDS:
                 written = after_of(mine, given)
                 problems += unknown_names(given, written) + unimported(given, written)
+                problems += held.problems(written, new)
             if screen:
                 problems += put_off(mine) + invented(mine, given)
             return problems + (also(mine) if also else [])
@@ -1677,7 +1968,7 @@ async def _by_file(
         async with limit, session_factory() as own:
             try:
                 answered = await Gateway(own, run.workspace_id).structured(
-                    request, ChangeProposal, needs, verify=verify
+                    request, ChangeProposal, needs, verify=verify, corrections=CHANGE_CORRECTIONS
                 )
             finally:
                 await own.commit()
@@ -2402,7 +2693,7 @@ class ChangeService:
         failed = [str(f.get("name") or "") for f in failures]
         definition = find("code-change")
         needs = (
-            replace(needs_of(definition), tools=False)
+            replace(needs_of(definition), tools=False, quality=HARD_QUALITY)
             if definition is not None
             else Needs(structured=True, quality=3, task="code")
         )
@@ -2420,6 +2711,7 @@ class ChangeService:
                     RepairProposal,
                     needs,
                     verify=lambda proposal: repair_problems(proposal, read, failures),
+                    corrections=CHANGE_CORRECTIONS,
                 ),
                 timeout=budget,
             )

@@ -40,6 +40,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.capabilities.catalogue import needs_of
+from leka.capabilities.changes import HARD_QUALITY
 from leka.capabilities.definition import Definition
 from leka.capabilities.deliverables.design import (
     MIME,
@@ -77,7 +78,9 @@ DRAW_TOKENS = 48_000
 PLAN_BUDGET = 3 * 60.0
 # A model slower than Gemini (Mistral, 2026-10-28) draws a whole screen in
 # more than five minutes.
-DRAW_BUDGET = 12 * 60.0
+DRAW_BUDGET = 15 * 60.0
+# How many times a drawing is told what is wrong and drawn again.
+DRAW_CORRECTIONS = 3
 DESIGN_BUDGET = PLAN_BUDGET + 2 * DRAW_BUDGET
 # A gateway's reason for no answer, as the design's error.
 NO_MODEL = {"none": "no_model", "timeout": "timeout", "limited": "limited", "blocked": "refused"}
@@ -184,7 +187,11 @@ instructions follow. Draw ONE screen, as one JSON object {"css": …, "body": �
 css, its complete style sheet; body, the HTML inside <body>. No script, no \
 event handler, no external resource — no <link>, no @import, no url() but \
 data: —, no link that leads anywhere: icons are inline SVG, images are CSS \
-shapes or inline SVG, fonts are named with a system fallback. What the code \
+shapes or inline SVG, fonts are named with a system fallback. No framework is \
+loaded: the application's utility classes (Tailwind's flex, p-4, text-sm, \
+bg-…) mean nothing here — give each element a short class name of your own \
+and write in css every rule it needs, by its values (the colours and sizes \
+the code's tokens give). What the code \
 takes from data when it runs — a name, a count, a date — is a plausible \
 example shaped like the code's types. Self-contained, at most 40 000 \
 characters of body, in the language the screen speaks, as finished as a real \
@@ -362,7 +369,9 @@ async def _asked[T: BaseModel](
         max_tokens=tokens,
         ref=f"agent_run:{run.id}",
     )
-    needs = replace(needs_of(definition), tools=False)
+    # Drawn by the provider's strongest, whatever answers the rest
+    # (2026-10-29: Mistral Medium chosen, no mock-up came).
+    needs = replace(needs_of(definition), tools=False, quality=HARD_QUALITY)
 
     async def ask(own: AsyncSession) -> T:
         answered = await asyncio.wait_for(
@@ -373,6 +382,10 @@ async def _asked[T: BaseModel](
                 # A screen drawn bare is drawn again, told why — then by the
                 # next model (2026-10-21).
                 verify=checked(model, also),
+                # Told what is wrong — the classes with no rule — and drawn
+                # again, a few times (2026-10-29: Mistral Large copied the
+                # code's Tailwind classes twice, then was given up on).
+                corrections=DRAW_CORRECTIONS,
             ),
             timeout=budget,
         )

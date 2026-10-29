@@ -162,6 +162,11 @@ class InvalidOutputError(Exception):
     """A structured answer that does not match what was asked."""
 
 
+class CutOutputError(InvalidOutputError):
+    """An answer cut at its token limit: asked again as it is, it would be
+    cut again — told once, never `corrections` times."""
+
+
 @dataclass(frozen=True)
 class Attempt:
     provider: str
@@ -364,6 +369,9 @@ class Gateway:
             list(fallbacks) if fallbacks is not None else fallbacks_of(settings.llm_fallbacks)
         )
         self._retries = max(0, settings.llm_retries if retries is None else retries)
+        # How many times a model is told what was wrong with its answer and
+        # asked again, before the next one is (structured `corrections`).
+        self._corrections: int | None = None
         self._tasks = task_routes_of(settings.llm_task_routes)
         self._sleep = sleep
         self._urls = urls if urls is not None else (leka_urls() if keys is None else {})
@@ -517,7 +525,8 @@ class Gateway:
             forces_tools=route.profile.forces_tools,
             responses=route.profile.responses,
         )
-        for attempt in range(1, self._retries + 2):
+        corrections = self._retries if self._corrections is None else self._corrections
+        for attempt in range(1, max(self._retries, corrections) + 2):
             try:
                 async with self._client(route.endpoint, wait_of(call.request)) as client:
                     done = await vendor.complete(call, client)
@@ -555,7 +564,8 @@ class Gateway:
                         request, route, attempt, done=done, error=str(invalid), status="invalid"
                     )
                     attempts.append(self._attempt(route, attempt, str(invalid)))
-                    if attempt <= self._retries:
+                    told = self._retries if isinstance(invalid, CutOutputError) else corrections
+                    if attempt <= told:
                         # Asked again with what was wrong — its own answer,
                         # and why it is not used — never the same words
                         # again: a model told corrects itself (2026-10-21:
@@ -594,17 +604,21 @@ class Gateway:
         *,
         budget: float | None = None,
         verify: Callable[[T], Sequence[str]] | None = None,
+        corrections: int | None = None,
     ) -> Structured[T]:
         """An answer in the shape of `model`, checked — and, given `verify`,
         held to what the caller expects of it (what it cites is known…): one
-        that does not match is asked again, then of the next model."""
+        that does not match is asked again, then of the next model.
+        `corrections`: how many times each model is told what was wrong and
+        asked again — LEKA_LLM_RETRIES unless said (2026-10-29: a code change
+        told once, then given up on, while each answer came closer)."""
         read: dict[str, Any] = {}
 
         def invalid(error: ValidationError, done: Completion) -> InvalidOutputError:
             # Cut at its token limit, thinking included: said as such,
             # never as a wrong shape (2026-10-18).
             if str(done.finish or "").upper() in CUT:
-                return InvalidOutputError(
+                return CutOutputError(
                     f"Cut at its limit of {request.max_tokens} tokens, thinking included."
                 )
             errors = error.errors()
@@ -634,9 +648,13 @@ class Gateway:
             read["value"] = value
             read["text"] = done.text
 
-        done = await self.complete(
-            replace(request, output=Output.of(model)), needs, budget=budget, check=check
-        )
+        held, self._corrections = self._corrections, corrections
+        try:
+            done = await self.complete(
+                replace(request, output=Output.of(model)), needs, budget=budget, check=check
+            )
+        finally:
+            self._corrections = held
         if done.text == read["text"]:
             return Structured(read["value"], done)
         # Redacted by an AI control (LEKA-406): read and held to what the
