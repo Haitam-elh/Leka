@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { LIVE_EVERY } from "@/lib/live";
 import { sources } from "@/lib/sources";
 
 /**
@@ -63,6 +64,7 @@ export function useCatalog() {
     queryKey: sourceKeys.catalog(),
     queryFn: sources.catalog,
     staleTime: 3_600_000,
+    refetchInterval: false,
   });
 }
 
@@ -81,7 +83,7 @@ export function useSourceSyncs(id: string) {
   return useQuery({
     queryKey: sourceKeys.syncs(id),
     queryFn: () => sources.syncs(id),
-    refetchInterval: (query) => (query.state.data?.pass_state ? 5_000 : false),
+    refetchInterval: (query) => (query.state.data?.pass_state ? 5_000 : LIVE_EVERY),
   });
 }
 
@@ -100,7 +102,7 @@ export function useSourceRuns(id: string) {
   return useQuery({
     queryKey: sourceKeys.runs(id),
     queryFn: async () => (await sources.runs(id)).data,
-    refetchInterval: (query) => (query.state.data?.[0]?.status === "running" ? 5_000 : false),
+    refetchInterval: (query) => (query.state.data?.[0]?.status === "running" ? 5_000 : LIVE_EVERY),
   });
 }
 
@@ -111,7 +113,7 @@ export function useSourceDeliveries(id: string) {
     queryKey: sourceKeys.deliveries(id),
     queryFn: async () => (await sources.deliveries(id)).data,
     refetchInterval: (query) =>
-      query.state.data?.some((delivery) => delivery.status === "pending") ? 5_000 : false,
+      query.state.data?.some((delivery) => delivery.status === "pending") ? 5_000 : LIVE_EVERY,
   });
 }
 

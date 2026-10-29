@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { insights, type IntelligenceSummary } from "@/lib/insights";
+import { LIVE_EVERY } from "@/lib/live";
 
 export const insightKeys = {
   summary: ["intelligence", "summary"] as const,
@@ -48,7 +49,7 @@ export function useInsights() {
   const summary = useQuery({
     queryKey: insightKeys.summary,
     queryFn: insights.summary,
-    refetchInterval: (query) => (waiting(query.state.data, askedAt) ? POLL_MS : false),
+    refetchInterval: (query) => (waiting(query.state.data, askedAt) ? POLL_MS : LIVE_EVERY),
   });
   const analyse = useMutation({
     mutationFn: insights.analyse,

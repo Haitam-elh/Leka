@@ -9,6 +9,7 @@ import {
   type ViewName,
   type WalkParams,
 } from "@/lib/knowledge-graph";
+import { LIVE_SLOW } from "@/lib/live";
 
 /** The knowledge graph as queries (LEKA-369). */
 export const graphKeys = {
@@ -39,6 +40,7 @@ export function useGraphWalk(params: WalkParams | null) {
   return useQuery({
     queryKey: params ? graphKeys.walk(params) : graphKeys.all,
     queryFn: () => knowledgeGraph.walk(params as WalkParams),
+    refetchInterval: LIVE_SLOW,
     enabled: params !== null && isEntityId(params.root),
     placeholderData: keepPreviousData,
   });
@@ -48,6 +50,7 @@ export function useGraphPaths(params: PathParams | null) {
   return useQuery({
     queryKey: params ? graphKeys.paths(params) : graphKeys.all,
     queryFn: () => knowledgeGraph.paths(params as PathParams),
+    refetchInterval: LIVE_SLOW,
     enabled: params !== null && isEntityId(params.from) && isEntityId(params.to),
   });
 }
@@ -56,6 +59,7 @@ export function useLandscapeView(name: ViewName | null) {
   return useQuery({
     queryKey: graphKeys.view(name ?? "company"),
     queryFn: () => knowledgeGraph.view(name ?? "company"),
+    refetchInterval: LIVE_SLOW,
     enabled: name !== null,
   });
 }
@@ -66,6 +70,7 @@ export function useArchitecture(environment: string | null, enabled = true, deta
   return useQuery({
     queryKey: graphKeys.architecture(environment, detailed),
     queryFn: () => knowledgeGraph.architecture(environment, detailed),
+    refetchInterval: LIVE_SLOW,
     enabled,
     placeholderData: keepPreviousData,
   });

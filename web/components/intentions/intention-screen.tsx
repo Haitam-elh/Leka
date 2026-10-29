@@ -65,7 +65,12 @@ import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import { useIntentionRuns } from "@/lib/agent-runs-queries";
 import type { IntentionDetail, IntentionLink } from "@/lib/intentions/api";
 import { may } from "@/lib/intentions/journey";
-import { useAnswer, useIntention, useIntentionChange } from "@/lib/intentions/queries";
+import {
+  useAnswer,
+  useFollowIntention,
+  useIntention,
+  useIntentionChange,
+} from "@/lib/intentions/queries";
 import { buildBreadcrumb } from "@/lib/navigation/breadcrumb";
 import { matchRoute } from "@/lib/navigation/active";
 import { useNamePage } from "@/lib/navigation/page-name";
@@ -92,6 +97,7 @@ export function IntentionScreen() {
   const valid = UUID.test(id);
   const intention = useIntention(valid ? id : "");
   const data = intention.data;
+  useFollowIntention(data);
   const crumbs = buildBreadcrumb(pathname, t, data ? () => data.title : undefined);
   useNamePage(pathname, data?.title);
   // The address says which view; none, the step it is at.

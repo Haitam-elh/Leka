@@ -163,6 +163,9 @@ export function BriefView({
   );
 }
 
+/** What the thing asked about is: answered by its name. */
+const SLOT_TARGET = new Set(["no_subject", "unknown_subject", "action_without_target", "missing_target"]);
+
 /** Whether a question can be answered here: a choice, an option, words. */
 function askable(question: BriefQuestion): boolean {
   return question.free || question.choices.length > 0 || optionsOf(question).length > 0;
@@ -282,7 +285,11 @@ function QuestionItem({
     );
   }
 
-  const settled = answer && !changing;
+  // Answered in words that did not settle it: still asked, said why — never
+  // shown as answered (2026-10-29: « Sur quoi faut-il agir ? » answered,
+  // ticked, and nothing moved).
+  const unsettled = Boolean(answer && !answer.unknown && question.blocking && question.free);
+  const settled = answer && !changing && !unsettled;
   return (
     <li className="flex flex-col gap-2" data-testid="brief-question" data-kind={question.kind}>
       <p className="flex items-start gap-2 text-[0.875rem] font-semibold text-brand-navy">
@@ -315,6 +322,16 @@ function QuestionItem({
         </p>
       ) : onAnswer ? (
         <div className="flex flex-col gap-2">
+          {unsettled && answer ? (
+            <p
+              className="rounded-lg bg-state-warning-soft px-3 py-2 text-[0.8125rem] text-brand-navy"
+              data-testid="brief-unsettled"
+            >
+              {fill(SLOT_TARGET.has(question.kind) ? w.unsettledTarget : w.unsettled, {
+                answer: said(answer.value ?? ""),
+              })}
+            </p>
+          ) : null}
           {question.choices.length || optionsOf(question).length ? (
             <div className="flex flex-wrap gap-2" role="group" aria-label={asked}>
               {question.choices.map((choice) => (

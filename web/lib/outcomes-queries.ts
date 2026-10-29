@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { planKeys } from "@/lib/actions-queries";
 import { intentionKeys } from "@/lib/intentions/queries";
+import { LIVE_EVERY } from "@/lib/live";
 import {
   type Expectation,
   isVerifying,
@@ -30,7 +31,7 @@ export function useVerifications(intentionId: string, enabled = true) {
     queryKey: outcomeKeys.verifications(intentionId),
     queryFn: () => outcomes.verifications(intentionId),
     enabled: Boolean(intentionId) && enabled,
-    refetchInterval: (query) => (isVerifying(query.state.data?.[0]) ? WHILE_VERIFYING : false),
+    refetchInterval: (query) => (isVerifying(query.state.data?.[0]) ? WHILE_VERIFYING : LIVE_EVERY),
   });
 }
 

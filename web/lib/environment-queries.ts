@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { type AlertRuleChange, type AlertRuleWrite, alertRules } from "@/lib/alert-rules";
 import { environment, isEntityId } from "@/lib/environment";
+import { LIVE_EVERY } from "@/lib/live";
 import { monitoring } from "@/lib/twin";
 
 /** The environment as queries (LEKA-359): the screen, and an entity's sheet. */
@@ -17,8 +18,8 @@ export const environmentKeys = {
  * connected): the first reading lands in seconds — asked again until it does. */
 export function untilFirstReading(
   env: { sources?: readonly unknown[]; freshness?: { last_read_at?: string | null } | null } | undefined,
-): number | false {
-  return env && (env.sources?.length ?? 0) > 0 && !env.freshness?.last_read_at ? 5000 : false;
+): number {
+  return env && (env.sources?.length ?? 0) > 0 && !env.freshness?.last_read_at ? 5000 : LIVE_EVERY;
 }
 
 export function useEnvironment() {

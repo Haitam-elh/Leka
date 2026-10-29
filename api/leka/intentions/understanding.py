@@ -55,7 +55,9 @@ from leka.knowledge import fold
 #    documentation is documenting; a question about something known, with
 #    no goal said, asks what is known of it (LEKA-440).
 # 6: drafting LEKA's own answer — a post-mortem, a report — is not an action.
-UNDERSTANDING_VERSION = 6
+# 7: what a proposal is for is not asked — « propose la modification … pour
+#    la déployer »; an action's target is chosen among what can be acted on.
+UNDERSTANDING_VERSION = 7
 
 # ── actions ─────────────────────────────────────────────────────────────
 
@@ -175,6 +177,19 @@ PLANS = _words(
     estimez assess estimate risque risques risk cout couts cost faisabilite feasibility"""
 )
 
+# What makes something for a person to look at — a design, a code change,
+# a script: what follows « pour » is what it is for, not done now
+# (2026-10-29: « propose la modification de code … pour la déployer sur
+# leka » stopped on « Déployer : sur quoi ? », then proposed deploying a
+# pull request).
+PRODUCING = _words(
+    """propose proposes proposez proposer proposition suggere suggeres suggerez suggerer
+    suggest prepare prepares preparez preparer ecris ecrire ecrivez genere generes generez
+    generer dessine dessines dessinez dessiner cree crees creez creer write draw create
+    generate"""
+)
+PURPOSE = _words("pour afin to")
+
 # ── mode ────────────────────────────────────────────────────────────────
 
 QUESTION_WORDS = _words(
@@ -216,6 +231,22 @@ COMMON = _words(
 )
 # « dis-moi », « peux-tu », « est-ce »: a verb and its pronoun, not a name.
 PRONOUNS = _words("la le les moi toi lui nous vous en y ce il elle on t tu je ils elles")
+# What an action on systems can be done on: never a pull request, a commit,
+# a person or a page — what was offered to deploy on 2026-10-29.
+ACTIONABLE = frozenset(
+    {
+        "service",
+        "application",
+        "repository",
+        "database",
+        "infra_resource",
+        "environment",
+        "cloud_account",
+        "resource_group",
+        "schema",
+        "data_object",
+    }
+)
 # How sure a goal is, by how much said it.
 SURE, LIKELY, GUESS = 0.8, 0.6, 0.4
 MIN_WORDS = 2
@@ -278,7 +309,9 @@ def _planned(word: str, left: Sequence[str], earlier: Sequence[str]) -> bool:
     if left[-1:] == ["comment"] or left[-2:] == ["how", "to"]:
         return True
     infinitive = word.endswith(("er", "ir")) or left[-1:] == ["to"]
-    return infinitive and bool(set(earlier[-6:]) & PLANS)
+    # « Propose la modification … pour la déployer »: what it is for.
+    proposed = bool(set(left) & PURPOSE) and bool(set(earlier) & PRODUCING)
+    return infinitive and (bool(set(earlier[-6:]) & PLANS) or proposed)
 
 
 def _done(word: str, left: Sequence[str]) -> bool:
@@ -394,6 +427,11 @@ def mode_of(text: str, actions: Sequence[Found]) -> tuple[str, str | None]:
         return "question", "?"
     if actions:
         return "request", actions[0].said
+    # « Propose-moi un design », « je souhaite que tu me proposes la
+    # modification de code »: something to make, a request (2026-10-29).
+    making = next((w for w in folded.split() if w in PRODUCING), None)
+    if making is not None:
+        return "request", making
     return "question", None
 
 
@@ -599,7 +637,11 @@ def _ambiguities(
                 blocking=True,
                 said="An action is asked, on nothing LEKA knows: on what?",
                 options=[a.verb.code for a in actions if a.verb.changes_systems],
-                choices=list(guessed.choices) if guessed is not None else [],
+                choices=[
+                    c
+                    for c in (guessed.choices if guessed is not None else [])
+                    if c.type in ACTIONABLE
+                ],
             )
         )
     if text.count("?") > 1 or (

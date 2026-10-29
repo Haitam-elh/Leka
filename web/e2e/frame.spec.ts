@@ -97,8 +97,12 @@ test.describe("The frame", () => {
     }
   });
 
-  test("a page at rest asks the API nothing more", async ({ page }) => {
-    // Five pages watched 10 s each: about a minute alone — past the default
+  test("a page at rest asks the API again at the calm pace, never faster", async ({ page }) => {
+    // 2026-10-29 (« que rien ne soit statique »): every page reads again
+    // every LIVE_EVERY (web/lib/live.ts, 10 s) while it is in view — never
+    // at the pace of something at work (3 to 5 s). Watched a little less
+    // than that pace: each address asked again once at most.
+    // Five pages watched 9 s each: about a minute alone — past the default
     // 60 s on a slow runner (CI, 2026-10-15).
     test.setTimeout(180_000);
     await signIn(page);
@@ -128,10 +132,13 @@ test.describe("The frame", () => {
       };
       page.off("request", load);
       page.on("request", count);
-      await page.waitForTimeout(10_000);
+      await page.waitForTimeout(9_000);
       page.off("request", count);
-      // Nothing is working on anything here: nothing to follow.
-      expect(again, `${path} kept asking: ${again.join(", ")}`).toHaveLength(0);
+      // Nothing is working on anything here: nothing followed fast.
+      const times = new Map<string, number>();
+      for (const url of again) times.set(url, (times.get(url) ?? 0) + 1);
+      const fast = [...times].filter(([, n]) => n > 1).map(([url]) => url);
+      expect(fast, `${path} kept asking: ${fast.join(", ")}`).toHaveLength(0);
     }
   });
 });

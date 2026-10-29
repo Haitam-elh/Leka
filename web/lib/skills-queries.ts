@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 
+import { LIVE_EVERY } from "@/lib/live";
 import { skills } from "@/lib/skills";
 
 export const skillKeys = {
@@ -14,6 +15,6 @@ export function useSkillRuns(ref: string, live = false) {
     queryKey: skillKeys.runs(ref),
     queryFn: () => skills.runs(ref),
     enabled: Boolean(ref),
-    refetchInterval: live ? 4_000 : false,
+    refetchInterval: live ? 4_000 : LIVE_EVERY,
   });
 }

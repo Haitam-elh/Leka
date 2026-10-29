@@ -72,7 +72,10 @@ Goals:
 simulating, planning, proposing a plan, documenting, drawing an \
 architecture or writing a page is never act, even about a migration or a \
 deployment: it is the goal of what they want to know or get \
-(plan_migration, assess_impact, map_dependencies, find_knowledge…).
+(plan_migration, assess_impact, map_dependencies, find_knowledge…). \
+Proposing a design, a mock-up or a code change for a person to review is \
+never act either, even when it says it is « to deploy »: a person reviews \
+and merges it, LEKA changes nothing by itself.
 - unknown only when nothing can be understood of what is wanted.
 - mode: "question" when they want an answer, "request" when they want \
 something done or produced.

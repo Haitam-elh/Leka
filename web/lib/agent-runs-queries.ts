@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { agentRuns, MOVING, type AgentRunCreate } from "@/lib/agent-runs";
+import { LIVE_EVERY } from "@/lib/live";
 
 export const agentRunKeys = {
   all: ["agent-runs"] as const,
@@ -25,7 +26,7 @@ export function useIntentionRuns(intentionId: string, live = false) {
     // agent it hands it to is started by its analysis, after this page
     // first asked. Read once, empty, it was never read again (2026-10-14).
     refetchInterval: (query) =>
-      live || query.state.data?.some((run) => MOVING.has(run.status)) ? FOLLOW_MS : false,
+      live || query.state.data?.some((run) => MOVING.has(run.status)) ? FOLLOW_MS : LIVE_EVERY,
   });
 }
 
@@ -35,7 +36,7 @@ export function useAgentRuns(key: string) {
     queryFn: () => agentRuns.list(key),
     enabled: Boolean(key),
     refetchInterval: (query) =>
-      query.state.data?.some((run) => MOVING.has(run.status)) ? FOLLOW_MS : false,
+      query.state.data?.some((run) => MOVING.has(run.status)) ? FOLLOW_MS : LIVE_EVERY,
   });
 }
 
@@ -47,6 +48,7 @@ export function useAgentRunDesign(id: string | null) {
     queryFn: () => agentRuns.design(id ?? ""),
     enabled: Boolean(id),
     staleTime: Infinity,
+    refetchInterval: false,
     retry: false,
   });
 }
@@ -62,7 +64,7 @@ export function useAgentRun(id: string | null) {
         (query.state.data.drawing ?? []).length > 0 ||
         Boolean(query.state.data.correcting))
         ? FOLLOW_MS
-        : false,
+        : LIVE_EVERY,
   });
 }
 

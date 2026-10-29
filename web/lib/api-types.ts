@@ -5714,8 +5714,8 @@ export interface paths {
          * Routing
          * @description Where it was last routed, and why (LEKA-398): every capability it
          *     could go to, ranked by its signals; every one it cannot, said why; or
-         *     LEKA's own analysis, or what to ask. Never routed yet: routed now, for
-         *     whoever reads it.
+         *     LEKA's own analysis, or what to ask. Never routed yet, or asked again
+         *     since — answered, reworded: routed now, for whoever reads it.
          */
         get: operations["routing_api_v1_intentions__intention_id__routing_get"];
         put?: never;

@@ -157,6 +157,18 @@ describe("a decision's governance", () => {
     );
   });
 
+  it("says plainly what each action does, and what approving or refusing changes", async () => {
+    // 2026-10-29: « on comprend pas vraiment pourquoi on cliquerait sur valider ».
+    choices.of.mockResolvedValue([decision()]);
+    show();
+    expect(await screen.findByTestId("decision-effect")).toHaveTextContent(
+      "Si vous validez, LEKA pourra migrer Billing API vers sa nouvelle cible en production.",
+    );
+    const choice = screen.getByTestId("decision-choice");
+    expect(choice).toHaveTextContent("Valider : ces actions pourront être lancées à l'étape Action");
+    expect(choice).toHaveTextContent("Refuser : rien n'est fait");
+  });
+
   it("says the freeze that covered it", async () => {
     choices.of.mockResolvedValue([
       decision({
