@@ -38,6 +38,7 @@ from leka.capabilities.gateway import Gateway, Message, NoModelError, Request, T
 from leka.capabilities.mockups import design_target, propose_design, proposes
 from leka.capabilities.models import AgentRun
 from leka.capabilities.runtime import filled, parameters_of
+from leka.capabilities.workshop import Draft
 from leka.platform import ObjectStoreError, Workspace, from_bytes, object_store
 
 logger = structlog.get_logger(__name__)
@@ -142,6 +143,7 @@ async def draw(
     budget: float = DECK_BUDGET,
     formats: Sequence[str] | None = None,
     read: Mapping[str, str] | None = None,
+    drafted: Draft | None = None,
 ) -> Drawn:
     """The deck of a run's analysis, drawn and kept — or, for a code-change
     agent, the change it proposes (changes.py); for the designer, the screen
@@ -163,6 +165,7 @@ async def draw(
             analysis,
             read=read or {},
             target=await design_target(session, run),
+            drafted=drafted,
         )
         if proposed.change is None:
             return Drawn(

@@ -46,6 +46,9 @@ def _run_step(run: AgentRun) -> str:
         return "drawing_design"
     if drawing:
         return "drawing_files"
+    # Writing its change itself, in its draft (workshop.py, 2026-10-30).
+    if run.status == "running" and (run.detail or {}).get("drafting"):
+        return "editing"
     return "queued" if run.status == "queued" else "working"
 
 

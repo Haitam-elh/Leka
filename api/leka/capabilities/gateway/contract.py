@@ -121,6 +121,10 @@ class Request:
     ref: str | None = None
     # The runtime's execution it is part of (LEKA-429): its calls, together.
     run_id: uuid.UUID | None = None
+    # An empty answer is the caller's to handle — a tool loop tells the model
+    # (2026-10-30: Mistral answered nothing after its last tool) —, never a
+    # provider's failure to retry.
+    empty_ok: bool = False
 
 
 @dataclass(frozen=True)
