@@ -36,6 +36,10 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 CATALOGUE_FILE = Path(__file__).resolve().parent / "languages.yaml"
+# Every word of the interface in English, flat — "nav.home": "Home" — as
+# web/ writes it from its dictionary (`npm run i18n:export`): what LEKA
+# translates into a language that has no dictionary (2026-10-30).
+INTERFACE_FILE = Path(__file__).resolve().parent / "interface_en.json"
 
 Surface = Literal["app", "site", "emails"]
 SURFACES: tuple[Surface, ...] = ("app", "site", "emails")
@@ -304,6 +308,14 @@ def writing_rule(tag: str) -> str:
         "stay as they are. If the request itself explicitly asks for another language, "
         "write in that one."
     )
+
+
+@cache
+def interface_english() -> dict[str, str]:
+    """The interface's words in English, by key, in the dictionary's order."""
+    with INTERFACE_FILE.open(encoding="utf-8") as stream:
+        words: dict[str, str] = json.load(stream)
+    return words
 
 
 def export() -> dict[str, object]:

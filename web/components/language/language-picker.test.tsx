@@ -7,10 +7,20 @@
 
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LanguagePicker } from "@/components/language/language-picker";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
+
+afterEach(() => vi.unstubAllGlobals());
+
+/** What GET /interface says: how far LEKA translated each language. */
+function translatedByLeka(said: { tag: string; status: string; done: number; total: number }[]) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(JSON.stringify(said.map((one) => ({ ...one, model: null }))), { status: 200 })),
+  );
+}
 
 const option = (tag: string) => screen.getAllByRole("option").find((o) => o.dataset.tag === tag)!;
 
@@ -63,12 +73,29 @@ describe("the language picker", () => {
 
     await user.type(screen.getByRole("combobox"), "japan");
     const ja = option("ja");
-    // Not translated: the workspace's French meanwhile, and the answers in Japanese.
+    // No dictionary: LEKA translates the whole interface once it is chosen,
+    // and answers in Japanese.
     expect(within(ja).getByTestId("language-status")).toHaveTextContent(
-      "Interface en Français pour l'instant · LEKA vous répond en 日本語",
+      "Interface traduite par LEKA dès que vous la choisissez, en quelques minutes · LEKA vous répond en 日本語",
     );
     // Its own name in its own language, for a screen reader's voice.
     expect(within(ja).getByText("日本語")).toHaveAttribute("lang", "ja");
+  });
+
+  it("says how far LEKA translated a language it translates itself", async () => {
+    translatedByLeka([
+      { tag: "ja", status: "ready", done: 7000, total: 7000 },
+      { tag: "de", status: "translating", done: 2100, total: 7000 },
+    ]);
+    const user = userEvent.setup();
+    show();
+    await user.type(screen.getByRole("combobox"), "japan");
+    expect(await within(option("ja")).findByText(/Interface traduite automatiquement par LEKA/)).toBeInTheDocument();
+    await user.clear(screen.getByRole("combobox"));
+    await user.type(screen.getByRole("combobox"), "deutsch");
+    expect(within(option("de")).getByTestId("language-status")).toHaveTextContent(
+      "Traduction de l'interface en cours : 30 %",
+    );
   });
 
   it("says a model's answers may be weaker where they are", async () => {

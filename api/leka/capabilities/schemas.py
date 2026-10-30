@@ -1529,3 +1529,25 @@ class PublicationDecision(BaseModel):
         default=None, max_length=20, description="The ids chosen; every one when absent."
     )
     note: str | None = Field(default=None, max_length=2000)
+
+
+class InterfaceLanguageRead(BaseModel):
+    """How far LEKA translated the interface into a language (2026-10-30)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    tag: str
+    status: Literal["none", "translating", "ready", "failed"] = Field(
+        description="none: never asked; translating: under way, its words arriving; "
+        "ready: translated; failed: no model answered, tried again later."
+    )
+    done: int = Field(description="The words translated, or left in English on purpose.")
+    total: int = Field(description="Every word of the interface.")
+    model: str | None = Field(description="Which model translated it: provider:model.")
+
+
+class InterfaceWordsRead(InterfaceLanguageRead):
+    """Its words so far, flat by key — « nav.home »: what the screens read
+    in place of the English."""
+
+    words: dict[str, str]

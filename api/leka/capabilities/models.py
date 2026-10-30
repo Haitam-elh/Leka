@@ -687,3 +687,30 @@ class Publication(Base, WorkspaceScopedMixin):
     )
     error: Mapped[str | None] = mapped_column(String(40), nullable=True)
     error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class InterfaceWords(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """The whole interface in a language that has no dictionary, translated
+    by LEKA's model the first time someone chose it (2026-10-30) — one row a
+    language, LEKA's and no customer's: everyone who chooses it reads it.
+
+    `sources` keeps the English each word was translated from: a word whose
+    English changed since is translated again, the others never. `failed`:
+    the words a model could not translate keeping their placeholders —
+    shown in English, never broken."""
+
+    __tablename__ = "interface_words"
+    __table_args__ = (
+        UniqueConstraint("tag", name="uq_interface_words_tag"),
+        CheckConstraint("status IN ('translating', 'ready', 'failed')", name="status"),
+    )
+
+    tag: Mapped[str] = mapped_column(String(35), nullable=False)
+    status: Mapped[str] = mapped_column(String(12), nullable=False)
+    words: Mapped[dict[str, str]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    sources: Mapped[dict[str, str]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    failed: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    # Which model translated it last: « mistral:mistral-large-latest ».
+    model: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -78,6 +78,18 @@ Examples:
 
 A partial translation falls back key by key, never to an empty string. In development, the missing keys are printed in the console. The QA report counts them.
 
+### Languages LEKA translates itself (2026-10-30)
+
+Choosing a language changes the whole interface, not only LEKA's answers. English and French have their dictionaries. Every other language of the catalogue is translated by LEKA's own model the first time someone chooses it:
+- `GET /api/v1/interface/{tag}` (public) answers the words translated so far and starts the translation when none was done. Starting one is rate limited per address.
+- A worker (`leka/capabilities/interface.py`) translates `api/leka/core/interface_en.json` by batches of 120, 4 at once, the first screens first (navigation, states, language, sign-in, home). Each batch is kept as soon as it is done. A whole language takes a few minutes.
+- A translation must keep every `{placeholder}` and every `{count|one|other}` of its English. Otherwise it is asked again once, told why, and then left in English (`failed`). It never breaks a screen.
+- The table `interface_words` keeps one row per language, for everyone. It also keeps the English each word was translated from: after a deploy, only the words whose English changed are translated again.
+- The browser lays the words over the screens as a partial translation (`web/lib/i18n/remote.ts`). The screens switch while the words arrive, with no reload. A notice in a corner shows how far it is. The device keeps the last words it read, so the next visit starts in the language.
+- The model is LEKA's own (`leka_complete`): its default, then its fallbacks. It is paid by LEKA once per language, never by a workspace's credits.
+
+`interface_en.json` is the English dictionary, flattened. Never edit it by hand: after a word changes, run `npm run i18n:export` in `web/`. A test fails when the two differ.
+
 ## 4. Which language someone gets
 
 The first of these that names a language LEKA offers:

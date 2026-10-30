@@ -12,6 +12,7 @@ import { auth } from "@/lib/auth";
 import { fill } from "@/lib/i18n/dictionaries";
 import { language as languageOf, REGIONS, shown } from "@/lib/i18n/languages";
 import { useDictionary, useLanguage } from "@/lib/i18n/locale-provider";
+import { percentOf } from "@/lib/i18n/remote";
 import { notify } from "@/lib/notify";
 import { workspace as workspaceApi } from "@/lib/workspace";
 
@@ -20,7 +21,9 @@ import { workspace as workspaceApi } from "@/lib/workspace";
  * speaks and answers them in, on every device — and their region, which
  * writes dates, numbers and amounts and never chooses the language. Then
  * the workspace's language, an admin's to change: what LEKA writes for
- * everyone in it, and where an untranslated language falls back.
+ * everyone in it, and where a word not translated yet falls back. A
+ * language without a dictionary is translated by LEKA once chosen: how far,
+ * said here.
  */
 
 function regionNamer(locale: string): (code: string) => string {
@@ -43,6 +46,7 @@ export function LanguageSettings() {
     format,
     region,
     workspaceLanguage,
+    translating,
     setRegion,
     setWorkspaceLanguage,
   } = useLanguage();
@@ -107,7 +111,14 @@ export function LanguageSettings() {
           </div>
           {current && !current.ui.app ? (
             <p className="text-xs text-shell-muted">
-              {fill(t.fallback, { shown: meanwhile?.native ?? "English" })} ·{" "}
+              {translating?.status === "ready"
+                ? t.byLeka
+                : translating?.status === "translating"
+                  ? fill(t.byLekaTranslating, { percent: percentOf(translating) })
+                  : translating?.status === "failed"
+                    ? fill(t.byLekaFailed, { shown: meanwhile?.native ?? "English" })
+                    : t.byLekaOnChoice}{" "}
+              ·{" "}
               {fill(current.ai === "limited" ? t.aiLimited : t.answers, { name: current.native })}
             </p>
           ) : null}

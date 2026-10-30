@@ -58,6 +58,7 @@ from leka.capabilities.gateway.service import (
     Tested,
     ToolRoundsError,
     default_ready,
+    leka_complete,
     leka_default,
     leka_keys,
 )
@@ -109,6 +110,7 @@ __all__ = [
     "Usage",
     "cost_at",
     "default_ready",
+    "leka_complete",
     "leka_cost",
     "leka_default",
     "leka_keys",
