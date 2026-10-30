@@ -76,6 +76,10 @@ pytestmark = pytest.mark.integration
 #   model_rates    what a model costs LEKA from a day on (LEKA-430): LEKA's
 #                  prices, no customer's. What a call cost a workspace is
 #                  model_calls, which is scoped.
+#   interface_words
+#                  the interface translated into a language by LEKA's model
+#                  (2026-10-30): the product's words, the same for everyone
+#                  who chooses that language.
 TENANT_FREE_TABLES = frozenset(
     {
         "workspaces",
@@ -89,6 +93,7 @@ TENANT_FREE_TABLES = frozenset(
         "site_events",
         "stripe_events",
         "model_rates",
+        "interface_words",
     }
 )
 

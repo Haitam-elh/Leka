@@ -9303,6 +9303,13 @@ const fr = {
     translated: "Interface traduite, relecture en cours",
     partial: "Interface traduite en partie, le reste en {shown}",
     fallback: "Interface en {shown} pour l'instant",
+    byLeka: "Interface traduite automatiquement par LEKA",
+    byLekaTranslating: "Traduction de l'interface en cours : {percent} %",
+    byLekaOnChoice: "Interface traduite par LEKA dès que vous la choisissez, en quelques minutes",
+    byLekaFailed:
+      "La traduction de l'interface n'a pas pu se faire. LEKA réessaie dans l'heure ; en attendant, elle s'affiche en {shown}.",
+    translatingNotice:
+      "LEKA traduit l'interface en {name} : {percent} %. Les écrans changent au fur et à mesure.",
     answers: "LEKA vous répond en {name}",
     aiLimited: "Réponses en {name} : qualité variable selon le modèle",
     current: "Langue actuelle",
@@ -18284,6 +18291,13 @@ const en: Dictionary = {
     translated: "Interface translated, review in progress",
     partial: "Interface partly translated, the rest in {shown}",
     fallback: "Interface in {shown} for now",
+    byLeka: "Interface translated automatically by LEKA",
+    byLekaTranslating: "Interface being translated: {percent}%",
+    byLekaOnChoice: "Interface translated by LEKA as soon as you choose it, in a few minutes",
+    byLekaFailed:
+      "The interface could not be translated. LEKA tries again within the hour; meanwhile it is shown in {shown}.",
+    translatingNotice:
+      "LEKA is translating the interface into {name}: {percent}%. The screens change as it goes.",
     answers: "LEKA answers you in {name}",
     aiLimited: "Answers in {name}: quality varies with the model",
     current: "Current language",

@@ -33,6 +33,7 @@ from leka.api import (
     ingestion,
     intelligence,
     intentions,
+    interface,
     knowledge,
     model_gateway,
     monitoring,
@@ -107,5 +108,7 @@ api_router.include_router(subscriptions.router)
 api_router.include_router(add_ons.router)
 # The notification centre (LEKA-476).
 api_router.include_router(notifications.router)
+# The interface in every language, translated by LEKA (2026-10-30), public.
+api_router.include_router(interface.router)
 
 __all__ = ["api_router"]

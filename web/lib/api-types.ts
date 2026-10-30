@@ -7028,6 +7028,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/interface": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The languages LEKA translated the interface into */
+        get: operations["interface_languages_api_v1_interface_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interface/{tag}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A language's interface, translated by LEKA */
+        get: operations["interface_words_api_v1_interface__tag__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -18094,6 +18128,69 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * InterfaceLanguageRead
+         * @description How far LEKA translated the interface into a language (2026-10-30).
+         */
+        InterfaceLanguageRead: {
+            /** Tag */
+            tag: string;
+            /**
+             * Status
+             * @description none: never asked; translating: under way, its words arriving; ready: translated; failed: no model answered, tried again later.
+             * @enum {string}
+             */
+            status: "none" | "translating" | "ready" | "failed";
+            /**
+             * Done
+             * @description The words translated, or left in English on purpose.
+             */
+            done: number;
+            /**
+             * Total
+             * @description Every word of the interface.
+             */
+            total: number;
+            /**
+             * Model
+             * @description Which model translated it: provider:model.
+             */
+            model: string | null;
+        };
+        /**
+         * InterfaceWordsRead
+         * @description Its words so far, flat by key — « nav.home »: what the screens read
+         *     in place of the English.
+         */
+        InterfaceWordsRead: {
+            /** Tag */
+            tag: string;
+            /**
+             * Status
+             * @description none: never asked; translating: under way, its words arriving; ready: translated; failed: no model answered, tried again later.
+             * @enum {string}
+             */
+            status: "none" | "translating" | "ready" | "failed";
+            /**
+             * Done
+             * @description The words translated, or left in English on purpose.
+             */
+            done: number;
+            /**
+             * Total
+             * @description Every word of the interface.
+             */
+            total: number;
+            /**
+             * Model
+             * @description Which model translated it: provider:model.
+             */
+            model: string | null;
+            /** Words */
+            words: {
+                [key: string]: string;
+            };
         };
         /**
          * InvitationCreate
@@ -61890,6 +61987,194 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NotificationPreferences"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    interface_languages_api_v1_interface_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterfaceLanguageRead"][];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    interface_words_api_v1_interface__tag__get: {
+        parameters: {
+            query?: {
+                words?: boolean;
+            };
+            header?: never;
+            path: {
+                tag: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterfaceWordsRead"];
                 };
             };
             /** @description The request could not be understood. */

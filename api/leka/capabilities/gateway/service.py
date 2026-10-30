@@ -853,6 +853,102 @@ class Gateway:
         return Tested(True, None, done.latency_ms, own.model, done.version)
 
 
+async def leka_complete(
+    request: Request,
+    needs: Needs = Needs(),
+    *,
+    transport: httpx.AsyncBaseTransport | None = None,
+    keys: dict[str, str | None] | None = None,
+    default: tuple[str, str] | None = None,
+    fallbacks: Sequence[tuple[str, str]] | None = None,
+    retries: int | None = None,
+    sleep: Sleep = asyncio.sleep,
+) -> Completion:
+    """LEKA's own models, for LEKA's own work — no workspace's, so no
+    customer's credits, controls or own model: its interface translated
+    into a language (2026-10-30). The default, then the fallbacks, each
+    tried again while it says its failure is temporary. NoModelError when
+    none answered."""
+    own_keys = keys if keys is not None else leka_keys()
+    routing = route_of(
+        replace(needs, structured=needs.structured or request.output is not None),
+        own=None,
+        keys=own_keys,
+        default=default or leka_default(),
+        fallbacks=list(fallbacks)
+        if fallbacks is not None
+        else fallbacks_of(settings.llm_fallbacks),
+        urls=leka_urls() if keys is None else {},
+    )
+    if not routing.routes:
+        raise NoModelError("No language model is configured.", passed=routing.passed, reason="none")
+    tries = max(0, settings.llm_retries if retries is None else retries)
+    attempts: list[Attempt] = []
+    for route in routing.routes[:MOST_MODELS]:
+        vendor = provider(route.endpoint.provider)
+        if vendor is None:
+            continue
+        circuit = f"model:{route.endpoint.provider}:leka"
+        if not await breaker.allow(circuit):
+            continue
+        call = Call(
+            route.endpoint,
+            route.profile.model,
+            replace(request, max_tokens=min(request.max_tokens, route.profile.output))
+            if route.profile.output
+            else request,
+            thinking=route.profile.thinking,
+            sends_temperature=route.profile.sends_temperature,
+            forces_tools=route.profile.forces_tools,
+            responses=route.profile.responses,
+        )
+        for attempt in range(1, tries + 2):
+            try:
+                async with httpx.AsyncClient(
+                    transport=transport, timeout=wait_of(call.request)
+                ) as client:
+                    done = await vendor.complete(call, client)
+                if not done.text.strip():
+                    raise ProviderError("An empty answer.", retryable=True)
+            except (ProviderError, httpx.HTTPError) as raised:
+                error = _said(raised)
+                attempts.append(
+                    Attempt(
+                        route.endpoint.provider,
+                        route.profile.model,
+                        "leka",
+                        route.why,
+                        attempt,
+                        str(error),
+                    )
+                )
+                logger.warning(
+                    "leka_model_call_failed",
+                    purpose=request.purpose,
+                    provider=route.endpoint.provider,
+                    model=route.profile.model,
+                    status=error.status,
+                    attempt=attempt,
+                )
+                if error.retryable and attempt <= tries:
+                    await sleep(min(error.retry_after or 2.0 ** (attempt - 1), LONGEST_WAIT))
+                    continue
+                if _down(raised, error):
+                    await breaker.failure(circuit)
+                break
+            await breaker.success(circuit)
+            logger.info(
+                "leka_model_call",
+                purpose=request.purpose,
+                provider=done.provider,
+                model=done.model,
+                tokens_in=done.usage.tokens_in,
+                tokens_out=done.usage.tokens_out,
+            )
+            return done
+    raise NoModelError("No language model answered.", attempts, routing.passed)
+
+
 def _down(raised: Exception, error: ProviderError) -> bool:
     """Whether the provider itself failed — unreachable, slow, overloaded,
     erring — as a circuit breaker counts it. An answer that is empty, not the

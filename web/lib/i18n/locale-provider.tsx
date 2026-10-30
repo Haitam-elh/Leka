@@ -19,6 +19,11 @@
  * knows: a choice made in this tab, its storage. Signed in, the account's
  * language comes in through adopt(), from the shell.
  *
+ * A language without a dictionary is translated by LEKA the first time
+ * someone chooses it (lib/i18n/remote.ts): its words are read as they
+ * arrive, the screens switch without a reload, and `translating` says how
+ * far it is.
+ *
  * The choice lives in the account and on the device, not in the URL:
  * locale-prefixed routes (/en/…) would move every link, every redirect
  * and the session cookie's path, and nothing needs them — the site's
@@ -31,6 +36,15 @@ import { type Dictionary, type Locale, setPluralLocale } from "@/lib/i18n/dictio
 import { type Direction, direction, formatLocale, isListed, regionOf } from "@/lib/i18n/languages";
 import { isPseudo } from "@/lib/i18n/pseudo";
 import {
+  applyInterface,
+  keepInterface,
+  keptInterface,
+  readInterface,
+  type RemoteInterface,
+  type RemoteProgress,
+  translatedByLeka,
+} from "@/lib/i18n/remote";
+import {
   browserSignals,
   qaFromAddress,
   remember,
@@ -39,6 +53,7 @@ import {
   settled,
 } from "@/lib/i18n/resolve";
 import { wordsFor } from "@/lib/i18n/translate";
+import { LIVE_SLOW } from "@/lib/live";
 
 export interface Initial {
   language: string;
@@ -65,6 +80,9 @@ interface LocaleValue {
   workspaceLanguage: string | null;
   dictionary: Dictionary;
   missing: string[];
+  /** A language LEKA translates itself: how far its translation is. None
+   * for a language with its own dictionary. */
+  translating: RemoteProgress | null;
   /** Signed in, and the account has no language yet: LEKA shows one it
    * found, and asks once whether to keep it. */
   unconfirmed: boolean;
@@ -83,6 +101,15 @@ interface LocaleValue {
 const LocaleContext = createContext<LocaleValue | null>(null);
 
 const DEFAULT_INITIAL: Initial = { language: "en", source: "default" };
+
+// While LEKA translates: how far, looked at this often; its words read
+// again at most this often (they weigh more).
+const LOOK_EVERY = 4_000;
+const WORDS_EVERY = 12_000;
+
+function progressOf(found: RemoteInterface): RemoteProgress {
+  return { tag: found.tag, status: found.status, done: found.done, total: found.total, model: found.model };
+}
 
 function browserRegion(): string | null {
   if (typeof navigator === "undefined") return null;
@@ -103,6 +130,9 @@ export function LocaleProvider({
   const [workspaceLanguage, setWorkspaceLanguage] = useState<string | null>(null);
   const [account, setAccount] = useState<AccountLanguage | null>(null);
   const adopted = useRef(false);
+  const [translating, setTranslating] = useState<RemoteProgress | null>(null);
+  // Bumped each time a translation's words arrive: the screens read them.
+  const [arrived, setArrived] = useState(0);
 
   // What only the browser knows: a choice made in this tab, its storage,
   // its own languages. Once, on mount.
@@ -118,7 +148,70 @@ export function LocaleProvider({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const words = useMemo(() => wordsFor(language, workspaceLanguage), [language, workspaceLanguage]);
+  // A language LEKA translates itself: the words this device kept first,
+  // then the API's — read again as they arrive, until it is done.
+  useEffect(() => {
+    if (!translatedByLeka(language)) {
+      setTranslating(null);
+      return;
+    }
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let applied = -1;
+    let appliedAt = 0;
+    const kept = keptInterface(language);
+    if (kept) {
+      applyInterface(language, kept.words);
+      applied = kept.done;
+      setTranslating(progressOf(kept));
+      setArrived((n) => n + 1);
+    } else {
+      setTranslating(null);
+    }
+    async function look(withWords: boolean) {
+      let found: RemoteInterface | null = null;
+      try {
+        found = await readInterface(language, withWords);
+      } catch {
+        found = null;
+      }
+      if (stopped) return;
+      if (found) {
+        if (withWords) {
+          applyInterface(language, found.words);
+          keepInterface(found);
+          applied = found.done;
+          appliedAt = Date.now();
+          setArrived((n) => n + 1);
+        }
+        setTranslating(progressOf(found));
+        if (found.status === "ready" || found.status === "failed") {
+          // Done since the last words read: the last ones.
+          if (!withWords && found.done !== applied) void look(true);
+          return;
+        }
+      }
+      const seen = found;
+      timer = setTimeout(
+        () => void look(seen !== null && seen.done !== applied && Date.now() - appliedAt >= WORDS_EVERY),
+        // Unreachable, or not started (too many asked from this address):
+        // at the calm pace.
+        seen && seen.status === "translating" ? LOOK_EVERY : LIVE_SLOW,
+      );
+    }
+    void look(true);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }, [language]);
+
+  const words = useMemo(
+    () => wordsFor(language, workspaceLanguage),
+    // `arrived`: a translation's words came in — the same language, new words.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [language, workspaceLanguage, arrived],
+  );
   const dir: Direction = language === "ar-XB" ? "rtl" : direction(words.shown);
   const format = isPseudo(words.shown) ? "en" : formatLocale(words.shown, region ?? heardRegion);
   // fill() picks "1 source" or "2 sources" by these rules — set while
@@ -188,6 +281,7 @@ export function LocaleProvider({
       workspaceLanguage,
       dictionary: words.dictionary,
       missing: words.missing,
+      translating,
       unconfirmed,
       setLanguage,
       setRegion,
@@ -195,7 +289,21 @@ export function LocaleProvider({
       adopt,
       saved,
     }),
-    [language, source, words, region, format, dir, workspaceLanguage, unconfirmed, setLanguage, setRegion, adopt, saved],
+    [
+      language,
+      source,
+      words,
+      region,
+      format,
+      dir,
+      workspaceLanguage,
+      translating,
+      unconfirmed,
+      setLanguage,
+      setRegion,
+      adopt,
+      saved,
+    ],
   );
 
   return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;

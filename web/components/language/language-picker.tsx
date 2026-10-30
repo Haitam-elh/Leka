@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Globe, Search } from "lucide-react";
-import { useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +14,7 @@ import {
 import { fill } from "@/lib/i18n/dictionaries";
 import { answers, type Language, language as languageOf, LANGUAGES, shown } from "@/lib/i18n/languages";
 import { useDictionary, useLanguage } from "@/lib/i18n/locale-provider";
+import { percentOf, readInterfaces, type RemoteProgress } from "@/lib/i18n/remote";
 
 /**
  * Choosing a language among the catalogue's 140 (docs/languages.md).
@@ -22,8 +23,9 @@ import { useDictionary, useLanguage } from "@/lib/i18n/locale-provider";
  * language types — by its English name, its name in the interface's
  * language, or its tag; accents and case set aside. Those the interface is
  * translated into come first. Each says, honestly, what choosing it gives:
- * the interface translated, or not yet and in which language meanwhile —
- * and that LEKA answers in it all the same.
+ * the interface translated, or translated by LEKA as soon as it is chosen
+ * (lib/i18n/remote.ts), and how far — and that LEKA answers in it all the
+ * same.
  */
 
 function namer(locale: string): (tag: string) => string | undefined {
@@ -58,6 +60,17 @@ export function LanguagePicker({
   const listId = useId();
   const list = useRef<HTMLUListElement>(null);
   const named = useMemo(() => namer(locale), [locale]);
+  // How far LEKA translated the languages it translates itself.
+  const [byLeka, setByLeka] = useState<Record<string, RemoteProgress>>({});
+  useEffect(() => {
+    let stopped = false;
+    void readInterfaces().then((all) => {
+      if (!stopped) setByLeka(Object.fromEntries(all.map((one) => [one.tag, one])));
+    });
+    return () => {
+      stopped = true;
+    };
+  }, []);
 
   const found = useMemo(
     () => LANGUAGES.filter((one) => answers(one, query, named(one.tag))),
@@ -71,6 +84,17 @@ export function LanguagePicker({
   function status(one: Language): string {
     if (one.ui.app === "reviewed") return t.reviewed;
     if (one.ui.app === "translated") return t.translated;
+    const ai = fill(one.ai === "limited" ? t.aiLimited : t.answers, { name: one.native });
+    if (!one.ui.app) {
+      const leka = byLeka[one.tag];
+      const said =
+        leka?.status === "ready"
+          ? t.byLeka
+          : leka?.status === "translating"
+            ? fill(t.byLekaTranslating, { percent: percentOf(leka) })
+            : t.byLekaOnChoice;
+      return `${said} · ${ai}`;
+    }
     // What the screens fall back to: the next language of its chain that is
     // translated, for a partial translation the one after it.
     const after = one.ui.app === "partial" ? shown("app", null, workspace) : shown("app", one.tag, workspace);
@@ -78,7 +102,6 @@ export function LanguagePicker({
     const fallback = fill(one.ui.app === "partial" ? t.partial : t.fallback, {
       shown: meanwhile?.native ?? "English",
     });
-    const ai = fill(one.ai === "limited" ? t.aiLimited : t.answers, { name: one.native });
     return `${fallback} · ${ai}`;
   }
 

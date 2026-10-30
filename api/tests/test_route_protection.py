@@ -103,6 +103,17 @@ PUBLIC_ROUTES: dict[tuple[str, str], str] = {
         "account. Kept without a person, workspace or address; rate limited "
         "per address, and over the limit dropped (LEKA-431)."
     ),
+    ("GET", "/api/v1/interface"): (
+        "How far LEKA translated the interface into each language: the "
+        "language picker reads it before anyone signs in. The product's, the "
+        "same for everybody, nothing of a workspace (2026-10-30)."
+    ),
+    ("GET", "/api/v1/interface/{tag}"): (
+        "The interface's words in a language without a dictionary: the "
+        "sign-in page speaks the visitor's language too. The product's, the "
+        "same for everybody; starting a translation is rate limited per "
+        "address (2026-10-30)."
+    ),
     ("POST", "/api/v1/billing/stripe/webhook"): (
         "Stripe telling LEKA a payment happened. Stripe has no session: the "
         "Stripe-Signature, checked against LEKA_STRIPE_WEBHOOK_SECRET before "

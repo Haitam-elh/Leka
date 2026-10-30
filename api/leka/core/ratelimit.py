@@ -66,6 +66,9 @@ PASSWORD_RESET_PER_EMAIL = Limit(attempts=3, window_seconds=3600)
 VERIFICATION_RESEND_PER_ACCOUNT = Limit(attempts=3, window_seconds=3600)
 # The pricing page's analytics (LEKA-431): anonymous, so held per address.
 SITE_EVENTS_PER_IP = Limit(attempts=60, window_seconds=60)
+# The interface translated into a new language (2026-10-30): LEKA's model,
+# paid by LEKA — started by anyone, so held per address.
+INTERFACE_TRANSLATIONS_PER_IP = Limit(attempts=10, window_seconds=3600)
 
 
 async def consume(scope: str, identifier: str, limit: Limit) -> LimitVerdict:

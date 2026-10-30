@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
+import { TranslatingNotice } from "@/components/language/translating-notice";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { direction } from "@/lib/i18n/languages";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
@@ -57,6 +58,7 @@ export default async function RootLayout({
             tooltip must work wherever a component happens to be used. */}
         <LocaleProvider initial={initial}>
           <TooltipProvider>{children}</TooltipProvider>
+          <TranslatingNotice />
         </LocaleProvider>
       </body>
     </html>

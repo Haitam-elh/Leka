@@ -25,21 +25,23 @@ export interface Words {
 
 type Tree = { [key: string]: unknown };
 
-function overlay(base: Tree, over: Tree, path: string, missing: string[]): Tree {
-  const out: Tree = {};
-  for (const [key, value] of Object.entries(base)) {
-    const here = path ? `${path}.${key}` : key;
-    const said = over[key];
-    if (value && typeof value === "object" && !Array.isArray(value)) {
-      out[key] = overlay(value as Tree, (said as Tree | undefined) ?? {}, here, missing);
-    } else if (typeof said === "string" && said.trim()) {
-      out[key] = said;
-    } else {
-      out[key] = value;
-      missing.push(here);
-    }
+function overlay(base: unknown, over: unknown, path: string, missing: string[]): unknown {
+  if (Array.isArray(base)) {
+    // A list's words, by index: a translation sent flat keeps them so.
+    const said = (over && typeof over === "object" ? over : {}) as Record<number, unknown>;
+    return base.map((value, at) => overlay(value, said[at], `${path}.${at}`, missing));
   }
-  return out;
+  if (base && typeof base === "object") {
+    const said = (over && typeof over === "object" ? over : {}) as Tree;
+    const out: Tree = {};
+    for (const [key, value] of Object.entries(base as Tree)) {
+      out[key] = overlay(value, said[key], path ? `${path}.${key}` : key, missing);
+    }
+    return out;
+  }
+  if (typeof over === "string" && over.trim()) return over;
+  missing.push(path);
+  return base;
 }
 
 const made = new Map<string, Words>();
