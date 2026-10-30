@@ -20,6 +20,7 @@ import { CATEGORY_TONE, CHIP, KIND_ICON } from "@/components/activity/activity";
 import { wordActivity } from "@/components/activity/items";
 import { LekaInsights } from "@/components/insights/leka-insights";
 import { CompactIntentionComposer } from "@/components/intentions/compact-composer";
+import { LiveWork } from "@/components/overview/live-work";
 import { FirstStepsCard } from "@/components/overview/first-steps";
 import {
   AgentsSection,
@@ -712,6 +713,8 @@ export function Overview() {
         <div className="min-w-0 xl:col-start-2 xl:row-start-1" data-testid="home-focus">
           <CompactIntentionComposer />
           <HistoryLink />
+          {/* What LEKA is doing right now, when it is (2026-10-29). */}
+          <LiveWork />
           {/* Under the history, small (2026-10-25); the lock says it instead. */}
           {load.status === "ready" && !locked ? (
             <FirstStepsCard sources={load.sources} />

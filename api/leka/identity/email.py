@@ -48,6 +48,13 @@ class EmailMessage:
     language: str | None = None
 
 
+def _dressed(message: EmailMessage) -> EmailMessage:
+    """As it is sent: in LEKA's dress, whatever wrote it (email_layout)."""
+    from leka.identity.email_layout import dressed
+
+    return dressed(message)
+
+
 @runtime_checkable
 class EmailSender(Protocol):
     async def send(self, message: EmailMessage) -> None: ...
@@ -92,6 +99,7 @@ class ResendEmailSender:
 
     async def deliver(self, message: EmailMessage) -> None:
         """Send, and raise if it fails. What the diagnostic uses."""
+        message = _dressed(message)
         payload: dict[str, object] = {
             "from": self._sender,
             "to": [message.to],
@@ -151,6 +159,7 @@ class SmtpEmailSender:
         self._use_ssl = use_ssl
 
     def _send_blocking(self, message: EmailMessage) -> None:
+        message = _dressed(message)
         payload: MIMEText | MIMEMultipart
         if message.html:
             # Text first, HTML last: a client shows the last part it can.

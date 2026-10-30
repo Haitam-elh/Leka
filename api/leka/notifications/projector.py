@@ -42,7 +42,7 @@ from leka.identity import User
 from leka.ingestion.enrichment.twin import LATE_AFTER
 from leka.intentions import Intention, IntentionEvent
 from leka.metering import CreditWarning
-from leka.monitoring import MonitoringAlert
+from leka.monitoring import MonitoringAlert, NightReview
 from leka.notifications.repository import NotificationRepository, Told
 from leka.platform import Workspace
 
@@ -429,6 +429,40 @@ async def _credits(
     return Read(told, _last([(w.created_at, w.id) for w in warnings]), len(warnings))
 
 
+# ── the night review (2026-10-29) ────────────────────────────────────────────
+
+
+async def _night(session: AsyncSession, workspace_id: uuid.UUID, after: Key, now: datetime) -> Read:
+    """What LEKA went through overnight, when it found something to look at:
+    told to everyone who reads the environment — a quiet night tells nothing."""
+    told: list[Told] = []
+    reviews = (
+        await session.scalars(
+            select(NightReview)
+            .where(_after(NightReview.created_at, NightReview.id, after))
+            .order_by(NightReview.created_at, NightReview.id)
+            .limit(BATCH)
+        )
+    ).all()
+    for review in reviews:
+        if review.trigger != "night" or not review.points:
+            continue
+        high = sum(1 for p in review.points if p.get("severity") == "high")
+        told.append(
+            Told(
+                key=f"night_review:{review.id}",
+                category="monitoring",
+                kind="alert.night_review",
+                severity="warning" if high else "info",
+                occurred_at=review.at,
+                params={"count": len(review.points), "high": high},
+                link="/environment",
+                to_permission="source:read",
+            )
+        )
+    return Read(told, _last([(r.created_at, r.id) for r in reviews]), len(reviews))
+
+
 # ── the workspace: who joined, whose role changed ───────────────────────────
 
 
@@ -512,6 +546,7 @@ FAMILIES: dict[str, Family] = {
     "billing": _billing,
     "credits": _credits,
     "workspace": _workspace,
+    "night": _night,
 }
 
 

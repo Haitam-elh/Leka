@@ -42,6 +42,7 @@ import {
   IconTile,
   typeLabel,
 } from "@/components/environment/parts";
+import { NightReviewCard } from "@/components/environment/night-review";
 import { PageContainer } from "@/components/shell/page-container";
 import { SourceLocked, useSourceLock } from "@/components/sources/source-lock";
 import { usePermissions } from "@/components/shell/shell-provider";
@@ -265,6 +266,8 @@ export function EnvironmentScreen() {
       <ErrorState error={architecture.error} onRetry={() => void architecture.refetch()} />
     ) : architecture.data ? (
       <div className="flex flex-col gap-3">
+        {/* What LEKA went through overnight, first (2026-10-29). */}
+        <NightReviewCard />
         {view === "list" ? (
           // The readable alternative to the map (LEKA-442).
           <Card title={t.environment.twin.list.caption}>

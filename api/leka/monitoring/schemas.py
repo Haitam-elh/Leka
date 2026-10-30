@@ -173,3 +173,41 @@ class AlertRuleChange(BaseModel):
     channels: list[ChannelKey] | None = Field(default=None, min_length=1, max_length=7)
     recipients: list[uuid.UUID] | None = Field(default=None, max_length=50)
     enabled: bool | None = None
+
+
+class NightPointRead(BaseModel):
+    """One thing the night review found to look at."""
+
+    model_config = ConfigDict(frozen=True)
+
+    kind: Literal["alert", "source", "findings", "decisions", "conflicts", "change", "runs"]
+    severity: Literal["high", "medium", "low"]
+    name: str = ""
+    count: int = 1
+    href: str
+    ask: bool = False
+    params: dict[str, JsonValue] = Field(default_factory=dict)
+
+
+class NightReviewRead(BaseModel):
+    """What LEKA went through overnight, and what it found."""
+
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+
+    id: uuid.UUID
+    at: datetime
+    trigger: Literal["night", "asked"]
+    checked: dict[str, int]
+    points: list[NightPointRead]
+
+
+class WorkingRead(BaseModel):
+    """One piece of work under way (monitoring/now.py)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    kind: Literal["intention", "agent", "source", "repair"]
+    title: str
+    step: str
+    since: datetime | None = None
+    href: str
