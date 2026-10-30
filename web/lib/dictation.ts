@@ -2,63 +2,31 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { ApiError } from "@/lib/api";
+import { intentions } from "@/lib/intentions/api";
+import { canRecord, type Recording, RecordingRefused, startRecording } from "@/lib/recorder";
+
 /**
- * Speaking an intention instead of typing it (2026-10-29: the « Dictée »
- * button said « Bientôt »). The browser's own speech recognition: nothing
- * to install, no key, no cost — Chrome, Edge and Safari have it; where a
- * browser has none, nothing is offered.
+ * Speaking an intention instead of typing it. The voice is recorded
+ * (lib/recorder) and written by LEKA's transcription (POST
+ * /intentions/transcriptions): the browser's own speech recognition wrote
+ * nothing in some browsers (2026-10-29: « je clique, je parle, rien ne
+ * s'écrit »), a recording works in every one.
  *
- * What is said is written where the text stands: after what was already
- * typed, a space between, the words heard so far shown as they come and
- * replaced by the final ones. Speaking again goes on from there.
+ * What is said is written after what was typed, a space between. Two
+ * minutes at most: stopped then, and written.
  */
-
-/** What the browser's recognition gives back, as much as is read here. */
-interface Heard {
-  readonly isFinal: boolean;
-  readonly 0: { readonly transcript: string };
-}
-interface HeardEvent {
-  readonly resultIndex: number;
-  readonly results: ArrayLike<Heard>;
-}
-interface Recognition {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  onresult: ((event: HeardEvent) => void) | null;
-  onerror: ((event: { error: string }) => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-}
-type RecognitionClass = new () => Recognition;
-
-function recognitionClass(): RecognitionClass | null {
-  if (typeof window === "undefined") return null;
-  const found = window as unknown as {
-    SpeechRecognition?: RecognitionClass;
-    webkitSpeechRecognition?: RecognitionClass;
-  };
-  return found.SpeechRecognition ?? found.webkitSpeechRecognition ?? null;
-}
 
 /** True when this browser can dictate. */
 export function canDictate(): boolean {
-  return recognitionClass() !== null;
+  return canRecord();
 }
 
 /** Why dictation stopped short, as the composer says it. */
-export type DictationProblem = "denied" | "no_microphone" | "no_speech" | "network" | "failed";
+export type DictationProblem = "denied" | "no_microphone" | "no_speech" | "unavailable" | "failed";
 
-const PROBLEMS: Record<string, DictationProblem> = {
-  "not-allowed": "denied",
-  "service-not-allowed": "denied",
-  "audio-capture": "no_microphone",
-  "no-speech": "no_speech",
-  network: "network",
-};
+/** Two minutes of speech at most. */
+export const MOST_SECONDS = 120;
 
 /** `before`, then `said`: a space between when both have words. */
 export function joined(before: string, said: string): string {
@@ -73,59 +41,74 @@ export function useDictation({
   text,
   onText,
 }: {
-  /** The language it is spoken in: « fr-FR », « en-US »… */
+  /** The language it is spoken in: « fr-FR », « en »… */
   language: string;
-  /** The text as it stands when dictation starts. */
+  /** The text as it stands once what was said is written. */
   text: () => string;
-  /** The text with what was said so far. */
+  /** The text with what was said. */
   onText: (value: string) => void;
 }) {
   const [listening, setListening] = useState(false);
+  const [writing, setWriting] = useState(false);
+  const [seconds, setSeconds] = useState(0);
   const [problem, setProblem] = useState<DictationProblem | null>(null);
-  const recognition = useRef<Recognition | null>(null);
+  const recording = useRef<Recording | null>(null);
+  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Never left listening once the composer is gone.
-  useEffect(() => () => recognition.current?.abort(), []);
+  const clock = (on: boolean) => {
+    if (timer.current) clearInterval(timer.current);
+    timer.current = null;
+    if (on) {
+      setSeconds(0);
+      timer.current = setInterval(() => setSeconds((s) => s + 1), 1000);
+    }
+  };
 
-  const stop = useCallback(() => recognition.current?.stop(), []);
+  // Never left recording once the composer is gone.
+  useEffect(
+    () => () => {
+      recording.current?.cancel();
+      if (timer.current) clearInterval(timer.current);
+    },
+    [],
+  );
 
-  const start = useCallback(() => {
-    const Found = recognitionClass();
-    if (!Found || recognition.current) return;
-    const heard = new Found();
-    heard.lang = language;
-    heard.continuous = true;
-    heard.interimResults = true;
-    const before = text();
-    let final = "";
-    heard.onresult = (event) => {
-      let interim = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i];
-        if (result.isFinal) final = joined(final, result[0].transcript);
-        else interim = joined(interim, result[0].transcript);
-      }
-      onText(joined(before, joined(final, interim)));
-    };
-    heard.onerror = (event) => {
-      // Stopped by hand: no problem to tell.
-      if (event.error === "aborted") return;
-      setProblem(PROBLEMS[event.error] ?? "failed");
-    };
-    heard.onend = () => {
-      recognition.current = null;
-      setListening(false);
-    };
-    recognition.current = heard;
-    setProblem(null);
+  const stop = useCallback(async () => {
+    const held = recording.current;
+    if (!held) return;
+    recording.current = null;
+    clock(false);
+    setListening(false);
+    setWriting(true);
     try {
-      heard.start();
-      setListening(true);
-    } catch {
-      recognition.current = null;
-      setProblem("failed");
+      const audio = await held.stop();
+      const said = (await intentions.transcribe(audio, language)).text;
+      if (!said.trim()) setProblem("no_speech");
+      else onText(joined(text(), said));
+    } catch (error) {
+      setProblem(error instanceof ApiError && error.status === 503 ? "unavailable" : "failed");
+    } finally {
+      setWriting(false);
     }
   }, [language, onText, text]);
 
-  return { listening, problem, start, stop };
+  const start = useCallback(async () => {
+    if (recording.current || writing) return;
+    setProblem(null);
+    try {
+      recording.current = await startRecording();
+    } catch (error) {
+      setProblem(error instanceof RecordingRefused ? error.why : "failed");
+      return;
+    }
+    setListening(true);
+    clock(true);
+  }, [writing]);
+
+  // Two minutes: stopped, and written.
+  useEffect(() => {
+    if (listening && seconds >= MOST_SECONDS) void stop();
+  }, [listening, seconds, stop]);
+
+  return { listening, writing, seconds, problem, start, stop };
 }

@@ -75,6 +75,7 @@ from leka.capabilities.gateway import (
     model_calls,
     model_usage,
 )
+from leka.capabilities.gateway.transcription import MAX_AUDIO_BYTES, Transcript, transcribe
 from leka.capabilities.llm import (
     ContextItem,
     ContextPack,
@@ -297,6 +298,7 @@ __all__ = [
     "CATEGORIES",
     "DECK_FILES",
     "DRAWING_LOST",
+    "MAX_AUDIO_BYTES",
     "ROUTING_VERSION",
     "Agent",
     "AgentFrontMatter",
@@ -457,6 +459,7 @@ __all__ = [
     "Tool",
     "ToolCall",
     "ToolChoice",
+    "Transcript",
     "UnknownThingError",
     "Withheld",
     "Workflow",
@@ -552,6 +555,7 @@ __all__ = [
     "sync",
     "sync_catalogue",
     "tool_schema",
+    "transcribe",
     "validated",
     "without_block",
     "without_mark",

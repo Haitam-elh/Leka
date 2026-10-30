@@ -702,3 +702,21 @@ async def test_gpt_6_s_reasoning_goes_back_whole_with_its_tool_calls() -> None:
         OPENAI, _call("openai", "gpt-4.1", request), {"choices": [{"message": {}}]}
     )
     assert str(sent.url) == "https://api.openai.com/v1/chat/completions"
+
+
+def test_a_step_its_own_model_cannot_do_goes_to_its_provider_s_strongest_on_its_key() -> None:
+    # 2026-10-29: Mistral Medium chosen, a redesign written by it — twelve
+    # tests red, no mock-up drawn. The hard steps (quality 3): Mistral Large,
+    # on the workspace's own key; the rest stays with Medium.
+    endpoint = Endpoint("mistral", "ws-key", owner="workspace")
+    own = Own(endpoint, "mistral-medium-latest")
+    hard = route(Needs(quality=3), own=own, keys=KEYS, default=DEFAULT)
+    assert _order(hard)[0] == ("mistral", "mistral-large-latest", "own_stronger")
+    assert hard.routes[0].endpoint.api_key == "ws-key"
+    easy = route(Needs(), own=own, keys=KEYS, default=DEFAULT)
+    assert _order(easy)[0] == ("mistral", "mistral-medium-latest", "own")
+    # Ours only: still its provider's strongest, never LEKA's.
+    only = route(
+        Needs(quality=3), own=Own(endpoint, own.model, exclusive=True), keys=KEYS, default=DEFAULT
+    )
+    assert [r[2] for r in _order(only)] == ["own_stronger"]
