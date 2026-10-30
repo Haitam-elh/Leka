@@ -48,7 +48,7 @@ from leka.architect import DossierError
 from leka.background import JobQueue, enqueue_job
 from leka.capabilities.attached import attached_to
 from leka.capabilities.catalogue import CatalogueService, Entry, needs_of
-from leka.capabilities.code_tools import CODE_NAMES, CODE_TOOLS, code_handlers
+from leka.capabilities.code_tools import CODE_NAMES, CODE_TOOLS, WORKSHOP_NAMES, code_handlers
 from leka.capabilities.dedicated import own_definition
 from leka.capabilities.definition import Definition, check_input
 from leka.capabilities.deliverable_check import (
@@ -91,6 +91,7 @@ from leka.capabilities.runtime import (
 )
 from leka.capabilities.skills import SkillRuntime, agent_skill_tools, skill_handlers
 from leka.capabilities.tools import TOOLS, Answer, handlers
+from leka.capabilities.workshop import DRAFT_CONTEXT, judged
 from leka.connectors import SourceRepository
 from leka.context import AssembledContext, ContextRepository, ContextService, IntentAsk
 from leka.core.config import settings
@@ -145,6 +146,12 @@ FINAL_RENDER = frozenset(
 # An agent reading code round after round with a slower model (30 rounds,
 # 2026-10-29: a design review cut at 15 minutes) has more time.
 RUN_BUDGET = 25 * 60.0
+# An agent that makes its change itself in its draft (workshop.py,
+# 2026-10-30): a large change, edit by edit, each checked, takes longer;
+# the conversation kept within this many characters, its oldest reads
+# dropped first; told what its checks find, this many times more.
+DRAFT_BUDGET = 40 * 60.0
+DRAFT_CORRECTIONS = 2
 # The hosts of code: an agent that needs one of them, and nothing else, rests
 # its answer on the code it reads (2026-10-28).
 CODE_HOSTS = frozenset({"github", "gitlab", "bitbucket"})
@@ -275,10 +282,13 @@ class _Offered(Mapping[str, ToolHandler]):
         bound: Mapping[str, Callable[[Mapping[str, Any]], Awaitable[Answer]]],
         steps: Steps,
         run: AgentRun,
+        after: Callable[[str], None] | None = None,
     ) -> None:
         self._bound = bound
         self._steps = steps
         self._run = run
+        # What the run says of itself after each call (its draft, live).
+        self._after = after
 
     def __getitem__(self, name: str) -> ToolHandler:
         async def call(arguments: Mapping[str, Any]) -> str:
@@ -304,6 +314,8 @@ class _Offered(Mapping[str, ToolHandler]):
                 why=said.why,
                 ms=int((time.monotonic() - started) * 1000),
             )
+            if self._after is not None:
+                self._after(name)
             await self._steps.save()
             return said.text
 
@@ -623,7 +635,90 @@ async def _run(
         tools=[Tool(t.name, t.description, t.parameters) for t in given],
         ref=f"agent_run:{run.id}",
     )
-    offered_now = _Offered({t.name: bound[t.name] for t in given if t.name in bound}, steps, run)
+    # It makes its change itself, in a draft LEKA keeps (workshop.py,
+    # 2026-10-30): more time, a conversation kept short, its draft checked.
+    drafts = bool(WORKSHOP_NAMES & {t.name for t in given})
+
+    def drafting(name: str) -> None:
+        """Its draft, said live on the run: the files it changed, the step
+        of its plan it is on (« LEKA travaille sur… »)."""
+        draft = read.get("draft")
+        if draft is None or name not in WORKSHOP_NAMES:
+            return
+        doing = next((s.title for s in draft.plan if s.status == "doing"), None)
+        run.detail = {
+            **(run.detail or {}),
+            "drafting": {
+                "files": len(draft.changed()),
+                "edits": draft.edits,
+                "steps": len(draft.plan),
+                "done": sum(1 for s in draft.plan if s.status == "done"),
+                **({"doing": doing[:200]} if doing else {}),
+            },
+        }
+
+    def known() -> dict[str, str]:
+        """The files it read, and those its draft holds: what it may cite."""
+        files = dict(read.get("files", {}))
+        draft = read.get("draft")
+        if draft is not None:
+            files |= {f"{draft.repository}:{p}": t for p, t in draft.now.items() if t is not None}
+        return files
+
+    async def judge(text: str) -> list[str]:
+        # Its draft finished first: it holds together, its plan done
+        # (2026-10-30) — checked whatever LEKA_AGENT_CORRECTIONS says.
+        said = await judged(read.get("draft")) if drafts else []
+        if not settings.agent_corrections:
+            return said
+        files = known()
+        said += [
+            # Its deliverable, every section its agent gives — whatever the
+            # model; told what it lacks, it writes it again (2026-10-22).
+            *missing(
+                definition.instructions or "",
+                text,
+                language=language or "fr",
+                framed=framed(definition),
+            ),
+            # Never a model caught in a loop (2026-10-28).
+            *repeats(text),
+            # And every line it cites, read (2026-10-23).
+            *(unread(text, files) if reads_code else []),
+            # The repository asked, not another (2026-10-28).
+            *(
+                elsewhere(
+                    " ".join(str(v) for v in (run.inputs or {}).values()),
+                    files,
+                    read.get("paths", {}),
+                )
+                if reads_code
+                else []
+            ),
+            # Read before it is described; nothing named it never saw
+            # (2026-10-28).
+            *(
+                invented(
+                    text,
+                    files,
+                    read.get("paths", {}),
+                    read.get("pulls", {}),
+                    reads_code=needs_code(definition),
+                )
+                if reads_code
+                else []
+            ),
+            # A design implemented whole, never by halves.
+            *(deferred(text) if target is not None else []),
+        ]
+        return said
+
+    offered_now = _Offered(
+        {t.name: bound[t.name] for t in given if t.name in bound},
+        steps,
+        run,
+        after=drafting if drafts else None,
+    )
     try:
         done: Completion = await asyncio.wait_for(
             Gateway(session, workspace_id).run_tools(
@@ -632,49 +727,11 @@ async def _run(
                 replace(needs_of(definition), tools=bool(given)),
                 rounds=definition.rounds or TOOL_ROUNDS,
                 conclude=True,
-                # Its deliverable, every section its agent gives — whatever
-                # the model; told what it lacks, it writes it again
-                # (2026-10-22).
-                # And every line it cites, read (2026-10-23).
-                judge=lambda text: [
-                    *missing(
-                        definition.instructions or "",
-                        text,
-                        language=language or "fr",
-                        framed=framed(definition),
-                    ),
-                    # Never a model caught in a loop (2026-10-28).
-                    *repeats(text),
-                    *(unread(text, read.get("files", {})) if reads_code else []),
-                    # The repository asked, not another (2026-10-28).
-                    *(
-                        elsewhere(
-                            " ".join(str(v) for v in (run.inputs or {}).values()),
-                            read.get("files", {}),
-                            read.get("paths", {}),
-                        )
-                        if reads_code
-                        else []
-                    ),
-                    # Read before it is described; nothing named it never saw
-                    # (2026-10-28).
-                    *(
-                        invented(
-                            text,
-                            read.get("files", {}),
-                            read.get("paths", {}),
-                            read.get("pulls", {}),
-                            reads_code=needs_code(definition),
-                        )
-                        if reads_code
-                        else []
-                    ),
-                    # A design implemented whole, never by halves.
-                    *(deferred(text) if target is not None else []),
-                ],
-                corrections=settings.agent_corrections,
+                judge=judge,
+                corrections=settings.agent_corrections + (DRAFT_CORRECTIONS if drafts else 0),
+                keep_chars=DRAFT_CONTEXT if drafts else None,
             ),
-            timeout=budget,
+            timeout=max(budget, DRAFT_BUDGET) if drafts else budget,
         )
     except ToolRoundsError:
         return await _fail(session, run, "tool_rounds")
@@ -749,7 +806,13 @@ async def _run(
     ):
         await session.commit()
         drawn = await draw(
-            session, run, definition, output, formats=wanted, read=read.get("files") or {}
+            session,
+            run,
+            definition,
+            output,
+            formats=wanted,
+            read=read.get("files") or {},
+            drafted=read.get("draft"),
         )
         if drawn.error is None:
             steps.add(drawn.step, **drawn.said())

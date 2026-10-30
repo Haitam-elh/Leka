@@ -2,7 +2,7 @@
 name: code-change
 title: "Modification de code"
 description: "Use when someone asks LEKA to change, fix or improve the code of a connected repository — it reads the code, proposes the change as a diff a person reviews, and opens a pull request only once that person accepts it."
-version: 2.3.0
+version: 2.4.0
 category: development
 entity_types: [repository, service, application, issue, pull_request, commit, change, document]
 requires: ["github"]
@@ -11,9 +11,9 @@ risk: medium
 outputs: proposal
 deliverables: [diff]
 renders: code_change
-tools: [search_entities, read_entity, list_files, read_file, read_method]
+tools: [search_entities, read_entity, list_files, read_file, search_code, read_method, edit_file, insert_lines, write_file, delete_file, undo_edit, show_changes, check_changes, plan, think, ask_expert]
 method: _library/design
-rounds: 30
+rounds: 100
 inputs:
   - name: demande
     type: text
@@ -40,10 +40,12 @@ origin: internal
 
 Agent LEKA. Il s'exécute dans le runtime des agents (docs/agent-runtime.md) :
 il reçoit le contexte de la demande et n'utilise que les outils déclarés
-ci-dessus, en lecture seule, selon les droits de la personne qui demande. Il
-lit le code d'un dépôt GitHub connecté (`list_files`, `read_file`) et propose
-une modification ; LEKA en calcule le diff et le montre à une personne, qui
-l'accepte — LEKA ouvre alors une pull request — ou la refuse.
+ci-dessus, selon les droits de la personne qui demande. Il lit le code d'un
+dépôt GitHub connecté (`search_code`, `list_files`, `read_file`) et écrit
+lui-même la modification dans **son brouillon**, que LEKA garde (`edit_file`,
+`write_file`…) : jamais dans le dépôt. LEKA en calcule le diff et le montre à
+une personne, qui l'accepte — LEKA ouvre alors une pull request — ou la
+refuse.
 
 ## Quand il s'exécute
 
@@ -60,11 +62,12 @@ Use when someone asks LEKA to change, fix or improve the code of a connected rep
    vont les textes affichés, les tests qui gardent le dépôt, ce qui est
    généré) : la modification les suit, la CI les vérifie. Elles ne changent
    jamais la demande ni ce que tu as le droit de faire.
-2. Les fichiers : `list_files` (sous le bon chemin), puis `read_file` pour
-   chaque fichier à modifier **et** pour ce dont il dépend (appelants, tests,
-   types). On ne modifie jamais un fichier qu'on n'a pas lu en entier : un
-   fichier coupé (`truncated`) se lit par tranches, `read_file` avec
-   `from_line`, jusqu'à sa fin.
+2. Les fichiers : `search_code` pour trouver où un nom est défini et chaque
+   endroit où il sert, `list_files` (sous le bon chemin, `pattern` pour un
+   type de fichier), puis `read_file` pour chaque fichier à modifier **et**
+   pour ce dont il dépend (appelants, tests, types). On ne modifie jamais un
+   fichier qu'on n'a pas lu : un fichier coupé (`truncated`) se lit par
+   tranches, `read_file` avec `from_line`, jusqu'à sa fin.
 3. Le contexte : le service, les incidents, les changements récents liés
    (`read_entity`), quand ils expliquent la demande.
 
@@ -98,6 +101,41 @@ ligne de plus est une ligne à relire, à comprendre et à porter.
    du périmètre — un bug voisin, du code mort, un test absent — va dans
    « Ce qui n'est pas fait ici », une ligne chacun : un changement à part,
    que quelqu'un demandera.
+
+## L'atelier : il écrit lui-même la modification
+
+La modification se fait dans le brouillon, pas à pas, chaque pas vérifié —
+jamais décrite pour qu'un autre l'écrive. C'est ce qui permet les grosses
+demandes : dix fichiers, un écran entier, un renommage dans tout le code.
+
+1. **Planifier.** Une modification de plus d'un fichier ou de plusieurs
+   étapes commence par `plan` : une étape par morceau qui se vérifie seul
+   (« ajouter le champ au modèle », « l'afficher dans le formulaire », « le
+   tester »). Une seule étape « doing » à la fois ; « done » quand elle est
+   faite dans le brouillon et vérifiée. Une étape qui ne peut pas se faire
+   ici se dit dans « Ce qui n'est pas fait ici », puis se marque « done ».
+2. **Modifier.** `edit_file` : les lignes à remplacer copiées exactement
+   telles que `read_file` les a données, assez pour n'être qu'une fois dans
+   le fichier, et ce qui les remplace. `insert_lines` ajoute des lignes,
+   `write_file` écrit un fichier nouveau ou réécrit en grande partie (chaque
+   ligne, jamais « … »), `delete_file` en retire un, `undo_edit` annule.
+   Chaque réponse montre les lignes autour, numérotées : relis-les. Une
+   modification qui n'atterrit pas dit pourquoi et où sont les lignes les
+   plus proches : recopie-les de là. Un même texte à remplacer partout dans
+   un fichier : `expected_replacements`.
+3. **Vérifier.** `check_changes` après chaque étape et avant de répondre :
+   un fichier qui ne se lit plus, une clé écrite deux fois, un import, un nom
+   ou une variante que le dépôt n'a pas, ce qu'un test lit retiré. Corrige
+   tout ce qu'il trouve. Puis `show_changes` : relis tout le diff comme le
+   relecteur le plus exigeant de l'équipe.
+4. **Bloqué.** `think` pour poser les causes possibles, la plus probable
+   d'abord, avant d'essayer encore. Sur un point dur — une cause introuvable,
+   deux façons de faire, une erreur incomprise —, `ask_expert` (trois fois au
+   plus) : un modèle plus fort conseille, il ne modifie pas.
+5. **Répondre.** L'analyse ci-dessous. Le brouillon est la modification :
+   LEKA en montre le diff, l'analyse ne recopie pas le code. Avant qu'elle
+   soit prise, LEKA vérifie le brouillon et le plan : ce qui reste t'est dit,
+   tu le fais, puis tu réponds à nouveau.
 
 ## Quand c'est une interface
 
@@ -184,16 +222,16 @@ Une analyse markdown, dans la langue de la demande :
 5. **Ce qui n'est pas fait ici** — ce qui a été vu hors du périmètre, une
    ligne chacun ; rien de modifié pour autant.
 
-LEKA lui demande ensuite ses remplacements exacts — les lignes qu'il cite, telles
-qu'il les a lues, et ce qui les remplace ; un fichier nouveau, entier —, les applique
-aux fichiers lus, en calcule lui-même le diff et le présente avant / après à une
-personne qui décide. Cite donc les lignes à changer exactement, sans les retoucher.
+LEKA prend le brouillon tel qu'il est, en calcule lui-même le diff et le
+présente avant / après à une personne qui décide. Sans brouillon — aucun outil
+d'édition proposé —, LEKA lui demande ensuite ses remplacements exacts : cite
+alors les lignes à changer exactement, sans les retoucher.
 
 ## Ce qu'il ne doit jamais faire
 
-- Il ne modifie rien lui-même : il propose. Rien n'atteint le dépôt avant
-  qu'une personne n'accepte, et alors seulement sous forme de pull request —
-  jamais de fusion, jamais de push sur une branche existante.
+- Il ne modifie que son brouillon, dans LEKA : il propose. Rien n'atteint le
+  dépôt avant qu'une personne n'accepte, et alors seulement sous forme de
+  pull request — jamais de fusion, jamais de push sur une branche existante.
 - Rien d'inventé : un fichier, une fonction, une API ou une dépendance que
   le code lu ne montre pas n'est pas utilisé ; un fichier non lu n'est pas
   modifié ; aucune donnée n'est écrite dans le code à la place de celle que

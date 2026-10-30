@@ -92,7 +92,9 @@ model with its id, its type and its line of text, **as data**.
 | `dependencies` | what one thing depends on (`depends_on`) or what depends on it (`used_by`), 1 to 3 steps — only of its types, the rest counted (LEKA-400) | `workspace:read` |
 | `what_happened` | incidents, deployments, changes, releases, merges around one thing, 1 to 30 days back — only of its types (LEKA-400) | `workspace:read` |
 | `read_content` | what one thing's records say — a page's text, a ticket's description, a README — its 4 latest, each cut at 6,000 characters; only of its types (2026-10-14) | `workspace:read` |
-| `list_files`, `read_file` | a GitHub repository's files, one file's text — the code-change agent's (§ 6 ter) | `workspace:read` |
+| `list_files`, `read_file` | a GitHub repository's files (by folder, by glob `pattern`), one file's text — as the agent's draft holds it when it changed it; a path not found answered with the files it most likely means — the code-change agent's (§ 6 ter) | `workspace:read` |
+| `search_code` | a regular expression through every file of a branch (its archive, read once; the draft's text where it changed it), narrowed by folder and glob; four searches in a row that find nothing said fruitless — § 6 ter | `workspace:read` |
+| `edit_file`, `insert_lines`, `write_file`, `delete_file`, `undo_edit`, `show_changes`, `check_changes`, `plan`, `think`, `ask_expert` | the code-change agent's workshop (§ 6 ter, 2026-10-30): its change made in a draft LEKA keeps — never the repository | `workspace:read` |
 | `list_pull_requests`, `read_pull_request` | a GitHub repository's pull requests, one with its diff — the code review's (§ 6 quater) | `workspace:read` |
 | `audit_dependencies` | one lock file or manifest of a GitHub repository, read whole by the server (`capabilities/lockfiles.py`: npm, PyPI, Go, crates.io, RubyGems, Packagist, Maven, NuGet), never given to the model as is: its packages counted — direct, development only, private —, each public one looked up in the public OSV database (`advisories.py`, `LEKA_ADVISORIES_URL`; only names and versions sent): the vulnerable ones, the worst first, with ids, aliases, severity and the versions that fix them; said not checked when the database is not reached — the dependency analysis's (2026-10-22) | `workspace:read` |
 | `read_method` | the guides of the library the agent names (`method:`, [agents/_library/README.md](../agents/_library/README.md)): without a path, their index — each with what it is for; with one, that `.md` file's text, cut at 60,000 characters. Never a file outside the library. LEKA's own content, the same for every workspace — the designer's (`design-review`), the motion review's, the interface's quality and the code change's for an interface (`capabilities/method_tools.py`) | `workspace:read` |
@@ -268,6 +270,59 @@ stays proposed and says why (`pull_requests_off`, `not_allowed` — the token
 cannot write — `branch_exists`…). Never a merge: reviewing and merging the
 pull request stays the team's. What fails while proposing never fails the
 run (`render_failed`, its code).
+
+### The workshop: the agent makes its change itself (2026-10-30)
+
+The code-change agent (2.4.0) no longer only describes its change for
+another model to write: it makes it, edit by edit, in a **draft** LEKA keeps
+in memory for the run (`capabilities/workshop.py`) — never in the
+repository:
+
+- **An editor that answers.** `edit_file` replaces lines copied exactly —
+  or copied with other spaces or indentation, laid as the file indents — and
+  answers with the lines around the edit, numbered, and a warning when the
+  file no longer parses. A text not found is answered with the closest lines
+  of the file; a text there several times, with each line it is on (or
+  replaced each time with `expected_replacements`). `insert_lines`,
+  `write_file` (never « … » standing for code kept), `delete_file`,
+  `undo_edit`.
+- **Search.** `search_code` through the branch's archive, read once
+  (`GitHubCode.archive`: 40 MB compressed at most, text files of 1 MB at
+  most); refused, the files read are searched, said so.
+- **A plan.** `plan` keeps the steps of a large change (todo, doing, done).
+- **Checked before it is taken.** `check_changes` runs LEKA's checks on the
+  draft — a file that no longer parses, a key written twice, an import, a
+  name or a variant the repository has not, what a test reads taken away.
+  Before its analysis is taken, the runtime says back what the checks find
+  and the plan's steps left undone (`judged`), `DRAFT_CORRECTIONS` times more.
+- **Stuck, then helped.** `think` writes its reasoning down; `ask_expert`
+  asks a stronger model (quality 3, three times a run at most).
+- **A long task.** 100 rounds, 40 minutes (`DRAFT_BUDGET`); the conversation
+  kept within 400,000 characters, the oldest tools' results dropped first,
+  said dropped (`condensed`); the same call answered the same three times
+  said stuck (`stuck_said`); an empty answer told and asked again, never a
+  provider's failure (`empty_ok`).
+- **The repository's rules travel with the code.** The first edit in a
+  folder brings the `AGENTS.md`, `CLAUDE.md`… of that folder and those above.
+- **Live.** The run's detail says its draft (`drafting`: files, edits, the
+  step doing); « LEKA travaille sur… » says « modifie le code dans son
+  brouillon ».
+
+**« Réparer le problème » too.** A pull request in red is repaired the same
+way: a draft of its branch at the pull request's head, the agent reading what
+failed (each check, its annotations, its log), the files it names, what uses
+them, then fixing and checking it (`_repaired_in_draft`, `REPAIR_DRAFT_RULES`:
+never a test weakened, never an ignore comment); it answers « Cause : … » and
+« Correction : … ». Left without a fix while the checks fail in the code —
+told so twice —, the writer of before is asked for exact edits with the time
+left: a repair is never lost to an agent that would not edit. 30 minutes for
+all of it (`REPAIR_BUDGET`, the draft two thirds).
+
+The draft is the change: `propose_change(drafted=…)` takes each file whole as
+the draft holds it — no writer asked —, read again by the reviewer when it
+touches several files or implements a design, diffed on its branch (60 files
+at most) and kept, proposed. With no draft (a model that wrote its change as
+a diff in its analysis), the writer path below is unchanged.
 
 ## 6 quater. Its deliverable on the intention — the code review on the diff (2026-10-14)
 

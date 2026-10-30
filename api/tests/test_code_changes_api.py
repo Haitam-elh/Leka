@@ -822,13 +822,25 @@ async def test_a_change_is_proposed_diffed_and_accepted_as_a_pull_request(
     assert await execute_run(acme["acme"], uuid.UUID(run_id)) == {"status": "succeeded"}
 
     # Its own tools: the code tools and its method's guides (an interface's
-    # change follows the designer's), declared — never the others'.
+    # change follows the designer's), and its workshop (2026-10-30: it makes
+    # its change itself, in a draft) — declared, never the others'.
     assert set(script.declared()) == {
         "search_entities",
         "read_entity",
         "list_files",
         "read_file",
+        "search_code",
         "read_method",
+        "edit_file",
+        "insert_lines",
+        "write_file",
+        "delete_file",
+        "undo_edit",
+        "show_changes",
+        "check_changes",
+        "plan",
+        "think",
+        "ask_expert",
     }
     read = json.loads(
         script.asked[2]["contents"][-1]["parts"][0]["functionResponse"]["response"]["result"]
@@ -2090,6 +2102,27 @@ def _fix(find: str = "== 'line 2'\n") -> dict[str, Any]:
     }
 
 
+FIXED = (
+    "Cause : Le test lit encore la ligne 2 telle qu'elle était avant le changement.\n"
+    "Correction : Le test attend la ligne 2 telle que le changement l'écrit."
+)
+
+
+def _edit(old: str = "    assert lines()[1] == 'line 2'\n") -> dict[str, Any]:
+    """The repair's agent fixing the test in its draft (2026-10-30)."""
+    return gemini(
+        call={
+            "name": "edit_file",
+            "args": {
+                "repository": REPO,
+                "path": "tests/test_ledger.py",
+                "old_text": old,
+                "new_text": "    assert lines()[1] == 'line 2 changed'\n",
+            },
+        }
+    )
+
+
 async def _applied_in_red(
     client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID], github: GitHub
 ) -> uuid.UUID:
@@ -2134,15 +2167,17 @@ async def test_a_pull_request_in_red_is_repaired_on_its_branch_and_its_checks_ru
     # Asked twice while it runs: one.
     assert (await client.post(repair)).json()["error"]["details"][0]["message"] == "repairing"
 
-    # The model's first fix copies a line that is not there: asked again,
-    # told why — its second lands.
-    script = leka_gemini(gemini(json.dumps(_fix("== 'line two'\n"))), gemini(json.dumps(_fix())))
+    # The agent fixes it itself, in a draft of the branch (2026-10-30): its
+    # first edit copies a line that is not there — told why, and where the
+    # closest lines are —, its second lands; then it says the cause.
+    script = leka_gemini(_edit("    assert lines()[1] == 'line two'\n"), _edit(), gemini(FIXED))
     pushed = len(github.writes())
     assert await repair_change(acme["acme"], change_id) == {
         "state": "pushed",
         "commit": "fix-commit",
     }
-    assert len(script.asked) == 2
+    assert len(script.asked) == 3
+    assert {"edit_file", "read_file", "search_code", "check_changes"} <= set(script.declared())
     material = json.loads(script.asked[0]["contents"][-1]["parts"][0]["text"])
     # What failed, as GitHub said it — its log fetched without the token —
     # and the files at the pull request's head, its own and those named.
@@ -2155,8 +2190,9 @@ async def test_a_pull_request_in_red_is_repaired_on_its_branch_and_its_checks_ru
         "tests/test_ledger.py": TEST_LEDGER,
     }
     assert "+line 2 changed" in material["change"]["diff"]
-    again = json.dumps(script.asked[1])
-    assert "tests/test_ledger.py: an edit" in again
+    again = json.dumps(script.asked[1], ensure_ascii=False)
+    assert "is not in tests/test_ledger.py as you wrote it" in again
+    assert "The closest lines in the file" in again
 
     # One commit on its branch, on top of its head, never forced.
     writes = github.writes()[pushed:]
@@ -2223,14 +2259,14 @@ async def test_a_repair_says_why_it_wrote_nothing_and_what_it_may_not_do(
     change_id = await _applied_in_red(client, identity, acme, github)
     repair = f"{API}/{change_id}/repair"
 
-    # A test failing in the code, answered empty — or « nothing to fix »:
-    # asked again, the failing lines quoted (2026-10-29: Mistral answered
-    # empty twice, read as « rien à corriger dans le code »).
+    # A test failing in the code, answered « nothing to fix »: told so, the
+    # failing lines quoted (2026-10-29: Mistral answered empty twice, read as
+    # « rien à corriger dans le code »); it fixes it in its draft.
     assert (await client.post(repair)).status_code == 202
-    outside = {"cause": "Le runner n'a pas démarré : rien à corriger dans le code.", "files": []}
-    script = leka_gemini(gemini("{}"), gemini(json.dumps(_fix())))
+    outside = "Le runner n'a pas démarré : rien à corriger dans le code."
+    script = leka_gemini(gemini("Cause : rien à corriger."), _edit(), gemini(FIXED))
     assert (await repair_change(acme["acme"], change_id))["state"] == "pushed"
-    assert len(script.asked) == 2
+    assert len(script.asked) == 3
     told = json.dumps(script.asked[1], ensure_ascii=False)
     assert "The checks fail in the repository's code" in told
     assert "FAILED tests/test_ledger.py::test_line_2" in told
@@ -2243,7 +2279,7 @@ async def test_a_repair_says_why_it_wrote_nothing_and_what_it_may_not_do(
     logs = dict(github.logs)
     github.logs.clear()
     assert (await client.post(repair)).status_code == 202
-    blind = leka_gemini(gemini(json.dumps(_fix())))
+    blind = leka_gemini(gemini(FIXED))
     assert (await repair_change(acme["acme"], change_id))["state"] == "failed"
     assert blind.asked == []
     said = (await client.get(f"{API}/{change_id}")).json()["repairs"][-1]
@@ -2253,18 +2289,18 @@ async def test_a_repair_says_why_it_wrote_nothing_and_what_it_may_not_do(
     # written.
     github.logs[11] = "##[error]The runner has received a shutdown signal."
     assert (await client.post(repair)).status_code == 202
-    leka_gemini(gemini(json.dumps(outside)))
+    leka_gemini(gemini(f"Cause : {outside}"))
     pushed = len(github.writes())
     assert (await repair_change(acme["acme"], change_id))["state"] == "outside"
     assert github.writes()[pushed:] == []
     said = (await client.get(f"{API}/{change_id}")).json()["repairs"][-1]
-    assert (said["state"], said["cause"]) == ("outside", outside["cause"])
+    assert (said["state"], said["cause"]) == ("outside", outside)
     github.logs.update(logs)
 
     # Its branch moved meanwhile: said, never forced.
     assert (await client.post(repair)).status_code == 202
     github.branch_moved = True
-    leka_gemini(gemini(json.dumps(_fix())))
+    leka_gemini(_edit(), gemini(FIXED))
     assert (await repair_change(acme["acme"], change_id))["state"] == "failed"
     said = (await client.get(f"{API}/{change_id}")).json()["repairs"][-1]
     assert (said["state"], said["error"]) == ("failed", "moved")
@@ -2273,7 +2309,7 @@ async def test_a_repair_says_why_it_wrote_nothing_and_what_it_may_not_do(
     # Closed in red by a person: reopened, then repaired.
     github.pull["state"] = "closed"
     assert (await client.post(repair)).status_code == 202
-    leka_gemini(gemini(json.dumps(_fix())))
+    leka_gemini(_edit(), gemini(FIXED))
     assert (await repair_change(acme["acme"], change_id))["state"] == "pushed"
     assert ("/repos/acme/payments/pulls/7", {"state": "open"}) in github.writes()
     said = (await client.get(f"{API}/{change_id}")).json()["repairs"][-1]
@@ -2297,3 +2333,31 @@ async def test_a_repair_says_why_it_wrote_nothing_and_what_it_may_not_do(
             await session.commit()
     merged = await client.post(repair)
     assert (merged.status_code, merged.json()["error"]["details"][0]["message"]) == (409, "merged")
+
+
+async def test_a_repair_its_agent_cannot_make_is_written_by_the_writer_all_the_same(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    github: GitHub,
+    leka_gemini: Callable[..., Script],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # 2026-10-30: the agent's draft first; left without a fix where the code
+    # fails, told so twice, the writer of before asked — a repair is never
+    # lost to an agent that would not edit.
+    async def queue(workspace_id: uuid.UUID, change_id: uuid.UUID) -> bool:
+        return True
+
+    monkeypatch.setattr(code_changes_api, "queue_repair", queue)
+    change_id = await _applied_in_red(client, identity, acme, github)
+    assert (await client.post(f"{API}/{change_id}/repair")).status_code == 202
+    nothing = gemini("Cause : je ne vois pas.")
+    script = leka_gemini(nothing, nothing, nothing, gemini(json.dumps(_fix())))
+    assert (await repair_change(acme["acme"], change_id))["state"] == "pushed"
+    assert len(script.asked) == 4
+    # The writer: structured, no tool.
+    assert script.asked[3]["generationConfig"]["responseMimeType"] == "application/json"
+    assert "tools" not in script.asked[3]
+    said = (await client.get(f"{API}/{change_id}")).json()["repairs"][-1]
+    assert said["cause"].startswith("Le test lit encore la ligne 2")

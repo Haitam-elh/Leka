@@ -307,6 +307,7 @@
  "overview.live.steps.queued": "queued",
  "overview.live.steps.working": "at work",
  "overview.live.steps.writing_change": "writing the change",
+ "overview.live.steps.editing": "editing the code in its draft",
  "overview.live.steps.drawing_design": "drawing the mock-ups",
  "overview.live.steps.drawing_files": "preparing the deliverables",
  "overview.live.steps.reading": "reading the source",

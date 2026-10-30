@@ -27,9 +27,12 @@
     repaired, on asking (2026-10-24) its checks in red: « Réparer le
                         problème » — what failed read on GitHub (each check,
                         its annotations, the end of its log), the files it
-                        names read at the pull request's head, the model
-                        asked for the fix (exact edits, checked against those
-                        files), one more commit on its leka/ branch — closed,
+                        names read at the pull request's head; the agent
+                        fixes it itself in a draft of the branch, each edit
+                        answered, the whole checked (workshop.py,
+                        2026-10-30) — or, no fix where the code fails, the
+                        writer asked for exact edits, checked against those
+                        files; one more commit on its leka/ branch — closed,
                         the pull request reopened first. The checks run
                         again; three repairs at most, then a person looks
     undone, on asking   (2026-10-20) not merged: its pull request closed.
@@ -55,7 +58,7 @@ import json
 import posixpath
 import re
 import uuid
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -77,7 +80,16 @@ from leka.capabilities.code_names import (
 )
 from leka.capabilities.definition import Definition
 from leka.capabilities.deliverable_check import deferred
-from leka.capabilities.gateway import Gateway, Message, Needs, NoModelError, Request, Tier
+from leka.capabilities.gateway import (
+    Gateway,
+    Message,
+    Needs,
+    NoModelError,
+    Request,
+    Tier,
+    Tool,
+    ToolRoundsError,
+)
 from leka.capabilities.models import AgentRun, CodeChange
 from leka.capabilities.registry import find
 from leka.connectors import (
@@ -96,6 +108,9 @@ from leka.db import session_factory, system_scope, workspace_scope
 logger = structlog.get_logger(__name__)
 
 MAX_FILES = 20
+# A change its agent made itself in its draft (workshop.py), its files at
+# most: each edit checked as it was made, more may land.
+MAX_DRAFTED = 60
 # A gateway's reason for no answer, as a change's error.
 NO_MODEL = {
     "none": "no_model",
@@ -127,6 +142,15 @@ CHANGE_TIER = Tier.STANDARD
 CHANGE_BUDGET = 20 * 60.0
 # A diff kept, at most, per file.
 MAX_DIFF_CHARS = 120_000
+# A repair, all of it; the share its agent's draft may take, the writer
+# asked after it with what is left (2026-10-30) — at least this.
+REPAIR_BUDGET = 30 * 60.0
+DRAFT_SHARE = 2 / 3
+LEAST_TO_REPAIR = 120.0
+# Rounds of tools a repair's agent may take; told what its draft lacks, this
+# many times more.
+REPAIR_ROUNDS = 40
+REPAIR_CORRECTIONS = 2
 CONNECTED = (SourceStatus.ACTIVE, SourceStatus.DEGRADED)
 
 
@@ -990,13 +1014,18 @@ async def code_for(
 
 
 async def _changed(
-    code: GitHubCode, repository: str, base: str, proposed: Sequence[ProposedFile]
+    code: GitHubCode,
+    repository: str,
+    base: str,
+    proposed: Sequence[ProposedFile],
+    *,
+    most: int = MAX_FILES,
 ) -> tuple[list[dict[str, object]], list[dict[str, str]]]:
     """Each file proposed, read on the branch, changed here: its diff — or
     why it could not be."""
     files: list[dict[str, object]] = []
     skipped: list[dict[str, str]] = []
-    for each in proposed[:MAX_FILES]:
+    for each in proposed[:most]:
         path = safe_path(each.path)
         if path is None or any(f["path"] == path for f in files):
             continue
@@ -1446,8 +1475,12 @@ async def propose_change(
     read: Mapping[str, str] | None = None,
     budget: float = CHANGE_BUDGET,
     target: Mapping[str, object] | None = None,
+    drafted: Any = None,
 ) -> Proposed:
     """The change a run's analysis proposes, applied, diffed and kept:
+
+    0. the change its agent made itself in its draft (`drafted`,
+       workshop.py, 2026-10-30) — no writer asked;
 
     1. its own diff, when it holds one that lands whole on the files read
        again — no model asked again;
@@ -1457,6 +1490,17 @@ async def propose_change(
 
     Implementing a design review's direction (`target`, mockups.design_target):
     the writer is given its mock-up too (2026-10-24)."""
+    if drafted is not None and drafted.changed():
+        return await _from_draft(
+            session,
+            run,
+            definition,
+            analysis,
+            drafted,
+            read=read or {},
+            target=target,
+            budget=budget,
+        )
     found = await _repository_of(session, run, analysis)
     from_diff: tuple[list[dict[str, object]], list[dict[str, str]]] = ([], [])
     base = ""
@@ -1649,6 +1693,75 @@ async def propose_change(
         return _from_diff_else(session, run, analysis, found, base, from_diff, none)
     change = _kept(
         run, source, repository, base, proposal.title, proposal.summary.strip(), files, skipped
+    )
+    session.add(change)
+    await session.flush()
+    return Proposed(change, None, usage, skipped)
+
+
+async def _from_draft(
+    session: AsyncSession,
+    run: AgentRun,
+    definition: Definition,
+    analysis: str,
+    draft: Any,
+    *,
+    read: Mapping[str, str],
+    target: Mapping[str, object] | None,
+    budget: float,
+) -> Proposed:
+    """The change its agent made itself, edit by edit, in its draft
+    (workshop.py, 2026-10-30): each file whole as the draft holds it — no
+    model asked to write it again —, read again by a reviewer when it
+    touches several files or implements a design, then diffed on its branch
+    and kept."""
+    usage: dict[str, Any] = {"from": "draft", "edits": draft.edits}
+    written = await code_for(session, run.workspace_id, draft.repository)
+    if written is None:
+        return Proposed(None, "no_repository", usage)
+    source, code = written
+    given = {f"{draft.repository}:{p}": t for p, t in draft.given().items()} | dict(read)
+    proposal = completed(draft.proposal(), run, analysis, draft.repository, given)
+    if target is not None or len(draft.changed()) > 1:
+        inputs: dict[str, object] = {**run.inputs, **({"maquette": target} if target else {})}
+        rules = await repository_rules(code, draft.repository, draft.ref, list(draft.changed()))
+        if rules:
+            inputs[RULES_INPUT] = rules
+        held = draft.held or await held_names(code, draft.repository, draft.ref, given)
+        if held.said:
+            inputs[NAMES_INPUT] = held.said
+        proposal, usage["reviewed"] = await reviewed(
+            session,
+            run,
+            definition,
+            inputs,
+            analysis,
+            given,
+            proposal,
+            held,
+            deadline=asyncio.get_running_loop().time() + budget,
+        )
+    try:
+        files, skipped = await _changed(
+            code, draft.repository, draft.ref, proposal.files, most=MAX_DRAFTED
+        )
+    except CodeRefusedError as refused:
+        logger.warning("change_not_read", run=str(run.id), code=refused.code)
+        return Proposed(None, refused.code, usage)
+    except Exception:
+        logger.exception("change_not_read", run=str(run.id))
+        return Proposed(None, "error", usage)
+    if not files:
+        return Proposed(None, "no_change", usage, skipped)
+    change = _kept(
+        run,
+        source,
+        draft.repository,
+        draft.ref,
+        proposal.title,
+        proposal.summary.strip(),
+        files,
+        skipped,
     )
     session.add(change)
     await session.flush()
@@ -2636,14 +2749,16 @@ class ChangeService:
         return read
 
     async def repaired(
-        self, change_id: uuid.UUID, *, budget: float = CHANGE_BUDGET
+        self, change_id: uuid.UUID, *, budget: float = REPAIR_BUDGET
     ) -> dict[str, object]:
         """The repair asked, done: what failed read on GitHub, the files it
-        names and the change's own read at the pull request's head, the
-        model asked for the fix — its edits held to those files, asked
-        again when they do not land — then applied here, one commit pushed
-        on its branch, the pull request reopened first when closed. The
-        change then holds its files as its pull request does."""
+        names and the change's own read at the pull request's head; the
+        agent fixes it itself, in a draft of its branch, each edit answered
+        and the whole checked (workshop.py, 2026-10-30) — or, the draft left
+        without a fix where the code fails, the writer asked for it, its
+        edits held to those files; one commit pushed on its branch, the pull
+        request reopened first when closed. The change then holds its files
+        as its pull request does."""
         change = await self.change(change_id)
         if not change.repairs or change.repairs[-1].get("state") != "running":
             return {"state": "not_asked"}
@@ -2697,6 +2812,51 @@ class ChangeService:
             if definition is not None
             else Needs(structured=True, quality=3, task="code")
         )
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + budget
+        drafted: tuple[RepairProposal, str, list[FileChange], dict[str, str]] | None = None
+        try:
+            drafted = await self._repaired_in_draft(
+                change, code, head, failures, read, rules, needs, budget=budget * DRAFT_SHARE
+            )
+        except NoModelError as error:
+            said = next((a.error for a in reversed(error.attempts) if a.error), None)
+            logger.warning("code_change_repair_not_drafted", reason=error.reason, said=said)
+            if error.reason == "none":
+                return await self.repair_ended(
+                    change_id,
+                    "failed",
+                    error="no_model",
+                    said="Aucun modèle n'est disponible dans cet espace.",
+                    failed=failed,
+                )
+        except TimeoutError:
+            logger.warning("code_change_repair_draft_too_long", change=str(change_id))
+        if drafted is not None:
+            in_draft, drafted_by, drafted_fixes, as_was = drafted
+            said_draft: dict[str, Any] = {
+                "cause": in_draft.cause.strip()[:2000],
+                "summary": in_draft.summary.strip()[:1000],
+                "model": drafted_by,
+                "failed": failed,
+                "how": "draft",
+            }
+            if not drafted_fixes:
+                # The cause is not in the code: said, nothing written.
+                return await self.repair_ended(change_id, "outside", **said_draft)
+            return await self._pushed(
+                change,
+                code,
+                seen,
+                head,
+                as_was,
+                in_draft,
+                drafted_fixes,
+                failed,
+                said_draft,
+                number,
+                branch,
+            )
         request = Request(
             purpose="agent:code-change:repair",
             messages=repair_messages(change, failures, read, rules),
@@ -2713,7 +2873,7 @@ class ChangeService:
                     verify=lambda proposal: repair_problems(proposal, read, failures),
                     corrections=CHANGE_CORRECTIONS,
                 ),
-                timeout=budget,
+                timeout=max(LEAST_TO_REPAIR, deadline - loop.time()),
             )
         except NoModelError as error:
             said = next((a.error for a in reversed(error.attempts) if a.error), None)
@@ -2773,6 +2933,121 @@ class ChangeService:
                 "request.",
                 **found,
             )
+        return await self._pushed(
+            change, code, seen, head, read, proposal, fixes, failed, found, number, branch
+        )
+
+    async def _repaired_in_draft(
+        self,
+        change: CodeChange,
+        code: GitHubCode,
+        head: str,
+        failures: Sequence[Mapping[str, Any]],
+        read: Mapping[str, str],
+        rules: str,
+        needs: Needs,
+        *,
+        budget: float,
+    ) -> tuple[RepairProposal, str, list[FileChange], dict[str, str]] | None:
+        """The repair made by the agent itself in a draft of its branch at
+        the pull request's head (workshop.py, 2026-10-30): it reads, searches,
+        edits, checks — each edit answered, the whole checked before it is
+        taken. Its fix, its model, the files as they were — or None when it
+        left the draft without a fix while the checks fail in the code: the
+        writer is asked then. NoModelError, TimeoutError: the caller's."""
+        from leka.capabilities.code_tools import CODE_TOOLS, REPAIR_NAMES, code_handlers
+        from leka.capabilities.workshop import DRAFT_CONTEXT, Draft, judged
+
+        repository = change.repository
+        draft = Draft(code, repository, head, before=dict(read), read=dict(read))
+        seen: dict[str, Any] = {
+            "drafts": {repository: draft},
+            "draft": draft,
+            "files": {f"{repository}:{p}": t for p, t in read.items()},
+        }
+        bound = code_handlers(self._session, self._workspace_id, seen)
+        tools = [t for t in CODE_TOOLS if t.name in REPAIR_NAMES]
+
+        def as_text(name: str) -> Callable[[Mapping[str, Any]], Awaitable[str]]:
+            async def call(arguments: Mapping[str, Any]) -> str:
+                return (await bound[name](arguments)).text
+
+            return call
+
+        in_code = failed_in_code(failures)
+
+        async def judge(text: str) -> list[str]:
+            said = await judged(draft)
+            if not draft.changed() and in_code:
+                said.append(
+                    "The checks fail in the repository's code, as these lines say: "
+                    + " | ".join(in_code)
+                    + ". Find the cause in the files at the pull request's head and fix it in "
+                    "the draft (edit_file), then answer again; only a runner down, a secret "
+                    "missing or a network error is outside the code."
+                )
+            if not cause_of(text)[0]:
+                said.append(
+                    "Answer with « Cause : » (what failed and why) on its first line and "
+                    "« Correction : » (what the fix changes) on the second."
+                )
+            return said
+
+        request = Request(
+            purpose="agent:code-change:repair",
+            messages=repair_messages(change, failures, read, rules, drafting=True),
+            tier=Tier.DEEP,
+            max_tokens=CHANGE_TOKENS,
+            tools=[Tool(t.name, t.description, t.parameters) for t in tools],
+            ref=f"code_change:{change.id}",
+        )
+        try:
+            done = await asyncio.wait_for(
+                Gateway(self._session, self._workspace_id).run_tools(
+                    request,
+                    {t.name: as_text(t.name) for t in tools},
+                    replace(needs, structured=False, tools=True),
+                    rounds=REPAIR_ROUNDS,
+                    conclude=True,
+                    judge=judge,
+                    corrections=REPAIR_CORRECTIONS,
+                    keep_chars=DRAFT_CONTEXT,
+                ),
+                timeout=budget,
+            )
+        except ToolRoundsError:
+            logger.warning("code_change_repair_no_answer", change=str(change.id))
+            return None
+        changed = draft.changed()
+        if not changed and in_code:
+            return None
+        cause, summary = cause_of(done.text)
+        fixes = [FileChange(path, after) for path, (_b, after) in sorted(changed.items())]
+        before = {p: b for p, (b, _a) in changed.items() if b is not None}
+        return (
+            RepairProposal(cause=cause, summary=summary),
+            done.model,
+            fixes[:MAX_DRAFTED],
+            {**read, **before},
+        )
+
+    async def _pushed(
+        self,
+        change: CodeChange,
+        code: GitHubCode,
+        seen: Mapping[str, Any],
+        head: str,
+        read: Mapping[str, str],
+        proposal: RepairProposal,
+        fixes: list[FileChange],
+        failed: list[str],
+        found: dict[str, Any],
+        number: int,
+        branch: str,
+    ) -> dict[str, object]:
+        """A repair's fixes, one commit on its branch — the pull request
+        reopened first when closed —, said."""
+        change_id, repository = change.id, change.repository
         reopened = False
         try:
             if seen["state"] == "closed":
@@ -2969,7 +3244,7 @@ class ChangeService:
 # Repairs pushed on one pull request, at most: past that, a person looks.
 MAX_REPAIRS = 3
 # Asked longer ago and not done: lost (a worker gone) — asked again.
-REPAIR_LOST = timedelta(minutes=20)
+REPAIR_LOST = timedelta(minutes=35)
 REPAIR_JOB = "leka.capabilities.changes.repair_change_job"
 # The files what failed names, read at the pull request's head, at most —
 # beyond the change's own.
@@ -3050,6 +3325,46 @@ service that did not start, a network error — give no files, and say so in \
 cause. A test, a type check, a build or a lint that fails on the repository's \
 files is in the code.
 Answer with the JSON object only.
+
+Never write the em dash « — »: a colon, a comma, a semicolon or \
+parentheses, as the sentence needs."""
+
+
+REPAIR_DRAFT_RULES = """You are LEKA's repair agent. A pull request LEKA \
+opened, for a change a person accepted, failed its checks. You are given the \
+change (its title, its summary, its diff), what failed — each check, its \
+annotations (file, line, message), the end of its log — and files at the \
+pull request's head. Find why the checks fail and fix it yourself, in LEKA's \
+draft of the pull request's branch — LEKA commits the draft on that branch:
+- read_file, list_files and search_code read the pull request's head: what \
+the failure names, what it uses, what uses it;
+- think: the possible causes, the most likely first, before you edit;
+- edit_file, insert_lines, write_file: the smallest fix that makes the checks \
+pass while keeping what the change was for;
+- check_changes, then show_changes: your fix checked before you answer.
+Rules:
+- Fix the cause, never hide it: never delete, skip or weaken a test, an \
+assertion, a lint rule or a type check to make it pass, and never add an \
+ignore comment (eslint-disable, @ts-ignore, type: ignore, noqa).
+- When the change moved or renamed something a test relies on — an id, a \
+data-testid, a label, an export, a name — keep it in the new code where it \
+still makes sense; when the change meant to change what the test checks, \
+update the test to the new behaviour, as strict as it was.
+- A test that checks a rule of the whole repository (no text written into a \
+component, no em dash, a naming rule) fails because the change broke that \
+rule: the change is fixed to follow it, the test is never touched. \
+`repository_rules`, when given, are those rules, as the repository writes \
+them.
+- Never write data into the code: what a screen shows comes from where the \
+code already reads it; invented records, names or figures are removed.
+- When the failure is not in the code — a runner down, a secret missing, a \
+service that did not start, a network error — change nothing. A test, a type \
+check, a build or a lint that fails on the repository's files is in the code.
+When the fix is in the draft, answer with two lines, in the language of the \
+change's summary:
+Cause : what failed and why, in one or two sentences.
+Correction : what the fix changes, in one sentence.
+When the failure is not in the code, answer the Cause line alone.
 
 Never write the em dash « — »: a colon, a comma, a semicolon or \
 parentheses, as the sentence needs."""
@@ -3158,6 +3473,8 @@ def repair_messages(
     failures: Sequence[Mapping[str, Any]],
     read: Mapping[str, str],
     rules: str = "",
+    *,
+    drafting: bool = False,
 ) -> list[Message]:
     diff = "\n".join(str(f.get("diff") or "") for f in change.files)
     material = {
@@ -3181,9 +3498,27 @@ def repair_messages(
     if rules:
         material["repository_rules"] = rules
     return [
-        Message.system(REPAIR_RULES),
+        Message.system(REPAIR_DRAFT_RULES if drafting else REPAIR_RULES),
         Message.user(json.dumps(material, ensure_ascii=False, default=str)),
     ]
+
+
+_CAUSE = re.compile(r"^\W*cause\W*:\s*(.+)$", re.IGNORECASE | re.MULTILINE)
+_FIXED = re.compile(r"^\W*(?:correction|fix|summary)\W*:\s*(.+)$", re.IGNORECASE | re.MULTILINE)
+
+
+def cause_of(text: str) -> tuple[str, str]:
+    """A repair agent's last word: its « Cause : » and « Correction : »
+    lines — the cause its first paragraph when it wrote no such line."""
+    said = text.strip()
+    cause = _CAUSE.search(said)
+    fixed = _FIXED.search(said)
+    if cause is None:
+        first = next((p.strip() for p in said.split("\n\n") if p.strip()), "")
+        return ("" if not first else first.lstrip("# ").strip()), (
+            fixed.group(1).strip() if fixed else ""
+        )
+    return cause.group(1).strip(), fixed.group(1).strip() if fixed else ""
 
 
 def _commit_message(proposal: RepairProposal, failed: Sequence[str], number: int) -> str:

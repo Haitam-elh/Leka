@@ -31,7 +31,9 @@ A repository outside the source's scope is refused before a byte is sent.
 from __future__ import annotations
 
 import base64
+import io
 import re
+import tarfile
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -50,6 +52,38 @@ MAX_LONG_BYTES = 5_000_000
 MAX_LOCK_BYTES = 20_000_000
 # The paths a tree gives back, at most.
 MAX_PATHS = 2_000
+# A branch's archive, read to search its code (2026-10-30): its weight at
+# most, compressed; each text file kept at most; all of them at most.
+MAX_ARCHIVE_BYTES = 40_000_000
+MAX_ARCHIVED_FILE = 1_000_000
+MAX_ARCHIVED_TEXT = 60_000_000
+
+
+def _texts_of(archive: bytes) -> dict[str, str]:
+    """The text files of a tarball as GitHub gives it — each path without
+    the folder it wraps them in (owner-repo-sha/)."""
+    texts: dict[str, str] = {}
+    total = 0
+    try:
+        with tarfile.open(fileobj=io.BytesIO(archive), mode="r:*") as packed:
+            for member in packed:
+                if not member.isfile() or member.size > MAX_ARCHIVED_FILE:
+                    continue
+                path = member.name.split("/", 1)[1] if "/" in member.name else ""
+                if not path or total + member.size > MAX_ARCHIVED_TEXT:
+                    continue
+                read = packed.extractfile(member)
+                raw = read.read() if read is not None else b""
+                if b"\0" in raw[:8000]:
+                    continue
+                try:
+                    texts[path] = raw.decode("utf-8")
+                except UnicodeDecodeError:
+                    continue
+                total += member.size
+    except (tarfile.TarError, EOFError, OSError) as error:
+        raise CodeRefusedError("unavailable", "L'archive de GitHub est illisible.") from error
+    return texts
 
 
 class CodeRefusedError(Exception):
@@ -384,6 +418,42 @@ class GitHubCode:
             return body.decode("utf-8")
         except UnicodeDecodeError as error:
             raise CodeRefusedError("binary", f"{path} n'est pas un fichier texte.") from error
+
+    async def archive(self, repository: str, ref: str) -> dict[str, str]:
+        """Every text file of a branch, by path: its archive, read once to
+        search the code (2026-10-30) — a binary, a file over
+        MAX_ARCHIVED_FILE, what is past MAX_ARCHIVED_TEXT left out.
+        CodeRefusedError when GitHub refuses it or it weighs too much."""
+        name = self._checked(repository)
+        async with self._client() as client:
+            answer = await client.get(f"/repos/{name}/tarball/{ref}")
+        if answer.status_code == 200:
+            body = answer.content
+        else:
+            location = answer.headers.get("location")
+            if answer.status_code not in (301, 302, 303, 307, 308) or not location:
+                raise self._refused(answer, f"l'archive de {ref}")
+            where = urlsplit(location)
+            if where.scheme != "https" or not where.netloc:
+                raise CodeRefusedError("unavailable", "GitHub a donné une adresse inattendue.")
+            # A signed address of GitHub's storage: no token sent there.
+            async with (
+                self._connector.http(f"https://{where.netloc}") as storage,
+                storage.stream(
+                    "GET", where.path + (f"?{where.query}" if where.query else "")
+                ) as got,
+            ):
+                if got.status_code != 200:
+                    raise CodeRefusedError("unavailable", f"GitHub a répondu {got.status_code}.")
+                buffer = bytearray()
+                async for chunk in got.aiter_bytes():
+                    buffer += chunk
+                    if len(buffer) > MAX_ARCHIVE_BYTES:
+                        raise CodeRefusedError("too_large", f"{repository} est trop gros ici.")
+                body = bytes(buffer)
+        if len(body) > MAX_ARCHIVE_BYTES:
+            raise CodeRefusedError("too_large", f"{repository} est trop gros ici.")
+        return _texts_of(body)
 
     # ── its pull requests, read (2026-10-14: the code review's deliverable) ──
 

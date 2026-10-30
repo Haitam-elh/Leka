@@ -14,6 +14,21 @@ that names them (`tools:`), never by default.
                          server (lockfiles.py), each with its known
                          vulnerabilities (advisories.py) — the dependency
                          analysis's (2026-10-22)
+    search_code          a regular expression through every file of a branch
+
+The code-change agent's workshop (workshop.py, 2026-10-30): it makes its
+change itself in a draft LEKA keeps — never the repository, a person
+decides on the change:
+
+    edit_file            a text replaced, answered with the lines around it
+    insert_lines         lines added after a line
+    write_file           a whole file, new or rewritten
+    delete_file, undo_edit
+    show_changes         the draft's diff
+    check_changes        what LEKA checks before a person sees the change
+    plan                 the steps of a large change, each todo, doing, done
+    think                its reasoning, written down
+    ask_expert           a stronger model's advice on a hard point
 """
 
 from __future__ import annotations
@@ -35,6 +50,8 @@ from leka.core.config import settings
 
 # What a file gives the model, at most.
 MOST_CHARS = 60_000
+# A stronger model asked for advice, per run at most (ask_expert).
+MOST_EXPERTS = 3
 MOST_PATHS = 400
 # What an audit gives the model, at most: the vulnerable packages, the
 # ranges asked without an exact version.
@@ -53,6 +70,11 @@ LIST_FILES = AgentTool(
             "repository": {"type": "string", "description": "Its full name: owner/repo."},
             "branch": {"type": "string", "description": "The branch; its default when empty."},
             "path": {"type": "string", "description": "Only files under this path."},
+            "pattern": {
+                "type": "string",
+                "description": "Only files matching this glob: `*.tsx`, `web/**/*.ts`, "
+                "`**/test_*.py`, `*.{ts,tsx}`.",
+            },
         },
         "required": ["repository"],
     },
@@ -145,12 +167,247 @@ AUDIT_DEPENDENCIES = AgentTool(
     permission="workspace:read",
 )
 
+_REPOSITORY = {"type": "string", "description": "Its full name: owner/repo."}
+_PATH = {"type": "string", "description": "The file's path in the repository."}
+
+SEARCH_CODE = AgentTool(
+    name="search_code",
+    description=(
+        "Search a regular expression through every file of a connected GitHub repository's "
+        "branch (your draft's text where you changed it): the lines that match, each with its "
+        "path and number. Narrow it with `path` (a folder) and `include` (a glob: `*.tsx`, "
+        "`**/test_*.py`, `*.{ts,tsx}`); `literal: true` searches the text as written. Find "
+        "where a name is defined and every place it is used before you change it."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "repository": _REPOSITORY,
+            "pattern": {"type": "string", "description": "A regular expression (Python)."},
+            "path": {"type": "string", "description": "Only under this folder."},
+            "include": {"type": "string", "description": "Only files matching this glob."},
+            "literal": {"type": "boolean", "description": "The pattern as written (false)."},
+            "ignore_case": {"type": "boolean", "description": "Case aside (false)."},
+            "branch": {"type": "string", "description": "The branch; its default when empty."},
+        },
+        "required": ["repository", "pattern"],
+    },
+    permission="workspace:read",
+)
+
+EDIT_FILE = AgentTool(
+    name="edit_file",
+    description=(
+        "Change a file in LEKA's draft of your change — never the repository: a person "
+        "decides on the change. `old_text`: whole lines copied exactly as read_file gave them, "
+        "enough of them to be in the file once; `new_text`: what replaces them. The answer "
+        "shows the lines around the edit with their numbers, and says when the file no longer "
+        "parses: check them. To replace a text each time it is in the file, give "
+        "`expected_replacements`, how many times it is there. Several edits of one file: one "
+        "call each, from the top of the file down."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "repository": _REPOSITORY,
+            "path": _PATH,
+            "old_text": {"type": "string", "description": "The exact lines to replace."},
+            "new_text": {"type": "string", "description": "What replaces them; empty: removed."},
+            "expected_replacements": {
+                "type": "integer",
+                "description": "How many times old_text is in the file (1).",
+            },
+        },
+        "required": ["repository", "path", "old_text", "new_text"],
+    },
+    permission="workspace:read",
+)
+
+INSERT_LINES = AgentTool(
+    name="insert_lines",
+    description="Add lines to a file of the draft, after a line number (0: at its top).",
+    parameters={
+        "type": "object",
+        "properties": {
+            "repository": _REPOSITORY,
+            "path": _PATH,
+            "after_line": {"type": "integer", "description": "The line they follow (0: the top)."},
+            "text": {"type": "string", "description": "The lines added."},
+        },
+        "required": ["repository", "path", "after_line", "text"],
+    },
+    permission="workspace:read",
+)
+
+WRITE_FILE = AgentTool(
+    name="write_file",
+    description=(
+        "Write a whole file in the draft: a new one, or one you rewrite through most of its "
+        "lines (a screen redesigned). Every line of it, never « … » or a comment standing for "
+        "code you keep: for a few changes, use edit_file."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "repository": _REPOSITORY,
+            "path": _PATH,
+            "content": {"type": "string", "description": "The whole file."},
+        },
+        "required": ["repository", "path", "content"],
+    },
+    permission="workspace:read",
+)
+
+DELETE_FILE = AgentTool(
+    name="delete_file",
+    description="Remove a file in the draft, when the change takes it away.",
+    parameters={
+        "type": "object",
+        "properties": {"repository": _REPOSITORY, "path": _PATH},
+        "required": ["repository", "path"],
+    },
+    permission="workspace:read",
+)
+
+UNDO_EDIT = AgentTool(
+    name="undo_edit",
+    description="Undo your last edit of a file in the draft.",
+    parameters={
+        "type": "object",
+        "properties": {"repository": _REPOSITORY, "path": _PATH},
+        "required": ["repository", "path"],
+    },
+    permission="workspace:read",
+)
+
+SHOW_CHANGES = AgentTool(
+    name="show_changes",
+    description=(
+        "Your draft's diff so far: every file you changed, or one (`path`). Read it whole "
+        "before you answer, as the strictest reviewer of the team would."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {"path": {"type": "string", "description": "One file; all when empty."}},
+    },
+    permission="workspace:read",
+)
+
+CHECK_CHANGES = AgentTool(
+    name="check_changes",
+    description=(
+        "What LEKA checks before a person sees the change, run on your draft now: a file that "
+        "no longer parses, a key written twice, an import, a name or a variant that is nowhere "
+        "in the repository, something a test reads taken away. Run it after each step of a "
+        "large change and before you answer; fix what it finds."
+    ),
+    parameters={"type": "object", "properties": {}},
+    permission="workspace:read",
+)
+
+PLAN = AgentTool(
+    name="plan",
+    description=(
+        "The plan of a change of several steps. Give `steps` to set it, the whole list each "
+        "time; nothing to read it. Plan a large change before you edit, keep one step « doing » "
+        "at a time, mark it « done » only once it is in the draft and checked. A step left "
+        "undone is said back to you before your analysis is taken."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "steps": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string", "description": "What the step does."},
+                        "status": {"type": "string", "enum": ["todo", "doing", "done"]},
+                        "note": {"type": "string", "description": "Where, or what is left."},
+                    },
+                    "required": ["title", "status"],
+                },
+            }
+        },
+    },
+    permission="workspace:read",
+)
+
+THINK = AgentTool(
+    name="think",
+    description=(
+        "Write your reasoning down — what you found, the ways to do it, which you choose and "
+        "why — without reading or changing anything. Before a large edit, or when a check "
+        "fails twice."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {"thought": {"type": "string", "description": "Your reasoning."}},
+        "required": ["thought"],
+    },
+    permission="workspace:read",
+)
+
+ASK_EXPERT = AgentTool(
+    name="ask_expert",
+    description=(
+        "Ask a stronger model for advice on a hard point: a cause you do not find, two ways to "
+        "do it, an error you do not understand. Give your `question` and the `context` it needs "
+        "(code, errors); it sees your draft's diff. It recommends, it does not edit. Three "
+        "times per change at most."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "question": {"type": "string", "description": "What you need to know."},
+            "context": {"type": "string", "description": "The code, the errors it needs."},
+        },
+        "required": ["question"],
+    },
+    permission="workspace:read",
+)
+
+# The workshop's tools: the code-change agent's own (workshop.py).
+WORKSHOP_TOOLS: tuple[AgentTool, ...] = (
+    EDIT_FILE,
+    INSERT_LINES,
+    WRITE_FILE,
+    DELETE_FILE,
+    UNDO_EDIT,
+    SHOW_CHANGES,
+    CHECK_CHANGES,
+    PLAN,
+    THINK,
+    ASK_EXPERT,
+)
+WORKSHOP_NAMES = frozenset(t.name for t in WORKSHOP_TOOLS)
+# What a repair of a pull request in red is offered (changes.py): reading at
+# its head, fixing in a draft of its branch, checking (2026-10-30).
+REPAIR_NAMES = frozenset(
+    {
+        "list_files",
+        "read_file",
+        "search_code",
+        "edit_file",
+        "insert_lines",
+        "write_file",
+        "delete_file",
+        "undo_edit",
+        "show_changes",
+        "check_changes",
+        "think",
+        "ask_expert",
+    }
+)
+
 CODE_TOOLS: tuple[AgentTool, ...] = (
     LIST_FILES,
     READ_FILE,
+    SEARCH_CODE,
     LIST_PULL_REQUESTS,
     READ_PULL_REQUEST,
     AUDIT_DEPENDENCIES,
+    *WORKSHOP_TOOLS,
 )
 CODE_NAMES = frozenset(t.name for t in CODE_TOOLS)
 
@@ -258,11 +515,20 @@ def code_handlers(
     goes into `kept`: `listed` (repository → its pulls), `pulls`
     (repository#number → the pull and its files), `files`
     (repository:path → the file's text), `paths` (repository → the files
-    list_files showed)."""
+    list_files showed), `drafts` (repository → its branch as searched and
+    changed, workshop.py) and `draft`, the one the agent changed: its
+    change."""
     seen: dict[str, Any] = kept if kept is not None else {}
     # Here, not at the top: changes.py reads the catalogue, which reads the
     # registry, which reads these tools' names.
     from leka.capabilities.changes import code_for
+    from leka.capabilities.workshop import (
+        Draft,
+        EditError,
+        matches_glob,
+        nearest_paths,
+        plan_said,
+    )
 
     opened: dict[str, GitHubCode | None] = {}
 
@@ -276,16 +542,82 @@ def code_handlers(
         said = str(asked or "").strip()
         return said or await found.default_branch(repository)
 
+    def drafted(repository: str) -> Draft | None:
+        held: Draft | None = seen.get("drafts", {}).get(repository)
+        return held
+
+    async def draft_of(arguments: Mapping[str, Any], *, editing: bool = False) -> Draft | Answer:
+        """The repository's draft — made at its first use. One change, one
+        repository: the first edited is the change's."""
+        repository = str(arguments.get("repository") or "").strip()
+        editing_one: Draft | None = seen.get("draft")
+        if not repository and editing_one is not None:
+            repository = editing_one.repository
+        if editing and editing_one is not None and repository != editing_one.repository:
+            return Answer(
+                _said(
+                    {
+                        "error": "one_repository",
+                        "said": f"This change is on {editing_one.repository}: one change, one "
+                        "repository. Say what else is needed in « Ce qui n'est pas fait ici ».",
+                    }
+                ),
+                "refused",
+                "invalid_input",
+            )
+        draft = drafted(repository)
+        if draft is None:
+            found = await code(repository)
+            if found is None:
+                return Answer(_said({"error": "no_repository"}), "refused", "out_of_scope")
+            try:
+                branch = await branch_of(found, repository, arguments.get("branch"))
+            except CodeRefusedError as refused:
+                return Answer(_said({"error": refused.code}), "refused", refused.code)
+            draft = Draft(found, repository, branch)
+            seen.setdefault("drafts", {})[repository] = draft
+        draft.read = {
+            key.split(":", 1)[1]: text
+            for key, text in seen.get("files", {}).items()
+            if key.startswith(f"{repository}:")
+        }
+        if editing and editing_one is None:
+            seen["draft"] = draft
+            # A plan set before its first edit is the draft's.
+            if not draft.plan and seen.get("plan_before", {}).get("steps"):
+                draft.set_plan(seen["plan_before"]["steps"])
+        return draft
+
     async def list_files(arguments: Mapping[str, Any]) -> Answer:
         repository = str(arguments.get("repository") or "").strip()
         found = await code(repository)
         if found is None:
             return Answer(_said({"error": "no_repository"}), "refused", "out_of_scope")
+        draft = drafted(repository)
         try:
-            branch = await branch_of(found, repository, arguments.get("branch"))
+            # A draft's branch, unless another is asked: a repair's is the
+            # pull request's head.
+            branch = (
+                draft.ref
+                if draft is not None and not arguments.get("branch")
+                else await branch_of(found, repository, arguments.get("branch"))
+            )
             paths, more = await found.paths(repository, branch, str(arguments.get("path") or ""))
         except CodeRefusedError as refused:
             return Answer(_said({"error": refused.code}), "refused", refused.code)
+        # The files the draft adds, listed with the others; those it takes
+        # away, not.
+        if draft is not None:
+            under = str(arguments.get("path") or "")
+            paths = [p for p in paths if draft.now.get(p, "") is not None]
+            paths += [
+                p
+                for p, t in draft.now.items()
+                if t is not None and p.startswith(under) and p not in paths
+            ]
+        pattern = str(arguments.get("pattern") or "").strip()
+        if pattern:
+            paths = [p for p in paths if matches_glob(p, pattern)]
         # What it saw listed: the files it may name (2026-10-28).
         listed = seen.setdefault("paths", {}).setdefault(repository, [])
         listed.extend(p for p in paths if p not in listed)
@@ -316,8 +648,35 @@ def code_handlers(
         found = await code(repository)
         if found is None:
             return Answer(_said({"error": "no_repository"}), "refused", "out_of_scope")
+        # A file the draft changed: as the draft holds it now.
+        draft = drafted(repository)
+        if draft is not None and path in draft.now:
+            text_now = draft.now[path]
+            if text_now is None:
+                return Answer(_said({"error": "deleted_in_draft"}), "refused", "not_found")
+            wanted_now = str(arguments.get("find") or "").strip()
+            return Answer(
+                _said(
+                    {
+                        "repository": repository,
+                        "branch": draft.ref,
+                        "path": path,
+                        "draft": True,
+                        **(
+                            found_in(text_now, wanted_now)
+                            if wanted_now
+                            else lines_of(text_now, arguments)
+                        ),
+                    }
+                ),
+                "ok",
+            )
         try:
-            branch = await branch_of(found, repository, arguments.get("branch"))
+            branch = (
+                draft.ref
+                if draft is not None and not arguments.get("branch")
+                else await branch_of(found, repository, arguments.get("branch"))
+            )
             try:
                 text = await found.read(repository, path, branch)
             except CodeRefusedError as refused:
@@ -329,7 +688,18 @@ def code_handlers(
         except CodeRefusedError as refused:
             return Answer(_said({"error": refused.code}), "refused", refused.code)
         if text is None:
-            return Answer(_said({"error": "not_found"}), "refused", "not_found")
+            # Not there: the files it most likely means, never a guess
+            # left to the model (2026-10-30).
+            try:
+                tree, _more = await found.paths(repository, branch)
+            except CodeRefusedError:
+                tree = []
+            near = nearest_paths(path, tree)
+            return Answer(
+                _said({"error": "not_found", **({"did_you_mean": near} if near else {})}),
+                "refused",
+                "not_found",
+            )
         wanted = str(arguments.get("find") or "").strip()
         if wanted:
             return Answer(
@@ -418,12 +788,188 @@ def code_handlers(
         seen.setdefault("audits", {})[f"{repository}:{path}"] = said
         return Answer(_said({"repository": repository, "branch": branch, **said}), "ok")
 
+    # ── the workshop (workshop.py, 2026-10-30) ───────────────────────────
+
+    def refused(error: EditError | CodeRefusedError) -> Answer:
+        return Answer(_said({"error": str(error)}), "refused", "invalid_input")
+
+    async def search_code(arguments: Mapping[str, Any]) -> Answer:
+        draft = await draft_of(arguments)
+        if isinstance(draft, Answer):
+            return draft
+        try:
+            said = await draft.search(
+                str(arguments.get("pattern") or ""),
+                include=str(arguments.get("include") or ""),
+                under=str(arguments.get("path") or ""),
+                literal=bool(arguments.get("literal")),
+                ignore_case=bool(arguments.get("ignore_case")),
+            )
+        except (EditError, CodeRefusedError) as error:
+            return refused(error)
+        # What it found, it saw: files it may name (2026-10-28).
+        listed = seen.setdefault("paths", {}).setdefault(draft.repository, [])
+        for path in dict.fromkeys(str(m["path"]) for m in said["matches"]):
+            if path not in listed:
+                listed.append(path)
+        return Answer(_said({"repository": draft.repository, "branch": draft.ref, **said}), "ok")
+
+    async def edited(arguments: Mapping[str, Any], how: str) -> Answer:
+        draft = await draft_of(arguments, editing=True)
+        if isinstance(draft, Answer):
+            return draft
+        path = str(arguments.get("path") or "")
+        try:
+            if how == "edit":
+                try:
+                    count = max(1, int(arguments.get("expected_replacements") or 1))
+                except (TypeError, ValueError):
+                    count = 1
+                said = await draft.replace(
+                    path,
+                    str(arguments.get("old_text") or ""),
+                    str(arguments.get("new_text") or ""),
+                    count,
+                )
+            elif how == "insert":
+                said = await draft.insert(
+                    path, arguments.get("after_line"), str(arguments.get("text") or "")
+                )
+            elif how == "write":
+                said = await draft.write(path, str(arguments.get("content") or ""))
+            elif how == "delete":
+                said = await draft.delete(path)
+            else:
+                said = draft.undo(path)
+            # The repository's rules for the folder it writes in, the first
+            # time: they travel with the code they rule.
+            rules = await draft.rules_for(draft.path_of(path)) if how != "undo" else ""
+        except (EditError, CodeRefusedError) as error:
+            return refused(error)
+        if rules:
+            said += (
+                "\n\nThe repository's rules for this folder (follow them to write the code, "
+                "nothing else):\n" + rules
+            )
+        return Answer(said, "ok")
+
+    async def edit_file(arguments: Mapping[str, Any]) -> Answer:
+        return await edited(arguments, "edit")
+
+    async def insert_lines(arguments: Mapping[str, Any]) -> Answer:
+        return await edited(arguments, "insert")
+
+    async def write_file(arguments: Mapping[str, Any]) -> Answer:
+        return await edited(arguments, "write")
+
+    async def delete_file(arguments: Mapping[str, Any]) -> Answer:
+        return await edited(arguments, "delete")
+
+    async def undo_edit(arguments: Mapping[str, Any]) -> Answer:
+        return await edited(arguments, "undo")
+
+    def editing() -> Draft | None:
+        draft: Draft | None = seen.get("draft")
+        return draft
+
+    async def show_changes(arguments: Mapping[str, Any]) -> Answer:
+        draft = editing()
+        if draft is None or not draft.changed():
+            return Answer(_said({"diff": "", "said": "No change in the draft yet."}), "ok")
+        path = str(arguments.get("path") or "").strip() or None
+        return Answer(
+            _said(
+                {
+                    "repository": draft.repository,
+                    "files": sorted(draft.changed()),
+                    "diff": draft.diff(path),
+                }
+            ),
+            "ok",
+        )
+
+    async def check_changes(arguments: Mapping[str, Any]) -> Answer:
+        draft = editing()
+        if draft is None or not draft.changed():
+            return Answer(_said({"problems": [], "said": "No change in the draft yet."}), "ok")
+        await draft_of({"repository": draft.repository})
+        problems = await draft.problems()
+        return Answer(
+            _said(
+                {
+                    "files_changed": len(draft.changed()),
+                    "problems": problems,
+                    **(
+                        {}
+                        if problems
+                        else {
+                            "said": "LEKA's checks find nothing. Read show_changes as a reviewer "
+                            "would before you answer."
+                        }
+                    ),
+                }
+            ),
+            "ok",
+        )
+
+    async def plan(arguments: Mapping[str, Any]) -> Answer:
+        draft = editing()
+        if draft is None:
+            # Planned before the first edit: the draft of the repository
+            # read, or one to come.
+            held: dict[str, Any] = seen.setdefault("plan_before", {})
+            steps = arguments.get("steps")
+            if isinstance(steps, list):
+                held["steps"] = steps
+            return Answer(_said({"steps": held.get("steps", []), "said": "Plan kept."}), "ok")
+        steps = arguments.get("steps")
+        if isinstance(steps, list):
+            draft.set_plan([s for s in steps if isinstance(s, Mapping)])
+        elif not draft.plan and seen.get("plan_before", {}).get("steps"):
+            draft.set_plan(seen["plan_before"]["steps"])
+        return Answer(_said(plan_said(draft.plan)), "ok")
+
+    async def think(arguments: Mapping[str, Any]) -> Answer:
+        return Answer(_said({"noted": True}), "ok")
+
+    async def ask_expert(arguments: Mapping[str, Any]) -> Answer:
+        from leka.capabilities.workshop import expert_advice
+
+        draft = editing()
+        asked = int(seen.get("experts", 0))
+        if asked >= MOST_EXPERTS:
+            return Answer(
+                _said({"error": f"The expert was asked {MOST_EXPERTS} times already: go on."}),
+                "refused",
+                "limited",
+            )
+        seen["experts"] = asked + 1
+        said = await expert_advice(
+            session,
+            workspace_id,
+            str(arguments.get("question") or ""),
+            str(arguments.get("context") or ""),
+            draft,
+        )
+        return Answer(_said({"advice": said}), "ok")
+
     return {
         "list_files": list_files,
         "read_file": read_file,
+        "search_code": search_code,
         "list_pull_requests": list_pull_requests,
         "read_pull_request": read_pull_request,
         "audit_dependencies": audit_dependencies,
+        "edit_file": edit_file,
+        "insert_lines": insert_lines,
+        "write_file": write_file,
+        "delete_file": delete_file,
+        "undo_edit": undo_edit,
+        "show_changes": show_changes,
+        "check_changes": check_changes,
+        "plan": plan,
+        "think": think,
+        "ask_expert": ask_expert,
     }
 
 

@@ -104,10 +104,11 @@ class AgentFrontMatter(BaseModel):
     rounds: int | None = Field(
         default=None,
         ge=1,
-        le=40,
+        le=120,
         description="How many rounds of tool calls it may take before it must answer — the "
         "runtime's default (16) when none: an agent that gathers a whole documentation asks "
-        "for more (2026-10-14)",
+        "for more (2026-10-14), one that writes a large change edit by edit more still "
+        "(2026-10-30)",
     )
     renders: Literal["architecture_deck", "code_change", "design_mockups"] | None = Field(
         default=None,

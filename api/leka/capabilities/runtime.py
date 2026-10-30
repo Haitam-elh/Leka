@@ -286,17 +286,24 @@ above: do not describe files, do not say they are attached.""",
     "code_change": """---
 
 How this runs in LEKA:
-- Read the code before proposing anything: list_files, then read_file for \
-each file you would change and for what it depends on. A file you did not \
-read, you do not change.
+- Read the code before proposing anything: search_code to find where a name \
+is defined and used, list_files, then read_file for each file you would \
+change and for what it depends on. A file you did not read, you do not change.
+- When you are offered the editing tools (edit_file, insert_lines, \
+write_file, delete_file), make the change yourself in LEKA's draft — never \
+the repository: plan a change of several steps first (plan), check the draft \
+after each step and before you answer (check_changes), read its diff \
+(show_changes). The draft is the change: LEKA shows its diff to a person, \
+before and after, who accepts or rejects it — do not copy the code into the \
+analysis. Before your analysis is taken, LEKA checks the draft and your plan; \
+what is left is said to you.
 - This answer is the analysis, in markdown: the problem, where it is in the \
 code (paths, functions), the change file by file and why, its risks, how to \
-test it. For each file, give the change as a unified diff in a ```diff block \
-— `--- a/path`, `+++ b/path`, then each `@@` hunk with three lines of \
-context, every line copied exactly as you read it, indentation included. \
-LEKA applies that diff to the file itself and shows it to a person, before \
-and after, who accepts or rejects it; what does not apply, it asks you again \
-as exact edits.
+test it. With no editing tool offered, give each file's change as a unified \
+diff in a ```diff block — `--- a/path`, `+++ b/path`, then each `@@` hunk \
+with three lines of context, every line copied exactly as you read it, \
+indentation included; LEKA applies it, and asks you again as exact edits \
+what does not apply.
 - Nothing is written to the repository by you or by LEKA before that \
 person accepts; then LEKA opens a pull request, never a merge.""",
     "design_mockups": """---

@@ -33,6 +33,7 @@ answer may not carry. What they refuse raises NoModelError, said why
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import re
 import uuid
@@ -530,7 +531,7 @@ class Gateway:
             try:
                 async with self._client(route.endpoint, wait_of(call.request)) as client:
                     done = await vendor.complete(call, client)
-                if not done.text.strip() and not done.tool_calls:
+                if not done.text.strip() and not done.tool_calls and not request.empty_ok:
                     raise ProviderError("An empty answer.", retryable=True)
             except (ProviderError, httpx.HTTPError) as raised:
                 error = _said(raised)
@@ -675,8 +676,9 @@ class Gateway:
         *,
         rounds: int = 6,
         conclude: bool = False,
-        judge: Callable[[str], Sequence[str]] | None = None,
+        judge: Callable[[str], Sequence[str] | Awaitable[Sequence[str]]] | None = None,
         corrections: int = 2,
+        keep_chars: int | None = None,
     ) -> Completion:
         """Asks, calls the tools the model asks for, gives it what they
         returned, until it answers — `rounds` at most. A tool that fails
@@ -687,17 +689,41 @@ class Gateway:
         what it read given as text (`_concluded`). `judge`: what is wrong
         with its answer — said back to it with its answer, `corrections`
         times at most, its tools still offered to read what it lacks; then
-        its answer as it is (2026-10-22: any model, the same deliverable)."""
+        its answer as it is (2026-10-22: any model, the same deliverable) —
+        `judge` may be a coroutine (2026-10-30: a draft's checks read the
+        repository). `keep_chars`: the conversation kept within that many
+        characters, the oldest tools' results dropped first, said so — a long
+        task's state is in its draft, not in what it read (2026-10-30). The
+        same call made again and again, answered the same, is said to the
+        model (stuck)."""
         messages = list(request.messages)
+        # An empty answer told, never retried as a failure.
+        request = replace(request, empty_ok=True)
         asking = request
         left = corrections if judge is not None else 0
+        calls: list[str] = []
+        empty = MOST_EMPTY
         for round_ in range(rounds):
             last = conclude and round_ == rounds - 1
             if last:
                 asking = replace(asking, tool_choice=ToolChoice.NONE)
+            if keep_chars is not None:
+                messages = condensed(messages, len(request.messages), keep_chars)
             done = await self.complete(replace(asking, messages=messages), needs)
+            if not done.tool_calls and not done.text.strip():
+                # Nothing said (2026-10-30): told so, asked again; past
+                # MOST_EMPTY, its last word asked with no tool.
+                if not empty or last:
+                    return await self._concluded(replace(request, empty_ok=False), messages, needs)
+                empty -= 1
+                messages += [Message(Role.ASSISTANT, "…"), Message.user(EMPTY_SAID)]
+                asking = replace(request, tool_choice=ToolChoice.AUTO)
+                continue
             if not done.tool_calls:
-                problems = list(judge(done.text)) if judge is not None and left and not last else []
+                problems: list[str] = []
+                if judge is not None and left and not last:
+                    said = judge(done.text)
+                    problems = list(await said if inspect.isawaitable(said) else said)
                 if not problems:
                     return done
                 left -= 1
@@ -717,7 +743,7 @@ class Gateway:
             if last:
                 # It would not stop reading, tools refused: its calls are
                 # not run; it is asked again with no tool to call.
-                return await self._concluded(request, messages, needs)
+                return await self._concluded(replace(request, empty_ok=False), messages, needs)
             messages.append(Message(Role.ASSISTANT, done.text, tool_calls=done.tool_calls))
             for tool_call in done.tool_calls:
                 handler = handlers.get(tool_call.name)
@@ -729,6 +755,7 @@ class Gateway:
                     except Exception as error:
                         logger.warning("model_tool_failed", tool=tool_call.name, exc_info=True)
                         result = json.dumps({"error": type(error).__name__})
+                result = stuck_said(calls, tool_call.name, tool_call.arguments, result)
                 messages.append(
                     Message(Role.TOOL, result, tool_call_id=tool_call.id, name=tool_call.name)
                 )
@@ -851,6 +878,57 @@ class Gateway:
         await self._mark(failed=None)
         await self._session.flush()
         return Tested(True, None, done.latency_ms, own.model, done.version)
+
+
+# The tools' results a conversation keeps whole however long it grows: the
+# latest ones, what the model works on now.
+KEPT_WHOLE = 8
+DROPPED = (
+    "[LEKA dropped this result to keep the conversation short. Call the tool again if you "
+    "need it; your draft and your plan are kept whole.]"
+)
+# The same call answered the same this many times in a row: said stuck.
+STUCK_AFTER = 3
+# An empty answer, told this many times at most.
+MOST_EMPTY = 2
+EMPTY_SAID = (
+    "Your last answer was empty. Give your deliverable now, whole, as your instructions ask — "
+    "or call the tool you still need."
+)
+
+
+def condensed(messages: list[Message], start: int, most: int) -> list[Message]:
+    """The conversation within `most` characters: the oldest tools' results
+    after the request's own messages (`start`) dropped first, each said
+    dropped — never the request, never the latest KEPT_WHOLE results, never
+    a call without its result (2026-10-30)."""
+    size = sum(len(m.content or "") for m in messages)
+    if size <= most:
+        return messages
+    results = [i for i, m in enumerate(messages) if i >= start and m.role is Role.TOOL]
+    kept = list(messages)
+    for at in results[:-KEPT_WHOLE] if len(results) > KEPT_WHOLE else []:
+        if size <= most:
+            break
+        old = kept[at]
+        if old.content == DROPPED:
+            continue
+        size -= len(old.content or "") - len(DROPPED)
+        kept[at] = replace(old, content=DROPPED)
+    return kept
+
+
+def stuck_said(calls: list[str], name: str, arguments: Mapping[str, Any], result: str) -> str:
+    """A tool's result — told, the same call answered the same STUCK_AFTER
+    times in a row, that repeating it will not help (2026-10-30)."""
+    key = json.dumps([name, arguments, result], sort_keys=True, default=str)
+    calls.append(key)
+    if len(calls) >= STUCK_AFTER and len(set(calls[-STUCK_AFTER:])) == 1:
+        return (
+            f"{result}\n\nNOTE: you made this same call {STUCK_AFTER} times and got the same "
+            "answer: calling it again will not help. Change what you ask, or do something else."
+        )
+    return result
 
 
 async def leka_complete(
