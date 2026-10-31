@@ -70,6 +70,7 @@ from leka.monitoring import (
     entitled,
     latest_night_review,
     night_review,
+    night_standing,
     webhooks,
     working_now,
 )
@@ -107,7 +108,18 @@ async def night(session: SessionDep, principal: Reader) -> NightReviewRead | Non
     """The last night review: what LEKA went through, what it found to look
     at (2026-10-29). None before the first."""
     found = await latest_night_review(session)
-    return NightReviewRead.model_validate(found) if found is not None else None
+    if found is None:
+        return None
+    # As it stands now: what was settled since is gone (2026-10-31).
+    points, settled = await night_standing(session, found)
+    return NightReviewRead(
+        id=found.id,
+        at=found.at,
+        trigger=found.trigger,
+        checked=found.checked,
+        points=points,
+        settled=settled,
+    )
 
 
 @router.post("/night-review", response_model=NightReviewRead)

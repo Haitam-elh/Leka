@@ -8,6 +8,7 @@ import { cn } from "cn";
 
 import { Card, IconTile } from "@/components/environment/parts";
 import { intentionHref } from "@/components/environment/twin";
+import { hrefOf } from "@/components/insights/leka-insights";
 import { Pill } from "@/components/intelligence/pill";
 import { exactDate, timeAgo } from "@/components/knowledge/time";
 import { Button } from "@/components/ui/button";
@@ -18,14 +19,32 @@ import { notify } from "@/lib/notify";
 import type { NightPoint } from "@/lib/twin";
 
 /**
- * The night review (2026-10-29, after Polsia's « travaille pendant que vous
- * dormez »): what LEKA went through overnight — how many things, sources,
- * alerts, findings — and what it found to look at, the most serious first,
- * each with where to see it and, when LEKA can look into it, a question
- * ready to ask. Gone through again on demand.
+ * The night review (2026-10-29): what LEKA went through overnight — every
+ * hour of the night — how many things, sources, alerts, findings — and what
+ * it found to look at, the most serious first, each with where to see it
+ * and, when LEKA can look into it, a question ready to ask. What was settled
+ * since is gone, said in a word (2026-10-31). Gone through again on demand.
  */
 
 const TONES = { high: "danger", medium: "warning", low: "neutral" } as const;
+
+/** Where a point is seen: a finding where its subject is (its entity's
+ * sheet, its source's page), as Ce que LEKA a remarqué links it
+ * (2026-10-31: « Voir » led to the page already open) — else the review's. */
+export function seenAt(point: NightPoint): string {
+  if (point.kind !== "finding") return point.href;
+  const params = point.params as Record<string, unknown>;
+  const href = hrefOf({
+    code: String(params.code ?? ""),
+    category: String(params.category ?? ""),
+    subject: {
+      type: String(params.subject_type ?? ""),
+      id: params.subject_id ? String(params.subject_id) : null,
+      kind: params.subject_kind ? String(params.subject_kind) : null,
+    },
+  } as unknown as Parameters<typeof hrefOf>[0]);
+  return href ?? point.href;
+}
 const SHOWN = 6;
 
 /** What a point says, in the reader's language. */
@@ -43,6 +62,10 @@ export function pointSaid(t: Dictionary, point: NightPoint): string {
         name: point.name,
         why: (w.whys as Record<string, string>)[String(params.why)] ?? String(params.why),
       });
+    case "finding":
+      return fill(w.finding, { name: point.name });
+    case "run":
+      return fill(w.run, { name: point.name, count: point.count });
     case "findings": {
       const names = Array.isArray(params.names) ? params.names.map(String).join(", ") : "";
       return fill(names ? w.findingsOn : w.findings, { count: point.count, names });
@@ -60,6 +83,7 @@ export function pointSaid(t: Dictionary, point: NightPoint): string {
 function askOf(t: Dictionary, point: NightPoint): string | null {
   if (!point.ask) return null;
   const w = t.environment.night;
+  if (point.kind === "finding") return fill(w.askFinding, { name: point.name });
   const trouble = String((point.params as Record<string, unknown>).trouble ?? "");
   return fill(w.ask, {
     name: point.name,
@@ -129,6 +153,7 @@ export function NightReviewCard({ className }: { className?: string }) {
                   alerts: checked.alerts ?? 0,
                   findings: checked.findings ?? 0,
                 })}
+                {found.settled ? ` ${fill(w.settled, { count: found.settled })}` : ""}
               </span>
             </div>
             {points.length ? (
@@ -165,9 +190,9 @@ export function NightReviewCard({ className }: { className?: string }) {
                           {w.analyse}
                         </Link>
                       ) : null}
-                      {point.href.startsWith("http") ? (
+                      {seenAt(point).startsWith("http") ? (
                         <a
-                          href={point.href}
+                          href={seenAt(point)}
                           target="_blank"
                           rel="noreferrer"
                           className="text-[0.8125rem] font-medium text-brand-violet hover:underline"
@@ -176,7 +201,7 @@ export function NightReviewCard({ className }: { className?: string }) {
                         </a>
                       ) : (
                         <Link
-                          href={point.href}
+                          href={seenAt(point)}
                           className="text-[0.8125rem] font-medium text-brand-violet hover:underline"
                         >
                           {w.see}

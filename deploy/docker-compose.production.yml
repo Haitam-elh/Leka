@@ -91,6 +91,14 @@ services:
     <<: [*app, *no-http]
     command: ["python", "-m", "leka.platform.worker"]
 
+  # What a person waits on — an agent, an intention's analysis, a code change
+  # and its repair — never behind a long job (2026-10-31: with one worker, a
+  # documentation run waited behind a sync and was said failed after an
+  # hour). This one drains leka:high only; the one above, all three.
+  worker-high:
+    <<: [*app, *no-http]
+    command: ["python", "-m", "leka.platform.worker", "leka:high"]
+
   # Puts the tick and the sweeps on the queue. Without it the worker waits
   # for ever: the tick is what turns events into job runs. Exactly one.
   scheduler:

@@ -823,7 +823,8 @@ class AgentRunRead(BaseModel):
     )
     error: str | None = Field(
         description="Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, "
-        "invalid_output, abandoned, error."
+        "invalid_output, abandoned (interrupted along the way), not_started (queued too long, "
+        "the workers busy), error."
     )
     reasons: list[dict[str, object]] = Field(
         description="When it could no longer run: the catalogue's reasons, as it said them."

@@ -19694,7 +19694,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "alert" | "source" | "findings" | "decisions" | "conflicts" | "change" | "runs";
+            kind: "alert" | "source" | "finding" | "findings" | "decisions" | "conflicts" | "change" | "run" | "runs";
             /**
              * Severity
              * @enum {string}
@@ -19746,8 +19746,17 @@ export interface components {
             checked: {
                 [key: string]: number;
             };
-            /** Points */
+            /**
+             * Points
+             * @description What still stands of what it found, as it stands now: a point settled since (an intention deleted, a finding closed, a pull request green) is gone.
+             */
             points: components["schemas"]["NightPointRead"][];
+            /**
+             * Settled
+             * @description Its points settled since it ran.
+             * @default 0
+             */
+            settled: number;
         };
         /** NormalisationFailureRead */
         NormalisationFailureRead: {

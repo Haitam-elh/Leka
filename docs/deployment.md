@@ -23,7 +23,7 @@ managed platform, see [`adr/014-hosting.md`](adr/014-hosting.md).
 | | |
 |---|---|
 | **Instance** | one EC2, `eu-central-1`, x86_64, Docker Compose |
-| **Containers** | `caddy` → `web` and `api`, plus `worker`, `scheduler`, `redis`, and `migrate` which runs once |
+| **Containers** | `caddy` → `web` and `api`, plus `worker`, `worker-high`, `scheduler`, `redis`, and `migrate` which runs once |
 | **Names** | `leka-core.com` → `web` (the site and the application), `api.leka-core.com` → `api`; `app.` and `www.` redirect to `leka-core.com`; Caddy holds every certificate |
 | **Database** | Amazon RDS for PostgreSQL, `eu-central-1` — **not** on the instance, not reachable from the internet |
 | **Object storage** | Amazon S3, `eu-central-1` |
@@ -41,8 +41,12 @@ writes `NEXT_PUBLIC_API_URL` into the JavaScript it sends to browsers, so it
 comes from the repository variable `PROD_API_URL` at build time, not from
 `production.env`. Changing the API's name means rebuilding the web image.
 
-The worker and the scheduler are two processes of the API image:
-`python -m leka.platform.worker` runs jobs, `python -m leka.platform.scheduler`
+The workers and the scheduler are processes of the API image:
+`python -m leka.platform.worker` runs jobs — `worker` drains the three
+queues, `worker-high` only `leka:high`, what a person waits on (an agent, an
+intention's analysis, a code change and its repair), so that it never waits
+behind a long sync or a sweep (2026-10-31: with one worker, a documentation
+run waited an hour and was said failed) —, `python -m leka.platform.scheduler`
 puts the ten-second tick and the sweeps on the queue. **Without the
 scheduler the worker waits for ever** — the tick is what turns `events` into
 `job_runs`. Both configure logging and Sentry before they run anything, which

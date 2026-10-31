@@ -73,6 +73,9 @@ FAILURES = (
     "timeout",  # longer than a run may take
     "invalid_output",  # not what the agent delivers (a JSON agent, no JSON)
     "abandoned",  # its worker went away: found running too long by the sweep
+    # Never started: queued past FORGOTTEN, the workers busy with longer
+    # work (2026-10-31: a documentation run said failed after an hour).
+    "not_started",
     "error",  # anything else: its type, logged
 )
 

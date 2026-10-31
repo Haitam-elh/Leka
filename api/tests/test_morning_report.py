@@ -2,9 +2,11 @@
 and e-mailed in the morning.
 
 What these protect: a night with something to look at told to every
-member — a quiet one told to no one; the morning's e-mail sent once, to
-each member in their language, never to who muted the watch, in LEKA's
-dress, each point in words and the way to Mon environnement.
+member — once, the morning's (2026-10-31: a review every hour of the night,
+never a bell each hour) —, a quiet one told to no one; the morning's e-mail
+sent once, to each member in their language, never to who muted the
+watch, in LEKA's dress, each point in words — only those that still stand
+— and the way to Mon environnement.
 """
 
 # ruff: noqa: F811 — fixtures imported to be requested by name.
@@ -19,7 +21,7 @@ from httpx import AsyncClient
 
 from leka.db import session_factory, workspace_scope
 from leka.identity import EmailMessage
-from leka.monitoring import NightReview
+from leka.monitoring import MonitoringAlert, NightReview
 from leka.notifications import morning
 from leka.notifications.models import NotificationPreference
 from tests.conftest import FakeIdentity
@@ -71,7 +73,14 @@ async def _kept(workspace_id: uuid.UUID, *rows: Any) -> None:
 async def test_a_night_with_points_is_told_a_quiet_one_is_not(
     client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
 ) -> None:
-    await _kept(acme["acme"], _review(acme["acme"], POINTS), _review(acme["acme"], []))
+    morning_at = datetime.now(UTC) - timedelta(hours=1)
+    await _kept(
+        acme["acme"],
+        # The night's hourly reviews: only the one the morning took rings.
+        _review(acme["acme"], POINTS, at=datetime.now(UTC) - timedelta(hours=4)),
+        _review(acme["acme"], POINTS, reported_at=morning_at),
+        _review(acme["acme"], [], reported_at=morning_at),
+    )
     _as(identity, acme, "member")
     said = (await client.get("/api/v1/notifications", params={"category": "monitoring"})).json()
     [night] = [n for n in said["data"] if n["kind"] == "alert.night_review"]
@@ -93,9 +102,25 @@ async def test_the_morning_report_is_mailed_once_never_to_who_muted_the_watch(
 
     monkeypatch.setattr(morning, "build_email_sender", Sender)
     review = _review(acme["acme"], POINTS)
+    now = datetime.now(UTC)
     await _kept(
         acme["acme"],
         review,
+        # The alert still open this morning; the decisions taken since.
+        MonitoringAlert(
+            workspace_id=acme["acme"],
+            id=uuid.uuid4(),
+            subject_type="entity",
+            subject_id=uuid.uuid4(),
+            subject_name="payment-api",
+            family="health",
+            kind="unavailable",
+            severity="high",
+            certainty="confirmed",
+            status="open",
+            opened_at=now,
+            last_seen_at=now,
+        ),
         NotificationPreference(
             workspace_id=acme["acme"], id=uuid.uuid4(), user_id=acme["member"], muted=["monitoring"]
         ),
@@ -103,10 +128,11 @@ async def test_the_morning_report_is_mailed_once_never_to_who_muted_the_watch(
     done = await morning.send_morning_reports()
     assert done["sent"] == 1
     [message] = sent
-    # In the member's language: this one's is English.
-    assert message.subject.startswith("LEKA · Night review: 2 points to look at")
+    # In the member's language: this one's is English — only what still
+    # stands this morning: the decisions taken since are not said.
+    assert message.subject.startswith("LEKA · Night review: 1 point to look at")
     assert "- payment-api: unavailable" in message.body
-    assert "- 2 decision(s) wait for your approval" in message.body
+    assert "decision" not in message.body
     html = message.html or ""
     assert "leka-wordmark.png" in html and ">Open My environment</a>" in html
     assert "/environment" in html
@@ -127,3 +153,10 @@ def test_each_point_is_said_in_english_too() -> None:
     assert morning.point_said(POINTS[0], words) == "payment-api: unavailable"
     change = {"kind": "change", "name": "Fix the balance", "params": {"number": 7}}
     assert morning.point_said(change, words) == "Pull request #7 is red: Fix the balance"
+    finding = {"kind": "finding", "name": "Redis", "params": {"finding": "f1"}}
+    assert morning.point_said(finding, words) == "Important finding from LEKA on Redis"
+    run = {"kind": "run", "name": "Documentation assistant", "count": 2, "params": {}}
+    assert (
+        morning.point_said(run, words)
+        == "The agent « Documentation assistant » failed 2 time(s) since yesterday"
+    )

@@ -160,9 +160,10 @@ SCHEDULE: tuple[Scheduled, ...] = (
     # The audit trail's retention (LEKA-407): what has outlived each
     # workspace's, deleted — and said, in the trail itself.
     Scheduled("audit-sweep", "leka.governance.audit.run_audit_sweep", cron="15 4 * * *"),
-    # What LEKA went through overnight, for the morning (2026-10-29): 02:30
-    # UTC, 03:30 in Paris.
-    Scheduled("night-review", "leka.monitoring.night.run_night_reviews", cron="30 2 * * *"),
+    # What LEKA went through overnight, for the morning (2026-10-29): every
+    # hour of the night (2026-10-31: « toutes les heures pendant la nuit »),
+    # 21:30 to 05:30 UTC — 22:30 to 06:30 in Paris in winter.
+    Scheduled("night-review", "leka.monitoring.night.run_night_reviews", cron="30 21-23,0-5 * * *"),
     # Its report, e-mailed in the morning: 06:00 UTC, 07:00 in Paris.
     Scheduled("morning-report", "leka.notifications.morning.run_morning_reports", cron="0 6 * * *"),
     # The operational alerts (LEKA-408), judged every five minutes. On the low

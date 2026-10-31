@@ -1370,11 +1370,14 @@ async def sweep_runs(*, now: datetime | None = None, limit: int = 200) -> dict[s
                 if run is None or run.status not in (RunStatus.QUEUED, RunStatus.RUNNING):
                     continue
                 was = run.status
+                # Never started is said as such: the workers were busy, not
+                # the run broken (2026-10-31).
+                code = "not_started" if was == RunStatus.QUEUED else "abandoned"
                 run.status = RunStatus.FAILED.value
-                run.error = "abandoned"
+                run.error = code
                 run.finished_at = moment
                 steps = Steps(session, run, await runs.last_seq(run_id))
-                steps.add("failed", code="abandoned", was=was)
+                steps.add("failed", code=code, was=was)
                 await session.commit()
                 swept += 1
     logger.info("agent_runs_swept", abandoned=swept)
