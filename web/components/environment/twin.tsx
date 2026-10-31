@@ -556,6 +556,9 @@ export function AlertsCard({ monitoring }: { monitoring: Monitoring | undefined 
     name ? name.charAt(0).toUpperCase() + name.slice(1) : "-";
   return (
     <Card
+      // The night review's « Voir » of an alert scrolls here (2026-10-31).
+      id="alerts"
+      className="scroll-mt-24"
       title={w.title}
       icon={<IconTile icon={Bell} tone="violet" className="size-9" />}
       action={

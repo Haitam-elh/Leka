@@ -10,8 +10,7 @@ import { useDictionary } from "@/lib/i18n/locale-provider";
 import type { Working } from "@/lib/twin";
 
 /**
- * « LEKA travaille sur… » (2026-10-29, after Polsia's running log): on the
- * home, under the question, what LEKA is doing right now — an intention
+ * « LEKA travaille sur… » (2026-10-29): on the home, under the question, what LEKA is doing right now — an intention
  * analysed, an agent writing a change or drawing mock-ups, a source read, a
  * pull request repaired — each with its step, since when, and the way to
  * follow it. Followed closely while there is some; nothing under way,

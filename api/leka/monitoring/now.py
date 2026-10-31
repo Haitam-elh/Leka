@@ -1,6 +1,6 @@
-"""What LEKA is working on, now (2026-10-29, after Polsia's « travail en
-cours sur votre tâche… »): every piece of work under way in the workspace,
-the latest first, each with its step and where to follow it.
+"""What LEKA is working on, now (2026-10-29): every piece of work under way
+in the workspace, the latest first, each with its step and where to follow
+it.
 
     an intention          being analysed, its actions carried out, checked
     an agent's run        queued, at work, or drawing what it delivers — its

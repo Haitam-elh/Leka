@@ -11,6 +11,7 @@ from leka.monitoring.models import (
 from leka.monitoring.night import latest as latest_night_review
 from leka.monitoring.night import review as night_review
 from leka.monitoring.night import run_night_reviews
+from leka.monitoring.night import standing as night_standing
 from leka.monitoring.now import working_now
 from leka.monitoring.repository import AlertRepository
 from leka.monitoring.schemas import (
@@ -73,6 +74,7 @@ __all__ = [
     "latest_night_review",
     "message",
     "night_review",
+    "night_standing",
     "run_monitoring_sweep",
     "run_night_reviews",
     "seen_of",

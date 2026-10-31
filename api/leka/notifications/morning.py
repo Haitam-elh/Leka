@@ -1,6 +1,6 @@
-"""The morning report (2026-10-29, after Polsia's daily report): the night's
-review, e-mailed to the workspace's members in the morning — what LEKA went
-through, each point to look at, and the way to Mon environnement.
+"""The morning report (2026-10-29): the night's review, e-mailed to the
+workspace's members in the morning — what LEKA went through, each point to
+look at, and the way to Mon environnement.
 
 Sent once a review (`reported_at`), only when there is something to look
 at — a quiet night writes to no one — to each member in their language,
@@ -27,7 +27,7 @@ from leka.identity import (
     email_language,
     email_paragraphs,
 )
-from leka.monitoring import NightReview
+from leka.monitoring import NightReview, night_standing
 from leka.notifications.models import NotificationPreference
 from leka.platform import Membership, Workspace
 
@@ -57,6 +57,8 @@ WORDS: dict[str, dict[str, str]] = {
         "why.degraded": "lecture en échec",
         "why.unread": "non lue depuis plus de 24 h",
         "findings": "{count} constat(s) important(s) de LEKA{on}",
+        "finding": "Constat important de LEKA sur {name}",
+        "run": "L'agent « {name} » a échoué {count} fois depuis hier",
         "on": ", sur {names}",
         "decisions": "{count} décision(s) attendent votre validation",
         "conflicts": "{count} conflit(s) de connaissance à trancher",
@@ -83,6 +85,8 @@ WORDS: dict[str, dict[str, str]] = {
         "why.degraded": "reading failed",
         "why.unread": "not read for over 24 h",
         "findings": "{count} important finding(s) from LEKA{on}",
+        "finding": "Important finding from LEKA on {name}",
+        "run": "The agent « {name} » failed {count} time(s) since yesterday",
         "on": ", on {names}",
         "decisions": "{count} decision(s) wait for your approval",
         "conflicts": "{count} knowledge conflict(s) to settle",
@@ -116,13 +120,21 @@ def point_said(point: Mapping[str, object], words: Mapping[str, str]) -> str:
         return words["findings"].format(count=count, on=on)
     if kind == "change":
         return words["change"].format(number=params.get("number") or "", name=name)
+    if kind in ("finding", "run"):
+        return words[kind].format(name=name, count=count)
     return words.get(kind, kind).format(count=count)
 
 
-def report(review: NightReview, workspace: str | None, language: str) -> EmailMessage:
-    """The morning's e-mail of a review, in `language`, LEKA's dress."""
+def report(
+    review: NightReview,
+    workspace: str | None,
+    language: str,
+    points: Sequence[Mapping[str, object]] | None = None,
+) -> EmailMessage:
+    """The morning's e-mail of a review, in `language`, LEKA's dress — its
+    points as they stand when it is sent (`points`), when given."""
     words = _words(language)
-    points = review.points
+    points = list(review.points if points is None else points)
     count = len(points)
     plural = "" if count == 1 else "s"
     checked = {k: review.checked.get(k, 0) for k in ("things", "sources", "alerts", "findings")}
@@ -208,11 +220,13 @@ async def send_morning_reports(*, now: datetime | None = None) -> dict[str, int]
                         continue
                     review.reported_at = moment
                     await session.commit()
-                    if not review.points:
+                    # What still stands this morning (2026-10-31).
+                    points, _settled = await night_standing(session, review, now=moment)
+                    if not points:
                         continue
                     for address, chosen in await _recipients(workspace.id):
                         language = email_language(chosen, workspace=workspace.default_language)
-                        message = report(review, workspace.name, language)
+                        message = report(review, workspace.name, language, points)
                         try:
                             await sender.send(
                                 EmailMessage(

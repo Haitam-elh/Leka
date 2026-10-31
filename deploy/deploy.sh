@@ -111,8 +111,8 @@ healthy() {
       curl -fsS --max-time 5 http://127.0.0.1:8000/api/v1/health > /dev/null 2>&1 \
       && "${COMPOSE[@]}" exec -T api \
         curl -fsS --max-time 5 http://web:3000/login > /dev/null 2>&1; then
-      # The worker and the scheduler have no endpoint to ask.
-      steady worker && steady scheduler
+      # The workers and the scheduler have no endpoint to ask.
+      steady worker && steady worker-high && steady scheduler
       return
     fi
     sleep 2
@@ -162,7 +162,7 @@ fi
 
 echo "::error::${RELEASE} did not come up."
 "${COMPOSE[@]}" ps -a || true
-"${COMPOSE[@]}" logs --tail=60 migrate api worker scheduler web || true
+"${COMPOSE[@]}" logs --tail=60 migrate api worker worker-high scheduler web || true
 
 if [ -z "$PREVIOUS" ] || [ -z "$PREVIOUS_REGISTRY" ]; then
   echo "::error::No previous release to go back to. The box is down."

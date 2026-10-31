@@ -91,6 +91,7 @@ export function Card({
   className,
   children,
   labelledBy,
+  id,
 }: {
   title: React.ReactNode;
   icon?: React.ReactNode;
@@ -98,9 +99,12 @@ export function Card({
   className?: string;
   children: React.ReactNode;
   labelledBy?: string;
+  /** Where a link elsewhere scrolls to (`/environment#alerts`). */
+  id?: string;
 }) {
   return (
     <section
+      id={id}
       aria-labelledby={labelledBy}
       className={cn("rounded-xl border border-shell-line bg-white p-4", className)}
     >

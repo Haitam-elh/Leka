@@ -5,7 +5,9 @@
  * it; what LEKA went through, counted; each point in words, the most
  * serious first, with where to see it and, when LEKA can look into it, the
  * question ready to ask; nothing found said as good news; run again on
- * demand, shown at once.
+ * demand, shown at once. A finding seen where its subject is, an agent's
+ * failures on its page, an alert on its card — never the page already open
+ * (2026-10-31); what was settled since, said.
  */
 import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
@@ -29,13 +31,14 @@ const REVIEW: NightReview = {
   at: "2026-10-29T02:30:00Z",
   trigger: "night",
   checked: { things: 42, sources: 3, alerts: 1, findings: 7 },
+  settled: 0,
   points: [
     {
       kind: "alert",
       severity: "high",
       name: "payment-api",
       count: 1,
-      href: "/environment",
+      href: "/environment#alerts",
       ask: true,
       params: { trouble: "unavailable" },
     },
@@ -94,11 +97,66 @@ describe("the night review", () => {
     night.again.mockResolvedValue({ ...REVIEW, trigger: "asked", points: [] });
     show();
     await waitFor(() =>
-      expect(screen.getByTestId("night-review")).toHaveTextContent("chaque nuit à 3 h 30"),
+      expect(screen.getByTestId("night-review")).toHaveTextContent(
+        "toutes les heures de la nuit, de 22 h 30 à 6 h 30",
+      ),
     );
     await user.click(screen.getByTestId("night-review-again"));
     await waitFor(() => expect(screen.getByTestId("night-review-verdict")).toHaveTextContent("Rien à signaler"));
     expect(screen.getByTestId("night-review")).toHaveTextContent("Tout va bien");
     expect(screen.getByTestId("night-review-checked")).toHaveTextContent("Relancée");
+  });
+
+  it("sees a finding where its subject is, an agent's failures on its page, and says what was settled", async () => {
+    night.get.mockResolvedValue({
+      ...REVIEW,
+      settled: 1,
+      points: [
+        {
+          kind: "finding",
+          severity: "high",
+          name: "Redis",
+          count: 1,
+          href: "/environment?tab=applications",
+          ask: true,
+          params: {
+            finding: "f1",
+            code: "sync.stale",
+            category: "health",
+            subject_type: "entity",
+            subject_id: "8d2f6a3e-1b2c-4d5e-8f90-123456789abc",
+            subject_kind: "database",
+          },
+        },
+        {
+          kind: "run",
+          severity: "medium",
+          name: "Assistant de documentation",
+          count: 2,
+          href: "/capabilities/documentation-assistant",
+          ask: false,
+          params: { agent: "documentation-assistant" },
+        },
+      ],
+    });
+    show();
+    const points = await screen.findAllByTestId("night-review-point");
+    expect(points[0]).toHaveTextContent("Constat important de LEKA sur Redis");
+    expect(within(points[0]).getByRole("link", { name: "Voir" })).toHaveAttribute(
+      "href",
+      "/environment/databases/8d2f6a3e-1b2c-4d5e-8f90-123456789abc",
+    );
+    expect(within(points[0]).getByRole("link", { name: "Analyser" })).toHaveAttribute(
+      "href",
+      `/intentions/new?q=${encodeURIComponent(
+        "Explique le constat de LEKA sur Redis : ce qu'il veut dire et ce qu'il faut faire.",
+      )}`,
+    );
+    expect(points[1]).toHaveTextContent("L'agent « Assistant de documentation » : 2 échecs depuis hier");
+    expect(within(points[1]).getByRole("link", { name: "Voir" })).toHaveAttribute(
+      "href",
+      "/capabilities/documentation-assistant",
+    );
+    expect(screen.getByTestId("night-review-checked")).toHaveTextContent("1 point réglé depuis.");
   });
 });

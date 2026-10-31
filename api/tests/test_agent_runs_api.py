@@ -816,9 +816,11 @@ async def test_kept_swept_and_the_workspaces_own(
     )
     swept = await sweep_runs()
     assert swept["abandoned"] >= 2
-    for run in (lost, forgotten):
+    # Interrupted along the way, or never started — said apart (2026-10-31:
+    # a run that waited behind longer work was said broken).
+    for run, why in ((lost, "abandoned"), (forgotten, "not_started")):
         said = await _detail(client, run["id"])
-        assert (said["status"], said["error"]) == ("failed", "abandoned")
+        assert (said["status"], said["error"]) == ("failed", why)
     assert (await sweep_runs())["abandoned"] == 0
 
     # A step is never changed.

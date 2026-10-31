@@ -201,8 +201,7 @@ class ChannelEndpoint(Base, WorkspaceScopedMixin):
 
 class NightReview(Base, WorkspaceScopedMixin):
     """What LEKA went through overnight, and what it found to look at
-    (2026-10-29, after Polsia's « travaille pendant que vous dormez »):
-    each review kept — when, how many of each thing it read (`checked`),
+    (2026-10-29): each review kept — when, how many of each thing it read (`checked`),
     and its points, the most serious first, each with where to see it and
     what to ask of LEKA about it (monitoring/night.py)."""
 

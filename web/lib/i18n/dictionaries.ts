@@ -1893,7 +1893,8 @@ const fr = {
       tool_rounds: "le modèle n'a jamais conclu",
       timeout: "trop longue, relancez-la",
       invalid_output: "le livrable n'est pas au format attendu",
-      abandoned: "interrompue",
+      abandoned: "interrompue en cours de route, relancez-la",
+      not_started: "n'a pas pu démarrer : LEKA terminait d'autres tâches longues, relancez-la",
       error: "erreur inattendue",
       refused: "aucun modèle autorisé par l'espace ne pouvait répondre",
       limited: "une limite d'usage est atteinte",
@@ -4152,7 +4153,9 @@ const fr = {
       title: "Revue de la nuit",
       again: "Relancer maintenant",
       failed: "La revue n'a pas pu être relancée : réessayez.",
-      first: "LEKA passe tout en revue chaque nuit à 3 h 30. Pas encore de revue : lancez la première maintenant.",
+      first:
+        "LEKA passe tout en revue toutes les heures de la nuit, de 22 h 30 à 6 h 30. Pas encore de revue : lancez la première maintenant.",
+      settled: "{count} {count|point réglé|points réglés} depuis.",
       checkedNight:
         "Le {when}, LEKA a passé en revue {things} éléments, {sources} {sources|source|sources}, {alerts} {alerts|alerte|alertes} et {findings} {findings|constat|constats}.",
       checkedAsked:
@@ -4165,6 +4168,7 @@ const fr = {
       more: "Voir les {count} autres",
       fewer: "Voir moins",
       ask: "Pourquoi {name} est {trouble} ?",
+      askFinding: "Explique le constat de LEKA sur {name} : ce qu'il veut dire et ce qu'il faut faire.",
       severities: { high: "Important", medium: "À voir", low: "Mineur" },
       points: {
         alert: "{name} : {trouble}",
@@ -4173,6 +4177,8 @@ const fr = {
         whys: { error: "en erreur", degraded: "lecture en échec", unread: "non lue depuis plus de 24 h" },
         findings: "{count} {count|constat important|constats importants} de LEKA",
         findingsOn: "{count} {count|constat important|constats importants} de LEKA, sur {names}",
+        finding: "Constat important de LEKA sur {name}",
+        run: "L'agent « {name} » : {count} {count|échec|échecs} depuis hier",
         decisions: "{count} {count|décision attend|décisions attendent} votre validation",
         conflicts: "{count} {count|conflit|conflits} de connaissance à trancher",
         change: "La pull request #{number} est rouge : {name}",
@@ -11114,7 +11120,8 @@ const en: Dictionary = {
       tool_rounds: "the model never concluded",
       timeout: "too long, run it again",
       invalid_output: "what it delivered is not in the expected format",
-      abandoned: "interrupted",
+      abandoned: "interrupted along the way, run it again",
+      not_started: "could not start: LEKA was finishing other long tasks, run it again",
       error: "unexpected error",
       refused: "no model the workspace allows could answer",
       limited: "a usage limit is reached",
@@ -13307,7 +13314,9 @@ const en: Dictionary = {
       title: "Night review",
       again: "Run it now",
       failed: "The review could not be run again: try again.",
-      first: "LEKA goes through everything every night at 3:30. No review yet: run the first one now.",
+      first:
+        "LEKA goes through everything every hour of the night, from 10:30 pm to 6:30 am. No review yet: run the first one now.",
+      settled: "{count} {count|point|points} settled since.",
       checkedNight:
         "On {when}, LEKA went through {things} things, {sources} {sources|source|sources}, {alerts} {alerts|alert|alerts} and {findings} {findings|finding|findings}.",
       checkedAsked:
@@ -13320,6 +13329,7 @@ const en: Dictionary = {
       more: "See the {count} others",
       fewer: "See fewer",
       ask: "Why is {name} {trouble}?",
+      askFinding: "Explain LEKA's finding on {name}: what it means and what to do.",
       severities: { high: "Important", medium: "To look at", low: "Minor" },
       points: {
         alert: "{name}: {trouble}",
@@ -13328,6 +13338,8 @@ const en: Dictionary = {
         whys: { error: "in error", degraded: "reading failed", unread: "not read for over 24 h" },
         findings: "{count} important {count|finding|findings} from LEKA",
         findingsOn: "{count} important {count|finding|findings} from LEKA, on {names}",
+        finding: "Important finding from LEKA on {name}",
+        run: "The agent « {name} »: {count} {count|failure|failures} since yesterday",
         decisions: "{count} {count|decision waits|decisions wait} for your approval",
         conflicts: "{count} knowledge {count|conflict|conflicts} to settle",
         change: "Pull request #{number} is red: {name}",

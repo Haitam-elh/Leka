@@ -20,11 +20,12 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from leka.capabilities import CodeChange
+from leka.capabilities import AgentRun, CodeChange
 from leka.connectors import Source, SourceStatus, SyncStatus
 from leka.db import session_factory, system_scope, workspace_scope
+from leka.intelligence import Finding
 from leka.monitoring import MonitoringAlert, NightReview
-from leka.monitoring.night import review_every_workspace
+from leka.monitoring.night import review_every_workspace, still
 from tests.conftest import FakeIdentity
 from tests.test_context_engine import model
 from tests.test_intention_analysis_api import queued  # noqa: F401 — a fixture
@@ -183,3 +184,135 @@ async def test_what_leka_works_on_now_each_with_its_step_and_where(
     )
     _as(identity, acme, "other_admin")
     assert (await client.get("/api/v1/monitoring/now")).json() == []
+
+
+async def _red_change(workspace: uuid.UUID, source: uuid.UUID, intention: uuid.UUID | None) -> None:
+    with workspace_scope(workspace):
+        async with session_factory() as session:
+            session.add(
+                CodeChange(
+                    workspace_id=workspace,
+                    id=uuid.uuid4(),
+                    source_id=source,
+                    intention_id=intention,
+                    repository="acme/payments",
+                    base_branch="main",
+                    title="Implémente le design de l'accueil",
+                    status="applied",
+                    pull_request_number=450,
+                    follow={"stage": "checks_failed"},
+                )
+            )
+            await session.commit()
+
+
+async def test_a_point_settled_since_is_gone_at_once_never_a_deleted_intention_s(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[uuid.UUID],
+) -> None:
+    # 2026-10-31: the pull request #450's intention deleted, the review still
+    # said it, its « Voir » leading nowhere.
+    _as(identity, acme, "admin")
+    asked = await client.post("/api/v1/intentions", json={"text": ASKED})
+    intention = asked.json()["intention"]["id"]
+    created: dict[str, Any] = await _create(client)
+    await _red_change(acme["acme"], uuid.UUID(created["id"]), uuid.UUID(intention))
+    said = (await client.post(API)).json()
+    [change] = [p for p in said["points"] if p["kind"] == "change"]
+    assert change["href"] == f"/intentions/{intention}/deliverable"
+    assert said["settled"] == 0
+
+    assert (await client.delete(f"/api/v1/intentions/{intention}")).status_code == 200
+    now = (await client.get(API)).json()
+    assert [p for p in now["points"] if p["kind"] == "change"] == []
+    assert now["settled"] == 1 and now["id"] == said["id"]
+    # And the next review never says it again.
+    again = (await client.post(API)).json()
+    assert [p for p in again["points"] if p["kind"] == "change"] == []
+
+
+async def test_each_finding_and_each_failing_agent_is_a_point_seen_where_it_is(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+) -> None:
+    _as(identity, acme, "admin")
+    now = datetime.now(UTC)
+    entity = uuid.uuid4()
+    with workspace_scope(acme["acme"]):
+        async with session_factory() as session:
+            session.add(
+                Finding(
+                    workspace_id=acme["acme"],
+                    analyzer="health",
+                    analyzer_version=1,
+                    key=f"entity:{entity}",
+                    category="health",
+                    code="health.unavailable",
+                    params={},
+                    statement="Redis is down.",
+                    severity="high",
+                    rank=10,
+                    confidence=0.9,
+                    subject_type="entity",
+                    subject_id=entity,
+                    subject_name="Redis",
+                    subject_kind="database",
+                    status="open",
+                    first_seen_at=now,
+                    last_seen_at=now,
+                    first_run_id=uuid.uuid4(),
+                    last_run_id=uuid.uuid4(),
+                    occurrences=1,
+                    reopened=0,
+                )
+            )
+            for _ in range(2):
+                session.add(
+                    AgentRun(
+                        workspace_id=acme["acme"],
+                        key="documentation-assistant",
+                        version="1.0.0",
+                        status="failed",
+                        inputs={},
+                        requested_by=acme["admin"],
+                        format="markdown",
+                        detail={},
+                        queued_at=now,
+                        finished_at=now,
+                    )
+                )
+            await session.commit()
+    said = (await client.post(API)).json()
+    [finding] = [p for p in said["points"] if p["kind"] == "finding"]
+    assert (finding["name"], finding["ask"]) == ("Redis", True)
+    assert finding["params"]["subject_id"] == str(entity)
+    assert finding["params"]["subject_kind"] == "database"
+    [run] = [p for p in said["points"] if p["kind"] == "run"]
+    assert (run["name"], run["count"], run["href"]) == (
+        "Assistant de documentation",
+        2,
+        "/capabilities/documentation-assistant",
+    )
+    alerts = [p for p in said["points"] if p["kind"] == "alert"]
+    assert all(p["href"] == "/environment#alerts" for p in alerts)
+
+
+def test_what_still_stands_is_said_as_it_is_now_and_what_was_settled_counted() -> None:
+    point = {"kind": "decisions", "severity": "medium", "count": 2, "params": {}}
+    alert = {"kind": "alert", "severity": "high", "name": "api", "params": {"trouble": "degraded"}}
+    # Fewer decisions now: as they are now; the alert gone: settled.
+    now = [{**point, "count": 1}]
+    shown, settled = still([alert, point], now)
+    assert shown == now and settled == 1
+    # Kept counted before 2026-10-31: each one now.
+    counted = {"kind": "findings", "severity": "high", "count": 2, "params": {}}
+    each = [
+        {"kind": "finding", "severity": "high", "name": n, "params": {"finding": n}}
+        for n in ("a", "b")
+    ]
+    assert still([counted], each) == (each, 0)

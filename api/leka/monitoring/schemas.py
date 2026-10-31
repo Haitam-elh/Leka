@@ -180,7 +180,11 @@ class NightPointRead(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    kind: Literal["alert", "source", "findings", "decisions", "conflicts", "change", "runs"]
+    # findings and runs: counted, before 2026-10-31; one each since (finding,
+    # run).
+    kind: Literal[
+        "alert", "source", "finding", "findings", "decisions", "conflicts", "change", "run", "runs"
+    ]
     severity: Literal["high", "medium", "low"]
     name: str = ""
     count: int = 1
@@ -198,7 +202,11 @@ class NightReviewRead(BaseModel):
     at: datetime
     trigger: Literal["night", "asked"]
     checked: dict[str, int]
-    points: list[NightPointRead]
+    points: list[NightPointRead] = Field(
+        description="What still stands of what it found, as it stands now: a point settled "
+        "since (an intention deleted, a finding closed, a pull request green) is gone."
+    )
+    settled: int = Field(default=0, description="Its points settled since it ran.")
 
 
 class WorkingRead(BaseModel):

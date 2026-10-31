@@ -434,13 +434,18 @@ async def _credits(
 
 async def _night(session: AsyncSession, workspace_id: uuid.UUID, after: Key, now: datetime) -> Read:
     """What LEKA went through overnight, when it found something to look at:
-    told to everyone who reads the environment — a quiet night tells nothing."""
+    told to everyone who reads the environment — a quiet night tells nothing.
+    Once a night (2026-10-31: a review every hour of it): the review the
+    morning report took, when it took it (`reported_at`)."""
     told: list[Told] = []
     reviews = (
         await session.scalars(
             select(NightReview)
-            .where(_after(NightReview.created_at, NightReview.id, after))
-            .order_by(NightReview.created_at, NightReview.id)
+            .where(
+                NightReview.reported_at.is_not(None),
+                _after(NightReview.reported_at, NightReview.id, after),
+            )
+            .order_by(NightReview.reported_at, NightReview.id)
             .limit(BATCH)
         )
     ).all()
@@ -460,7 +465,9 @@ async def _night(session: AsyncSession, workspace_id: uuid.UUID, after: Key, now
                 to_permission="source:read",
             )
         )
-    return Read(told, _last([(r.created_at, r.id) for r in reviews]), len(reviews))
+    return Read(
+        told, _last([(r.reported_at, r.id) for r in reviews if r.reported_at]), len(reviews)
+    )
 
 
 # ── the workspace: who joined, whose role changed ───────────────────────────
