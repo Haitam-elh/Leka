@@ -249,6 +249,8 @@ async def test_the_designer_reads_its_method_while_it_runs(
         "read_entity",
         "list_files",
         "read_file",
+        # Who reads the code can search it (2026-10-31).
+        "search_code",
         "list_pull_requests",
         "read_pull_request",
         "read_method",

@@ -1003,13 +1003,17 @@ def test_the_database_review_starts_from_the_catalogue_and_runs_nothing() -> Non
     that would lock or lose data, access; nothing run; its method credited,
     never told it."""
     d = {d.key: d for d in catalogue()}["database-review"]
+    # 1.2.0 (2026-10-31): a database LEKA does not read is not « à risque »,
+    # what already ran is not rewritten, a count is counted.
     assert (d.kind, d.lifecycle, d.version, d.mode) == (
         Kind.AGENT,
         Lifecycle.ACTIVE,
-        "1.1.0",
+        "1.2.0",
         "read_only",
     )
-    assert {"read_entity", "list_files", "read_file", "read_pull_request"} <= set(d.tools)
+    assert {"read_entity", "list_files", "read_file", "search_code", "read_pull_request"} <= set(
+        d.tools
+    )
     assert {i.name for i in d.contract.inputs} == {"base", "depot", "changement", "symptome"}
     assert all(not i.required for i in d.contract.inputs)
     given, withheld = agent_skill_tools(d)

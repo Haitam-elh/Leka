@@ -464,7 +464,10 @@ def journey(facts: Facts, now: datetime) -> Journey:
     if last is not None and last.name == "by_hand":
         return said(J.DONE, "by_hand", "nothing", None, {ARCHIVE, LAUNCH_AGENTS})
     if last is not None and last.name == "verified":
-        return said(J.DONE, None, "nothing", None, {ARCHIVE, LAUNCH_AGENTS})
+        # Its agents delivered: a deliverable is ready, never « verified »
+        # — an analysis says itself what it could not check (2026-10-31).
+        reason = "delivered" if path == AGENTS else None
+        return said(J.DONE, reason, "nothing", None, {ARCHIVE, LAUNCH_AGENTS})
     if analysis is not None and analysis.status in ("partial", "inconclusive"):
         return said(
             J.ANALYSIS_PARTIAL, analysis.status, "read_result", ASKER, {ARCHIVE, LAUNCH_AGENTS}
@@ -559,7 +562,7 @@ MATRIX: tuple[Row, ...] = (
         (S.COMPLETED,),
         ("verified", "by_hand"),
         (ASK_AGAIN, ARCHIVE, LAUNCH_AGENTS),
-        ("by_hand",),
+        ("by_hand", "delivered"),
     ),
     Row(J.CANCELLED, (S.CANCELLED,), ("cancelled",), (ARCHIVE,), ("by_person",)),
     Row(J.SUPERSEDED, (), ("asked_again", "clarified"), ()),

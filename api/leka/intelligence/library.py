@@ -1605,6 +1605,20 @@ class SchemaHealth(Assessed):
     duplicate_indexes: list[TableNote]
     floating_money: list[TableNote]
     timestamps_without_zone: list[TableNote]
+    connected: bool = Field(
+        default=True,
+        description="Whether a database source reads it. False: LEKA knows it from its code or "
+        "its cloud only — its tables are unknown, never missing (2026-10-31).",
+    )
+    known_from: list[str] = Field(
+        default_factory=list, description="The kinds of the sources LEKA knows it from."
+    )
+
+
+# The sources that read a database itself: its tables, columns, indexes.
+DATABASE_SOURCES = frozenset(
+    {"postgresql", "mysql", "mariadb", "sqlserver", "oracle", "mongodb", "supabase"}
+)
 
 
 def index_columns(definition: str) -> tuple[str, ...]:
@@ -1787,7 +1801,20 @@ def judge_schema(health: SchemaHealth) -> list[Signal]:
                 tables=named(health.timestamps_without_zone),
             )
         )
-    if not health.tables:
+    if not health.tables and not health.connected:
+        # Unknown, never missing (2026-10-31: « no table » read as a database
+        # without its migrations, a production run told to apply them).
+        where = ", ".join(health.known_from) or "the company model"
+        said.append(
+            signal(
+                "schema.not_connected",
+                "info",
+                f"LEKA does not read {health.database} itself: it knows it from {where} only. "
+                "Its tables, keys, indexes and volumes are unknown here, not missing: connect it "
+                "as a source to review them.",
+            )
+        )
+    elif not health.tables:
         said.append(signal("schema.empty", "info", "LEKA knows no table in this database."))
     return said
 
@@ -1806,6 +1833,10 @@ async def schema_health(asked: SchemaAsked, call: Call) -> SchemaHealth:
         database=database.name,
         engine=str(engine) if engine else None,
     )
+    known_from = sorted({s.kind for s in citer.sources.get(database.id, ()) if s.kind})
+    health.connected = bool(DATABASE_SOURCES & set(known_from))
+    health.known_from = known_from
+    health.signals = judge_schema(health)
     said = citer.named(database, kind="database")
     # What it cites: the database, and the tables it points out.
     shown = {said.id} | {

@@ -313,7 +313,8 @@ or when its source ties an incident to it.
 | | `schema.duplicate_index` | info | two indexes on the same columns |
 | | `schema.timestamp_without_zone` | info | PostgreSQL dates without their time zone |
 | | `schema.not_read` | info | no table's structure read yet: the source must sync again |
-| | `schema.empty` | info | no table |
+| | `schema.not_connected` | info | a database LEKA knows from the code or another source only: its tables are unknown, not missing |
+| | `schema.empty` | info | a connected database with no table |
 | `delivery-metrics` | `delivery.high_failure_rate` | warning, critical past 30 % | change failure rate above 15 % |
 | | `delivery.failed_deployments` | warning | deployments failed |
 | | `delivery.slow_recovery` | warning | recovering takes more than a day |

@@ -52,6 +52,8 @@ from leka.capabilities.code_tools import CODE_NAMES, CODE_TOOLS, WORKSHOP_NAMES,
 from leka.capabilities.dedicated import own_definition
 from leka.capabilities.definition import Definition, check_input
 from leka.capabilities.deliverable_check import (
+    contradicted,
+    contradictions_said,
     deferred,
     elsewhere,
     invented,
@@ -91,7 +93,7 @@ from leka.capabilities.runtime import (
 )
 from leka.capabilities.skills import SkillRuntime, agent_skill_tools, skill_handlers
 from leka.capabilities.tools import TOOLS, Answer, handlers
-from leka.capabilities.workshop import DRAFT_CONTEXT, judged
+from leka.capabilities.workshop import DRAFT_CONTEXT, Draft, judged
 from leka.connectors import SourceRepository
 from leka.context import AssembledContext, ContextRepository, ContextService, IntentAsk
 from leka.core.config import settings
@@ -387,13 +389,17 @@ async def _context(
 # What an agent that declares no tools reads of the code, when a repository
 # is connected (2026-10-23: the architect drew bricks no source names, the
 # code it could not read).
-READ_CODE = ("list_files", "read_file")
+READ_CODE = ("list_files", "read_file", "search_code")
 
 
 def code_tools_of(definition: Definition) -> tuple[str, ...]:
     """The code tools an agent is offered, a GitHub source connected: those
     it names — or, naming none, the reading of the code."""
     named = tuple(t.name for t in CODE_TOOLS if t.name in definition.tools)
+    # Who reads a file may search the code: an absence is said only once
+    # looked for (2026-10-31: indexes said missing that the code creates).
+    if "read_file" in named and "search_code" not in named:
+        named += ("search_code",)
     return named if definition.tools else READ_CODE
 
 
@@ -665,12 +671,57 @@ async def _run(
             files |= {f"{draft.repository}:{p}": t for p, t in draft.now.items() if t is not None}
         return files
 
+    repository: dict[str, str] = {}
+
+    async def repository_files() -> dict[str, str]:
+        """The files of the repositories it read, as they are: its branch's
+        archive, read once — or what it read, when refused."""
+        if repository or not reads_code:
+            return repository
+        from leka.capabilities.changes import code_for
+
+        named = [*read.get("paths", {}), *(k.split(":", 1)[0] for k in read.get("files", {}))]
+        drafts = read.setdefault("drafts", {})
+        for name in list(dict.fromkeys(named))[:2]:
+            draft = drafts.get(name)
+            if draft is None:
+                found = await code_for(session, workspace_id, name)
+                if found is None:
+                    continue
+                try:
+                    draft = Draft(found[1], name, await found[1].default_branch(name))
+                except Exception:
+                    logger.warning("facts_repository_not_read", repository=name, exc_info=True)
+                    continue
+                drafts[name] = draft
+            draft.read = {
+                k.split(":", 1)[1]: t
+                for k, t in read.get("files", {}).items()
+                if k.startswith(f"{name}:")
+            }
+            try:
+                texts, _refused = await draft.everything()
+            except Exception:
+                logger.warning("facts_repository_not_read", repository=name, exc_info=True)
+                continue
+            repository.update(texts)
+        return repository
+
+    async def facts(text: str) -> list[str]:
+        """What it says that the code contradicts (2026-10-31)."""
+        if not reads_code:
+            return []
+        return [c.to_model() for c in contradicted(text, await repository_files())]
+
     async def judge(text: str) -> list[str]:
         # Its draft finished first: it holds together, its plan done
         # (2026-10-30) — checked whatever LEKA_AGENT_CORRECTIONS says.
         said = await judged(read.get("draft")) if drafts else []
         if not settings.agent_corrections:
             return said
+        # Held to the code: an index it says missing that the code declares,
+        # a count that is not the count, a finding on a file not read.
+        said += await facts(text)
         files = known()
         said += [
             # Its deliverable, every section its agent gives — whatever the
@@ -777,6 +828,13 @@ async def _run(
     )
     if lacking:
         steps.add("incomplete", said=lacking[0][:500])
+    # What the code still contradicts once it was told: said to the reader,
+    # never left as if it held (2026-10-31).
+    if settings.agent_corrections and reads_code and run.format == "markdown":
+        still = contradicted(output, await repository_files())
+        if still:
+            steps.add("contradicted", points=[c.said[:200] for c in still])
+            output = f"{output.rstrip()}\n\n{contradictions_said(still, language=language or 'fr')}"
     # What LEKA draws of it — the architect's deck (delivery.py): its files,
     # or why there are none; the analysis stands either way.
     detail = dict(run.detail)
