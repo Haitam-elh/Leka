@@ -7999,7 +7999,7 @@ export interface components {
             corrections?: components["schemas"]["DesignCorrectionRead"][];
             /**
              * Error
-             * @description Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, invalid_output, abandoned, error.
+             * @description Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, invalid_output, abandoned (interrupted along the way), not_started (queued too long, the workers busy), error.
              */
             error: string | null;
             /**
@@ -8178,7 +8178,7 @@ export interface components {
             corrections?: components["schemas"]["DesignCorrectionRead"][];
             /**
              * Error
-             * @description Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, invalid_output, abandoned, error.
+             * @description Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, invalid_output, abandoned (interrupted along the way), not_started (queued too long, the workers busy), error.
              */
             error: string | null;
             /**
