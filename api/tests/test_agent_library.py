@@ -1179,8 +1179,19 @@ def test_the_change_impact_analysis_reads_the_pull_request_asked() -> None:
     # 2026-10-23, tested on leka-core: asked about PR #402, it read #398 — one
     # the context showed —, and named teams no source gave.
     d = {d.key: d for d in catalogue()}["change-impact-analysis"]
-    assert d.version == "1.2.0"
+    assert d.version == "1.3.0"
     said = d.instructions or ""
     assert "La pull request que la demande nomme est celle qui se lit" in said
     assert "Une ligne citée (`chemin:ligne`) est une ligne lue" in said
     assert "« à désigner »" in said
+
+
+def test_the_change_impact_analysis_reads_the_whole_diff() -> None:
+    # 2026-11-01, tested on leka-core with Gemini: PR #402 summed up as « the
+    # database review agent », its billing, connector and ingestion changes
+    # unread — « 2 files returned of 31 » — and its risk said low.
+    d = {d.key: d for d in catalogue()}["change-impact-analysis"]
+    assert "read_file" in d.tools
+    said = d.instructions or ""
+    assert "**Tout le diff se lit.**" in said
+    assert "**Pas de risque faible sur du code non lu.**" in said

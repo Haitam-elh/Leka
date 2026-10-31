@@ -2,7 +2,7 @@
 name: change-impact-analysis
 title: "Analyse d'impact d'un changement"
 description: "Use when someone asks how far a planned or shipped change reaches — the services, applications, data, teams and business processes it touches directly and indirectly, and who must know — from the company model and its diff."
-version: 1.2.0
+version: 1.3.0
 category: development
 entity_types: [pull_request, change, deployment, release, repository, service, application, database, infra_resource, incident, business_capability, business_process, team, person]
 requires: ["github|gitlab|bitbucket"]
@@ -10,7 +10,7 @@ mode: read_only
 risk: low
 outputs: analysis
 deliverables: [markdown]
-tools: [search_entities, read_entity, dependencies, what_happened, list_pull_requests, read_pull_request]
+tools: [search_entities, read_entity, dependencies, what_happened, list_pull_requests, read_pull_request, read_file]
 skills: [blast-radius, change-review]
 inputs:
   - name: changement
@@ -48,6 +48,15 @@ autre que le contexte montre, même plus récente. Le livrable s'ouvre sur son
 numéro et son titre, tels que lus ; introuvable, elle se dit, et l'analyse
 s'arrête.
 
+**Tout le diff se lit.** Chaque fichier de la pull request est classé par
+domaine avant toute conclusion : facturation et prix, connecteurs,
+ingestion des données, schéma et migrations, authentification, interface,
+agents, tests, documentation. Un fichier de code dont le diff manque ou est
+coupé (`truncated`) se lit avec `read_file`, au chemin et sur la branche de
+la pull request : « non renvoyé par l'outil » n'est jamais une raison de ne
+pas le lire. Le résumé du changement dit ce que font tous ses domaines,
+pas seulement le premier fichier lu.
+
 1. **Ce qui change** : la pull request et son diff sur GitHub
    (`list_pull_requests`, `read_pull_request`), sinon ce que les sources et la
    demande disent du changement — un changement seulement prévu se décrit
@@ -79,6 +88,11 @@ s'arrête.
    l'arrêtent, fixés avant, et qui décide ; qui prévenir avant, et qui
    après.
 
+**Pas de risque faible sur du code non lu.** Un domaine sensible touché
+(facturation, données, authentification, connecteurs, schéma) dont le code
+n'a pas été lu laisse le risque « inconnu », jamais « faible » ; les
+fichiers non lus sont nommés un par un dans les limites.
+
 Une portée vide (le changement ne touche rien de connu) se dit, avec ce qui
 manque pour en juger.
 
@@ -100,6 +114,8 @@ Un document markdown, dans la langue de la demande :
 
 - Une ligne citée (`chemin:ligne`) est une ligne lue, avec le nom exact de ce
   qu'elle porte ; sans lecture, le fichier seul, sans numéro.
+- Une référence qu'on n'a pas ne laisse pas de trou : pas de « (ex.) » ni
+  de « sur ) » vides, la phrase se réécrit sans elle.
 - Une équipe ou une personne vient des sources ; sinon « à désigner » —
   jamais « l'équipe Engineering » supposée.
 - Lecture seule : tu ne modifies rien, tu ne déclenches rien, tu ne dis jamais l'avoir fait.
