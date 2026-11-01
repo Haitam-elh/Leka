@@ -156,6 +156,27 @@ def test_a_count_that_is_not_the_count_and_a_finding_on_a_file_not_read() -> Non
     assert contradicted("Tout va bien.", FILES) == [] and contradicted(review, {}) == []
 
 
+def test_a_file_said_not_read_with_its_risk_left_open_is_no_finding() -> None:
+    # 2026-11-01: the regression and impact analyses name what they could
+    # not read, its risk « inconnu », and list it under « Limites » — honest,
+    # never said contradicted.
+    review = "\n".join(
+        [
+            "## Risques de régression",
+            "| Risque | Comportement | Où |",
+            "|---|---|---|",
+            "| inconnu | prix des offres | `api/leka/billing/catalogue.py` (non lu) |",
+            "| élevé | **N+1 possible** | `api/leka/identity/repository.py` (non lu) |",
+            "## Limites",
+            "| Fichier | Domaine | Pourquoi |",
+            "|---|---|---|",
+            "| `api/leka/billing/catalogue.py` | facturation | non lu : diff coupé |",
+        ]
+    )
+    found = contradicted(review, FILES)
+    assert [(c.kind, "identity/repository.py" in c.said) for c in found] == [("not_read", True)]
+
+
 def test_a_database_leka_does_not_read_is_unknown_never_empty() -> None:
     unread = library.schema_of([], database="LEKA", engine=None)
     unread.connected, unread.known_from = False, ["github"]
