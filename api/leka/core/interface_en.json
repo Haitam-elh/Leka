@@ -5886,6 +5886,7 @@
  "intentions.journey.why.to_verify.default": "The actions ran: LEKA checks the result against your sources.",
  "intentions.journey.why.done.default": "Done, and checked.",
  "intentions.journey.why.done.by_hand": "You do it yourself, with LEKA's plan.",
+ "intentions.journey.why.done.delivered": "The deliverable is ready. What LEKA could not verify is said in it, with what to measure.",
  "intentions.journey.why.cancelled.by_person": "The request was withdrawn.",
  "intentions.journey.next.answer": "Answer LEKA's questions.",
  "intentions.journey.next.clarify": "Make your request precise: name what it is about.",

@@ -7,7 +7,11 @@ import { cn } from "cn";
  * markdown a model writes, drawn as a page in LEKA's own type. It covers:
  * - headings, paragraphs, lists (one level of nesting), quotes, rules;
  * - code blocks, and tables (`| a | b |`);
- * - inside a line: **bold**, *italic*, `code`, [links](https://…).
+ * - inside a line: **bold**, *italic*, `code`, [links](https://…) — an
+ *   underscore inside a word is the word's (`20260919_003_x.py`), never
+ *   emphasis (2026-10-31);
+ * - an ordered list numbered on across blank lines, a code block inside an
+ *   item, or written at the end of its line, drawn as code.
  *
  * Never HTML: what the model wrote is text, put in elements. A tag it
  * wrote is shown as written, never run. A link opens only http(s), in a new
@@ -17,13 +21,28 @@ import { cn } from "cn";
 type Block =
   | { kind: "heading"; level: number; text: string }
   | { kind: "paragraph"; text: string }
-  | { kind: "list"; ordered: boolean; items: { text: string; children: string[] }[] }
+  | { kind: "list"; ordered: boolean; items: { text: string; children: Child[] }[] }
   | { kind: "quote"; text: string }
   | { kind: "code"; text: string; lang: string }
   | { kind: "table"; head: string[]; rows: string[][] }
   | { kind: "rule" };
 
 const LIST = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/;
+const FENCE = /^\s*```/;
+
+/** What an item holds under it: a line, or a block of code. */
+type Child = string | { code: string; lang: string };
+
+/** A line's text, and the code a model wrote at its end (« **Ajouter** ```sql
+ * CREATE INDEX …``` »): the text, and the code apart. */
+function splitFence(text: string): { text: string; code: { code: string; lang: string } | null } {
+  const at = text.indexOf("```");
+  if (at < 0) return { text, code: null };
+  const rest = text.slice(at + 3);
+  const lang = /^(\w+)\s/.exec(rest)?.[1] ?? "";
+  const body = rest.slice(lang.length).replace(/```\s*$/, "").trim();
+  return { text: text.slice(0, at).trim(), code: body ? { code: body, lang } : null };
+}
 
 function cells(line: string): string[] {
   return line
@@ -69,6 +88,9 @@ export function blocksOf(source: string): Block[] {
       const rows: string[][] = [];
       i += 2;
       while (i < lines.length && lines[i].trim().startsWith("|")) rows.push(cells(lines[i++]));
+      // A header shorter than its rows: its last columns, untitled but drawn.
+      const widest = Math.max(head.length, ...rows.map((r) => r.length));
+      while (head.length < widest) head.push("");
       blocks.push({ kind: "table", head, rows });
       continue;
     }
@@ -81,20 +103,45 @@ export function blocksOf(source: string): Block[] {
     const item = LIST.exec(line);
     if (item) {
       const ordered = /\d/.test(item[2]);
-      const items: { text: string; children: string[] }[] = [];
+      const items: { text: string; children: Child[] }[] = [];
       const base = item[1].length;
+      const add = (text: string, child: boolean) => {
+        const { text: said, code } = splitFence(text);
+        if (child && items.length) items[items.length - 1].children.push(said);
+        else items.push({ text: said, children: [] });
+        if (code) items[items.length - 1].children.push(code);
+      };
       while (i < lines.length) {
         const found = LIST.exec(lines[i]);
-        if (found && found[1].length <= base) {
-          items.push({ text: found[3], children: [] });
+        if (found && found[1].length <= base && /\d/.test(found[2]) === ordered) {
+          add(found[3], false);
           i++;
-        } else if (found && items.length) {
-          items[items.length - 1].children.push(found[3]);
+        } else if (found && found[1].length > base && items.length) {
+          add(found[3], true);
           i++;
+        } else if (FENCE.test(lines[i]) && items.length) {
+          // A block of code inside the item: the item's.
+          const lang = lines[i].trim().slice(3).trim();
+          const body: string[] = [];
+          i++;
+          while (i < lines.length && !FENCE.test(lines[i])) body.push(lines[i++].trim());
+          i++;
+          items[items.length - 1].children.push({ code: body.join("\n"), lang });
         } else if (lines[i].trim() && /^\s{2,}\S/.test(lines[i]) && items.length) {
           // A wrapped line of the item above.
           items[items.length - 1].text += ` ${lines[i].trim()}`;
           i++;
+        } else if (!lines[i].trim()) {
+          // A blank line: the list goes on when an item of it follows
+          // (2026-10-31: « 1. » each time, one list per item).
+          let next = i;
+          while (next < lines.length && !lines[next].trim()) next++;
+          const after = next < lines.length ? LIST.exec(lines[next]) : null;
+          const goesOn =
+            after !== null && (after[1].length > base || /\d/.test(after[2]) === ordered);
+          if (!goesOn && !(next < lines.length && FENCE.test(lines[next]) && /^\s+/.test(lines[next])))
+            break;
+          i = next;
         } else break;
       }
       blocks.push({ kind: "list", ordered, items });
@@ -114,7 +161,10 @@ export function blocksOf(source: string): Block[] {
   return blocks;
 }
 
-const INLINE = /(\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\[[^\]]+\]\([^)\s]+\)|\*[^*\s][^*]*\*|_[^_\s][^_]*_)/g;
+// An underscore inside a word is the word's: `_` emphasis opens and closes
+// only at a word's edge (2026-10-31: « 20260919_003_encrypt » set in italics).
+const INLINE =
+  /(\*\*[^*]+\*\*|(?<![\p{L}\p{N}_])__[^_]+__(?![\p{L}\p{N}_])|`[^`]+`|\[[^\]]+\]\([^)\s]+\)|\*[^*\s][^*]*\*|(?<![\p{L}\p{N}_])_[^_\s][^_]*_(?![\p{L}\p{N}_]))/gu;
 
 /** A line's emphasis, code and links — as elements, never as HTML. */
 export function Inline({ text }: { text: string }) {
@@ -239,11 +289,22 @@ export function Markdown({ source, className }: { source: string; className?: st
                     <Inline text={item.text} />
                     {item.children.length ? (
                       <ul className="mt-1 flex list-[circle] flex-col gap-1 ps-5">
-                        {item.children.map((child, c) => (
-                          <li key={c}>
-                            <Inline text={child} />
-                          </li>
-                        ))}
+                        {item.children.map((child, c) =>
+                          typeof child === "string" ? (
+                            <li key={c}>
+                              <Inline text={child} />
+                            </li>
+                          ) : (
+                            <li key={c} className="list-none">
+                              <pre
+                                className="overflow-x-auto rounded-lg bg-shell-canvas p-3 font-mono text-[0.8125rem] leading-5"
+                                data-lang={child.lang || undefined}
+                              >
+                                {child.code}
+                              </pre>
+                            </li>
+                          ),
+                        )}
                       </ul>
                     ) : null}
                   </li>

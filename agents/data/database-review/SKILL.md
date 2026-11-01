@@ -2,7 +2,7 @@
 name: database-review
 title: "Revue de base de données"
 description: "Use when someone asks whether a database is in good shape, or a change to it is safe — its schema's integrity, the indexes its queries need, the queries that will not hold as it grows, a migration that would lock or lose data, who may read what — read from the database's catalogue as a connected source shows it and from a connected GitHub repository's models, queries and migrations, never by querying the data."
-version: 1.1.0
+version: 1.2.0
 category: data
 entity_types: [database, schema, data_object, service, application, team, infra_resource, repository, pull_request, incident, deployment, change, document]
 requires: ["github|postgresql|mysql|mariadb|sqlserver|oracle|mongodb|supabase"]
@@ -10,7 +10,7 @@ mode: read_only
 risk: low
 outputs: analysis
 deliverables: [markdown]
-tools: [search_entities, read_entity, read_content, dependencies, what_happened, list_files, read_file, list_pull_requests, read_pull_request]
+tools: [search_entities, read_entity, read_content, dependencies, what_happened, list_files, read_file, search_code, list_pull_requests, read_pull_request]
 skills: [schema-health, data-landscape]
 rounds: 24
 inputs:
@@ -94,7 +94,12 @@ schéma réel, le volume réel et les requêtes réelles — jamais d'après un 
 1. **Le catalogue d'abord.** Les constats de `schema-health` sont des faits :
    reprends-les, avec le volume de chaque table. Une base dont la structure
    n'a pas encore été lue (`schema.not_read`) se dit, et la revue s'appuie
-   alors sur le code.
+   alors sur le code. Une base que LEKA ne lit pas lui-même
+   (`schema.not_connected` : il la connaît par son code ou par son cloud)
+   n'est ni vide ni à risque : ses tables sont **inconnues**, pas absentes.
+   Dis-le, dis comment la connecter (une source PostgreSQL, MySQL…), et fais
+   la revue sur le code — jamais un verdict « À risque » sur ce seul motif,
+   jamais « appliquer les migrations en production ».
 2. **L'intégrité.** Chaque table a une clé primaire ; une relation a sa clé
    étrangère et ce qui se passe à la suppression du parent ; ce qui ne peut
    manquer est `NOT NULL` ; ce qui est unique pour le métier a sa contrainte
@@ -137,8 +142,10 @@ schéma réel, le volume réel et les requêtes réelles — jamais d'après un 
 8. **Avant de dire qu'il manque quelque chose** — un index, une contrainte,
    un délai, une migration de retour — cherche-le là où il vit d'ordinaire :
    le catalogue (`read_entity`), les migrations, les modèles, la
-   configuration. Dis où tu as cherché. Trouvé ailleurs, ce n'est pas un
-   constat.
+   configuration — `search_code` avec le nom de la colonne, `create_index`,
+   `Index(`. Dis où tu as cherché. Trouvé ailleurs, ce n'est pas un constat.
+   LEKA vérifie lui-même chaque absence affirmée dans le code du dépôt avant
+   que la revue soit livrée : ce qu'il trouve t'est dit, tu corriges.
 9. **Une protection n'est pas un défaut.** Une contrainte qui refuse, un
    verrou, une règle d'accès : ne recommande jamais de l'enlever pour « que
    ça passe ». Au plus, une question.
@@ -165,6 +172,23 @@ schéma réel, le volume réel et les requêtes réelles — jamais d'après un 
     chiffrement, et une donnée réécrite ne revient pas. Le chiffrement au
     repos, la réplique, l'exposition : seulement ce que les attributs lus
     disent — sinon une question.
+
+14. **Ce qui a déjà tourné ne se réécrit pas.** Une migration appliquée ne
+    se modifie pas : son risque était au moment où elle a tourné. `CONCURRENTLY`
+    sert à un index ajouté à une grosse table existante, jamais à la
+    migration initiale (des tables vides), et il ne s'exécute pas dans une
+    transaction : dis comment l'outil du dépôt le permet (Alembic :
+    `autocommit_block`).
+15. **Un type se change pour une donnée qui le demande.** L'argent dans un
+    type exact ; un score, une confiance, une probabilité entre 0 et 1 reste
+    en flottant, et déjà contraint, il ne l'est pas deux fois. Une
+    validation faite par l'application (Pydantic, un formulaire, un
+    sérialiseur) compte : pas de contrainte par expression régulière en base
+    à sa place, sauf si plusieurs applications écrivent dans la table.
+16. **Compte, ne devine pas.** Un nombre de fichiers, de tables, de
+    migrations se compte (`list_files`) et se dit avec où il a été compté.
+    Un fichier que tu n'as pas lu ne porte aucun constat : il va dans « Ce
+    qui n'a pas pu être vérifié ».
 
 ## Ce qu'il produit
 

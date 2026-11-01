@@ -7851,6 +7851,7 @@ const fr = {
         done: {
           default: "C'est fait, et vérifié.",
           by_hand: "Vous le faites vous-même, avec le plan de LEKA.",
+          delivered: "Le livrable est prêt. Ce que LEKA n'a pas pu vérifier y est dit, avec ce qu'il faut mesurer.",
         },
         cancelled: { by_person: "La demande a été retirée." },
       },
@@ -16909,6 +16910,7 @@ const en: Dictionary = {
         done: {
           default: "Done, and checked.",
           by_hand: "You do it yourself, with LEKA's plan.",
+          delivered: "The deliverable is ready. What LEKA could not verify is said in it, with what to measure.",
         },
         cancelled: { by_person: "The request was withdrawn." },
       },

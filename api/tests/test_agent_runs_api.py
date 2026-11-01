@@ -272,6 +272,7 @@ async def test_the_architect_runs_end_to_end(
         # No repository connected: its reading of the code, said withheld.
         "tool_withheld",
         "tool_withheld",
+        "tool_withheld",
         "tool",
         "tool",
         "tool",
@@ -657,6 +658,7 @@ async def test_its_tools_follow_who_asked_and_never_act(
         # It names no tools: the code's reading too — no repository here.
         {"name": "list_files", "why": "no_source"},
         {"name": "read_file", "why": "no_source"},
+        {"name": "search_code", "why": "no_source"},
     ]
     assert script.declared() == TOOL_NAMES
 

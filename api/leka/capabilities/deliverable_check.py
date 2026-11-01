@@ -27,6 +27,7 @@ from __future__ import annotations
 import math
 import re
 import unicodedata
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
@@ -305,11 +306,566 @@ def deferred(deliverable: str) -> list[str]:
     ]
 
 
+# ── what a deliverable says, held to the code (2026-10-31) ────────────────
+#
+# A database review, written by a mid-range model, listed « critical missing
+# indexes » the repository creates, « 117 migrations » where there are 102,
+# and an N+1 in a file it marked « not read ». Its instructions already said
+# « before you say something is missing, look for it »: a rule a model may
+# skip, so LEKA looks itself, in the repository's files, and says back what
+# contradicts the deliverable — the model corrects it; what still stands
+# after is said to the reader.
+
+# Words that say something is not there.
+_ABSENT = re.compile(
+    r"manquant|missing|absent|aucun index|sans index|pas d.index|non index|unindexed|"
+    r"no index|without (?:an )?index",
+    re.IGNORECASE,
+)
+_ABOUT_INDEX = re.compile(r"index", re.IGNORECASE)
+# Where a claim is not one: what could not be checked, what is to measure.
+_HEDGED = re.compile(
+    r"pas pu .tre v.rifi|not (?:been )?verified|could not be|. mesurer|to measure|questions?",
+    re.IGNORECASE,
+)
+_TICKED = re.compile(r"`([^`\n]{1,160})`")
+_PAIR = re.compile(r"\b([A-Za-z_][\w]*)\.([A-Za-z_][\w]*)\b")
+_ON = re.compile(r"\bON\s+([\w.\"]+)\s*\(([^)]*)\)", re.IGNORECASE)
+_INDEX_NAME = re.compile(r"\b((?:ix|idx|index)_[\w]+)\b", re.IGNORECASE)
+# How code declares an index, in the usual tools: Alembic, SQLAlchemy's
+# models, SQL, Rails. What it does not say for sure — a name computed, a
+# column object — is left out: never said indexed on a guess.
+_SQL_INDEX = re.compile(
+    r"CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?"
+    r"(?:\"?([\w.]+)\"?\s+)?ON\s+(?:ONLY\s+)?\"?([\w.]+)\"?\s*(?:USING\s+\w+\s*)?\(\s*\"?(\w+)",
+    re.IGNORECASE,
+)
+_SQL_DROP_INDEX = re.compile(
+    r"DROP\s+INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+EXISTS\s+)?\"?([\w.]+)", re.IGNORECASE
+)
+_RAILS_INDEX = re.compile(r"add_index\s*\(?\s*[:\"'](\w+)[\"']?\s*,\s*\[?\s*[:\"'](\w+)")
+_ALEMBIC_INDEX = re.compile(r"\b(create_index|create_unique_constraint|create_primary_key)\(")
+_ALEMBIC_DROP_INDEX = re.compile(r"\bdrop_index\(")
+_INDEXY = re.compile(r"index|__tablename__|create_table|constraint", re.IGNORECASE)
+_DOCUMENTS = (".md", ".mdx", ".rst", ".txt", ".adoc", ".html")
+_TABLENAME = re.compile(r"__tablename__\s*=\s*[\"'](\w+)[\"']")
+_ATTRIBUTE = re.compile(
+    r"^[ \t]+(\w+)\s*(?::[^=\n]*)?=\s*(?:\w+\.)?(?:mapped_column|Column)\(", re.MULTILINE
+)
+_CONSTRAINT = re.compile(r"\b(?:\w+\.)?(Index|UniqueConstraint|PrimaryKeyConstraint)\(")
+_KEYED = re.compile(r"\b(?:index|unique|primary_key)\s*=\s*True")
+_COUNTED = re.compile(
+    r"\b(\d{1,5})\s+(?:fichiers?|files?|migrations?(?:\s+alembic)?)\b[^\n|]{0,60}?"
+    r"`([\w@.-]+(?:/[\w@.-]+)+/?)`",
+    re.IGNORECASE,
+)
+_NOT_READ = re.compile(r"\bnon lu\b|\bnot read\b|\bpas lu\b", re.IGNORECASE)
+# How a migration makes a table and its columns: Alembic's own words, and
+# the SQL it may run. A table renamed is left alone: its columns came from
+# another name.
+_CREATE_TABLE = re.compile(r"create_table\(\s*[\"'](\w+)[\"']")
+_ADD_COLUMN = re.compile(r"add_column\(")
+_QUOTED = re.compile(r"[\"'][^\"']*[\"']")
+_QUOTED_NAME = re.compile(r"[\"'](\w+)[\"']")
+_NAMED_CALL = re.compile(r"[\w.]+\(\s*[\"'](\w+)[\"']")
+_NOT_A_COLUMN = re.compile(r"[\w.]*(?:Constraint|Index)\(|\w+\s*=[^=]")
+_ALTERS = re.compile(r"(alter_column|rename_table)\(")
+_RENAMED = re.compile(r"rename_table\(|new_column_name\s*=|RENAME\s+(?:TO|COLUMN)", re.IGNORECASE)
+MOST_CONTRADICTIONS = 6
+
+
+@dataclass(frozen=True)
+class Contradiction:
+    """A point of a deliverable the code contradicts: what it says, and where
+    the code says otherwise."""
+
+    said: str
+    kind: str  # index, column, count, not_read
+    path: str = ""
+    line: int = 0
+    evidence: str = ""
+
+    def to_model(self) -> str:
+        if self.kind == "index":
+            return (
+                f"You say {self.said} has no index, but {self.path}:{self.line} has "
+                f"`{self.evidence}`. Read it, then correct or remove that point: a missing "
+                "index is said only once looked for, and where."
+            )
+        if self.kind == "column" and self.evidence == "dropped":
+            return (
+                f"You say {self.said} has no index, but that column no longer exists: "
+                f"{self.path}:{self.line} drops it. Remove that point, or say what replaced it "
+                "(search_code)."
+            )
+        if self.kind == "column":
+            return (
+                f"You say {self.said} has no index, but no migration of the repository makes "
+                f"that column: the table is created at {self.path}:{self.line} without it, and "
+                "no later migration adds it. Look for the column's real name (search_code), or "
+                "remove that point."
+            )
+        if self.kind == "count":
+            return (
+                f"You say {self.line} files in {self.said}, but the repository holds "
+                f"{self.evidence}. Count again (list_files), or say the number you read."
+            )
+        return (
+            f"« {self.said} »: a finding on a file you did not read is no finding. Read the "
+            "file (read_file), or move the point to « Ce qui n'a pas pu être vérifié »."
+        )
+
+
+def _cells(line: str) -> list[str]:
+    return [c.strip() for c in line.strip().strip("|").split("|")]
+
+
+def _bare(name: str) -> str:
+    return name.strip().strip('"`[]').split(".")[-1].lower()
+
+
+def _index_claims(line: str) -> list[tuple[str, str, set[str]]]:
+    """The (table, column) a line says lacks an index — and the names of the
+    index it proposes."""
+    names = {n.lower() for n in _INDEX_NAME.findall(line)}
+    pairs: list[tuple[str, str]] = []
+    for code in _TICKED.findall(line):
+        on = _ON.search(code)
+        if on:
+            columns = [c.strip() for c in on.group(2).split(",") if c.strip()]
+            if columns:
+                pairs.append((_bare(on.group(1)), _bare(columns[0].split()[0])))
+            continue
+        for table, column in _PAIR.findall(code):
+            pairs.append((table.lower(), column.lower()))
+    if not pairs and line.strip().startswith("|"):
+        # A table's row: its first two cells in code, the table then the
+        # column (« | `memberships` | `user_id` | Clé étrangère | … »).
+        ticked = [_TICKED.findall(c) for c in _cells(line)]
+        firsts = [t[0] for t in ticked if t][:2]
+        if len(firsts) == 2:
+            pairs.append((_bare(firsts[0]), _bare(firsts[1])))
+    return [(t, c, names) for t, c in dict.fromkeys(pairs)]
+
+
+@dataclass(frozen=True)
+class _Index:
+    """An index the code declares: its table, the column it starts with —
+    the one it serves alone — its name, and where."""
+
+    table: str
+    column: str
+    name: str
+    path: str
+    line: int
+    text: str
+    # A model's: the schema as it is today, never dropped since.
+    model: bool = False
+
+
+def _literal(argument: str) -> str | None:
+    """A quoted name, or Alembic's `op.f("…")` around one."""
+    made = re.fullmatch(r"(?:\w+\.f\()?\s*[\"'](\w+)[\"']\s*\)?", argument.strip())
+    return made.group(1).lower() if made else None
+
+
+def _first_listed(argument: str) -> str | None:
+    """The first name of a list of columns (`["user_id", …]`)."""
+    made = re.match(r"[\[(]\s*[\"'](\w+)[\"']", argument.strip())
+    return made.group(1).lower() if made else None
+
+
+def _line_of(text: str, at: int) -> int:
+    return text.count("\n", 0, at) + 1
+
+
+def _said(call: str) -> str:
+    return " ".join(call.split())[:200]
+
+
+def _indexes_of(files: Mapping[str, str]) -> list[_Index]:
+    """Every index the repository's files declare, and still keep: one a
+    migration drops by its name is gone."""
+    made: list[_Index] = []
+    dropped: list[str] = []
+    for path, written in files.items():
+        if path.lower().endswith(_DOCUMENTS) or not _INDEXY.search(written):
+            continue
+        python = path.endswith(".py")
+        text = _upgrade_of(_code_of(written)) if python else written
+        for one in _SQL_INDEX.finditer(text):
+            name, table, column = (g.lower() if g else "" for g in one.groups())
+            line = _line_of(text, one.start())
+            made.append(_Index(_bare(table), column, _bare(name), path, line, _said(one.group(0))))
+        dropped += [_bare(d) for d in _SQL_DROP_INDEX.findall(text)]
+        for one in _RAILS_INDEX.finditer(text):
+            table, column = one.group(1).lower(), one.group(2).lower()
+            line = _line_of(text, one.start())
+            made.append(_Index(table, column, "", path, line, _said(text.split("\n")[line - 1])))
+        if not python:
+            continue
+        for one in _ALEMBIC_INDEX.finditer(text):
+            call = _balanced(text, one.end() - 1)
+            arguments = _arguments(call)
+            if len(arguments) < 3:
+                continue
+            name, table = _literal(arguments[0]), _literal(arguments[1])
+            column = _first_listed(arguments[2])
+            if table and column:
+                line = _line_of(text, one.start())
+                written_as = text[text.rfind("\n", 0, one.start()) + 1 : one.end() - 1] + call
+                made.append(_Index(table, column, name or "", path, line, _said(written_as)))
+        for one in _ALEMBIC_DROP_INDEX.finditer(text):
+            arguments = _arguments(_balanced(text, one.end() - 1))
+            name = _literal(arguments[0]) if arguments else None
+            if name:
+                dropped.append(name)
+        for one in _CREATE_TABLE.finditer(text):
+            table = one.group(1).lower()
+            call = _balanced(text, text.index("(", one.start()))
+            start = text.index("(", one.start())
+            for argument in _arguments(call)[1:]:
+                at = start + call.find(argument)
+                column = _keyed(argument)
+                if column:
+                    line = _line_of(text, at)
+                    made.append(_Index(table, column, "", path, line, _said(argument)))
+        for one in _TABLENAME.finditer(text):
+            # A model: its class, from its `class` line to the next one.
+            begin = text.rfind("\nclass ", 0, one.start()) + 1
+            end = text.find("\nclass ", one.end())
+            block = text[begin : len(text) if end < 0 else end]
+            table = one.group(1).lower()
+            for attribute in _ATTRIBUTE.finditer(block):
+                call = _balanced(block, attribute.end() - 1)
+                if _KEYED.search(" ".join(_arguments(call))):
+                    named = _arguments(call)
+                    column = (_literal(named[0]) if named else None) or attribute.group(1).lower()
+                    line = _line_of(text, begin + attribute.start())
+                    said = _said(attribute.group(0) + call[1:])
+                    made.append(_Index(table, column, "", path, line, said, model=True))
+            for constraint in _CONSTRAINT.finditer(block):
+                arguments = _arguments(_balanced(block, constraint.end() - 1))
+                names = [a for a in (_literal(x) for x in arguments) if a]
+                index = constraint.group(1) == "Index"
+                if index and len(names) >= 2 and _literal(arguments[0]) and _literal(arguments[1]):
+                    name, column = names[0], names[1]
+                elif not index and names and _literal(arguments[0]):
+                    name, column = "", names[0]
+                else:
+                    continue
+                line = _line_of(text, begin + constraint.start())
+                said = _said(text.split("\n")[line - 1])
+                made.append(_Index(table, column, name, path, line, said, model=True))
+    created = Counter(i.name for i in made if i.name and not i.model)
+    gone = {name for name, times in Counter(dropped).items() if times >= created.get(name, 0)}
+    return [i for i in made if i.model or i.name not in gone]
+
+
+def _keyed(argument: str) -> str | None:
+    """The column a `Column("x", …, index=True)` of a `create_table` makes
+    an index on — or a key's first column."""
+    if re.match(r"(?:\w+\.)?Column\(", argument) and _KEYED.search(argument):
+        named = _NAMED_CALL.match(argument)
+        return named.group(1).lower() if named else None
+    key = re.match(r"(?:\w+\.)?(?:UniqueConstraint|PrimaryKeyConstraint)\(\s*[\"'](\w+)", argument)
+    return key.group(1).lower() if key else None
+
+
+def _indexed(
+    table: str, column: str, names: set[str], indexes: Sequence[_Index]
+) -> tuple[str, int, str] | None:
+    """Where the code declares an index starting with that column of that
+    table — or creates, on that table, the very index proposed."""
+    for one in indexes:
+        if one.table == table and (one.column == column or (one.name and one.name in names)):
+            return one.path, one.line, one.text
+    return None
+
+
+def _balanced(text: str, start: int) -> str:
+    """The call opened at `start` — up to its closing parenthesis, strings
+    skipped."""
+    depth, quote, n = 0, "", start
+    while n < len(text):
+        char = text[n]
+        if quote:
+            if char == "\\":
+                n += 1
+            elif char == quote:
+                quote = ""
+        elif char in "\"'":
+            quote = char
+        elif char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0:
+                return text[start : n + 1]
+        n += 1
+    return text[start:]
+
+
+# Python's strings — triple-quoted first — and its comments.
+_PY_TOKEN = re.compile(
+    r'"""[\s\S]*?"""'
+    r"|'''[\s\S]*?'''"
+    r'|"(?:\\.|[^"\\\n])*"'
+    r"|'(?:\\.|[^'\\\n])*'"
+    r"|#[^\n]*"
+)
+
+
+def _code_of(text: str) -> str:
+    """Python's text without its comments — a comment's apostrophe is no
+    string — lines kept, so their numbers hold."""
+    return _PY_TOKEN.sub(
+        lambda m: " " * len(m.group(0)) if m.group(0)[0] == "#" else m.group(0), text
+    )
+
+
+def _arguments(call: str) -> list[str]:
+    """A call's arguments `(…)` as written, split at its own commas."""
+    found: list[str] = []
+    depth, quote, start = 0, "", 1
+    for n, char in enumerate(call):
+        if quote:
+            if char == quote and call[n - 1] != "\\":
+                quote = ""
+        elif char in "\"'":
+            quote = char
+        elif char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth -= 1
+            if depth == 0:
+                found.append(call[start:n])
+                break
+        elif char == "," and depth == 1:
+            found.append(call[start:n])
+            start = n + 1
+    return [a.strip() for a in found if a.strip()]
+
+
+def _named(argument: str) -> str | None:
+    """The column an argument makes, by its name in quotes — `sa.Column("x",
+    …)` or a helper's `_jsonb("x")`; "" for what is no column (a constraint,
+    an option); None when it makes one out of sight (`*timestamps()`, a
+    name computed)."""
+    made = _NAMED_CALL.match(argument)
+    if made:
+        return made.group(1).lower()
+    if _NOT_A_COLUMN.match(argument):
+        return ""
+    return None
+
+
+@dataclass(frozen=True)
+class _Table:
+    """What a repository's migrations make of a table: where they create
+    it, every column it may have, and those dropped since — with where."""
+
+    path: str
+    line: int
+    columns: frozenset[str]
+    dropped: dict[str, tuple[str, int]]
+
+
+def _upgrade_of(text: str) -> str:
+    """A migration's way forward: its `downgrade()` puts back what it
+    removed, and is no column of today."""
+    back = text.find("\ndef downgrade")
+    return text if back < 0 else text[:back]
+
+
+def _columns_of(table: str, files: Mapping[str, str]) -> _Table | None:
+    """Where the migrations create that table, and every column they give
+    it — then or later. None when no migration creates it, or it is renamed,
+    or a column is made out of sight: then the code says nothing for sure."""
+    created: tuple[str, int] | None = None
+    columns: set[str] = set()
+    added: set[str] = set()
+    dropped: dict[str, tuple[str, int]] = {}
+    quoted = re.compile(rf"[\"']{re.escape(table)}[\"']", re.IGNORECASE)
+    batch = re.compile(rf"batch_alter_table\(\s*[\"']{re.escape(table)}[\"']", re.IGNORECASE)
+    altered = re.compile(
+        rf"ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?\"?{re.escape(table)}\"?\s+ADD\s+"
+        r"(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?(\S+)",
+        re.IGNORECASE,
+    )
+    removed = re.compile(
+        rf"drop_column\(\s*[\"']{re.escape(table)}[\"']\s*,\s*[\"'](\w+)[\"']", re.IGNORECASE
+    )
+    for path, written in files.items():
+        if not quoted.search(written) and table not in written.lower():
+            continue
+        text = _upgrade_of(_code_of(written)) if path.endswith(".py") else written
+        batched = bool(batch.search(text))
+        # A name computed (`for column in (…)`): any name the file quotes
+        # may be it.
+        loose = {c.lower() for c in _QUOTED_NAME.findall(text)}
+        for made in _CREATE_TABLE.finditer(text):
+            if made.group(1).lower() != table:
+                continue
+            created = created or (path, text.count("\n", 0, made.start()) + 1)
+            for argument in _arguments(_balanced(text, text.index("(", made.start())))[1:]:
+                name = _named(argument)
+                if name is None:
+                    return None
+                columns.add(name)
+        for add in _ADD_COLUMN.finditer(text):
+            arguments = _arguments(_balanced(text, add.end() - 1))
+            if arguments and _QUOTED.fullmatch(arguments[0]):
+                if not quoted.fullmatch(arguments[0]):
+                    continue  # another table's
+                arguments = arguments[1:]
+            elif not batched:
+                continue
+            name = _named(arguments[0]) if arguments else None
+            added |= {name} if name else loose
+        for sql in altered.findall(text):
+            name = sql.strip("\"'`;,")
+            added |= {name.lower()} if re.fullmatch(r"\w+", name) else loose
+        for drop in removed.finditer(text):
+            dropped[drop.group(1).lower()] = (path, text.count("\n", 0, drop.start()) + 1)
+        for alter in _ALTERS.finditer(text):
+            body = _balanced(text, alter.end() - 1)
+            if quoted.search(body) and (alter.group(1) == "rename_table" or _RENAMED.search(body)):
+                return None
+        for line in text.split("\n"):
+            if quoted.search(line) and _RENAMED.search(line):
+                return None
+        if batched and _RENAMED.search(text):
+            return None
+    columns.discard("")
+    if created is None or not columns:
+        return None
+    # Dropped, then added again — in whatever order: it may be there.
+    gone = {c: where for c, where in dropped.items() if c not in added}
+    return _Table(created[0], created[1], frozenset((columns | added) - set(gone)), gone)
+
+
+def contradicted(deliverable: str, files: Mapping[str, str]) -> list[Contradiction]:
+    """What the deliverable says that the repository's files contradict: an
+    index said missing that the code declares, or on a column no migration
+    makes; a count of files that is not the count; a finding on a file said
+    not read. `files`: path → text."""
+    if not deliverable or not files:
+        return []
+    found: list[Contradiction] = []
+    seen: set[tuple[str, str]] = set()
+    indexes: list[_Index] | None = None
+    heading = ""
+    for raw in deliverable.split("\n"):
+        line = raw.strip()
+        if line.startswith("#"):
+            heading = line
+            continue
+        if not line or _HEDGED.search(heading):
+            continue
+        absent = bool(_ABSENT.search(line)) or bool(
+            _ABSENT.search(heading) and line.startswith("|") and "`" in line
+        )
+        if absent and (_ABOUT_INDEX.search(line) or _ABOUT_INDEX.search(heading)):
+            for table, column, names in _index_claims(line):
+                if (table, column) in seen:
+                    continue
+                seen.add((table, column))
+                made = _columns_of(table, files)
+                if made is not None and column in made.dropped:
+                    path, n = made.dropped[column]
+                    found.append(Contradiction(f"{table}.{column}", "column", path, n, "dropped"))
+                    continue
+                indexes = _indexes_of(files) if indexes is None else indexes
+                where = _indexed(table, column, names, indexes)
+                if where is not None:
+                    path, n, evidence = where
+                    found.append(Contradiction(f"{table}.{column}", "index", path, n, evidence))
+                elif made is not None and column not in made.columns:
+                    found.append(Contradiction(f"{table}.{column}", "column", made.path, made.line))
+        for number, folder in _COUNTED.findall(line):
+            prefix = folder.strip("/") + "/"
+            held = [
+                p
+                for p in files
+                if p.startswith(prefix)
+                and "/" not in p[len(prefix) :]
+                and not p.rsplit("/", 1)[-1].startswith(("__", "."))
+            ]
+            if held and len(held) != int(number):
+                found.append(
+                    Contradiction(folder, "count", line=int(number), evidence=str(len(held)))
+                )
+        if _NOT_READ.search(line) and line.startswith("|"):
+            found.append(Contradiction(line.strip("| ")[:160], "not_read"))
+    return found[:MOST_CONTRADICTIONS]
+
+
+def contradictions_said(found: Sequence[Contradiction], *, language: str = "fr") -> str:
+    """What still contradicts the code once the agent was told, said to the
+    reader at the end of the deliverable — never left as if it held."""
+    if not found:
+        return ""
+    french = language.lower().startswith("fr")
+    lines = [
+        "## Points contredits par le code" if french else "## Points the code contradicts",
+        "",
+        (
+            "LEKA a vérifié ces points dans le code du dépôt après la rédaction : ils sont "
+            "contredits. Ne les suivez pas sans les relire."
+            if french
+            else "LEKA checked these points in the repository's code after they were written: "
+            "the code contradicts them. Do not act on them without reading them again."
+        ),
+        "",
+    ]
+    for one in found:
+        if one.kind == "index":
+            lines.append(
+                f"- `{one.said}` : `{one.path}:{one.line}` déclare déjà l'index (`{one.evidence}`)."
+                if french
+                else f"- `{one.said}`: `{one.path}:{one.line}` already declares the index "
+                f"(`{one.evidence}`)."
+            )
+        elif one.kind == "column" and one.evidence == "dropped":
+            lines.append(
+                f"- `{one.said}` : cette colonne n'existe plus, `{one.path}:{one.line}` "
+                "la supprime."
+                if french
+                else f"- `{one.said}`: that column no longer exists, `{one.path}:{one.line}` "
+                "drops it."
+            )
+        elif one.kind == "column":
+            lines.append(
+                f"- `{one.said}` : cette colonne n'existe pas dans le code (la table est créée "
+                f"en `{one.path}:{one.line}` sans elle, et aucune migration ne l'ajoute)."
+                if french
+                else f"- `{one.said}`: no such column in the code (the table is created at "
+                f"`{one.path}:{one.line}` without it, and no migration adds it)."
+            )
+        elif one.kind == "count":
+            lines.append(
+                f"- « {one.line} fichiers dans `{one.said}` » : le dépôt en compte {one.evidence}."
+                if french
+                else f"- « {one.line} files in `{one.said}` »: the repository holds {one.evidence}."
+            )
+        else:
+            lines.append(
+                f"- « {one.said} » : le fichier n'a pas été lu."
+                if french
+                else f"- « {one.said} »: the file was not read."
+            )
+    return "\n".join(lines)
+
+
 __all__ = [
     "PLAN",
     "SHARE",
     "SUMMARY",
+    "Contradiction",
     "Section",
+    "contradicted",
+    "contradictions_said",
     "deferred",
     "elsewhere",
     "expected",
