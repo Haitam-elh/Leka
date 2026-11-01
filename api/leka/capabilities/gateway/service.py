@@ -126,8 +126,8 @@ class NoModelError(Exception):
 
 
 # What a concluding model is given of what its tools returned, at most.
-READ_KEPT = 12_000
 READ_TOTAL = 400_000
+READ_CUT = "\n(cut here: {kept} of {whole} characters kept, the rest not read)"
 CONCLUDE = (
     "You have used every round of tools this run allows. Answer now, as your "
     "instructions ask, with only what you read below — no tool any more; say "
@@ -135,23 +135,38 @@ CONCLUDE = (
 )
 
 
+def _read_share(sizes: Sequence[int], room: int) -> int:
+    """How much one result may keep for all to fit in `room`: the short ones
+    whole, the long ones sharing what those leave."""
+    left = room
+    for at, size in enumerate(ordered := sorted(sizes)):
+        share = left // (len(ordered) - at)
+        if size > share:
+            return share
+        left -= size
+    return room
+
+
 def _what_was_read(exchanged: Sequence[Message]) -> str:
-    """Each tool call made and what it returned, as text."""
+    """Each tool call made and what it returned, as text: every result has
+    its share, one cut says so (2026-11-01: a pull request of 31 files, cut
+    unsaid at a fixed length, read as a pull request of 2)."""
     asked: dict[str, str] = {}
-    parts = [CONCLUDE]
-    size = len(CONCLUDE)
+    results: list[tuple[str, str]] = []
     for message in exchanged:
         for call in message.tool_calls:
             arguments = json.dumps(dict(call.arguments), ensure_ascii=False, default=str)
             asked[call.id] = f"{call.name} {arguments}"
         if message.role is Role.TOOL:
-            said = f"\n## {asked.get(message.tool_call_id or '', message.name or 'tool')}\n"
-            said += message.content[:READ_KEPT]
-            if size + len(said) > READ_TOTAL:
-                parts.append("\n(the rest is left out: too long)")
-                break
-            parts.append(said)
-            size += len(said)
+            called = asked.get(message.tool_call_id or "", message.name or "tool")
+            results.append((f"\n## {called}\n", message.content))
+    room = READ_TOTAL - len(CONCLUDE) - sum(len(head) + len(READ_CUT) + 20 for head, _ in results)
+    share = max(0, _read_share([len(content) for _, content in results], room))
+    parts = [CONCLUDE]
+    for head, content in results:
+        parts += [head, content[:share]]
+        if len(content) > share:
+            parts.append(READ_CUT.format(kept=share, whole=len(content)))
     return "".join(parts)
 
 

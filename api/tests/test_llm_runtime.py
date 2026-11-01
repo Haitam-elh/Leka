@@ -49,6 +49,8 @@ from leka.capabilities import (
     Tier,
     cites,
 )
+from leka.capabilities.gateway.contract import Role, ToolCall
+from leka.capabilities.gateway.service import READ_TOTAL, _what_was_read
 from leka.capabilities.llm import GUARDRAILS
 from leka.db import session_factory, system_scope, workspace_scope
 from leka.platform import Workspace
@@ -361,6 +363,25 @@ async def test_tools_then_a_shape_the_last_round_answers_with_what_it_read(
     assert all("responseJsonSchema" in body["generationConfig"] for body in script.asked)
     modes = [body["toolConfig"]["functionCallingConfig"]["mode"] for body in script.asked]
     assert modes == ["AUTO", "AUTO", "NONE"]
+
+
+def test_a_concluding_model_keeps_a_share_of_every_result_and_is_told_of_a_cut() -> None:
+    """A pull request of 31 files, cut unsaid at a fixed length, was read as
+    a pull request of 2 (2026-11-01)."""
+    call = ToolCall("1", "read_pull_request", {"number": 402})
+    small = Message(Role.TOOL, "s" * 1_000, tool_call_id="1", name="read_pull_request")
+    long = Message(Role.TOOL, "l" * 120_000, tool_call_id="1", name="read_pull_request")
+
+    # Within what it may be given: nothing cut, past the former 12 000.
+    said = _what_was_read([Message(Role.ASSISTANT, "", tool_calls=(call,)), small, long])
+    assert "s" * 1_000 in said and "l" * 120_000 in said and "cut here" not in said
+
+    # Past it: all there, the short whole, the long sharing the rest, said.
+    said = _what_was_read([small, *[long] * 6])
+    assert len(said) <= READ_TOTAL
+    assert said.count("## read_pull_request") == 7
+    assert "s" * 1_000 in said
+    assert said.count("cut here") == 6 and "of 120000 characters kept" in said
 
 
 async def test_what_a_model_was_asked_is_remembered_on_its_facts(workspace: uuid.UUID) -> None:
