@@ -985,7 +985,7 @@ def test_the_dependency_analysis_reads_lock_files_and_never_recalls_a_vulnerabil
     assert (d.kind, d.lifecycle, d.version, d.mode) == (
         Kind.AGENT,
         Lifecycle.ACTIVE,
-        "1.0.0",
+        "1.1.0",
         "read_only",
     )
     assert "audit_dependencies" in d.tools
@@ -1009,6 +1009,14 @@ def test_the_dependency_analysis_reads_lock_files_and_never_recalls_a_vulnerabil
         "jamais « a causé »",
         "Dis où tu as cherché",
         "tu n'installes rien",
+        # 1.1.0 (2026-11-01, LEKA's own web): four « production » packages
+        # pulled by one command-line tool the code never imports, one said
+        # reachable as « Node's HTTP client », every action given to someone
+        # no source named.
+        "par où elle arrive",
+        "« Atteignable » se prouve dans le code",
+        "le ranger en développement",
+        "« à désigner »",
     ):
         assert rule.lower() in said.lower(), rule
     assert credited(
