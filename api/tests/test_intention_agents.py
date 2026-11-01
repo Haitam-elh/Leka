@@ -119,10 +119,17 @@ def _gemini(said: dict[str, Any]) -> httpx.Response:
 class Gemini:
     """Reads the request, proposes what it was told to, writes."""
 
-    def __init__(self, proposing: dict[str, Any], corrected: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self,
+        proposing: dict[str, Any],
+        corrected: dict[str, Any] | None = None,
+        reading: dict[str, Any] | None = None,
+    ) -> None:
         self.proposing = proposing
         # What it answers once told why its first answer is not used.
         self.corrected = corrected
+        # How it understands the request, when not as a deck to draw.
+        self.reading = reading
         self.told: list[str] = []
         self.asked: list[str] = []
         self.offered: list[str] = []
@@ -134,7 +141,8 @@ class Gemini:
         if "restated" in schema["properties"]:
             self.asked.append("reading")
             return _gemini(
-                {
+                self.reading
+                or {
                     "mode": "request",
                     "goal": "map_dependencies",
                     "confidence": 0.9,
@@ -178,9 +186,11 @@ def gemini(monkeypatch: pytest.MonkeyPatch) -> Callable[..., Gemini]:
     monkeypatch.setattr(service, "settings", configured)
 
     def install(
-        proposing: dict[str, Any] = PROPOSED, corrected: dict[str, Any] | None = None
+        proposing: dict[str, Any] = PROPOSED,
+        corrected: dict[str, Any] | None = None,
+        reading: dict[str, Any] | None = None,
     ) -> Gemini:
-        scripted = Gemini(proposing, corrected)
+        scripted = Gemini(proposing, corrected, reading)
         monkeypatch.setattr(
             Gateway,
             "_client",
@@ -778,6 +788,58 @@ async def test_a_model_told_why_its_choice_does_not_fit_chooses_again_itself(
     assert proposal["steps"][0]["agent"] == "design-review"
     # The model's choice, said whose.
     assert (proposal["by"], proposal["model"]) == ("model", "gemini-3.8-flash")
+
+
+async def test_a_cause_understood_is_never_given_to_an_agent_that_only_changes_things(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[tuple[uuid.UUID, str]],
+    gemini: Callable[..., Gemini],
+    started: list[uuid.UUID],
+) -> None:
+    """2026-11-01: « a test fails between 22 h and midnight — find the
+    cause in the code », understood as a cause to find and nothing to
+    change; the model chose the code change all the same, which ran an hour
+    toward a diff no one asked for. Told what the request was understood to
+    want and which agents answer it, the model chooses again, itself — from
+    the understanding, never from a word of the request."""
+    await _ready(acme)
+    scripted = gemini(
+        {
+            "agents": [{"key": "code-change", "why": "Corriger le calcul des périodes."}],
+            "steps": [{"title": "Proposer le diff", "agent": "code-change"}],
+            "informative": False,
+        },
+        corrected={
+            "agents": [{"key": "debug-assistant", "why": "Trouver pourquoi le test échoue."}],
+            "steps": [
+                {"title": "Lire le test et le code", "detail": "", "agent": "debug-assistant"}
+            ],
+            "informative": False,
+        },
+        reading={
+            "mode": "request",
+            "goal": "explain_cause",
+            "confidence": 0.9,
+            "restated": "Trouver pourquoi le test d'activité échoue la nuit après le changement "
+            "d'heure.",
+        },
+    )
+    _as(identity, acme, "member")
+    # Words that name no agent: the understanding alone says what it wants.
+    intention = await _ask(
+        client,
+        "Le nombre de périodes de l'activité est faux la nuit après le changement d'heure : "
+        "d'où ça vient ? Regarde acme/payments.",
+    )
+    await _analysed(acme, intention)
+    [told] = scripted.told
+    assert "understood as « explain_cause »" in told and "code-change only changes" in told
+    assert "debug-assistant" in told
+    proposal = (await _get(client, f"/{intention['id']}/analysis"))["result"]["proposal"]
+    assert [a["key"] for a in proposal["agents"]] == ["debug-assistant"]
 
 
 async def test_a_model_that_never_chooses_what_the_work_needs_leaves_it_to_the_catalogue(

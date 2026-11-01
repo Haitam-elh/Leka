@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.background import (
     JobStatus,
+    job_attempt,
 )
 from leka.background.repository import JobRunRepository
 from leka.background.runner import run_job
@@ -172,6 +173,22 @@ async def test_the_request_that_caused_a_job_is_visible_inside_it(session: Async
     await run_job(run_id)
 
     assert background_jobs.CALLS == [("request_id", "01FROMTHEREQUEST")]
+
+
+async def test_a_job_knows_its_attempt_one_whose_worker_died_its_second(
+    session: AsyncSession,
+) -> None:
+    """2026-11-01: a deploy restarted the workers mid-run. The job came back
+    — its second attempt — and must know it, to take its work back."""
+    workspace = await make_workspace(session)
+    first = await _runnable(session, workspace, job=f"{PATH}.observe_attempt")
+    again = await _runnable(session, workspace, job=f"{PATH}.observe_attempt", attempts=1)
+
+    await run_job(first)
+    await run_job(again)
+
+    assert background_jobs.CALLS == [("attempt", (1, 1)), ("attempt", (2, 2))]
+    assert job_attempt() == 0  # outside a job
 
 
 async def test_the_request_id_does_not_leak_into_the_next_job(session: AsyncSession) -> None:

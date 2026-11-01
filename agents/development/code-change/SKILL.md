@@ -1,8 +1,8 @@
 ---
 name: code-change
 title: "Modification de code"
-description: "Use when someone asks LEKA to change, fix or improve the code of a connected repository — it reads the code, proposes the change as a diff a person reviews, and opens a pull request only once that person accepts it."
-version: 2.4.0
+description: "Use when someone asks LEKA to change, fix or improve the code of a connected repository — it reads the code, proposes the change as a diff a person reviews, and opens a pull request only once that person accepts it. Not when someone only asks why something fails or how it works: that is a diagnosis, the debugging assistant's."
+version: 2.4.1
 category: development
 entity_types: [repository, service, application, issue, pull_request, commit, change, document]
 requires: ["github"]

@@ -101,6 +101,20 @@ class CapabilityRunRepository:
         )
         return bool(claimed.rowcount)  # type: ignore[attr-defined]
 
+    async def resume(self, run_id: uuid.UUID, *, at: datetime) -> bool:
+        """Running, taken back by its own job come again — its worker died
+        mid-run. Its hour starts again."""
+        resumed = await self._session.execute(
+            update(AgentRun)
+            .where(
+                AgentRun.workspace_id == self._workspace_id,
+                AgentRun.id == run_id,
+                AgentRun.status == "running",
+            )
+            .values(started_at=at)
+        )
+        return bool(resumed.rowcount)  # type: ignore[attr-defined]
+
     async def finish(self, run_id: uuid.UUID, **values: object) -> bool:
         """Running to how it ended — False when it no longer runs: cancelled
         meanwhile, that stands."""

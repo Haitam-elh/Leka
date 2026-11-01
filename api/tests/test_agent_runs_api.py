@@ -66,6 +66,7 @@ from leka.capabilities import (
     sweep_runs,
     sync_catalogue,
 )
+from leka.capabilities import runs as runs_module
 from leka.capabilities.deliverables.layout import deck_slides
 from leka.capabilities.gateway import service
 from leka.capabilities.registry import catalogue
@@ -787,6 +788,39 @@ async def test_cancelled_by_who_asked_or_an_admin(
     _as(identity, acme, "admin")
     assert (await client.post(f"{API}/{theirs['id']}/cancel")).status_code == 200
     assert (await client.post(f"{API}/{uuid.uuid4()}/cancel")).status_code == 404
+
+
+async def test_a_run_whose_worker_died_is_taken_back_by_its_job_come_again(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    leka_gemini: Callable[..., Script],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """2026-11-01: a deploy restarted the workers mid-run. The job came back
+    and found the run « running »: it left it so, and an hour later the
+    sweep said « interrupted, run it again ». Its own job come again takes
+    it back, from the start, and says so; anything else still leaves it."""
+    await _ready(acme)
+    leka_gemini()
+    _as(identity, acme, "member")
+    started = await _start(client)
+    await _sql(
+        acme["acme"],
+        "UPDATE agent_runs SET status = 'running', started_at = now() - interval '20 minutes' "
+        "WHERE id = :id",
+        id=uuid.UUID(started["id"]),
+    )
+    # Not its job's second attempt: left as it is.
+    assert await _run(acme, started["id"]) == {"status": "not_queued"}
+    assert _kinds(await _detail(client, started["id"])) == ["queued"]
+
+    monkeypatch.setattr(runs_module, "job_attempt", lambda: 2)
+    await _run(acme, started["id"])
+    done = await _detail(client, started["id"])
+    assert _kinds(done)[:3] == ["queued", "resumed", "started"]
+    assert done["status"] != "running"
 
 
 # ── kept ───────────────────────────────────────────────────────────────────

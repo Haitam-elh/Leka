@@ -34,7 +34,7 @@ VERSIONS = {
     "build-fixer": "1.3.0",
     "code-review": "1.4.0",
     "data-analysis": "1.4.0",
-    "debug-assistant": "1.5.0",
+    "debug-assistant": "1.6.0",
     "documentation-assistant": "2.1.0",
     "incident-investigation": "1.4.0",
     "infrastructure-analysis": "1.4.0",
@@ -768,7 +768,7 @@ def test_the_code_change_proposes_the_smallest_change_and_says_the_rest() -> Non
     # literally, the fewest files, nothing changed on the way, every line
     # justified; what it saw beyond, said and left alone.
     change = {d.key: d for d in catalogue()}["code-change"]
-    assert change.version == "2.4.0"
+    assert change.version == "2.4.1"
     said = change.instructions or ""
     # 2026-10-29 (#446): the repository's rules read first, its data never
     # invented, rounds enough to read a whole screen — and, its change made

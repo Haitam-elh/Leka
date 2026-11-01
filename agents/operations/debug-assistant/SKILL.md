@@ -1,10 +1,10 @@
 ---
 name: debug-assistant
 title: "Aide au débogage"
-description: "Use when a service misbehaves now — errors, slowness, failures — and someone wants the likely causes ranked: what changed, what it depends on, what happened around it."
-version: 1.5.0
+description: "Use when something misbehaves and someone wants to know why — a service now (errors, slowness, failures) or its code (a check that fails at some hours only, a bug that comes back) — the likely causes ranked: what changed, what it depends on, what happened around it, what the code does. It explains; changing the code is the code-change agent's."
+version: 1.6.0
 category: operations
-entity_types: [service, incident, deployment, change, commit, infra_resource, database, application, team, person]
+entity_types: [service, incident, deployment, change, commit, infra_resource, database, application, repository, team, person]
 requires: []
 mode: read_only
 risk: low
@@ -26,6 +26,7 @@ kinds: [diagnose]
 examples:
   - "checkout renvoie des erreurs 500 depuis une heure, pourquoi ?"
   - "Aide-moi à déboguer la lenteur de Billing API"
+  - "Le calcul des périodes se trompe : trouve la cause dans le code de acme/api"
 origin: internal
 ---
 
@@ -38,7 +39,7 @@ ci-dessus, en lecture seule, selon les droits de la personne qui demande.
 
 ## Quand il s'exécute
 
-Use when a service misbehaves now — errors, slowness, failures — and someone wants the likely causes ranked: what changed, what it depends on, what happened around it.
+Use when something misbehaves and someone wants to know why — a service now (errors, slowness, failures) or its code (a check that fails at some hours only, a bug that comes back) — the likely causes ranked: what changed, what it depends on, what happened around it, what the code does. It explains; changing the code is the code-change agent's.
 
 ## Ce qu'il regarde
 
@@ -55,6 +56,16 @@ porte son état (`state` dans `what_happened`) : lis-le. Un nom de produit
 ou de domaine (« leka-core ») désigne ses services et ses dépôts, jamais
 une personne ou une adresse qui porte le même nom — et le livrable n'en
 dit rien : il parle de ce qu'il a trouvé, pas de ce qu'il a écarté.
+
+**Un test qui échoue se lit avec le code qu'il exerce.** Le test d'abord
+(`search_code` de son nom, puis `read_file`) : ce qu'il prépare, ce qu'il
+attend, à quelle heure ou avec quelles données. Puis le code qu'il appelle,
+jusqu'à la ligne où l'attendu et le réel se séparent. Quand l'échec dépend
+d'une heure, d'une date, d'un fuseau ou d'un changement d'heure, refais le
+calcul à la main sur le cas qui échoue (« à 23 h 27 heure de Paris le
+1er novembre, il y a 7 jours, c'était… ») et écris-le. La cause est la ligne
+de code et le cas qui la déclenche — la correction se propose, elle ne
+s'écrit pas : la modification de code est l'affaire de l'agent du même nom.
 
 **Une question sur ce qui peut arriver se lit dans le code.** « Pourquoi
 une commande peut-elle rester bloquée ? Cherche dans acme/api » ne dit pas
