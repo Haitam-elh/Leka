@@ -325,7 +325,15 @@ _ABSENT = re.compile(
 _ABOUT_INDEX = re.compile(r"index", re.IGNORECASE)
 # Where a claim is not one: what could not be checked, what is to measure.
 _HEDGED = re.compile(
-    r"pas pu .tre v.rifi|not (?:been )?verified|could not be|. mesurer|to measure|questions?",
+    r"pas pu .tre v.rifi|not (?:been )?verified|could not be|. mesurer|to measure|questions?|"
+    r"limites?\b|limits?\b|non lus?\b|not read|unread|angles? morts?|blind spots?",
+    re.IGNORECASE,
+)
+# A file said not read, its risk honestly left open (2026-11-01: the
+# regression and impact analyses keep « inconnu » for code they could not
+# read): no finding made on it.
+_LEFT_OPEN = re.compile(
+    r"\binconnue?s?\b|\bunknown\b|non jug|not judged|. lire\b|to read\b|non .valu|not assessed",
     re.IGNORECASE,
 )
 _TICKED = re.compile(r"`([^`\n]{1,160})`")
@@ -796,7 +804,7 @@ def contradicted(deliverable: str, files: Mapping[str, str]) -> list[Contradicti
                 found.append(
                     Contradiction(folder, "count", line=int(number), evidence=str(len(held)))
                 )
-        if _NOT_READ.search(line) and line.startswith("|"):
+        if _NOT_READ.search(line) and line.startswith("|") and not _LEFT_OPEN.search(line):
             found.append(Contradiction(line.strip("| ")[:160], "not_read"))
     return found[:MOST_CONTRADICTIONS]
 
