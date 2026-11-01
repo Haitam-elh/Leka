@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "cn";
 import { summaryOf } from "@/components/capabilities/catalogue";
@@ -990,18 +990,35 @@ function SidePanel({ intention, offer }: { intention: IntentionDetail; offer: In
   const w = t.intentions.detail;
   const [tab, setTab] = useState<Tab>("plan");
   const tabs: Tab[] = ["plan", "result", "sources", "technical"];
+  const panel = useRef<HTMLElement>(null);
+  // A tab opens at its top, wherever the last one was left.
+  const open = (next: Tab) => {
+    setTab(next);
+    if (panel.current) panel.current.scrollTop = 0;
+  };
   return (
-    <aside className="@container min-w-0 space-y-4" aria-label={w.tabs.plan}>
+    // Beside the page (xl): within the screen, scrolled on its own, however
+    // long the result; the padding keeps its cards' outline from being cut.
+    <aside
+      ref={panel}
+      data-testid="detail-side-panel"
+      className="@container min-w-0 space-y-4 xl:sticky xl:top-3 xl:max-h-[calc(100dvh-var(--shell-header-height)-1.5rem)] xl:overflow-y-auto xl:p-px"
+      aria-label={w.tabs.plan}
+    >
       <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-shell-line">
-        {/* Narrow (a phone): the tabs go on two lines, never cut. */}
-        <div role="tablist" className="mb-4 flex flex-wrap justify-between gap-x-2 border-b border-shell-line">
+        {/* Narrow (a phone): the tabs go on two lines, never cut. Beside the
+            page, they stay in sight as its panel scrolls. */}
+        <div
+          role="tablist"
+          className="z-10 mb-4 flex flex-wrap justify-between gap-x-2 border-b border-shell-line bg-white xl:sticky xl:-top-px"
+        >
           {tabs.map((each) => (
             <button
               key={each}
               type="button"
               role="tab"
               aria-selected={tab === each}
-              onClick={() => setTab(each)}
+              onClick={() => open(each)}
               className={cn(
                 "-mb-px border-b-2 px-2 py-2 text-[0.8125rem] font-medium whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-brand-violet/40",
                 tab === each
@@ -1024,7 +1041,7 @@ function SidePanel({ intention, offer }: { intention: IntentionDetail; offer: In
           <TechnicalLinks intention={intention} />
         )}
       </div>
-      <Dependencies intention={intention} onAll={() => setTab("result")} />
+      <Dependencies intention={intention} onAll={() => open("result")} />
       <Expected intention={intention} />
     </aside>
   );

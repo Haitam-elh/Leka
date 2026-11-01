@@ -361,6 +361,14 @@ describe("an intention's page", () => {
     expect(plan).toHaveTextContent("La capacité IA de votre formule Starter est épuisée ce mois-ci.");
   });
 
+  it("opens a tab of its side panel at the top, wherever the last was left", async () => {
+    show();
+    const panel = screen.getByTestId("detail-side-panel");
+    panel.scrollTop = 500;
+    await userEvent.click(screen.getByTestId("detail-tab-result"));
+    expect(panel.scrollTop).toBe(0);
+  });
+
   it("lays the plan out step by step, LEKA's own steps included", () => {
     show();
     const [step] = screen.getAllByTestId("detail-plan-step");
