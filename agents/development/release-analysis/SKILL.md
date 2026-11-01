@@ -2,7 +2,7 @@
 name: release-analysis
 title: "Analyse de release"
 description: "Use when someone wants a release or a deployment analysed — what went out, what it touched, what happened after it — or the risk of the next one assessed."
-version: 1.4.0
+version: 1.5.0
 category: development
 entity_types: [release, deployment, change, commit, pull_request, service, incident, application, repository, business_capability, business_process]
 requires: ["github|gitlab|bitbucket"]
@@ -60,6 +60,18 @@ d'écrire, dans cet ordre :
    migration » peut être un outil qui planifie, pas une migration. Ce qui franchit une frontière — un échange entre
    services, un schéma de données, l'authentification, un paiement — est
    noté à part.
+
+   **Toute la période, pas la dernière release.** Chaque déploiement de la
+   période demandée se liste, un par ligne, avec sa date et ses pull
+   requests ; le plus gros (en lignes, en fichiers, en zones sensibles)
+   se lit en premier et porte le verdict, pas le plus récent.
+
+   **Ce que LEKA a vu, et quand.** Les déploiements viennent de la source
+   telle que LEKA l'a lue : sa dernière lecture se dit. « Pas encore
+   déployée » ne s'écrit que si la source a été lue après la fusion ;
+   sinon « non vu par LEKA à sa dernière lecture (date) ». Un chiffre
+   d'une compétence (taux d'échec, nombre de déploiements) se cite avec
+   sa période.
 2. **Les angles de risque.** Pour ce qu'elle touche, et seulement là où les
    sources montrent la frontière : les accès et la sécurité ; l'intégrité
    des données (une migration destructive, un traitement qu'on ne peut pas
@@ -95,7 +107,7 @@ d'écrire, dans cet ordre :
 
 Un document markdown, dans la langue de la demande :
 
-1. **Ce qui est parti** — changements, pull requests, services.
+1. **Ce qui est parti** — chaque déploiement de la période, ses pull requests, les services touchés, et la date de dernière lecture de la source.
 2. **Après** — incidents ou changements survenus ensuite, et leur lien possible.
 3. **Évaluation** — le verdict en une phrase, ce qui le bloque, ce qui a été vérifié et ce qui manque pour en être sûr.
 4. **Pour la prochaine** — ce qu'il faudrait surveiller, le retour arrière à prévoir et, pour une release risquée, ses paliers et les signaux qui l'arrêtent.
