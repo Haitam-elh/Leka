@@ -166,8 +166,38 @@ export function blocksOf(source: string): Block[] {
 const INLINE =
   /(\*\*[^*]+\*\*|(?<![\p{L}\p{N}_])__[^_]+__(?![\p{L}\p{N}_])|`[^`]+`|\[[^\]]+\]\([^)\s]+\)|\*[^*\s][^*]*\*|(?<![\p{L}\p{N}_])_[^_\s][^_]*_(?![\p{L}\p{N}_]))/gu;
 
+// A line break a model writes in a table's cell, and a box to tick as a
+// checklist writes it (2026-11-01: « <br> » and « [ ] » shown as they were typed).
+const BREAK = /<br\s*\/?>/i;
+const BOX = /^\[([ xX])\]\s+/;
+
 /** A line's emphasis, code and links — as elements, never as HTML. */
 export function Inline({ text }: { text: string }) {
+  const lines = text.split(BREAK);
+  if (lines.length > 1) {
+    return (
+      <>
+        {lines.map((line, n) => (
+          <Fragment key={n}>
+            {n > 0 && <br />}
+            <Inline text={line.trim()} />
+          </Fragment>
+        ))}
+      </>
+    );
+  }
+  const box = BOX.exec(text);
+  if (box) {
+    return (
+      <>
+        {/* A mark, never a form's checkbox: nothing here is ticked by the reader. */}
+        <span aria-hidden="true" data-box={box[1] === " " ? "todo" : "done"} className="me-1.5">
+          {box[1] === " " ? "☐" : "☑"}
+        </span>
+        <Inline text={text.slice(box[0].length)} />
+      </>
+    );
+  }
   const parts = text.split(INLINE);
   return (
     <>

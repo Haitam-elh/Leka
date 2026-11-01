@@ -513,6 +513,9 @@ class GitHubCode:
                 }
             )
         return {
+            # Its CI first: what a reader cut short still has (2026-11-01: a
+            # 31-file pull request, cut at its diffs, read with no CI).
+            "checks": checks,
             **_pull_brief(meta),
             "body": str(meta.get("body") or "")[:MAX_BODY],
             "base": str((meta.get("base") or {}).get("ref") or ""),
@@ -521,7 +524,6 @@ class GitHubCode:
             "deletions": int(meta.get("deletions") or 0),
             "changed_files": int(meta.get("changed_files") or len(files)),
             "files": files,
-            "checks": checks,
         }
 
     # ── the one write: a pull request ────────────────────────────────────────

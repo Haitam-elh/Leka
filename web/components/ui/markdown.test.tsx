@@ -6,7 +6,8 @@
  *   numbered on;
  * - SQL written at the end of a step's line, or under it: drawn as code;
  * - a table whose header has fewer cells than its rows: every cell drawn;
- * - code inside bold, as a model titles a point: drawn as code (2026-11-01).
+ * - code inside bold, as a model titles a point: drawn as code (2026-11-01);
+ * - « <br> » in a table's cell, « [ ] » before a step: a line break and a box.
  */
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
@@ -61,5 +62,25 @@ describe("an agent's report, drawn", () => {
     expect(text).not.toHaveTextContent("`");
     expect(text.querySelector("strong code")?.textContent).toBe("night.py:17");
     expect(text.querySelector("em code")?.textContent).toBe("gemini");
+  });
+
+  it("breaks a cell's line where a model wrote <br>, and draws a checklist's boxes", () => {
+    const source = [
+      "| Critère | Preuve |",
+      "|---|---|",
+      "| 1 | **Code** : `night.py:166`.<br>**Test** : non lu.<br/>**CI** : verte. |",
+      "",
+      "- [ ] Cliquer sur « Voir ».",
+      "- [x] Lire la CI.",
+    ].join("\n");
+    render(<Markdown source={source} />);
+    const text = screen.getByTestId("markdown");
+    expect(text).not.toHaveTextContent("<br");
+    expect(text).not.toHaveTextContent("[ ]");
+    expect(text.querySelectorAll("td br")).toHaveLength(2);
+    const boxes = [...text.querySelectorAll<HTMLElement>("li [data-box]")];
+    expect(boxes.map((box) => box.dataset.box)).toEqual(["todo", "done"]);
+    expect(text.querySelector("input")).toBeNull();
+    expect(text).toHaveTextContent("Cliquer sur « Voir ».");
   });
 });

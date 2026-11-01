@@ -813,7 +813,7 @@ def test_the_acceptance_holds_a_change_to_its_criteria_with_proof() -> None:
     assert (d.kind, d.lifecycle, d.version, d.mode) == (
         Kind.AGENT,
         Lifecycle.ACTIVE,
-        "1.0.0",
+        "1.1.0",
         "read_only",
     )
     assert set(d.tools) == {
@@ -841,6 +841,14 @@ def test_the_acceptance_holds_a_change_to_its_criteria_with_proof() -> None:
         "tu ne lances rien",
         "Rien d'inventé",
         "N'ajoute aucune exigence",
+        # 1.1.0 (2026-11-01, PR #456 recetted): its rounds spent before the
+        # tests, its CI cut off, « À reprendre » for a pull request with
+        # nothing to change, and a link said hard-coded that the web makes.
+        "Lire dans le bon ordre",
+        "les tests d'abord",
+        "Non vérifié par LEKA",
+        "**À confirmer**",
+        "Un problème se suit jusqu'où la\n   personne le verrait",
     ):
         assert rule.lower() in said.lower(), rule
     assert credited("qa-acceptance", "msitarzewski/agency-agents")
