@@ -1172,11 +1172,22 @@ def test_the_regression_analysis_reads_the_pull_request_asked() -> None:
     # 2026-10-23, tested on leka-core: asked about PR #404, it read #378 — one
     # the context showed —, and cited test lines it never read.
     d = {d.key: d for d in catalogue()}["regression-analysis"]
-    assert d.version == "1.2.0"
+    assert d.version == "1.3.0"
     said = d.instructions or ""
     assert "La pull request que la demande nomme est celle qui se lit" in said
     assert "Une ligne citée (`chemin:ligne`) est une ligne lue" in said
     assert "« à désigner »" in said
+
+
+def test_the_regression_analysis_reads_the_whole_diff() -> None:
+    # 2026-11-01, tested on leka-core with Gemini: PR #402's extraction
+    # version 2 → 3, billing and code tools unseen — « 2 files returned of
+    # 31 » —, a Caddy proxy test asked of a PR that never touches it, and a
+    # frontmatter test that already exists.
+    said = {d.key: d for d in catalogue()}["regression-analysis"].instructions or ""
+    assert "**Tout le diff se lit.**" in said
+    assert "**Ce qui casse le plus souvent passe en premier**" in said
+    assert "**Un test recommandé n'existe pas déjà.**" in said
 
 
 def test_the_change_impact_analysis_reads_the_pull_request_asked() -> None:

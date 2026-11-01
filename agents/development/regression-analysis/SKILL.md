@@ -2,7 +2,7 @@
 name: regression-analysis
 title: "Analyse de régression"
 description: "Use when someone asks what a pull request, a change or a release could break that used to work — the behaviours it alters, what depends on them, whether tests guard them, what broke last time there — from its diff and the company model."
-version: 1.2.0
+version: 1.3.0
 category: development
 entity_types: [pull_request, change, deployment, release, repository, service, application, database, infra_resource, incident, business_capability, business_process]
 requires: ["github|gitlab|bitbucket"]
@@ -60,7 +60,18 @@ s'arrête.
 4. **L'histoire** : ce qui a cassé dans cette zone (`what_happened`), les
    incidents après un changement semblable.
 
-Un diff coupé (`truncated`) se dit : ce qui n'a pas été lu n'est pas jugé.
+**Tout le diff se lit.** Chaque fichier de la pull request est classé par
+domaine avant toute conclusion : facturation et prix, connecteurs et outils
+partagés, ingestion et format des données, schéma et migrations,
+authentification, interface, agents, tests, documentation. Un fichier de
+code dont le diff manque ou est coupé (`truncated`) se lit avec
+`read_file` : « non renvoyé par l'outil » n'est jamais une raison de ne pas le lire. Ce
+qui reste non lu se nomme, fichier par fichier, et n'est pas jugé « faible ».
+
+**Ce qui casse le plus souvent passe en premier** : une version d'extraction
+ou un format de donnée qui change (ce qui le relit, ce qui est retraité), un
+prix ou un droit d'accès qui change, un outil ou un connecteur que d'autres
+parties du code appellent.
 
 ## Sa méthode
 
@@ -92,6 +103,11 @@ Pour chaque comportement que le changement modifie :
    dernier.
 
 Zéro risque est une analyse valide. Ne fabrique rien pour paraître prudent.
+
+**Un test recommandé n'existe pas déjà.** Avant de demander un test, cherche-le
+à côté du code et dans les tests du dépôt (`list_files`, `read_file`) :
+trouvé, il se cite et se lance ; absent, il se demande. Un test ne vise que
+ce que le diff touche : jamais un composant qu'il ne modifie pas.
 
 ## Ce qu'il produit
 
