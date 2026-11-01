@@ -38,7 +38,7 @@ VERSIONS = {
     "documentation-assistant": "2.0.0",
     "incident-investigation": "1.4.0",
     "infrastructure-analysis": "1.4.0",
-    "release-analysis": "1.4.0",
+    "release-analysis": "1.5.0",
     "security-review": "1.5.0",
     "test-analysis": "1.4.0",
 }
@@ -588,6 +588,11 @@ def test_the_release_analysis_caps_its_verdict() -> None:
     # instance, a 1 % error rate from nowhere, a docs/rollback.md to write.
     assert "jamais à un titre" in said and "« 10 % des utilisateurs »" in said
     assert "jamais un chiffre de manuel" in said and "« non trouvé" in said
+    # 2026-11-01, tested on leka-core with Gemini: « since yesterday »
+    # answered with the last of four deployments, two already in production
+    # said « not deployed yet » from a source read before, « 0 % of 249 ».
+    assert "**Toute la période, pas la dernière release.**" in said
+    assert "**Ce que LEKA a vu, et quand.**" in said
     assert credited("release-analysis", "affaan-m/ECC", "msitarzewski/agency-agents")
 
 
