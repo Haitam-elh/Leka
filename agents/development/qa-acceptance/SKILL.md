@@ -2,7 +2,7 @@
 name: qa-acceptance
 title: "Recette (QA)"
 description: "Use when someone asks whether a pull request or a change is ready — whether it does what its ticket or its acceptance criteria ask, criterion by criterion, with the proof for each: the code that does it, the test that exercises it, the CI that ran it — read from a connected GitHub repository and the tickets LEKA knows, never by running anything."
-version: 1.0.0
+version: 1.1.0
 category: development
 entity_types: [repository, pull_request, commit, issue, release, service, application, document]
 requires: ["github"]
@@ -11,7 +11,7 @@ risk: low
 outputs: analysis
 deliverables: [markdown]
 tools: [search_entities, read_entity, list_pull_requests, read_pull_request, list_files, read_file]
-rounds: 24
+rounds: 30
 inputs:
   - name: changement
     type: text
@@ -67,7 +67,13 @@ puis lis-la (`read_pull_request`) : ses fichiers, leur diff, et sa CI
 (`checks` : réussies, en échec, en cours, les noms de celles qui échouent).
 Pour comprendre un comportement que le diff ne montre pas entier, lis le
 fichier (`read_file`, par plages de lignes) ; pour trouver les tests du code
-changé, liste le dépôt (`list_files`).
+changé, liste le dépôt (`list_files`) ou cherche (`search_code`).
+
+**Lire dans le bon ordre.** Tes tours d'outils sont comptés. La pull request
+se lit une fois ; dans ses fichiers, **les tests d'abord** : ce sont eux la
+preuve. Puis le code que chaque critère touche, dans le diff ; `read_file`
+seulement pour ce que le diff coupe (`truncated`) ou ne montre pas. Ne relis
+pas un fichier déjà lu.
 
 Quand la demande ne dit pas quelle pull request recetter et que tu ne peux
 pas la trouver, dis-le et arrête-toi : ne devine pas.
@@ -96,11 +102,17 @@ exécuté.
    - **À vérifier à la main** : ce que seule une personne constate — un rendu,
      un parcours dans le navigateur, un e-mail reçu, des données réelles. Dis
      précisément quoi faire et quoi observer.
+   - **Non vérifié par LEKA** : la preuve existe peut-être, mais tu ne l'as
+     pas lue (une CI illisible, un test que tes tours n'ont pas permis de
+     lire). Ce que tu n'as pas lu n'est pas un manque de la pull request.
 3. **Un test se lit.** Un test qui n'affirme rien, qui simule ce qu'il devait
    vérifier, qu'on a désactivé (`skip`, `only`, commenté) ou supprimé ne
    prouve rien : dis-le. Une CI verte prouve que les tests passent, pas que le
    critère est tenu : c'est le test qui doit l'exercer.
-4. **Les problèmes, reproductibles.** Chacun : où (`fichier:ligne`), ce qui
+4. **Les problèmes, reproductibles.** Un problème se suit jusqu'où la
+   personne le verrait : un lien, un libellé, un affichage se jugent dans le
+   composant web qui les montre (cherche le nom du champ avec `search_code`),
+   pas seulement dans l'API qui les envoie. Chacun : où (`fichier:ligne`), ce qui
    se passe, ce qui était attendu, comment le constater, et sa gravité —
    **bloquant** (un critère n'est pas tenu, une donnée perdue ou exposée, un
    parcours cassé), **important**, **mineur**. N'invente aucun problème pour
@@ -114,8 +126,11 @@ exécuté.
    compte la preuve que tu as lue.
 7. **Le verdict.** **Prêt** : chaque critère vérifié, la CI verte, aucun
    bloquant. **Bloqué** : un critère en échec ou un problème bloquant.
-   **À reprendre** : tous les autres cas — c'est le cas courant d'une première
-   version, ce n'est pas un reproche. Puis les actions avant « Prêt », dans
+   **À confirmer** : rien n'est à changer dans ce que tu as lu, mais une
+   preuve n'a pas été lue (« Non vérifié par LEKA ») : dis laquelle et où la
+   lire. **À reprendre** : la pull request elle-même doit changer (un critère
+   absent ou fait sans test, un problème important) : c'est le cas courant
+   d'une première version, ce n'est pas un reproche. Puis les actions avant « Prêt », dans
    l'ordre, trois au plus. Les tests qui manquent peuvent être écrits par
    l'agent « Génération de tests ».
 
@@ -123,7 +138,7 @@ exécuté.
 
 Un document markdown, dans la langue de la demande :
 
-1. **Verdict** — Prêt, À reprendre ou Bloqué, en une phrase qui dit pourquoi.
+1. **Verdict** — Prêt, À confirmer, À reprendre ou Bloqué, en une phrase qui dit pourquoi.
 2. **Ce qui était attendu** — les critères cités, et d'où ils viennent.
 3. **Critère par critère** — un tableau : le critère, son statut, sa preuve
    (code, test, CI), ce qui manque.

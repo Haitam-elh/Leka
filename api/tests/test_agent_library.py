@@ -35,7 +35,7 @@ VERSIONS = {
     "code-review": "1.4.0",
     "data-analysis": "1.4.0",
     "debug-assistant": "1.5.0",
-    "documentation-assistant": "2.0.0",
+    "documentation-assistant": "2.1.0",
     "incident-investigation": "1.4.0",
     "infrastructure-analysis": "1.4.0",
     "release-analysis": "1.5.0",
@@ -505,8 +505,16 @@ def test_the_documentation_assistant_maps_what_a_reader_finds() -> None:
         "Le code contre le document",
         "Les pages, un lecteur à la fois",
         "Des exemples vrais",
+        # 2.1.0 (2026-11-01, the night review documented): a `curl` to a
+        # domain and a « Bearer » token the code does not know, the morning
+        # e-mail asked for and left out, lines cited that hold something
+        # else, a « mainteneur désigné » no source names.
+        "Une commande se lance telle qu'écrite",
+        "La demande, point par point",
+        "Une ligne citée porte ce qu'on lui attribue",
     ):
         assert step in said, step
+    assert "jamais un rôle qu'aucune source ne donne" in said
     # 2026-10-18: it reads the code of a connected GitHub repository, and
     # writes pages ready to publish on Confluence from its deliverable.
     doc = {d.key: d for d in catalogue()}["documentation-assistant"]
@@ -805,7 +813,7 @@ def test_the_acceptance_holds_a_change_to_its_criteria_with_proof() -> None:
     assert (d.kind, d.lifecycle, d.version, d.mode) == (
         Kind.AGENT,
         Lifecycle.ACTIVE,
-        "1.0.0",
+        "1.1.0",
         "read_only",
     )
     assert set(d.tools) == {
@@ -833,6 +841,14 @@ def test_the_acceptance_holds_a_change_to_its_criteria_with_proof() -> None:
         "tu ne lances rien",
         "Rien d'inventé",
         "N'ajoute aucune exigence",
+        # 1.1.0 (2026-11-01, PR #456 recetted): its rounds spent before the
+        # tests, its CI cut off, « À reprendre » for a pull request with
+        # nothing to change, and a link said hard-coded that the web makes.
+        "Lire dans le bon ordre",
+        "les tests d'abord",
+        "Non vérifié par LEKA",
+        "**À confirmer**",
+        "Un problème se suit jusqu'où la\n   personne le verrait",
     ):
         assert rule.lower() in said.lower(), rule
     assert credited("qa-acceptance", "msitarzewski/agency-agents")

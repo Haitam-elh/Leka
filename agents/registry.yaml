@@ -79,7 +79,7 @@ agents:
 
   - path: development/qa-acceptance/SKILL.md
     name: qa-acceptance
-    version: 1.0.0
+    version: 1.1.0
     status: active
 
   - path: development/regression-analysis/SKILL.md
@@ -104,7 +104,7 @@ agents:
 
   - path: documentation/documentation-assistant/SKILL.md
     name: documentation-assistant
-    version: 2.0.0
+    version: 2.1.0
     status: active
 
   - path: drift/detect-undocumented-dependency/SKILL.md

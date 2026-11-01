@@ -177,6 +177,80 @@ def test_a_file_said_not_read_with_its_risk_left_open_is_no_finding() -> None:
     assert [(c.kind, "identity/repository.py" in c.said) for c in found] == [("not_read", True)]
 
 
+NIGHT = """\"\"\"The night review.
+
+Only what is there: no model asked.
+\"\"\"
+
+import asyncio
+
+UNREAD = 24
+
+
+def checked(source):
+    if source.last_synced_at is None:
+        return "unread"
+
+
+def standing(review):
+    return review.points
+"""
+
+
+def test_a_line_cited_for_a_name_it_does_not_hold_is_contradicted_with_where() -> None:
+    # 2026-11-01, a documentation of the night review: `standing` cited at
+    # lines that are imports, `last_synced_at` twenty lines away. Three
+    # lines either side still count as the line cited.
+    files = {"api/leka/monitoring/night.py": NIGHT}
+    doc = "\n".join(
+        [
+            "## Pages proposées",
+            "Le filtre `standing` (`api/leka/monitoring/night.py:6-7`) retire les points réglés.",
+            "La date `last_synced_at` (`night.py:3`) décide d'une source non lue.",
+            # Right, or two lines off: it holds.
+            "La fonction `checked` (`night.py:11`) et `standing` (`night.py:17`) lisent tout.",
+            # No name in code beside it, or a name the file never holds: no claim.
+            "Aucun modèle n'est appelé (`night.py:3`) ; tout est `déterministe` (`night.py:9`).",
+        ]
+    )
+    found = contradicted(doc, files)
+    assert [(c.kind, c.said, c.line, c.evidence) for c in found] == [
+        ("line", "api/leka/monitoring/night.py:6-7", 16, "standing"),
+        ("line", "night.py:3", 12, "last_synced_at"),
+    ]
+    assert (
+        found[0]
+        .to_model()
+        .startswith(
+            "You cite api/leka/monitoring/night.py:6-7 for `standing`, but those lines do not "
+            "hold it: `standing` is at api/leka/monitoring/night.py:16."
+        )
+    )
+    assert "ces lignes ne contiennent pas `standing`, qui est en" in contradictions_said(found)
+
+
+def test_a_command_calling_a_host_no_file_knows_is_contradicted() -> None:
+    files = {
+        "docs/deployment.md": "The API answers at https://api.leka-core.com.\n",
+        "api/leka/main.py": "app = FastAPI()\n",
+    }
+    doc = "\n".join(
+        [
+            "## Procédure",
+            "Le site public https://inconnu.example.org n'est pas une commande.",
+            "```bash",
+            'curl -X POST "https://api.leka.halimi.net/api/v1/monitoring/night-review"',
+            'curl "https://api.leka-core.com/api/v1/health"',
+            'curl "http://localhost:8000/api/v1/health" "https://api.example.com/x"',
+            "```",
+        ]
+    )
+    found = contradicted(doc, files)
+    assert [(c.kind, c.said) for c in found] == [("host", "api.leka.halimi.net")]
+    assert "no file of the repository knows the host api.leka.halimi.net" in found[0].to_model()
+    assert "aucun fichier du dépôt ne connaît cette adresse" in contradictions_said(found)
+
+
 def test_a_database_leka_does_not_read_is_unknown_never_empty() -> None:
     unread = library.schema_of([], database="LEKA", engine=None)
     unread.connected, unread.known_from = False, ["github"]
