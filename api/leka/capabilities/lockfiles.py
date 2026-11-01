@@ -58,6 +58,10 @@ class Package:
     dev: bool | None = None
     # From the public registry, as far as the file says.
     public: bool = True
+    # The project's own dependencies that pull it in, when the file shows
+    # the tree (2026-11-01: four « production » vulnerabilities, all pulled
+    # by one command-line tool listed in production, said reachable).
+    via: tuple[str, ...] = ()
 
 
 @dataclass
@@ -90,6 +94,7 @@ class Parsed:
                     # Development only when every copy is.
                     dev=_both(known.dev, p.dev),
                     public=known.public and p.public,
+                    via=tuple(sorted(set(known.via) | set(p.via))),
                 )
         self.packages = list(seen.values())
         self.ranges = sorted(set(self.ranges))
@@ -141,6 +146,47 @@ def _list(value: object) -> list[Any]:
 # ── npm ──────────────────────────────────────────────────────────────────
 
 
+# A package's own dependencies, as a lock names them.
+_REQUIRES = ("dependencies", "optionalDependencies", "peerDependencies")
+# The most direct dependencies said for one package.
+MOST_VIA = 5
+
+
+def _npm_paths(packages: Mapping[str, Any], asked: Iterable[str]) -> dict[str, set[str]]:
+    """For each installed path, the project's own dependencies that pull it
+    in: each followed through the tree as Node resolves a name — its own
+    `node_modules` first, then each folder above."""
+
+    def resolved(at: str, name: str) -> str | None:
+        here = at
+        while True:
+            candidate = f"{here}/node_modules/{name}" if here else f"node_modules/{name}"
+            if candidate in packages:
+                return candidate
+            if not here:
+                return None
+            cut = here.rfind("/node_modules/")
+            here = here[:cut] if cut >= 0 else ""
+
+    pulled: dict[str, set[str]] = {}
+    for own in asked:
+        start = f"node_modules/{own}"
+        if start not in packages:
+            continue
+        waiting, seen = [start], {start}
+        while waiting:
+            at = waiting.pop()
+            pulled.setdefault(at, set()).add(own)
+            entry = _dict(packages.get(at))
+            for part in _REQUIRES:
+                for name in _dict(entry.get(part)):
+                    found = resolved(at, name)
+                    if found is not None and found not in seen:
+                        seen.add(found)
+                        waiting.append(found)
+    return pulled
+
+
 def _npm_lock(text: str) -> Parsed:
     data = _dict(_json(text))
     found = Parsed("npm", "lock")
@@ -152,6 +198,7 @@ def _npm_lock(text: str) -> Parsed:
             for part in ("dependencies", "devDependencies", "optionalDependencies")
             for name in _dict(root.get(part))
         }
+        pulled = _npm_paths(packages, asked)
         for path, raw in packages.items():
             entry = _dict(raw)
             if not path or entry.get("link") or "node_modules/" not in path:
@@ -165,6 +212,7 @@ def _npm_lock(text: str) -> Parsed:
                     direct=path == f"node_modules/{name}" and name in asked,
                     dev=bool(entry.get("dev") or entry.get("devOptional")),
                     public=not resolved or _host(resolved) in PUBLIC_NPM,
+                    via=tuple(sorted(pulled.get(path, set()) - {name})),
                 )
             )
         return found.unique()

@@ -2,7 +2,7 @@
 name: dependency-analysis
 title: "Analyse de dépendances"
 description: "Use when someone asks about the third-party packages a repository depends on — their known vulnerabilities, which matter and how to fix them, what runs at install time, what a change of versions brought before an incident — read from a connected GitHub repository's lock files and manifests, each package looked up in the public OSV database, never by installing anything."
-version: 1.0.0
+version: 1.1.0
 category: security
 entity_types: [repository, pull_request, commit, release, deployment, change, incident, service, application, database, infra_resource, business_capability, business_process, team, person, document]
 requires: ["github"]
@@ -108,46 +108,61 @@ correction coûte.
    ces versions se dit : « non touché pour ces versions, d'après la base ».
    Quand la base n'a pas pu être consultée, dis que les vulnérabilités n'ont
    **pas été vérifiées** — jamais « aucune vulnérabilité ».
-2. **Chaque vulnérabilité, triée.** Pour chacune : directe ou transitive (et
-   par quel paquet direct elle arrive, si le fichier le montre) ; en
-   production ou seulement en développement — un outil de développement
-   tourne aussi dans la CI, avec ses secrets : ce n'est pas « sans risque » ;
-   le chemin vulnérable est-il appelé (ce que le code montre, sinon
-   « atteignabilité inconnue », jamais supposée) ; une correction existe-t-elle
-   (la version), et coûte-t-elle une version majeure. La priorité naît de
-   tout cela, pas de la gravité affichée seule.
-3. **La correction exacte.** Pour un paquet direct : la version qui corrige
+2. **Chaque vulnérabilité, triée.** Pour chacune : directe ou transitive, et
+   **par où elle arrive** : `via`, donné par l'outil, nomme les dépendances
+   du projet qui la tirent — écris-les ; en production ou seulement en
+   développement — un outil de développement tourne aussi dans la CI, avec
+   ses secrets : ce n'est pas « sans risque » ; le chemin vulnérable est-il
+   appelé ; une correction existe-t-elle (la version), et coûte-t-elle une
+   version majeure. La priorité naît de tout cela, pas de la gravité affichée
+   seule.
+3. **« Atteignable » se prouve dans le code.** Il cite l'import
+   (`fichier:ligne`, trouvé avec `search_code`) du paquet, ou de la
+   dépendance directe qui le tire, dans le code de l'application. Une
+   dépendance que le code n'importe nulle part — un outil en ligne de
+   commande, un générateur — ne porte pas sa chaîne jusqu'à l'application
+   qui tourne, même rangée en production dans le fichier : dis « non importé
+   par l'application ». Sans preuve dans un sens ou dans l'autre :
+   « atteignabilité inconnue », jamais supposée par une connaissance générale
+   (« le client HTTP de Node »).
+4. **La correction exacte.** Pour un paquet direct : la version qui corrige
    et ce qui change entre les deux (une version majeure se lit dans ses notes
    de version : dis-le). Pour un paquet transitif : le paquet direct à monter,
    ou le forçage que l'outil de paquets permet (`overrides`, `resolutions`,
-   une contrainte) — en disant ce qu'il risque. Sans correction publiée : ce
-   qui réduit le risque en attendant, et la surveillance.
-4. **Ce qui s'exécute sans qu'on le lise.** Un script d'installation dans le
+   une contrainte) — en disant ce qu'il risque. Quand toute sa chaîne passe
+   par un outil que le code n'importe pas, rangé en production : la
+   correction d'abord est de **le ranger en développement** (une ligne qui
+   sort toute sa chaîne de la production), avant tout forçage. Sans
+   correction publiée : ce qui réduit le risque en attendant, et la
+   surveillance.
+5. **Ce qui s'exécute sans qu'on le lise.** Un script d'installation dans le
    projet, une installation sans fichier de verrouillage, une dépendance tirée
    d'un dépôt git ou d'une adresse, des versions en plage sans verrou, une
    action d'intégration continue épinglée à une étiquette plutôt qu'à un
    commit : chacun est un constat, avec son fichier. Seul, aucun ne prouve
    une attaque : dis le risque, pas plus.
-5. **L'hygiène.** Le même paquet en plusieurs versions, un paquet direct que
+6. **L'hygiène.** Le même paquet en plusieurs versions, un paquet direct que
    le code ne semble plus importer (dis comment tu l'as vu, et que c'est à
    vérifier), un paquet interne au nom qu'un registre public pourrait
    prendre : des constats mineurs, groupés.
-6. **Pour un changement.** Les versions qui montent ou descendent, celles qui
+7. **Pour un changement.** Les versions qui montent ou descendent, celles qui
    franchissent une version majeure, les paquets ajoutés et retirés, et les
    vulnérabilités que le changement corrige ou apporte (l'outil sur la branche
    de la pull request).
-7. **Pour un incident.** Le changement de dépendance livré avant lui, dans
+8. **Pour un incident.** Le changement de dépendance livré avant lui, dans
    la fenêtre de l'incident : il le **précède**, il n'en est pas la preuve —
    dis « précède », jamais « a causé », sauf quand la source le dit. Ce qui
    le confirmerait : l'erreur dans le paquet, le retour à l'ancienne version.
-8. **Avant de dire qu'il manque quelque chose** — un fichier de verrouillage,
+9. **Avant de dire qu'il manque quelque chose** — un fichier de verrouillage,
    une mise à jour automatique, une analyse dans la CI — cherche-le là où il
    vit d'ordinaire : chaque application du dépôt, `.github/`, la
    configuration des outils. Dis où tu as cherché. Trouvé ailleurs, ce n'est
    pas un constat.
-9. **Les actions.** De trois à sept, la plus urgente d'abord : chacune dit le
-   paquet, la version cible, le fichier, ce qu'elle corrige, et ce qu'il faut
-   tester après.
+10. **Les actions.** De trois à sept, la plus urgente d'abord : chacune dit le
+   paquet, la version cible, le fichier (et la ligne lue), ce qu'elle
+   corrige, et ce qu'il faut tester après. Qui s'en charge vient des sources
+   (un responsable que le modèle ou un fichier nomme) ; sinon « à désigner » :
+   jamais une personne choisie parce qu'elle contribue au dépôt.
 
 ## Ce qu'il produit
 

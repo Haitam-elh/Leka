@@ -42,7 +42,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.capabilities.advisories import RANK, AdvisoriesUnavailableError, lookup
-from leka.capabilities.lockfiles import KNOWN, UnreadableError, parse, parser_for
+from leka.capabilities.lockfiles import KNOWN, MOST_VIA, UnreadableError, parse, parser_for
 from leka.capabilities.runtime import AgentTool
 from leka.capabilities.tools import Answer, Handler
 from leka.connectors import CodeRefusedError, GitHubCode
@@ -1021,6 +1021,9 @@ async def audited(text: str, path: str, *, url: str | None = None) -> dict[str, 
             "version": p.version,
             "direct": p.direct,
             "dev_only": p.dev,
+            # The project's own dependencies that pull it in, when the file
+            # shows the tree: its reach is theirs.
+            **({"via": list(p.via[:MOST_VIA])} if p.via and not p.direct else {}),
             "advisories": [a.said() for a in found[(parsed.ecosystem, p.name, p.version)]],
         }
         for p in hit

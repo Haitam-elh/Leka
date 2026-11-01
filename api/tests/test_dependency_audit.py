@@ -66,6 +66,49 @@ def test_npm_lock_files_say_what_is_direct_dev_and_private() -> None:
     assert not found[("@acme/billing", "1.0.0")].public
 
 
+def test_an_npm_lock_says_which_of_the_projects_dependencies_pull_a_package() -> None:
+    # 2026-11-01: the MCP SDK, body-parser and systeminformation said in
+    # production, all pulled by a command-line tool the code never imports.
+    lock = {
+        "lockfileVersion": 3,
+        "packages": {
+            "": {
+                "dependencies": {"next": "15.5.25", "shadcn": "^4.21.0"},
+                "devDependencies": {"jsdom": "^26"},
+            },
+            "node_modules/next": {"version": "15.5.25", "optionalDependencies": {"sharp": "*"}},
+            "node_modules/sharp": {"version": "0.35.4", "optional": True},
+            "node_modules/shadcn": {
+                "version": "4.21.0",
+                "dependencies": {"@modelcontextprotocol/sdk": "^1", "undici": "^7"},
+            },
+            "node_modules/@modelcontextprotocol/sdk": {
+                "version": "1.30.0",
+                "dependencies": {"express": "^5"},
+            },
+            "node_modules/express": {"version": "5.1.0", "dependencies": {"body-parser": "^2"}},
+            "node_modules/body-parser": {"version": "2.3.0"},
+            "node_modules/undici": {"version": "7.29.1"},
+            "node_modules/jsdom": {
+                "version": "26.1.0",
+                "dev": True,
+                "dependencies": {"undici": "^6"},
+            },
+            # Its own copy, nested: Node finds it before the one above.
+            "node_modules/jsdom/node_modules/undici": {"version": "6.21.0", "dev": True},
+        },
+    }
+    parsed = parse("web/package-lock.json", json.dumps(lock))
+    assert parsed is not None
+    via = {(p.name, p.version): p.via for p in parsed.packages}
+    assert via[("body-parser", "2.3.0")] == ("shadcn",)
+    assert via[("@modelcontextprotocol/sdk", "1.30.0")] == ("shadcn",)
+    assert via[("undici", "7.29.1")] == ("shadcn",)
+    assert via[("undici", "6.21.0")] == ("jsdom",)
+    assert via[("sharp", "0.35.4")] == ("next",)
+    assert via[("next", "15.5.25")] == ()
+
+
 def test_yarn_and_pnpm_lock_files() -> None:
     yarn = (
         "# yarn lockfile v1\n\n"
@@ -282,7 +325,7 @@ LOCK = json.dumps(
         "lockfileVersion": 3,
         "packages": {
             "": {"dependencies": {"express": "^4.18.0"}},
-            "node_modules/express": {"version": "4.18.2"},
+            "node_modules/express": {"version": "4.18.2", "dependencies": {"qs": "6.5.0"}},
             "node_modules/express/node_modules/qs": {"version": "6.5.0"},
             "node_modules/@acme/billing": {
                 "version": "1.0.0",
@@ -316,6 +359,8 @@ async def test_each_public_package_is_looked_up_the_worst_first_never_a_private_
     assert qs["published"] == "2022-11-26" and qs["url"].endswith("/GHSA-qs01")
     assert vulnerable[1]["advisories"][0]["severity"] == "medium"
     assert vulnerable[1]["direct"] is True
+    # A transitive one says which of the project's dependencies pulls it.
+    assert vulnerable[0]["via"] == ["express"] and "via" not in vulnerable[1]
 
 
 async def test_not_looked_up_unconfigured_or_unreachable_is_said(
