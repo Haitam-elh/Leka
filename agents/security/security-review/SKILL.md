@@ -2,7 +2,7 @@
 name: security-review
 title: "Revue de sécurité"
 description: "Use when someone asks whether an application, a service or its infrastructure is exposed — sensitive data it holds, what reaches it, who owns it, what is undocumented — and what to check first."
-version: 1.5.0
+version: 1.6.0
 category: security
 entity_types: [application, service, infra_resource, cloud_account, database, data_object, repository, team]
 requires: []
@@ -11,6 +11,7 @@ risk: low
 outputs: analysis
 deliverables: [markdown]
 tools: [search_entities, read_entity, dependencies, list_files, read_file]
+rounds: 30
 skills: [security-posture]
 inputs:
   - name: sujet
@@ -66,6 +67,14 @@ plages de lignes) ce qui le porte. Pour l'authentification et les sessions :
 Chaque constat cite le fichier et la ligne lus (`chemin:ligne`), jamais une
 ligne que tu n'as pas lue. Ce que tu n'as pas trouvé dans les fichiers lus se
 dit « non trouvé dans … », jamais « absent » : cela peut être ailleurs.
+
+**Le périmètre se lit avant de conclure.** Chaque chose que la demande nomme
+(les sessions, les invitations, les liens envoyés par e-mail…) a ses
+fichiers : trouve-les (`list_files` du dossier, `search_code` du nom) et
+lis-les, tous, avant d'écrire. Tes tours vont au code : le modèle de
+l'entreprise se lit en un tour, le contexte fourni suffit souvent. Une
+hypothèse ne porte jamais sur un fichier du périmètre que tu pouvais ouvrir
+(« ce qui manque : la lecture de `links.py` ») : ouvre-le et tranche.
 
 **Une protection n'est pas un défaut.** Un choix commenté dans le code se lit
 avant d'être jugé — un cookie CSRF lisible par la page en double envoi l'est
@@ -141,7 +150,9 @@ Un document markdown, dans la langue de la demande :
 
 1. **État** — *complet*, *partiel* ou *non évalué*, puis le périmètre regardé et
    ses lacunes. Rien d'appuyé : « Aucun constat appuyé dans le périmètre
-   évalué. » — jamais « c'est sûr ».
+   évalué. » — jamais « c'est sûr ». Sur un périmètre partiel, « aucun
+   constat » n'a pas de confiance « forte » : il vaut ce qui a été lu, et la
+   ligne nomme ce qui ne l'a pas été.
 2. **Surface** — ce qui l'atteint et ce qu'il atteint, ses frontières.
 3. **Données sensibles** — ce qu'il stocke ou lit, d'après le modèle.
 4. **Constats** — un tableau : sévérité, confiance, constat, scénario, ce qu'il
