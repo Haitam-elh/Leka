@@ -380,6 +380,19 @@ _NOT_A_COLUMN = re.compile(r"[\w.]*(?:Constraint|Index)\(|\w+\s*=[^=]")
 _ALTERS = re.compile(r"(alter_column|rename_table)\(")
 _RENAMED = re.compile(r"rename_table\(|new_column_name\s*=|RENAME\s+(?:TO|COLUMN)", re.IGNORECASE)
 MOST_CONTRADICTIONS = 6
+# A line cited, and what the deliverable says it holds: the names in code
+# written just before it (« le filtre `standing` (`night.py:28-33`) ») —
+# 2026-11-01, a documentation cited lines 28-33 for `standing`: its imports.
+_NAME = re.compile(r"[A-Za-z_]\w{3,}")
+# Lines around a citation that still count as it.
+SLACK = 3
+# An address a command calls (2026-11-01: a documentation's `curl` called an
+# API host no file of the repository knows).
+_URL = re.compile(r"https?://([A-Za-z0-9][A-Za-z0-9.-]*[A-Za-z0-9])")
+_ANY_HOST = re.compile(
+    r"^(?:localhost|127\.0\.0\.1|0\.0\.0\.0)$|(?:^|\.)example\.(?:com|org|net)$|"
+    r"\.(?:example|local|localhost|test|invalid|internal)$"
+)
 
 
 @dataclass(frozen=True)
@@ -388,7 +401,7 @@ class Contradiction:
     the code says otherwise."""
 
     said: str
-    kind: str  # index, column, count, not_read
+    kind: str  # index, column, count, not_read, line, host
     path: str = ""
     line: int = 0
     evidence: str = ""
@@ -412,6 +425,18 @@ class Contradiction:
                 f"that column: the table is created at {self.path}:{self.line} without it, and "
                 "no later migration adds it. Look for the column's real name (search_code), or "
                 "remove that point."
+            )
+        if self.kind == "line":
+            return (
+                f"You cite {self.said} for `{self.evidence}`, but those lines do not hold it: "
+                f"`{self.evidence}` is at {self.path}:{self.line}. Cite the line you read, or "
+                "the file alone."
+            )
+        if self.kind == "host":
+            return (
+                f"You write {self.evidence} in a command, but no file of the repository knows "
+                f"the host {self.said}. Take the address from the repository's configuration or "
+                "documentation (search_code), or write « À compléter » in its place."
             )
         if self.kind == "count":
             return (
@@ -753,24 +778,110 @@ def _columns_of(table: str, files: Mapping[str, str]) -> _Table | None:
     return _Table(created[0], created[1], frozenset((columns | added) - set(gone)), gone)
 
 
+def _file_of(path: str, files: Mapping[str, str]) -> str | None:
+    """The repository's file a citation names — whole, or by its end."""
+    if path in files:
+        return path
+    ends = [p for p in files if p.endswith(f"/{path}")]
+    return ends[0] if len(ends) == 1 else None
+
+
+def _defines(text: str, name: str) -> bool:
+    """Whether a line of code makes that name: a function, a class, a type,
+    a constant or a field."""
+    return bool(
+        re.match(
+            rf"\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?"
+            rf"(?:def|class|function|const|let|var|interface|type|enum)\s+{re.escape(name)}\b"
+            rf"|\s*{re.escape(name)}\s*(?::[^=]*)?=",
+            text,
+        )
+    )
+
+
+def _misplaced(line: str, files: Mapping[str, str]) -> list[Contradiction]:
+    """The lines a deliverable cites that do not hold the names it cites
+    them for — and where those names are. Only a name the file holds
+    elsewhere: a word of prose is no name to look for."""
+    found: list[Contradiction] = []
+    start = 0
+    for cited in _CITED_LINE.finditer(line):
+        # What is written between the last citation's code and this one's.
+        before = line[start : cited.start()].removesuffix("`")
+        start = cited.end() + (line[cited.end() : cited.end() + 1] == "`")
+        names = {
+            name
+            for code in _TICKED.findall(before)
+            if "/" not in code and not _CITED_LINE.search(code)
+            for name in _NAME.findall(code)
+        }
+        path = _file_of(cited.group(1), files)
+        if not names or path is None:
+            continue
+        lines = files[path].split("\n")
+        first = int(cited.group(2))
+        last = max(first, int(cited.group(3) or first))
+        if first > len(lines):
+            continue  # past its end: said by `unread`
+        words = {name: re.compile(rf"\b{re.escape(name)}\b") for name in names}
+        near = "\n".join(lines[max(0, first - 1 - SLACK) : last + SLACK])
+        if any(word.search(near) for word in words.values()):
+            continue
+        # Where the code makes it, rather than where a comment names it.
+        holding = [
+            (not _defines(text, name), abs(n + 1 - first), n + 1, name)
+            for n, text in enumerate(lines)
+            for name, word in words.items()
+            if word.search(text)
+        ]
+        if holding:
+            _, _, n, name = min(holding)
+            said = cited.group(0)
+            found.append(Contradiction(said, "line", path, n, name))
+    return found
+
+
+def _unknown_hosts(line: str, known: str) -> list[Contradiction]:
+    """The hosts a command calls that no file of the repository names."""
+    found: list[Contradiction] = []
+    for url in _URL.finditer(line):
+        host = url.group(1).lower()
+        if "." not in host or _ANY_HOST.search(host) or host in known:
+            continue
+        found.append(Contradiction(host, "host", evidence=url.group(0)))
+    return found
+
+
 def contradicted(deliverable: str, files: Mapping[str, str]) -> list[Contradiction]:
     """What the deliverable says that the repository's files contradict: an
     index said missing that the code declares, or on a column no migration
     makes; a count of files that is not the count; a finding on a file said
-    not read. `files`: path → text."""
+    not read; a line cited that does not hold what it is cited for; a host a
+    command calls that no file knows. `files`: path → text."""
     if not deliverable or not files:
         return []
     found: list[Contradiction] = []
     seen: set[tuple[str, str]] = set()
     indexes: list[_Index] | None = None
+    known: str | None = None
     heading = ""
+    fenced = False
     for raw in deliverable.split("\n"):
         line = raw.strip()
-        if line.startswith("#"):
+        if line.startswith("```"):
+            fenced = not fenced
+            continue
+        if line.startswith("#") and not fenced:
             heading = line
             continue
         if not line or _HEDGED.search(heading):
             continue
+        if fenced:
+            if _URL.search(line):
+                known = "\n".join(files.values()).lower() if known is None else known
+                found += _unknown_hosts(line, known)
+            continue
+        found += _misplaced(line, files)
         absent = bool(_ABSENT.search(line)) or bool(
             _ABSENT.search(heading) and line.startswith("|") and "`" in line
         )
@@ -850,6 +961,22 @@ def contradictions_said(found: Sequence[Contradiction], *, language: str = "fr")
                 if french
                 else f"- `{one.said}`: no such column in the code (the table is created at "
                 f"`{one.path}:{one.line}` without it, and no migration adds it)."
+            )
+        elif one.kind == "line":
+            lines.append(
+                f"- `{one.said}` : ces lignes ne contiennent pas `{one.evidence}`, qui est en "
+                f"`{one.path}:{one.line}`."
+                if french
+                else f"- `{one.said}`: those lines do not hold `{one.evidence}`, which is at "
+                f"`{one.path}:{one.line}`."
+            )
+        elif one.kind == "host":
+            lines.append(
+                f"- `{one.said}` : aucun fichier du dépôt ne connaît cette adresse, à vérifier "
+                "avant de lancer la commande."
+                if french
+                else f"- `{one.said}`: no file of the repository knows that address; check it "
+                "before running the command."
             )
         elif one.kind == "count":
             lines.append(

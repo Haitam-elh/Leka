@@ -2,7 +2,7 @@
 name: documentation-assistant
 title: "Assistant de documentation"
 description: "Use when someone wants to know how well something is documented, or wants its documentation written from what LEKA knows — its documents, the company model and, when a GitHub repository is connected, its code — pages ready to publish on Confluence, never invented."
-version: 2.0.0
+version: 2.1.0
 category: documentation
 entity_types: [document, knowledge_space, service, application, team, person, repository, database, business_capability, business_process]
 requires: ["confluence|microsoft_365|notion|google_workspace|guru|slab|github"]
@@ -105,6 +105,23 @@ cet ordre :
    lue —, cités ; jamais écrits de mémoire. La page dit la branche ou la
    version qu'elle décrit ; un changement incompatible appelle sa note de
    migration.
+8. **Une commande se lance telle qu'écrite.** Son adresse vient du dépôt (la
+   configuration, la documentation de déploiement : cherche-la avec
+   `search_code`), jamais un domaine deviné. Son authentification est celle
+   que le code vérifie (un cookie de session et son jeton CSRF, une clé que
+   le code lit) : jamais un « Authorization: Bearer » supposé. Introuvable,
+   la valeur s'écrit « À compléter ». LEKA vérifie lui-même que l'adresse
+   d'une commande existe dans le dépôt.
+9. **La demande, point par point.** Chaque chose que la demande nomme
+   (« quand elle tourne », « ce qu'elle envoie le matin »…) a sa réponse,
+   sous un titre à elle, dans les pages : à quelle heure, à qui, ce que le
+   message contient, ce qui l'empêche de partir. Une question que les
+   sources ne tranchent pas se dit « À compléter », jamais passée sous
+   silence.
+10. **Une ligne citée porte ce qu'on lui attribue.** `fichier:ligne` cite la
+    ligne où le nom écrit à côté se trouve, lue : la définition d'une
+    fonction, d'une constante, d'une route. Sans l'avoir lue, le fichier
+    seul. LEKA vérifie lui-même qu'une ligne citée contient le nom cité.
 
 ## Ce qu'il produit
 
@@ -113,7 +130,7 @@ Un document markdown, dans la langue de la demande :
 1. **Ce qui existe** — la carte de couverture : les documents, où, de quand, et le besoin que chacun couvre.
 2. **Ce qui manque ou a vieilli** — les trous critiques d'abord, puis les écarts avec le modèle, cités des deux côtés.
 3. **Pages proposées** — une à trois pages complètes en markdown, chacune titrée précisément (jamais « Documentation ») et pour un seul besoin, chaque fait appuyé par sa source — le fichier (et la ligne) pour ce qui vient du code, [id] pour le reste —, les trous signalés « À compléter ». Elles se publient telles quelles sur Confluence depuis le livrable.
-4. **Qui peut compléter** — les experts connus.
+4. **Qui peut compléter** — les experts connus, chacun avec ce que les sources disent de lui (l'auteur des fichiers, le responsable qu'un document nomme) ; jamais un rôle qu'aucune source ne donne (« mainteneur désigné », « contributeur principal »).
 
 ## Ce qu'il ne doit jamais faire
 

@@ -173,7 +173,15 @@ export function Inline({ text }: { text: string }) {
     <>
       {parts.map((part, index) => {
         if (!part) return null;
-        if (/^(\*\*|__).+\1$/.test(part)) return <strong key={index}>{part.slice(2, -2)}</strong>;
+        // What is bold or in italics keeps its own code and links
+        // (2026-11-01: « **Zéro inférence (`night.py:20-22`)** » showed its backticks).
+        if (/^(\*\*|__).+\1$/.test(part)) {
+          return (
+            <strong key={index}>
+              <Inline text={part.slice(2, -2)} />
+            </strong>
+          );
+        }
         if (part.startsWith("`") && part.endsWith("`") && part.length > 1) {
           return (
             <code key={index} className="rounded bg-shell-canvas px-1 py-0.5 font-mono text-[0.85em]">
@@ -197,7 +205,13 @@ export function Inline({ text }: { text: string }) {
             <Fragment key={index}>{link[1]}</Fragment>
           );
         }
-        if (/^([*_]).+\1$/.test(part)) return <em key={index}>{part.slice(1, -1)}</em>;
+        if (/^([*_]).+\1$/.test(part)) {
+          return (
+            <em key={index}>
+              <Inline text={part.slice(1, -1)} />
+            </em>
+          );
+        }
         return <Fragment key={index}>{part}</Fragment>;
       })}
     </>

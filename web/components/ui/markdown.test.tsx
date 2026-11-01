@@ -5,7 +5,8 @@
  * - « 1. » written before each step, blank lines between them: one list,
  *   numbered on;
  * - SQL written at the end of a step's line, or under it: drawn as code;
- * - a table whose header has fewer cells than its rows: every cell drawn.
+ * - a table whose header has fewer cells than its rows: every cell drawn;
+ * - code inside bold, as a model titles a point: drawn as code (2026-11-01).
  */
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
@@ -52,5 +53,13 @@ describe("an agent's report, drawn", () => {
     render(<Markdown source={"| Table | Problème |\n|---|---|\n| `sessions` | `user_agent` | Mineur |"} />);
     expect(screen.getAllByRole("columnheader")).toHaveLength(3);
     expect(screen.getByRole("cell", { name: "Mineur" })).toBeInTheDocument();
+  });
+
+  it("draws the code a bold title holds as code, never its backticks", () => {
+    render(<Markdown source={"1. **Zéro inférence (`night.py:17`)** : aucun *modèle (`gemini`)*."} />);
+    const text = screen.getByTestId("markdown");
+    expect(text).not.toHaveTextContent("`");
+    expect(text.querySelector("strong code")?.textContent).toBe("night.py:17");
+    expect(text.querySelector("em code")?.textContent).toBe("gemini");
   });
 });
