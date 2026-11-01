@@ -517,6 +517,8 @@ class GitHubCode:
             # 31-file pull request, cut at its diffs, read with no CI).
             "checks": checks,
             **_pull_brief(meta),
+            # Every file named before any diff: what a reader cut short still has.
+            "paths": [file["path"] for file in files],
             "body": str(meta.get("body") or "")[:MAX_BODY],
             "base": str((meta.get("base") or {}).get("ref") or ""),
             "head": str((meta.get("head") or {}).get("ref") or ""),

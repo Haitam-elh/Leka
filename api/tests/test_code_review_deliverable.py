@@ -238,6 +238,9 @@ async def test_the_review_reads_the_last_pull_and_its_run_answers_its_comments(
     assert {"list_pull_requests", "read_pull_request"} <= set(script.declared())
     # Read only.
     assert {method for method, _ in github.asked} == {"GET"}
+    # Every file named before any diff: what a reader cut short still has.
+    read = json.dumps(script.asked[2])
+    assert read.rindex("paths") < read.rindex("patch")
 
     run = (await client.get(f"{RUNS}/{run_id}")).json()
     assert run["report"] == "# Revue\n\nLe solde change."
