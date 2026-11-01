@@ -229,6 +229,47 @@ def test_a_line_cited_for_a_name_it_does_not_hold_is_contradicted_with_where() -
     assert "ces lignes ne contiennent pas `standing`, qui est en" in contradictions_said(found)
 
 
+COOKIES = """def set_session_cookie(response, token):
+    response.set_cookie(
+        settings.session_cookie_name,
+        token,
+        httponly=True,
+    )
+
+
+def set_csrf_cookie(response):
+    csrf_token = secrets.token_urlsafe(32)
+    response.set_cookie(
+        CSRF_COOKIE_NAME,
+        csrf_token,
+        httponly=False,
+    )
+"""
+
+
+def test_a_line_misplaced_is_said_where_the_very_code_cited_is() -> None:
+    # 2026-11-01, a security review: `httponly=False` cited off, and the line
+    # given was the session cookie's `httponly=True`; « X-CSRF-Token » sent
+    # LEKA looking for the word « CSRF » in a docstring.
+    files = {"api/leka/identity/cookies.py": COOKIES}
+    doc = "\n".join(
+        [
+            "## Surface",
+            "Le jeton CSRF est lisible (`httponly=False`, `cookies.py:4`).",
+            "Il est tiré par `secrets.token_urlsafe(32)` (`cookies.py:4`).",
+            "Le cookie `settings.session_cookie_name` (`cookies.py:16`) porte la session.",
+            # A header's name is no code to look for, nor a plain word.
+            "L'en-tête `X-CSRF-Token` (`cookies.py:1`) est comparé.",
+        ]
+    )
+    found = contradicted(doc, files)
+    assert [(c.said, c.line, c.evidence) for c in found] == [
+        ("cookies.py:4", 14, "httponly=False"),
+        ("cookies.py:4", 10, "secrets.token_urlsafe(32)"),
+        ("cookies.py:16", 3, "settings.session_cookie_name"),
+    ]
+
+
 def test_a_command_calling_a_host_no_file_knows_is_contradicted() -> None:
     files = {
         "docs/deployment.md": "The API answers at https://api.leka-core.com.\n",

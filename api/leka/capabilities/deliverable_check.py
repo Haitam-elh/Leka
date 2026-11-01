@@ -799,22 +799,41 @@ def _defines(text: str, name: str) -> bool:
     )
 
 
+def _said_names(code: str) -> list[str]:
+    """What a span of code names, the most precise first (2026-11-01: for
+    `httponly=False`, the line of `httponly=True` was given): the span as
+    written, then without its call's arguments, then the names in it that
+    are code — with an underscore, a capital inside, or a dot — never a
+    plain word (`X-CSRF-Token` names no `CSRF`)."""
+    if "/" in code or _CITED_LINE.search(code):
+        return []
+    said = " ".join(code.split())
+    bare = re.sub(r"\(.*\)$", "", said)
+    whole = re.fullmatch(r"[^\W\d][\w.]*", bare) is not None
+    names = [said] if whole or re.search(r"[=(.]", said) else []
+    names += [bare] if bare != said and whole else []
+    names += [part for part in bare.split(".") if "." in bare and _NAME.fullmatch(part)]
+    names += [
+        name
+        for name in _NAME.findall(said)
+        if "_" in name or re.search(r"[a-z][A-Z]", name) or (whole and name == bare)
+    ]
+    return list(dict.fromkeys(n for n in names if len(n) >= 3))
+
+
 def _misplaced(line: str, files: Mapping[str, str]) -> list[Contradiction]:
-    """The lines a deliverable cites that do not hold the names it cites
-    them for — and where those names are. Only a name the file holds
-    elsewhere: a word of prose is no name to look for."""
+    """The lines a deliverable cites that do not hold the code it cites
+    them for — and where that code is. Only code the file holds elsewhere:
+    a word of prose is nothing to look for."""
     found: list[Contradiction] = []
     start = 0
     for cited in _CITED_LINE.finditer(line):
         # What is written between the last citation's code and this one's.
         before = line[start : cited.start()].removesuffix("`")
         start = cited.end() + (line[cited.end() : cited.end() + 1] == "`")
-        names = {
-            name
-            for code in _TICKED.findall(before)
-            if "/" not in code and not _CITED_LINE.search(code)
-            for name in _NAME.findall(code)
-        }
+        names = list(
+            dict.fromkeys(name for code in _TICKED.findall(before) for name in _said_names(code))
+        )
         path = _file_of(cited.group(1), files)
         if not names or path is None:
             continue
@@ -823,21 +842,22 @@ def _misplaced(line: str, files: Mapping[str, str]) -> list[Contradiction]:
         last = max(first, int(cited.group(3) or first))
         if first > len(lines):
             continue  # past its end: said by `unread`
-        words = {name: re.compile(rf"\b{re.escape(name)}\b") for name in names}
+        words = {name: re.compile(rf"(?<!\w){re.escape(name)}(?!\w)") for name in names}
         near = "\n".join(lines[max(0, first - 1 - SLACK) : last + SLACK])
         if any(word.search(near) for word in words.values()):
             continue
-        # Where the code makes it, rather than where a comment names it.
-        holding = [
-            (not _defines(text, name), abs(n + 1 - first), n + 1, name)
-            for n, text in enumerate(lines)
-            for name, word in words.items()
-            if word.search(text)
-        ]
-        if holding:
-            _, _, n, name = min(holding)
-            said = cited.group(0)
-            found.append(Contradiction(said, "line", path, n, name))
+        # The most precise of what it named, where the code makes it rather
+        # than where a comment names it, the nearest.
+        for name, word in words.items():
+            holding = [
+                (not _defines(text, name.split("=")[0]), abs(n + 1 - first), n + 1)
+                for n, text in enumerate(lines)
+                if word.search(text)
+            ]
+            if holding:
+                _, _, n = min(holding)
+                found.append(Contradiction(cited.group(0), "line", path, n, name))
+                break
     return found
 
 

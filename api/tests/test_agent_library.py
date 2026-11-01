@@ -39,7 +39,7 @@ VERSIONS = {
     "incident-investigation": "1.4.0",
     "infrastructure-analysis": "1.4.0",
     "release-analysis": "1.5.0",
-    "security-review": "1.5.0",
+    "security-review": "1.6.0",
     "test-analysis": "1.4.0",
 }
 # The code an agent may read, beside the runtime's tools: the code review its
@@ -416,6 +416,14 @@ def test_the_security_review_separates_what_it_proves_from_what_it_suspects() ->
         assert step in said, step
     assert "Hypothèses" in said
     assert "Aucun constat appuyé dans le périmètre" in said
+    # 1.6.0 (2026-11-01, LEKA's authentication reviewed): 2 files of 15 read,
+    # four hypotheses on files it could have opened, « Néant », confidence
+    # « Forte ». Its scope read before it concludes, with the rounds for it.
+    flat = " ".join(said.split())
+    assert "Le périmètre se lit avant de conclure" in flat
+    assert "ouvre-le et tranche" in flat
+    assert "n'a pas de confiance « forte »" in flat
+    assert {d.key: d for d in catalogue()}["security-review"].rounds == 30
     # 2026-10-18: six threats looked for at each boundary — angles, not
     # findings; exposure and business impact over a score; a secret exposed
     # is already burned; each supported finding a requirement to verify.
