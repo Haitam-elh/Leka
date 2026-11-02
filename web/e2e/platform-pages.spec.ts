@@ -20,27 +20,22 @@ test.describe("Platform pages", () => {
       (n: { twin: { state: string } | null }) => n.twin && ["unavailable", "degraded"].includes(n.twin.state),
     );
     await page.goto("/overview");
-    const trouble = page.getByTestId("overview-trouble");
-    await expect(trouble).toBeVisible();
+    // Since the home's redesign (#469), what is wrong sits in the ribbon
+    // under the composer — two at most, each in its state, the way to
+    // analyse it — and the greeting says how the environment is.
+    const trouble = page.getByTestId("ribbon-trouble");
     if (troubled.length) {
-      // What needs someone first, each in its state, the way to analyse it.
-      const rows = trouble.locator("li[data-state]");
-      await expect(rows).toHaveCount(Math.min(troubled.length, 4));
-      for (const state of await rows.evaluateAll((all) => all.map((li) => li.getAttribute("data-state")))) {
+      await expect(trouble).toHaveCount(Math.min(troubled.length, 2));
+      for (const state of await trouble.evaluateAll((all) => all.map((el) => el.getAttribute("data-state")))) {
         expect(["unavailable", "degraded"]).toContain(state);
       }
-      await expect(rows.first().getByRole("link", { name: "Analyser" })).toHaveAttribute("href", /^\/intentions\/new\?q=/);
+      await expect(trouble.first().getByRole("link", { name: "Analyser" })).toHaveAttribute(
+        "href",
+        /^\/intentions\/new\?q=/,
+      );
+      await expect(page.getByTestId("greeting-chapeau")).toContainText("en difficulté");
     } else {
-      await expect(trouble).toContainText("Rien d'indisponible ni de dégradé selon les sources lues.");
-    }
-    // The alerts the plan includes — or the plan that would; never neither.
-    await expect(page.getByTestId("overview-alerts").or(page.getByTestId("overview-alerts-limit"))).toBeVisible();
-    // How fresh — never « temps réel ».
-    const freshness = page.getByTestId("overview-freshness");
-    if (environment.sources.length) {
-      await expect(freshness.getByTestId("twin-freshness")).toContainText("pas en temps réel");
-    } else {
-      await expect(freshness).toContainText("Aucune source");
+      await expect(trouble).toHaveCount(0);
     }
     // The tiles that said nothing to act on are gone.
     await expect(page.getByTestId("kpi-services")).toHaveCount(0);
