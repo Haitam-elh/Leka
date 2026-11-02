@@ -44,8 +44,7 @@ export function LiveWork() {
         className="flex items-center gap-2 text-[0.8125rem] font-semibold text-brand-navy"
       >
         <span className="relative flex size-2" aria-hidden="true">
-          <span className="absolute inline-flex size-full animate-ping rounded-full bg-brand-violet opacity-60 motion-reduce:animate-none" />
-          <span className="relative inline-flex size-2 rounded-full bg-brand-violet" />
+          <span className="size-2 rounded-full bg-brand-violet transition-opacity duration-200 ease-[var(--ease-out)]" />
         </span>
         {w.title}
       </h2>

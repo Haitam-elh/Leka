@@ -21,19 +21,19 @@ import { signIn } from "./sign-in";
  */
 
 test.describe("À valider", () => {
-  test("says what waits, on the overview and beside the sidebar's entry", async ({ page }) => {
+  test("says what waits, on the overview's ribbon and beside the sidebar's entry", async ({ page }) => {
     await signIn(page);
 
-    // The conflicts first, then what LEKA proposes: three, the rest counted.
-    const waiting = page.getByTestId("approvals-waiting").getByRole("listitem");
-    await expect(waiting).toHaveCount(3);
-    await expect(waiting.filter({ hasText: "SLA de payment-api : 99.95 ou 99.9" })).toHaveCount(1);
-    await expect(page.getByText("4 éléments en attente", { exact: true })).toBeVisible();
+    // Since the home's redesign (#469): the ribbon under the composer counts
+    // what waits, and leads to À valider.
+    const ribbon = page.getByTestId("ribbon-approvals");
+    await expect(ribbon).toContainText("4 éléments en attente");
     // In the header while something waits (LEKA-494).
     await expect(page.getByTestId("nav-approvals")).toContainText("4");
 
-    await waiting.filter({ hasText: "SLA de payment-api" }).getByRole("link").click();
-    await expect(page).toHaveURL(/\/approvals\/[0-9a-f-]{36}\?kind=conflict$/);
+    await ribbon.click();
+    await expect(page).toHaveURL(/\/approvals$/);
+    await page.getByRole("table").getByText("SLA de payment-api : 99.95 ou 99.9").click();
     await expect(page.getByTestId("conflict-panel").getByTestId("conflict-sides")).toContainText(
       "acme-eu",
     );

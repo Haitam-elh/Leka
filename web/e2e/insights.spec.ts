@@ -16,21 +16,22 @@ import { signIn } from "./sign-in";
  * said. And six days ago redis-sessions went from every source while
  * auth-service relied on it (LEKA-383).
  *
- * What a unit test cannot answer: that the engine's findings reach both
- * screens through the API, worded, in an order that holds, each leading to
- * the sheet of what it is about — a source to its page — and that asking
- * for an analysis now is taken.
+ * What a unit test cannot answer: that the engine's findings reach the screen
+ * through the API, worded, in an order that holds, each leading to the sheet
+ * of what it is about (a source to its page) and that asking for an analysis
+ * now is taken.
  */
 
 test.describe("Insights LEKA", () => {
-  test("says on the overview what the analyses found, the most pressing first", async ({ page }) => {
+  test("says on Mon environnement what the analyses found, the most pressing first", async ({ page }) => {
     await signIn(page);
+    await page.goto("/environment?tab=applications");
 
-    // Two on the overview, the most pressing first: the deployment an
+    // On Mon environnement, the most pressing first: the deployment an
     // incident followed (LEKA-378), then what went while relied on
     // (LEKA-383).
     const lines = page.getByTestId("insights-findings").getByRole("listitem");
-    await expect(lines).toHaveCount(2);
+    await expect(lines).toHaveCount(3);
     await expect(lines.nth(0)).toContainText(
       "Déploiement « payment-api v2.8.4 » : 1 incident ensuite",
     );
@@ -63,6 +64,7 @@ test.describe("Insights LEKA", () => {
 
   test("leads from a change to the service it was made to", async ({ page }) => {
     await signIn(page);
+    await page.goto("/environment?tab=applications");
 
     await page
       .getByTestId("insights-findings")
@@ -72,7 +74,7 @@ test.describe("Insights LEKA", () => {
     await expect(page.getByRole("heading", { level: 1 })).toContainText("payment-api");
   });
 
-  test("says it on Mon environnement too, and takes an analysis asked for", async ({ page }) => {
+  test("says it on Mon environnement, and takes an analysis asked for", async ({ page }) => {
     await signIn(page);
     // The card is the landscapes' (the architecture tab draws its own board).
     await page.goto("/environment?tab=applications");

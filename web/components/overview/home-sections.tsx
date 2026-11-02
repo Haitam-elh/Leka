@@ -197,16 +197,16 @@ export function EnvironmentCard() {
 
 /** « Historique des analyses », under the question (LEKA-470): every
  * intention asked, on the list that already holds them. */
-export function HistoryLink() {
+export function HistoryLink({ className }: { className?: string } = {}) {
   const t = useDictionary();
   return (
-    <div className="mt-4 flex justify-center">
+    <div className={cn("mt-2.5 flex items-center justify-end px-1", className)}>
       <Link
         href={routes.intentions()}
-        className="inline-flex items-center gap-2 rounded-xl border border-brand-violet/40 bg-white px-4 py-2 text-[0.875rem] font-medium text-shell-nav-active transition-colors outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+        className="inline-flex items-center gap-1.5 text-[0.8125rem] font-medium text-shell-nav-active transition-opacity duration-150 ease-[var(--ease-out)] hover:opacity-80 outline-none focus-visible:ring-2 focus-visible:ring-brand-violet/40"
         data-testid="home-history"
       >
-        <History className="size-4" aria-hidden="true" />
+        <History className="size-3.5" aria-hidden="true" />
         {t.overview.home.history}
       </Link>
     </div>
@@ -268,7 +268,7 @@ export function AgentsSection() {
               key={agent.key}
               className={cn(
                 CARD,
-                "relative flex flex-col p-3.5 hover:border-brand-violet/40 max-md:nth-[n+3]:hidden md:max-lg:nth-[n+4]:hidden lg:max-xl:nth-[n+5]:hidden",
+                "relative flex flex-col p-3.5 [@media(hover:hover)_and_(pointer:fine)]:hover:border-brand-violet/40 max-md:nth-[n+3]:hidden md:max-lg:nth-[n+4]:hidden lg:max-xl:nth-[n+5]:hidden",
               )}
               data-testid="home-agent"
               data-key={agent.key}

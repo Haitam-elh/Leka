@@ -451,6 +451,12 @@ const fr = {
         repairing: "répare la pull request",
       },
     },
+    /** The operational ribbon under the composer (2026-11-02). */
+    ribbon: {
+      label: "En ce moment",
+      examine: "Examiner",
+      alert: "Alerte",
+    },
     /** The home's blocks of the sprint's mockup (LEKA-456). */
     home: {
       environment: "Mon environnement",
@@ -9740,6 +9746,12 @@ const en: Dictionary = {
         reading: "reading the source",
         repairing: "repairing the pull request",
       },
+    },
+    /** The operational ribbon under the composer (2026-11-02). */
+    ribbon: {
+      label: "Right now",
+      examine: "Review",
+      alert: "Alert",
     },
     home: {
       environment: "My environment",
