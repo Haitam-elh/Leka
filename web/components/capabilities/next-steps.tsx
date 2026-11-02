@@ -89,7 +89,7 @@ export function NextSteps({
 
   return (
     <section
-      className="flex flex-col gap-3 rounded-xl border-2 border-brand-violet/30 bg-brand-violet-soft/40 px-5 py-4"
+      className="flex flex-col gap-3 rounded-xl border border-brand-violet/20 bg-brand-violet-soft/20 px-5 py-4"
       aria-labelledby="next-steps-title"
       data-testid="next-steps"
       data-agent={run.key}
@@ -100,17 +100,22 @@ export function NextSteps({
         </h2>
         <p className="text-[0.8125rem] text-shell-muted">{w.intro}</p>
       </div>
-      <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <ul className="flex flex-col gap-3">
         {steps.map((step, index) => {
           const Icon = ICONS[step.kind];
           return (
             <li
               key={`${step.kind}-${index}`}
-              className="flex flex-col gap-2 rounded-lg border border-shell-line bg-white p-3"
+              className={cn(
+                "flex flex-col gap-2 rounded-lg border p-3",
+                index === 0
+                  ? "border-brand-violet/25 bg-brand-violet-soft/35"
+                  : "border-shell-line bg-white",
+              )}
               data-testid="next-step"
               data-kind={step.kind}
             >
-              <p className="flex items-center gap-2 text-[0.9375rem] font-semibold text-brand-navy">
+              <p className="flex items-center gap-2 text-[0.875rem] font-semibold text-brand-navy">
                 <Icon className="size-4 shrink-0 text-brand-violet" aria-hidden="true" />
                 {say(step.title)}
               </p>
@@ -120,6 +125,7 @@ export function NextSteps({
                   type="button"
                   size="sm"
                   variant={index === 0 ? "default" : "outline"}
+                  className="w-full"
                   aria-expanded={step.kind === "fix" || step.kind === "tests" ? writing === step : undefined}
                   onClick={() => act(step)}
                   disabled={step.kind === "change" && change?.pending}

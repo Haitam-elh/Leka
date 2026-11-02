@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ChevronDown,
   CircleAlert,
   CircleCheck,
   Download,
@@ -201,81 +202,98 @@ function Delivered({
             {w.download}
           </Button>
         ) : null}
-        <a href="#next-steps" className={buttonVariants({ size: "sm" })} data-testid="deliverable-settle">
+        <a
+          href="#next-steps"
+          className={cn(buttonVariants({ size: "sm" }), "xl:hidden")}
+          data-testid="deliverable-settle"
+        >
           <Wrench className="size-3.5" aria-hidden="true" />
           {w.next.open}
         </a>
       </section>
-      {/* An agent that proposes code, its change not there: why, and again. */}
-      {CHANGE_AGENTS.has(run.key) && changes.data && !changes.data.length ? (
-        <ChangeMissing run={run} writing={writing} />
-      ) : null}
-      {/* The designer, its mock-ups not there: why, and again (2026-10-18). */}
-      {DESIGN_AGENTS.has(run.key) && !run.design ? <DesignMissing run={run} /> : null}
-      {views.length > 1 ? (
-        <div className="flex gap-2" role="tablist" aria-label={w.title}>
-          {views.map((each) => (
-            <button
-              key={each}
-              type="button"
-              role="tab"
-              aria-selected={view === each}
-              onClick={() => setView(each)}
-              data-testid={`deliverable-tab-${each}`}
-              className={cn(
-                "rounded-lg px-3 py-1.5 text-[0.8125rem] font-medium outline-none focus-visible:ring-2 focus-visible:ring-brand-violet/40",
-                view === each ? "bg-brand-violet-soft text-brand-violet" : "text-shell-nav hover:bg-shell-canvas",
-              )}
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px] xl:items-start">
+        <div className="flex min-w-0 flex-col gap-4">
+          {/* An agent that proposes code, its change not there: why, and again. */}
+          {CHANGE_AGENTS.has(run.key) && changes.data && !changes.data.length ? (
+            <ChangeMissing run={run} writing={writing} />
+          ) : null}
+          {/* The designer, its mock-ups not there: why, and again (2026-10-18). */}
+          {DESIGN_AGENTS.has(run.key) && !run.design ? <DesignMissing run={run} /> : null}
+          {views.length > 1 ? (
+            <div
+              className="inline-flex self-start rounded-lg border border-shell-line bg-shell-canvas p-1"
+              role="tablist"
+              aria-label={w.title}
             >
-              {each === "design" ? w.design : each === "change" ? w.change : each === "code" ? w.onCode : w.report}
-            </button>
-          ))}
+              {views.map((each) => (
+                <button
+                  key={each}
+                  type="button"
+                  role="tab"
+                  aria-selected={view === each}
+                  onClick={() => setView(each)}
+                  data-testid={`deliverable-tab-${each}`}
+                  className={cn(
+                    "rounded-md px-3.5 py-1.5 text-[0.8125rem] font-medium outline-none transition-[transform,background-color,color] duration-160 ease-[var(--ease-out)] focus-visible:ring-2 focus-visible:ring-brand-violet/40 active:scale-[0.97]",
+                    view === each
+                      ? "bg-white text-brand-navy shadow-xs font-semibold"
+                      : "text-shell-muted [@media(hover:hover)_and_(pointer:fine)]:hover:bg-white/60 [@media(hover:hover)_and_(pointer:fine)]:hover:text-brand-navy",
+                  )}
+                >
+                  {each === "design" ? w.design : each === "change" ? w.change : each === "code" ? w.onCode : w.report}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {run.design && view === "design" ? (
+            <DesignSimulator runId={run.id} />
+          ) : view === "change" ? (
+            <RunCodeChanges runId={run.id} />
+          ) : run.review && view === "code" ? (
+            <CodeReview review={run.review} />
+          ) : report ? (
+            <section
+              className="mx-auto w-full max-w-3xl rounded-xl border border-shell-line bg-white px-8 py-6"
+              data-testid="deliverable-report"
+            >
+              <Markdown source={readable(report)} />
+            </section>
+          ) : (
+            <StatePanel icon={FileText} title={w.empty} />
+          )}
+          {others.length ? (
+            <Card title={w.others}>
+              <ul className="flex flex-col gap-1 text-[0.8125rem]">
+                {others.map((other) => (
+                  <li key={other.id}>
+                    <Link href={deliverableHref(intentionId, other.id)} className="text-shell-nav-active hover:underline">
+                      {other.title ?? other.key}
+                    </Link>{" "}
+                    <span className="text-shell-muted">· {(t.agentRuns.statuses as Record<string, string>)[other.status] ?? other.status}</span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
         </div>
-      ) : null}
-      {run.design && view === "design" ? (
-        <DesignSimulator runId={run.id} />
-      ) : view === "change" ? (
-        <RunCodeChanges runId={run.id} />
-      ) : run.review && view === "code" ? (
-        <CodeReview review={run.review} />
-      ) : report ? (
-        <section className="rounded-xl border border-shell-line bg-white px-6 py-5" data-testid="deliverable-report">
-          <Markdown source={readable(report)} />
-        </section>
-      ) : (
-        <StatePanel icon={FileText} title={w.empty} />
-      )}
-      {/* The action that settles it (Karim, 2026-10-23), then what is sent
-          out of it: tickets for Jira, pages for Confluence. */}
-      <div id="next-steps" className="flex scroll-mt-24 flex-col gap-4">
-        <NextSteps
-          run={run}
-          intentionId={intentionId}
-          onStarted={(id) => router.push(deliverableHref(intentionId, id))}
-          onPublish={setPublishing}
-          onShowChange={() => setView("change")}
-          change={{
-            available: Boolean(changes.data?.length),
-            rewrite: () => rewrite.mutate(),
-            pending: rewrite.isPending || writing,
-          }}
-        />
-        <RunPublications runId={run.id} asking={publishing} onAsking={setPublishing} />
+        {/* The action that settles it (Karim, 2026-10-23), then what is sent
+            out of it: tickets for Jira, pages for Confluence. */}
+        <aside id="next-steps" className="flex scroll-mt-24 flex-col gap-4 xl:sticky xl:top-6">
+          <NextSteps
+            run={run}
+            intentionId={intentionId}
+            onStarted={(id) => router.push(deliverableHref(intentionId, id))}
+            onPublish={setPublishing}
+            onShowChange={() => setView("change")}
+            change={{
+              available: Boolean(changes.data?.length),
+              rewrite: () => rewrite.mutate(),
+              pending: rewrite.isPending || writing,
+            }}
+          />
+          <RunPublications runId={run.id} asking={publishing} onAsking={setPublishing} />
+        </aside>
       </div>
-      {others.length ? (
-        <Card title={w.others}>
-          <ul className="flex flex-col gap-1 text-[0.8125rem]">
-            {others.map((other) => (
-              <li key={other.id}>
-                <Link href={deliverableHref(intentionId, other.id)} className="text-shell-nav-active hover:underline">
-                  {other.title ?? other.key}
-                </Link>{" "}
-                <span className="text-shell-muted">· {(t.agentRuns.statuses as Record<string, string>)[other.status] ?? other.status}</span>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      ) : null}
     </div>
   );
 }
@@ -576,6 +594,7 @@ const SIGN = { add: "+", remove: "−", hunk: "", same: " " } as const;
 function FileReview({ file, comments }: { file: PullFile; comments: Comment[] }) {
   const t = useDictionary();
   const w = t.intentions.deliverable;
+  const [open, setOpen] = useState(comments.length > 0);
   const rows = useMemo(() => diffRows(file.patch), [file.patch]);
   // Each comment under its line; one on the whole file, above the diff.
   const { under, above } = useMemo(() => {
@@ -589,13 +608,24 @@ function FileReview({ file, comments }: { file: PullFile; comments: Comment[] })
     return { under: placed, above: loose };
   }, [comments, rows]);
   return (
-    <details
-      open={comments.length > 0}
+    <div
       className="rounded-xl border border-shell-line bg-white"
       data-testid="code-review-file"
       data-path={file.path}
     >
-      <summary className="flex cursor-pointer flex-wrap items-center gap-2 px-4 py-3 text-[0.8125rem]">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex w-full cursor-pointer flex-wrap items-center gap-2 px-4 py-3 text-start text-[0.8125rem]"
+      >
+        <ChevronDown
+          className={cn(
+            "size-4 shrink-0 text-shell-muted transition-transform duration-200 ease-[var(--ease-out)]",
+            open && "rotate-180",
+          )}
+          aria-hidden="true"
+        />
         <FileCode2 className="size-4 text-shell-muted" aria-hidden="true" />
         <span className="min-w-0 truncate font-mono text-brand-navy">{file.path}</span>
         <span className="text-xs text-[#15803d]">+{file.additions}</span>
@@ -607,27 +637,36 @@ function FileReview({ file, comments }: { file: PullFile; comments: Comment[] })
         ) : (
           <span className="text-xs text-shell-muted">{w.noComment}</span>
         )}
-      </summary>
-      <div className="border-t border-shell-line">
-        {above.length ? (
-          <div className="flex flex-col gap-2 p-3">
-            {above.map((comment, index) => (
-              <CommentCard key={index} comment={comment} whole={comment.line === null} />
-            ))}
+      </button>
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-200 ease-[var(--ease-out)]",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+        )}
+      >
+        <div className="overflow-hidden">
+          <div className="border-t border-shell-line">
+            {above.length ? (
+              <div className="flex flex-col gap-2 p-3">
+                {above.map((comment, index) => (
+                  <CommentCard key={index} comment={comment} whole={comment.line === null} />
+                ))}
+              </div>
+            ) : null}
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse font-mono text-[0.75rem] leading-5" data-testid="code-review-diff">
+                <tbody>
+                  {rows.map((row, index) => (
+                    <DiffLine key={index} row={row} comments={under.get(index)} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {file.truncated ? <p className="px-4 py-2 text-xs text-shell-muted">{w.truncated}</p> : null}
           </div>
-        ) : null}
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse font-mono text-[0.75rem] leading-5" data-testid="code-review-diff">
-            <tbody>
-              {rows.map((row, index) => (
-                <DiffLine key={index} row={row} comments={under.get(index)} />
-              ))}
-            </tbody>
-          </table>
         </div>
-        {file.truncated ? <p className="px-4 py-2 text-xs text-shell-muted">{w.truncated}</p> : null}
       </div>
-    </details>
+    </div>
   );
 }
 
