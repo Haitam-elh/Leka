@@ -338,73 +338,24 @@ describe("the overview", () => {
     expect(await screen.findByText("1 élément est en difficulté.")).toBeVisible();
   });
 
-  it("puts first what needs someone: a decision, what is wrong, a request under way", async () => {
+  it("puts first what needs someone: a decision, what is wrong, a request under way in the operational ribbon", async () => {
     mount();
-    const now = await screen.findByTestId("overview-now");
-    expect(within(now).getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
-      "À valider",
-      "Ce qui ne va pas",
-      "Mes intentions en cours",
-    ]);
-    const context = screen.getByTestId("overview-context");
-    expect(within(context).getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
-      "Activité récente",
-      "Fraîcheur et couverture",
-      "Insights LEKA",
-    ]);
+    const ribbon = await screen.findByTestId("operational-ribbon");
+    expect(ribbon).toHaveTextContent("En ce moment");
+    expect(ribbon).toHaveTextContent("payment-api");
   });
 
-  it("says what is wrong with how it is known, and what nothing says apart", async () => {
+  it("says what is wrong in the operational ribbon with how it is known and a way to analyse it", async () => {
     mount();
-    const trouble = await screen.findByTestId("overview-trouble");
-    const [row] = within(trouble).getAllByRole("listitem");
-    expect(row).toHaveAttribute("data-state", "degraded");
-    expect(row).toHaveTextContent("payment-api");
-    expect(row).toHaveTextContent("incident « OPS-1841 » ouvert · mesuré · par OPS board");
-    expect(within(row).getByRole("link", { name: "Analyser" })).toHaveAttribute(
+    const trouble = await screen.findByTestId("ribbon-trouble");
+    expect(trouble).toHaveAttribute("data-state", "degraded");
+    expect(trouble).toHaveTextContent("payment-api");
+    expect(trouble).toHaveTextContent("incident « OPS-1841 » ouvert · mesuré · par OPS board");
+    expect(within(trouble).getByRole("link", { name: "Analyser" })).toHaveAttribute(
       "href",
       `/intentions/new?q=${encodeURIComponent("Pourquoi payment-api est dégradé ?")}`,
     );
-    // Silence is never health.
-    expect(screen.getByTestId("overview-silent")).toHaveTextContent(
-      "2 éléments n'ont aucun signal : leur état n'est pas connu, ce n'est pas « sain ».",
-    );
     expect(await screen.findByText("1 élément est en difficulté.")).toBeVisible();
-  });
-
-  it("on Free, says the alerts are a paid plan's — never one simulated", async () => {
-    mount();
-    expect(await screen.findByTestId("overview-alerts-limit")).toHaveTextContent(
-      "Les alertes proactives sont incluses dès Starter.",
-    );
-    expect(screen.queryByTestId("overview-alerts")).not.toBeInTheDocument();
-  });
-
-  it("on a paid plan, says how many alerts are open", async () => {
-    monitoring.get.mockResolvedValue({
-      entitlement: {
-        plan: "growth",
-        proactive: true,
-        alerts: ["in_app", "email"],
-        contractual: false,
-        provisional: true,
-        alerts_from: "starter",
-        email_from: "growth",
-      },
-      open: [{ id: "a1" }, { id: "a2" }],
-      ended: [],
-    });
-    mount();
-    expect(await screen.findByTestId("overview-alerts")).toHaveTextContent("2 alertes ouvertes.");
-  });
-
-  it("says how fresh what LEKA sees is, what fails and what no source covers", async () => {
-    mount();
-    const card = await screen.findByTestId("overview-freshness");
-    expect(card).toHaveTextContent("Lu il y a 7 min");
-    expect(card).toHaveTextContent("Sources lues toutes les 60 min : pas en temps réel");
-    expect(card).toHaveTextContent("Runbooks space en échec");
-    expect(card).toHaveTextContent("Non couvert : État des services.");
   });
 
   it("an environment read and covered says so, nothing in trouble", async () => {
@@ -418,55 +369,18 @@ describe("the overview", () => {
     });
     mount();
     expect(
-      await screen.findByText("Rien d'indisponible ni de dégradé selon les sources lues."),
+      await screen.findByText("Vos sources sont à jour."),
     ).toBeVisible();
-    expect(screen.queryByTestId("overview-silent")).not.toBeInTheDocument();
-    expect(screen.getByTestId("overview-freshness")).toHaveTextContent(
-      "Toutes les sources sont lues et chaque partie de l'environnement est couverte.",
-    );
-  });
-
-  it("lists the intentions under way, each leading to it, in its journey's words", async () => {
-    underWay.mockResolvedValue({
-      data: [
-        {
-          id: "i1",
-          title: "Pourquoi payment-api est lente ?",
-          status: "awaiting_decision",
-          journey: sampleJourney("awaiting_decision"),
-        },
-      ],
-      next_cursor: null,
-    });
-    mount();
-    const list = await screen.findByTestId("overview-intentions");
-    const link = within(list).getByRole("link");
-    expect(link).toHaveAttribute("href", "/intentions/i1");
-    expect(link).toHaveTextContent("Pourquoi payment-api est lente ?");
-    // The same state as on the list and its page (LEKA-443).
-    expect(within(link).getByTestId("intention-status")).toHaveTextContent("Décision requise");
-  });
-
-  it("tells what Activité tells, the same events worded the same way", async () => {
-    mount();
-
-    const [row] = await screen.findAllByTestId("activity-row");
-    expect(row).toHaveTextContent("Information");
-    // The moment itself, machine-readable, as the knowledge timeline gives it.
-    const time = row.querySelector("time");
-    expect(time).not.toBeNull();
-    expect(Date.parse(time?.getAttribute("dateTime") ?? "")).toBeGreaterThan(Date.now() - 6 * 60_000);
-    expect(time).toHaveAttribute("title");
+    expect(screen.queryByTestId("ribbon-trouble")).not.toBeInTheDocument();
   });
 
   it("never shows the mockup's figures", async () => {
     mount();
-    await screen.findByTestId("overview-trouble");
+    await screen.findByTestId("greeting-chapeau");
 
     for (const mocked of ["98 %", "47 / 48 services", "Payment API", "Rollback", "Confiance élevée"]) {
       expect(screen.queryByText(new RegExp(mocked))).not.toBeInTheDocument();
     }
-    expect(screen.getByText("Rien à valider pour le moment.")).toBeVisible();
   });
 
   it("says so when the sources cannot be read", async () => {
@@ -497,7 +411,7 @@ describe("the overview", () => {
     expect(steps.compareDocumentPosition(screen.getByTestId("home-history")) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
   });
 
-  it("lists what LEKA proposes, waiting on someone, each leading to it", async () => {
+  it("lists what LEKA proposes, waiting on someone, in the operational ribbon", async () => {
     const owner = candidate({});
     const code = candidate({
       analyzer: "enrich_code",
@@ -511,15 +425,8 @@ describe("the overview", () => {
     proposed.mockResolvedValue({ data: [owner, code, ...more], next_cursor: null });
     mount();
 
-    const lines = within(await screen.findByTestId("approvals-waiting")).getAllByRole("listitem");
-    expect(lines).toHaveLength(3);
-    expect(lines[0]).toHaveTextContent("Platform est responsable de postgres-prod");
-    expect(lines[0]).toHaveTextContent(
-      "2 des 2 personnes qui le maintiennent sont membres de Platform · 85 %",
-    );
-    expect(within(lines[0]).getByRole("link")).toHaveAttribute("href", `/approvals/${owner.id}`);
-    expect(lines[1]).toHaveTextContent("acme/user-service est le code de user-service");
-    expect(screen.getByText("4 éléments en attente")).toBeVisible();
-    expect(screen.queryByText("Rien à valider pour le moment.")).not.toBeInTheDocument();
+    const ribbonApprovals = await screen.findByTestId("ribbon-approvals");
+    expect(ribbonApprovals).toHaveTextContent("4 éléments en attente");
+    expect(ribbonApprovals).toHaveAttribute("href", "/approvals");
   });
 });

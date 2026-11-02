@@ -296,7 +296,7 @@ export function IntentionComposer({
           {t.composer.compactSubtitle}
         </p>
         <div className="mx-auto mt-6 max-w-4xl text-start">
-          <div className="flex items-center gap-3 rounded-2xl border border-shell-line bg-white p-2 ps-3 shadow-sm focus-within:border-brand-violet focus-within:ring-3 focus-within:ring-brand-violet/20">
+          <div className="flex items-center gap-3 rounded-[20px] border-[1.5px] border-shell-line bg-white p-2.5 ps-3.5 shadow-[0_4px_20px_-2px_rgba(7,17,67,0.05)] transition-[border-color,box-shadow] duration-160 ease-[var(--ease-out)] focus-within:border-brand-violet focus-within:ring-3 focus-within:ring-brand-violet/15">
             <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-violet-soft">
               <Sparkle className="size-4 fill-brand-violet text-brand-violet" aria-hidden="true" />
             </span>
@@ -326,7 +326,7 @@ export function IntentionComposer({
               aria-label={t.composer.submit}
               aria-busy={submitting || undefined}
               data-testid="intention-submit"
-              className="size-11 shrink-0 rounded-full bg-brand-violet p-0 text-white transition-transform duration-150 ease-out hover:bg-brand-violet/90 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60"
+              className="size-11 shrink-0 rounded-full bg-brand-violet p-0 text-white transition-[transform,background-color] duration-160 ease-[var(--ease-out)] hover:bg-brand-violet/90 active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {submitting ? (
                 <Loader2 className="size-5 animate-spin" aria-hidden="true" />
