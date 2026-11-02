@@ -45,7 +45,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.architect import DossierError
-from leka.background import JobQueue, enqueue_job
+from leka.background import JobQueue, enqueue_job, job_attempt
 from leka.capabilities.attached import attached_to
 from leka.capabilities.catalogue import CatalogueService, Entry, needs_of
 from leka.capabilities.code_tools import CODE_NAMES, CODE_TOOLS, WORKSHOP_NAMES, code_handlers
@@ -415,14 +415,23 @@ async def execute_run(
     with workspace_scope(workspace_id):
         async with session_factory() as session:
             runs = CapabilityRunRepository(session, workspace_id)
+            resumed = False
             if not await runs.claim(run_id, at=now_or()):
-                await session.rollback()
-                return {"status": "not_queued"}
+                # Its own job come back, its worker gone (2026-11-01: a
+                # deploy restarted the workers mid-run; the job came again,
+                # found the run « running », and left it so an hour): taken
+                # back from the start, and said.
+                resumed = job_attempt() > 1 and await runs.resume(run_id, at=now_or())
+                if not resumed:
+                    await session.rollback()
+                    return {"status": "not_queued"}
             run = await runs.run(run_id)
             if run is None:  # pragma: no cover — claimed a moment ago
                 return {"status": "gone"}
             await session.refresh(run)
             steps = Steps(session, run, await runs.last_seq(run_id))
+            if resumed:
+                steps.add("resumed", attempt=job_attempt())
             steps.add("started")
             await session.commit()
             # What the person who asked may not see, it does not either

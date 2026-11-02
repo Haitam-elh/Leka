@@ -7,9 +7,11 @@ which is exactly the path under test.
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Any
 
+from leka.background import job_attempt
 from leka.core.request_context import current_request_id
 
 CALLS: list[tuple[str, Any]] = []
@@ -66,3 +68,13 @@ def leak(value: str) -> None:
     CALLS.append(("leak", value))
     msg = f"could not connect with {value}"
     raise RuntimeError(msg)
+
+
+def observe_attempt() -> None:
+    """Its attempt, as the job sees it — and as an agent's run sees it, in
+    the event loop it starts in its thread."""
+
+    async def inside() -> int:
+        return job_attempt()
+
+    CALLS.append(("attempt", (job_attempt(), asyncio.run(inside()))))

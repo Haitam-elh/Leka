@@ -38,6 +38,7 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from leka.background.attempt import ATTEMPT
 from leka.background.repository import JobRunRepository
 from leka.core.config import settings
 from leka.core.request_context import reset_request_id, set_request_id
@@ -144,9 +145,11 @@ async def _run(
     structlog.contextvars.bind_contextvars(
         run_id=str(run.id), job=job, attempt=run.attempts, request_id=run.request_id
     )
+    attempt = ATTEMPT.set(run.attempts)
     try:
         return await _execute(run_id, job, args, kwargs, lease, factory)
     finally:
+        ATTEMPT.reset(attempt)
         structlog.contextvars.unbind_contextvars("run_id", "job", "attempt", "request_id")
         if token is not None:
             reset_request_id(token)

@@ -69,6 +69,10 @@ from leka.intentions.schemas import (
 logger = structlog.get_logger(__name__)
 
 PURPOSE = "intention.proposal"
+# The goals of a request that asks why, and the work of an agent that only
+# changes things: one never answers the other unasked.
+DIAGNOSES = frozenset({"explain_cause", "investigate"})
+ACTS = frozenset({"act"})
 NEEDS = Needs(structured=True)
 MOST_AGENTS = 3
 # What a person may choose to have drawn — the rest of what an agent
@@ -80,6 +84,7 @@ You are given the request and LEKA's agents: what each delivers, the \
 inputs it takes, whether it can run here.
 
 - agents: the agents whose work the request needs, the most useful first, \
+answering the request's `goal` (each agent says the goals it answers), \
 three at most, each by its `key` exactly as given (« design-review »), never \
 its title. None when no agent's work fits: a plain question is \
 answered by LEKA's own analysis. A request to build, develop, change, test, \
@@ -296,6 +301,8 @@ def offered(entry: Any) -> dict[str, Any]:
         "key": d.key,
         "title": d.title,
         "delivers": d.summary,
+        # What it answers, as the request's own goal is said.
+        "goals": sorted(d.goals),
         "formats": sorted(CHOSEN & set(deliverables_of(d))),
         "examples": list(d.examples)[:3],
         "can_run_here": entry.availability.available,
@@ -569,6 +576,20 @@ async def propose(
                 f"asks. Read the request again: « {fits.title} » ({plain[0]}) delivers "
                 f"« {fits.summary} ». Choose the agents whose work it needs, by their keys."
             ]
+        # What the request was understood to want, against what each agent
+        # chosen does (2026-11-01: « trouve la cause » understood as a
+        # cause to find, nothing to change; the code change chosen all the
+        # same — the rule « never fixed unasked » read and not kept).
+        if goal in DIAGNOSES and not acting(understood):
+            changing = [k for k in got if by_key[k].definition.goals <= ACTS]
+            fitting = [k for k, e in by_key.items() if goal in e.definition.goals]
+            if changing and fitting:
+                return [
+                    f"The request was understood as « {goal} »: it asks why, and asks no "
+                    f"change. {', '.join(changing)} only change{'s' if len(changing) == 1 else ''} "
+                    f"things. The agents whose work answers « {goal} »: {', '.join(fitting)}. "
+                    "Choose the agents whose work it needs, by their keys."
+                ]
         if asks_work and not got and not value.informative:
             return [
                 "The request asks for work to be done and no agent was chosen: choose the "
