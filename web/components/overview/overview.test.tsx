@@ -359,6 +359,7 @@ describe("the overview", () => {
   });
 
   it("an environment read and covered says so, nothing in trouble", async () => {
+    list.mockResolvedValue({ data: [BACKEND] });
     const all = partlyConnected();
     environment.get.mockResolvedValue({
       ...all,
@@ -405,7 +406,7 @@ describe("the overview", () => {
     mount();
 
     expect(await screen.findByText("Connectez une première source pour commencer.")).toBeVisible();
-    expect(screen.getByText("Aucune source connectée pour l'instant.")).toBeVisible();
+    expect(screen.getByText("Aucune source connectée")).toBeVisible();
     // The first steps under the question and its history, a strip (2026-10-25).
     const steps = await screen.findByTestId("first-steps");
     expect(steps.compareDocumentPosition(screen.getByTestId("home-history")) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
