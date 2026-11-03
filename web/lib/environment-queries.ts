@@ -54,11 +54,6 @@ export function useMonitoring() {
   return useQuery({ queryKey: ["monitoring"] as const, queryFn: monitoring.get });
 }
 
-/** What LEKA went through overnight (2026-10-29). */
-export function useNightReview() {
-  return useQuery({ queryKey: ["monitoring", "night"] as const, queryFn: monitoring.night });
-}
-
 /** What LEKA is working on, now: followed closely while there is some. */
 export function useWorkingNow() {
   return useQuery({
@@ -68,12 +63,20 @@ export function useWorkingNow() {
   });
 }
 
-/** Gone through again now: what it found, shown at once. */
-export function useNightReviewAgain() {
+/** Whether the night review runs here (LEKA-526). */
+export function useNightReviewSetting() {
+  return useQuery({
+    queryKey: ["monitoring", "night", "setting"] as const,
+    queryFn: monitoring.nightSetting,
+  });
+}
+
+/** The night review turned on or off: the setting as the server now has it. */
+export function useNightReviewSettingChange() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: monitoring.nightAgain,
-    onSuccess: (review) => client.setQueryData(["monitoring", "night"], review),
+    mutationFn: (enabled: boolean) => monitoring.setNightSetting(enabled),
+    onSuccess: (setting) => client.setQueryData(["monitoring", "night", "setting"], setting),
   });
 }
 

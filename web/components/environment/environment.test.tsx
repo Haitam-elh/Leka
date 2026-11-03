@@ -93,6 +93,12 @@ vi.mock("next/navigation", async () => {
   };
 });
 
+// The night review has its own tests (night-review.test.tsx); here, only
+// where it stands (LEKA-526).
+vi.mock("@/components/environment/night-review", () => ({
+  NightReviewSetting: ({ id }: { id?: string }) => <section id={id} data-testid="night-review-place" />,
+}));
+
 // The card has its own tests (leka-insights.test.tsx); here it is only a
 // place on the page.
 vi.mock("@/components/insights/leka-insights", () => ({
@@ -486,6 +492,19 @@ describe("Mon environnement", () => {
     expect(await screen.findByText("Synchronisations en cours")).toBeInTheDocument();
     await pick(user, "configuration");
     expect(replace).toHaveBeenLastCalledWith("/environment?tab=configuration", { scroll: false });
+  });
+
+  it("keeps the night review off the overview, its setting with the alerts' (LEKA-526)", async () => {
+    const user = userEvent.setup();
+    mount(<EnvironmentScreen />);
+    expectView("architecture");
+    // The overview: the map and its foot, no night review.
+    expect(await screen.findByRole("heading", { name: "État global" })).toBeInTheDocument();
+    expect(screen.queryByTestId("night-review-place")).not.toBeInTheDocument();
+
+    // Its setting, with the alerts' settings.
+    await pick(user, "configuration");
+    expect(await screen.findByTestId("night-review-place")).toHaveAttribute("id", "night-review");
   });
 
   it("offers to connect a source only to who may", async () => {

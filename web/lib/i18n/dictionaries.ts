@@ -1541,6 +1541,8 @@ const fr = {
         "audit.retention_changed": "Conservation de l'audit changée",
         "workspace.plan_changed": "Offre changée",
         "workspace.credits_added": "Crédits IA ajoutés",
+        "monitoring.night_review_enabled": "Revue de la nuit activée",
+        "monitoring.night_review_disabled": "Revue de la nuit désactivée",
         "audit.expired": "Événements expirés supprimés",
         "audit.exported": "Journal exporté",
       },
@@ -4158,38 +4160,22 @@ const fr = {
     /** The night review (2026-10-29): what LEKA went through overnight. */
     night: {
       title: "Revue de la nuit",
-      again: "Relancer maintenant",
-      failed: "La revue n'a pas pu être relancée : réessayez.",
-      first:
-        "LEKA passe tout en revue toutes les heures de la nuit, de 22 h 30 à 6 h 30. Pas encore de revue : lancez la première maintenant.",
-      settled: "{count} {count|point réglé|points réglés} depuis.",
-      checkedNight:
-        "Le {when}, LEKA a passé en revue {things} éléments, {sources} {sources|source|sources}, {alerts} {alerts|alerte|alertes} et {findings} {findings|constat|constats}.",
-      checkedAsked:
-        "Relancée {when} : {things} éléments, {sources} {sources|source|sources}, {alerts} {alerts|alerte|alertes} et {findings} {findings|constat|constats} passés en revue.",
-      toLook: "{count} {count|point|points} à regarder",
-      nothing: "Rien à signaler",
-      allGood: "Tout va bien : rien n'attend personne ce matin.",
-      analyse: "Analyser",
-      see: "Voir",
-      more: "Voir les {count} autres",
-      fewer: "Voir moins",
-      ask: "Pourquoi {name} est {trouble} ?",
-      askFinding: "Explique le constat de LEKA sur {name} : ce qu'il veut dire et ce qu'il faut faire.",
-      severities: { high: "Important", medium: "À voir", low: "Mineur" },
-      points: {
-        alert: "{name} : {trouble}",
-        troubles: { unavailable: "indisponible", degraded: "dégradé", source_failing: "source en échec" },
-        source: "Source « {name} » : {why}",
-        whys: { error: "en erreur", degraded: "lecture en échec", unread: "non lue depuis plus de 24 h" },
-        findings: "{count} {count|constat important|constats importants} de LEKA",
-        findingsOn: "{count} {count|constat important|constats importants} de LEKA, sur {names}",
-        finding: "Constat important de LEKA sur {name}",
-        run: "L'agent « {name} » : {count} {count|échec|échecs} depuis hier",
-        decisions: "{count} {count|décision attend|décisions attendent} votre validation",
-        conflicts: "{count} {count|conflit|conflits} de connaissance à trancher",
-        change: "La pull request #{number} est rouge : {name}",
-        runs: "{count} {count|exécution d'agent a|exécutions d'agent ont} échoué depuis hier",
+      /** Whether it runs, an alert each workspace chooses (LEKA-526). */
+      setting: {
+        label: "Revue de la nuit",
+        on: "Activée",
+        off: "Désactivée",
+        explain:
+          "Chaque heure de la nuit, de {from} à {to}, LEKA passe en revue les alertes, les sources, ses constats, les décisions, ses pull requests et les agents, puis vous dit le matin ce qui attend : une notification et un e-mail.",
+        whenOn:
+          "La désactiver arrête les revues de la nuit et leurs notifications dès la nuit prochaine. Les revues passées et leurs constats restent.",
+        whenOff:
+          "Aucune revue la nuit, aucune notification ni e-mail le matin. Les revues passées et leurs constats restent ; vous pouvez la réactiver à tout moment.",
+        readOnly: "Seule une personne qui gère les sources et les alertes peut changer ce réglage.",
+        turnedOn: "Revue de la nuit activée : elle tourne dès cette nuit.",
+        turnedOff: "Revue de la nuit désactivée : plus de revue ni de notification la nuit.",
+        failed: "Le réglage n'a pas pu être enregistré : réessayez.",
+        loadFailed: "Le réglage de la revue de la nuit n'a pas pu être lu.",
       },
     },
     /** The Digital Twin (LEKA-442). */
@@ -10783,6 +10769,8 @@ const en: Dictionary = {
         "audit.retention_changed": "Audit retention changed",
         "workspace.plan_changed": "Plan changed",
         "workspace.credits_added": "AI credits added",
+        "monitoring.night_review_enabled": "Night review turned on",
+        "monitoring.night_review_disabled": "Night review turned off",
         "audit.expired": "Expired events deleted",
         "audit.exported": "Trail exported",
       },
@@ -13328,38 +13316,22 @@ const en: Dictionary = {
     /** The night review (2026-10-29): what LEKA went through overnight. */
     night: {
       title: "Night review",
-      again: "Run it now",
-      failed: "The review could not be run again: try again.",
-      first:
-        "LEKA goes through everything every hour of the night, from 10:30 pm to 6:30 am. No review yet: run the first one now.",
-      settled: "{count} {count|point|points} settled since.",
-      checkedNight:
-        "On {when}, LEKA went through {things} things, {sources} {sources|source|sources}, {alerts} {alerts|alert|alerts} and {findings} {findings|finding|findings}.",
-      checkedAsked:
-        "Run again {when}: {things} things, {sources} {sources|source|sources}, {alerts} {alerts|alert|alerts} and {findings} {findings|finding|findings} gone through.",
-      toLook: "{count} {count|point|points} to look at",
-      nothing: "Nothing to report",
-      allGood: "All good: nothing is waiting for anyone this morning.",
-      analyse: "Analyse",
-      see: "See",
-      more: "See the {count} others",
-      fewer: "See fewer",
-      ask: "Why is {name} {trouble}?",
-      askFinding: "Explain LEKA's finding on {name}: what it means and what to do.",
-      severities: { high: "Important", medium: "To look at", low: "Minor" },
-      points: {
-        alert: "{name}: {trouble}",
-        troubles: { unavailable: "unavailable", degraded: "degraded", source_failing: "source failing" },
-        source: "Source « {name} »: {why}",
-        whys: { error: "in error", degraded: "reading failed", unread: "not read for over 24 h" },
-        findings: "{count} important {count|finding|findings} from LEKA",
-        findingsOn: "{count} important {count|finding|findings} from LEKA, on {names}",
-        finding: "Important finding from LEKA on {name}",
-        run: "The agent « {name} »: {count} {count|failure|failures} since yesterday",
-        decisions: "{count} {count|decision waits|decisions wait} for your approval",
-        conflicts: "{count} knowledge {count|conflict|conflicts} to settle",
-        change: "Pull request #{number} is red: {name}",
-        runs: "{count} agent {count|run has|runs have} failed since yesterday",
+      /** Whether it runs, an alert each workspace chooses (LEKA-526). */
+      setting: {
+        label: "Night review",
+        on: "On",
+        off: "Off",
+        explain:
+          "Every hour of the night, from {from} to {to}, LEKA goes through the alerts, the sources, its findings, the decisions, its pull requests and the agents, then tells you in the morning what waits: a notification and an e-mail.",
+        whenOn:
+          "Turning it off stops the night reviews and their notifications from the next night. Past reviews and their findings stay.",
+        whenOff:
+          "No review at night, no notification or e-mail in the morning. Past reviews and their findings stay; you can turn it back on at any time.",
+        readOnly: "Only someone who manages the sources and the alerts can change this setting.",
+        turnedOn: "Night review on: it runs from tonight.",
+        turnedOff: "Night review off: no more review or notification at night.",
+        failed: "The setting could not be saved: try again.",
+        loadFailed: "The night review setting could not be read.",
       },
     },
     twin: {

@@ -1094,6 +1094,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/monitoring/night-review/setting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Night Setting
+         * @description Whether the night review runs here (LEKA-526).
+         */
+        get: operations["night_setting_api_v1_monitoring_night_review_setting_get"];
+        /**
+         * Set Night Setting
+         * @description Turned on or off, from the next night; kept in the audit trail.
+         *     Its past reviews and what they found stay.
+         */
+        put: operations["set_night_setting_api_v1_monitoring_night_review_setting_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/monitoring/now": {
         parameters: {
             query?: never;
@@ -19758,6 +19783,41 @@ export interface components {
              */
             settled: number;
         };
+        /**
+         * NightReviewSettingChange
+         * @description The night review turned on or off.
+         */
+        NightReviewSettingChange: {
+            /** Enabled */
+            enabled: boolean;
+        };
+        /**
+         * NightReviewSettingRead
+         * @description Whether the workspace's night review runs (LEKA-526): an alert it
+         *     chooses, with what it does when on.
+         */
+        NightReviewSettingRead: {
+            /**
+             * Enabled
+             * @description On: LEKA goes through the environment every hour of the night and tells the morning, in the application and by e-mail. Off: no review at night and nothing told; past reviews stay.
+             */
+            enabled: boolean;
+            /**
+             * Default
+             * @description What a workspace has until someone chooses.
+             */
+            default: boolean;
+            /**
+             * Hours Utc
+             * @description When it runs, in UTC: each hour of the night at half past.
+             */
+            hours_utc: string[];
+            /**
+             * Can Change
+             * @description Whether the reader may turn it on or off.
+             */
+            can_change: boolean;
+        };
         /** NormalisationFailureRead */
         NormalisationFailureRead: {
             /** Capability */
@@ -31915,6 +31975,194 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NightReviewRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    night_setting_api_v1_monitoring_night_review_setting_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NightReviewSettingRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    set_night_setting_api_v1_monitoring_night_review_setting_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NightReviewSettingChange"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NightReviewSettingRead"];
                 };
             };
             /** @description The request could not be understood. */

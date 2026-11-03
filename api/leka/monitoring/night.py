@@ -22,13 +22,18 @@ words, in the reader's language.
 What is shown is what still stands (`standing`, 2026-10-31): a point settled
 since the review — an intention deleted, a finding closed, a pull request
 green — is gone at once, never left until the next night.
+
+An alert each workspace chooses (LEKA-526): on, LEKA goes through the night
+and tells the morning; off, no review is made at night and nothing is told
+— what was reviewed before stays. A review asked for by a person is made
+either way: it is theirs, not the night's.
 """
 
 from __future__ import annotations
 
 import asyncio
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -344,11 +349,49 @@ async def standing(
     return still(review.points, fresh)
 
 
+# The workspace's setting (LEKA-526), kept with its other settings. Absent:
+# on — what every workspace had before it could choose, and what a new one
+# starts with until the product says otherwise.
+SETTING_KEY = "night_review"
+ENABLED_BY_DEFAULT = True
+
+
+def enabled(settings: Mapping[str, object] | None) -> bool:
+    """Whether a workspace's night review runs, from its settings."""
+    said = (settings or {}).get(SETTING_KEY)
+    if isinstance(said, Mapping) and isinstance(said.get("enabled"), bool):
+        return bool(said["enabled"])
+    return ENABLED_BY_DEFAULT
+
+
+async def is_enabled(session: AsyncSession, workspace_id: uuid.UUID) -> bool:
+    workspace = await session.get(Workspace, workspace_id)
+    return enabled(workspace.settings if workspace is not None else None)
+
+
+async def set_enabled(
+    session: AsyncSession, workspace_id: uuid.UUID, on: bool
+) -> tuple[bool, bool]:
+    """The night review switched on or off — before and after. Its past
+    reviews stay as they are."""
+    workspace = await session.get(Workspace, workspace_id)
+    if workspace is None:
+        msg = "the workspace is gone"
+        raise LookupError(msg)
+    before = enabled(workspace.settings)
+    workspace.settings = {**(workspace.settings or {}), SETTING_KEY: {"enabled": on}}
+    await session.flush()
+    return before, on
+
+
 async def review_every_workspace(*, now: datetime | None = None) -> dict[str, int]:
-    """Every workspace reviewed — one failing never stops the others."""
+    """Every workspace that keeps its night review on, reviewed — one
+    failing never stops the others; one that turned it off, left alone."""
     with system_scope():
         async with session_factory() as session:
-            ids: Sequence[uuid.UUID] = (await session.scalars(select(Workspace.id))).all()
+            rows = (await session.execute(select(Workspace.id, Workspace.settings))).all()
+    ids: Sequence[uuid.UUID] = [row.id for row in rows if enabled(row.settings)]
+    off = len(rows) - len(ids)
     done = failed = 0
     for workspace_id in ids:
         try:
@@ -360,7 +403,7 @@ async def review_every_workspace(*, now: datetime | None = None) -> dict[str, in
         except Exception:
             failed += 1
             logger.exception("night_review_failed", workspace=str(workspace_id))
-    return {"reviewed": done, "failed": failed}
+    return {"reviewed": done, "failed": failed, "off": off}
 
 
 def run_night_reviews() -> dict[str, int]:

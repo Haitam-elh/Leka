@@ -27,7 +27,7 @@ from leka.identity import (
     email_language,
     email_paragraphs,
 )
-from leka.monitoring import NightReview, night_standing
+from leka.monitoring import NightReview, night_review_enabled, night_standing
 from leka.notifications.models import NotificationPreference
 from leka.platform import Membership, Workspace
 
@@ -201,6 +201,10 @@ async def send_morning_reports(*, now: datetime | None = None) -> dict[str, int]
     sent = workspaces_told = 0
     sender = build_email_sender()
     for workspace in workspaces:
+        # Its night review turned off (LEKA-526): nothing told, even of a
+        # review made before it was.
+        if not night_review_enabled(workspace.settings):
+            continue
         try:
             with workspace_scope(workspace.id):
                 async with session_factory() as session:

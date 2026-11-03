@@ -23,7 +23,17 @@
     GET    /monitoring/night-review     what LEKA went through overnight
                                         and the points it found (null: none
                                         yet)
-    POST   /monitoring/night-review     gone through again now
+    POST   /monitoring/night-review     gone through again now — asked by
+                                        a person, made whether the night
+                                        review is on or off
+    GET    /monitoring/night-review/setting
+                                        whether the night review runs, and
+                                        whether the reader may change it
+                                        (LEKA-526)
+    PUT    /monitoring/night-review/setting
+                                        turned on or off (source:manage),
+                                        kept in the audit trail; past
+                                        reviews stay
     GET    /monitoring/now              what LEKA is working on, now: each
                                         piece of work, its step, where to
                                         follow it
@@ -50,8 +60,9 @@ from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
 from leka.billing.limits import PlanLimitError, room_for_alert_rule
 from leka.core.errors import ErrorCode, FieldError
-from leka.governance import Permission, Principal, require_permission
+from leka.governance import Permission, Principal, Target, audit_as, require_permission
 from leka.monitoring import (
+    NIGHT_REVIEW_DEFAULT,
     AlertDeliveryRead,
     AlertRead,
     AlertRepository,
@@ -64,13 +75,17 @@ from leka.monitoring import (
     MonitoringEntitlementRead,
     MonitoringRead,
     NightReviewRead,
+    NightReviewSettingChange,
+    NightReviewSettingRead,
     WatchableRead,
     WebhookConnect,
     WorkingRead,
     entitled,
     latest_night_review,
     night_review,
+    night_review_is_enabled,
     night_standing,
+    set_night_review_enabled,
     webhooks,
     working_now,
 )
@@ -127,6 +142,45 @@ async def night_again(session: SessionDep, principal: Reader) -> NightReviewRead
     """Gone through again now, for whoever reads the environment."""
     row = await night_review(session, principal.workspace_id, trigger="asked", by=principal.user_id)
     return NightReviewRead.model_validate(row)
+
+
+# When the night review runs (background/schedule.py: 30 21-23,0-5 * * *).
+NIGHT_HOURS_UTC = [f"{hour:02d}:30" for hour in (21, 22, 23, 0, 1, 2, 3, 4, 5)]
+
+
+async def _night_setting(session: SessionDep, principal: Principal) -> NightReviewSettingRead:
+    return NightReviewSettingRead(
+        enabled=await night_review_is_enabled(session, principal.workspace_id),
+        default=NIGHT_REVIEW_DEFAULT,
+        hours_utc=NIGHT_HOURS_UTC,
+        can_change=principal.has(Permission.SOURCE_MANAGE),
+    )
+
+
+@router.get("/night-review/setting", response_model=NightReviewSettingRead)
+async def night_setting(session: SessionDep, principal: Reader) -> NightReviewSettingRead:
+    """Whether the night review runs here (LEKA-526)."""
+    return await _night_setting(session, principal)
+
+
+@router.put("/night-review/setting", response_model=NightReviewSettingRead)
+async def set_night_setting(
+    body: NightReviewSettingChange, session: SessionDep, principal: Manager
+) -> NightReviewSettingRead:
+    """Turned on or off, from the next night; kept in the audit trail.
+    Its past reviews and what they found stay."""
+    before, after = await set_night_review_enabled(session, principal.workspace_id, body.enabled)
+    if after != before:
+        audit_as(
+            session,
+            principal,
+            "workspace",
+            "monitoring.night_review_" + ("enabled" if after else "disabled"),
+            target=Target("workspace", principal.workspace_id, None),
+            detail={"enabled": after},
+        )
+    await session.commit()
+    return await _night_setting(session, principal)
 
 
 @router.get("/now", response_model=list[WorkingRead])
