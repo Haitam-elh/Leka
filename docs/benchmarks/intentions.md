@@ -264,9 +264,10 @@ what differs when it is not.
 
 - **The rules**: the benchmark reads with the rules, whatever `.env` holds
   — the reference CI holds.
-- **A model**: `LEKA_BENCH_MODEL=1`, with the model configured
-  (`LEKA_LLM_PROVIDER`, `LEKA_LLM_MODEL`, its key): the understanding read
-  by it, through the LLM runtime. A run to compare, never the reference.
+- **A model**: `LEKA_BENCH_MODEL=1`, with its key: the understanding read
+  by the model assigned to LEKA's own work (`agents/models.yaml`) — or by a
+  candidate, `LEKA_LLM_TRIAL_MODEL=provider:model`, outside production —
+  through the LLM runtime. A run to compare, never the reference.
 - **A prompt**: change it, run with `LEKA_BENCH_REPORT`; its digest says
   which.
 - **Two runs**, side by side:

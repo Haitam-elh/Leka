@@ -30,7 +30,7 @@ import {
 import { ApiError } from "@/lib/api";
 import { fill, type Dictionary } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
-import { useModelGateway } from "@/lib/models-queries";
+import { useModelSettings } from "@/lib/models-queries";
 import { notify } from "@/lib/notify";
 import { personName } from "@/lib/team";
 import { useTeamMembers } from "@/lib/team-queries";
@@ -158,7 +158,7 @@ export function AIControlsCard({ canManage, roles }: { canManage: boolean; roles
   const w = t.governance.ai;
   const confirm = useConfirm();
   const { data } = useAIControls();
-  const gateway = useModelGateway();
+  const gateway = useModelSettings();
   const change = useAIControlChange();
   const [name, setName] = useState("");
   const [kind, setKind] = useState<AIControlKind>("output_check");

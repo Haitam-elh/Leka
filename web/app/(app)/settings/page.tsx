@@ -4,7 +4,7 @@ import { Building2 } from "lucide-react";
 
 import { IconTile } from "@/components/environment/parts";
 import { ActionEndpoints } from "@/components/settings/action-endpoints";
-import { LanguageModel } from "@/components/settings/language-model";
+import { CompanyModel } from "@/components/settings/company-model";
 import { LanguageSettings } from "@/components/settings/language-settings";
 import { WorkspaceGeneralForm } from "@/components/settings/workspace-general-form";
 import { PageContainer, PageHeader } from "@/components/shell/page-container";
@@ -26,8 +26,10 @@ function Settings() {
           </div>
           <WorkspaceGeneralForm />
         </section>
-        {/* The model that reads and answers (LEKA-394). */}
-        <LanguageModel />
+        {/* The company's own model, under an Enterprise contract that
+            brings it (LEKA-530). Which model each agent runs on is LEKA's
+            choice, never a setting: nothing of it here. */}
+        <CompanyModel />
         {/* The systems LEKA may act through (LEKA-391). */}
         <ActionEndpoints />
       </div>

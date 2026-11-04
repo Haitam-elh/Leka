@@ -382,13 +382,6 @@ function RunDetail({ id }: { id: string }) {
           ))}
         </ol>
       </div>
-      <p className="text-xs text-shell-muted" data-testid="agent-run-usage">
-        {fill(w.usage, {
-          calls: String(data.usage.calls),
-          tokens: String(data.usage.tokens_in + data.usage.tokens_out),
-        })}
-        {data.usage.cost_usd !== null ? ` · ${data.usage.cost_usd.toFixed(4)} $` : ""}
-      </p>
     </div>
   );
 }

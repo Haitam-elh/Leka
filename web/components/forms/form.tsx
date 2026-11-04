@@ -17,6 +17,13 @@ import type { LekaForm } from "@/lib/forms/use-leka-form";
  * validation first, in its own words, in the language of the operating
  * system rather than the one the person chose — and it stops the submit
  * before zod ever sees the values.
+ *
+ * Pressing a submit button leaves the focus where it is (2026-11-04).
+ * Otherwise the field being left is checked on the way out, its error
+ * appears above the button and pushes it down while the mouse is still
+ * pressed — released beside it, the click never lands: nothing is sent,
+ * nothing said. The submit checks every field and puts the focus on the
+ * first wrong one, which is where the person was going anyway.
  */
 export function Form<TValues extends FieldValues>({
   form,
@@ -33,6 +40,10 @@ export function Form<TValues extends FieldValues>({
       <form
         noValidate
         onSubmit={(event) => void form.submit(event)}
+        onMouseDown={(event) => {
+          const button = (event.target as HTMLElement).closest("button");
+          if (button?.type === "submit" && !button.disabled) event.preventDefault();
+        }}
         className={cn("space-y-6", className)}
         {...props}
       >

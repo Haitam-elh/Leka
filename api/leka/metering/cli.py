@@ -44,6 +44,19 @@ HTTP: what they show crosses every workspace, and LEKA's costs are its own.
             --after 2026-10-15:2026-11-01 [--format csv|json]
         Two periods side by side, by agent and purpose — before and after an
         optimisation.
+
+    python -m leka.metering.cli usage [--from 2026-10-01] [--to 2026-11-01]
+            [--workspace ID] [--user ID|EMAIL] [--agent KEY] [--provider P]
+            [--model M] [--operation PURPOSE] [--status ok|failed|invalid]
+            [--by workspace|user|agent|model|operation|day] [--limit N]
+            [--format csv|json]
+        Every call to a model (LEKA-530) — the LEKA team's backoffice, never
+        a customer's: its workspace, the person, the agent and operation,
+        the provider and model, when, how it ended, its tokens, its cost in
+        US dollars on the rate it was priced with, the AI credits it used.
+        The last 30 days by default, the latest 1000 calls; --by sums them,
+        and by workspace adds the AI capacity of its month: plan, allowance,
+        used, period.
 """
 
 from __future__ import annotations
@@ -55,7 +68,7 @@ import json
 import sys
 import uuid
 from collections.abc import Sequence
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -226,6 +239,45 @@ async def _compare(before: str, after: str, fmt: str) -> int:
     return 0
 
 
+async def _usage(given: argparse.Namespace) -> int:
+    today = datetime.now(UTC).date()
+    with system_scope():
+        async with session_factory() as session:
+            rows = await reports.usage(
+                session,
+                start=date.fromisoformat(given.start)
+                if given.start
+                else today - timedelta(days=30),
+                end=date.fromisoformat(given.end) if given.end else today + timedelta(days=1),
+                workspace=uuid.UUID(given.workspace) if given.workspace else None,
+                user=given.user,
+                agent=given.agent,
+                provider=given.provider,
+                model=given.model,
+                operation=given.operation,
+                status=given.status,
+                by=given.by,
+                limit=given.limit,
+            )
+    if given.by == "workspace":
+        # Its AI capacity this month, as the customer's plan has it.
+        for row in rows:
+            workspace_id = uuid.UUID(str(row["workspace_id"]))
+            with workspace_scope(workspace_id):
+                async with session_factory() as session:
+                    held = await credits_now(session, workspace_id, now=datetime.now(UTC))
+            row.update(
+                plan=held.plan,
+                allowance=held.allowance,
+                month_used=round(held.used, 2),
+                month_percent=held.percent,
+                period_start=held.period_start.isoformat(),
+                period_end=held.period_end.isoformat(),
+            )
+    _write(rows, given.format)
+    return 0
+
+
 async def _workspaces() -> int:
     with system_scope():
         async with session_factory() as session:
@@ -277,6 +329,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     compared.add_argument("--before", required=True)
     compared.add_argument("--after", required=True)
     compared.add_argument("--format", choices=["csv", "json"], default="csv")
+    used = commands.add_parser("usage")
+    used.add_argument("--from", dest="start")
+    used.add_argument("--to", dest="end")
+    used.add_argument("--workspace")
+    used.add_argument("--user")
+    used.add_argument("--agent")
+    used.add_argument("--provider")
+    used.add_argument("--model")
+    used.add_argument("--operation")
+    used.add_argument("--status", choices=["ok", "failed", "invalid"])
+    used.add_argument("--by", choices=sorted(reports.BY))
+    used.add_argument("--limit", type=int, default=1000)
+    used.add_argument("--format", choices=["csv", "json"], default="csv")
     given = parser.parse_args(argv)
     if given.command == "workspaces":
         return asyncio.run(_workspaces())
@@ -284,6 +349,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return asyncio.run(_report(given.name, given.month, given.format))
     if given.command == "compare":
         return asyncio.run(_compare(given.before, given.after, given.format))
+    if given.command == "usage":
+        return asyncio.run(_usage(given))
     if given.command == "plan":
         return asyncio.run(_plan(given))
     if given.command == "plans":

@@ -1,0 +1,129 @@
+# The model each agent runs on (LEKA-530) — and LEKA's own work's.
+#
+# Chosen by the LEKA team: candidate models are tried on the agent's real
+# work (its instructions, its tools, the deliverable it owes, how reliably,
+# how fast, at what cost), then one is validated and written here. The agent
+# runs on it, every step of it: no model is chosen per task while it runs.
+# Changing one is engineering work: the comparative tests, then this file,
+# reviewed in a pull request — never an environment variable, never a
+# customer's setting.
+#
+#   model      provider:model, one LEKA knows (api/leka/capabilities/gateway/profiles.py)
+#   fallbacks  models tested and approved for THIS agent, tried in order when
+#              its model fails. None: the agent tries its model again
+#              (LEKA_LLM_RETRIES), then says it failed — never an untested
+#              model in its place.
+#
+# Every agent of registry.yaml has its line (tests/test_model_assignments.py).
+# A workspace under an Enterprise contract may plug in its own model (its
+# account): it answers first; when it fails, the agent's models below do,
+# unless the workspace said "ours only".
+#
+# Trying a candidate: LEKA_LLM_TRIAL_MODEL puts every agent on one model,
+# outside production only (docs/model-gateway.md).
+#
+# Validated so far: Gemini 3.8 Flash, the model every agent was tested on
+# (October–November 2026). No fallback approved yet.
+
+version: 1
+
+# LEKA's own work, that no agent does: reading an intention, analysing it,
+# writing its answer, the company model's enrichment, the interface's words.
+operations:
+  model: google:gemini-3.8-flash
+  fallbacks: []
+
+agents:
+  accessibility-audit:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  api-design-review:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  application-architecture:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  architecture-analysis:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  build-fixer:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  change-impact-analysis:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  code-change:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  code-review:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  codebase-explorer:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  correlate-deploy-with-latency:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  data-analysis:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  database-review:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  debug-assistant:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  dependency-analysis:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  design-review:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  detect-undocumented-dependency:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  documentation-assistant:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  incident-investigation:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  infrastructure-analysis:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  map-service-ownership:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  migration-planning:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  motion-review:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  performance-analysis:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  qa-acceptance:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  regression-analysis:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  release-analysis:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  reliability-analysis:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  security-review:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  test-analysis:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  test-generation:
+    model: google:gemini-3.8-flash
+    fallbacks: []
+  ui-quality-review:
+    model: google:gemini-3.8-flash
+    fallbacks: []

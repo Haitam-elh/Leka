@@ -2,10 +2,13 @@
 (architecture rule 7) — for Intentions, Mon environnement, Capacités, the
 agents, the skills and the workflows alike.
 
-    a feature asks (Request) and says what it needs (Needs)
-      ──▶ routing.py: the models that can answer, in order
+    a feature asks (Request) — for an agent, or LEKA's own work — and says
+    what it needs (Needs)
+      ──▶ routing.py: the model the LEKA team assigned to that work
+          (agents/models.yaml, LEKA-530), then the fallbacks approved for
+          it — never one chosen per task, never an untested one
       ──▶ each tried: a temporary failure tried again (LEKA_LLM_RETRIES),
-          then the next model — never more than three
+          then the next approved model — never more than three
       ──▶ a structured answer read and checked against its model: one that
           does not match is tried again, then the next model
       ──▶ every attempt kept (model_calls): for what, about what, which
@@ -48,6 +51,7 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from leka.capabilities.gateway.assignment import Assignment, assigned
 from leka.capabilities.gateway.contract import (
     Call,
     Completion,
@@ -65,17 +69,9 @@ from leka.capabilities.gateway.contract import (
 from leka.capabilities.gateway.controls import ControlRefusedError, Guard
 from leka.capabilities.gateway.profiles import DEFAULTS
 from leka.capabilities.gateway.rates import Rates, load_rates
-from leka.capabilities.gateway.routing import (
-    Needs,
-    Own,
-    Passed,
-    Route,
-    Routing,
-    fallbacks_of,
-    task_routes_of,
-)
+from leka.capabilities.gateway.routing import Needs, Own, Passed, Route, Routing
 from leka.capabilities.gateway.routing import route as route_of
-from leka.capabilities.models import ModelCall, WorkspaceModel, WorkspaceModelDefault
+from leka.capabilities.models import ModelCall, WorkspaceModel
 from leka.connectors import BlockedAddressError, PublicTransport
 from leka.core import breaker
 from leka.core.config import settings
@@ -214,20 +210,20 @@ def leka_keys() -> dict[str, str | None]:
 
 
 def leka_urls() -> dict[str, str]:
-    """Where LEKA's default model is reached, when not its provider's own
-    address: a proxy, a regional endpoint — or, in the browser tests, a
-    local stand-in (LEKA_LLM_API_URL)."""
-    return {settings.llm_provider: settings.llm_api_url} if settings.llm_api_url else {}
+    """Where a provider of LEKA's is reached, when not at its own address:
+    a proxy, a regional endpoint — or, in the browser tests, a local
+    stand-in (LEKA_LLM_PROVIDER, LEKA_LLM_API_URL). Only for a provider LEKA
+    holds the key of: an address without it reaches nothing."""
+    if not settings.llm_api_url or settings.llm_api_key is None:
+        return {}
+    return {settings.llm_provider: settings.llm_api_url}
 
 
-def leka_default() -> tuple[str, str]:
-    """LEKA's default model: configured, never written where it is used."""
-    return settings.llm_provider, settings.llm_model
-
-
-def default_ready() -> bool:
-    """Whether LEKA's default model can be reached at all."""
-    return settings.llm_api_key is not None
+def leka_ready(purpose: str | None = None) -> bool:
+    """Whether LEKA holds a key for the model assigned to this work, or
+    for one of its approved fallbacks (agents/models.yaml)."""
+    keys = leka_keys()
+    return any(keys.get(name) for name, _ in assigned(purpose).models())
 
 
 def own_of(row: WorkspaceModel) -> Own | None:
@@ -380,15 +376,17 @@ class Gateway:
         self._workspace_id = workspace_id
         self._transport = transport
         self._keys = keys if keys is not None else leka_keys()
-        self._default = default or leka_default()
-        self._fallbacks = (
-            list(fallbacks) if fallbacks is not None else fallbacks_of(settings.llm_fallbacks)
+        # Given — a test's stand-in, a trial — the same models for all the
+        # work; else each call's own, as agents/models.yaml assigns it.
+        self._assignment = (
+            Assignment(model=default, fallbacks=tuple(fallbacks or ()))
+            if default is not None
+            else None
         )
         self._retries = max(0, settings.llm_retries if retries is None else retries)
         # How many times a model is told what was wrong with its answer and
         # asked again, before the next one is (structured `corrections`).
         self._corrections: int | None = None
-        self._tasks = task_routes_of(settings.llm_task_routes)
         self._sleep = sleep
         self._urls = urls if urls is not None else (leka_urls() if keys is None else {})
         self._guard = Guard(session, workspace_id)
@@ -402,43 +400,23 @@ class Gateway:
         )
         return found
 
-    async def chosen(self) -> WorkspaceModelDefault | None:
-        """Which of LEKA's models its admin chose to answer first here."""
-        found: WorkspaceModelDefault | None = await self._session.scalar(
-            select(WorkspaceModelDefault).where(
-                WorkspaceModelDefault.workspace_id == self._workspace_id
-            )
-        )
-        return found
+    def assignment(self, purpose: str | None = None) -> Assignment:
+        """The model this work runs on, and its approved fallbacks."""
+        return self._assignment or assigned(purpose)
 
-    async def defaults(self) -> tuple[tuple[str, str], list[tuple[str, str]]]:
-        """LEKA's model that answers first here, and those after it: the one
-        its admin chose — when LEKA holds its key — then LEKA's own default,
-        then its fallbacks; LEKA's default otherwise (2026-10-21)."""
-        chosen = await self.chosen()
-        if chosen is None or not self._keys.get(chosen.provider):
-            return self._default, self._fallbacks
-        first = (chosen.provider, chosen.model)
-        if first == self._default:
-            return self._default, self._fallbacks
-        return first, [self._default, *(f for f in self._fallbacks if f != first)]
-
-    async def routing(self, needs: Needs = Needs()) -> Routing:
+    async def routing(self, needs: Needs = Needs(), purpose: str | None = None) -> Routing:
         row = await self.setting()
-        default, fallbacks = await self.defaults()
         return route_of(
             needs,
             own=own_of(row) if row is not None else None,
             keys=self._keys,
-            default=default,
-            fallbacks=fallbacks,
+            assignment=self.assignment(purpose),
             urls=self._urls,
-            tasks=self._tasks,
         )
 
-    async def ready(self, needs: Needs = Needs()) -> bool:
-        """Whether a model can answer what is needed, here."""
-        return bool((await self.routing(needs)).routes)
+    async def ready(self, needs: Needs = Needs(), purpose: str | None = None) -> bool:
+        """Whether a model can answer what is needed, here, for this work."""
+        return bool((await self.routing(needs, purpose)).routes)
 
     def _client(self, endpoint: Endpoint, wait: float) -> httpx.AsyncClient:
         transport = self._transport
@@ -463,7 +441,7 @@ class Gateway:
             needs = replace(needs, structured=True)
         if request.tools:
             needs = replace(needs, tools=True)
-        routing = await self.routing(needs)
+        routing = await self.routing(needs, request.purpose)
         if not routing.routes:
             reason = (
                 "No language model is configured."
@@ -870,7 +848,7 @@ class Gateway:
             return Tested(
                 False, "No model of the workspace's own is set, or it is off.", None, None, None
             )
-        routing = route_of(Needs(), own=replace(own, exclusive=True), keys={}, default=("", ""))
+        routing = route_of(Needs(), own=replace(own, exclusive=True), keys={}, assignment=None)
         if not routing.routes:
             return Tested(False, "This model cannot be used.", None, own.model, None)
         request = Request(
@@ -959,18 +937,19 @@ async def leka_complete(
 ) -> Completion:
     """LEKA's own models, for LEKA's own work — no workspace's, so no
     customer's credits, controls or own model: its interface translated
-    into a language (2026-10-30). The default, then the fallbacks, each
-    tried again while it says its failure is temporary. NoModelError when
-    none answered."""
+    into a language (2026-10-30). The model assigned to it, then its
+    approved fallbacks (agents/models.yaml), each tried again while it says
+    its failure is temporary. NoModelError when none answered."""
     own_keys = keys if keys is not None else leka_keys()
     routing = route_of(
         replace(needs, structured=needs.structured or request.output is not None),
         own=None,
         keys=own_keys,
-        default=default or leka_default(),
-        fallbacks=list(fallbacks)
-        if fallbacks is not None
-        else fallbacks_of(settings.llm_fallbacks),
+        assignment=(
+            Assignment(model=default, fallbacks=tuple(fallbacks or ()))
+            if default is not None
+            else assigned(request.purpose)
+        ),
         urls=leka_urls() if keys is None else {},
     )
     if not routing.routes:

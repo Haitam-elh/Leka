@@ -111,7 +111,6 @@ def gemini(monkeypatch: pytest.MonkeyPatch) -> Callable[..., Gemini]:
             "google_api_key": SecretStr("g-key"),
             "mistral_api_key": None,
             "anthropic_api_key": None,
-            "llm_fallbacks": "",
         }
     )
     monkeypatch.setattr(service, "settings", configured)

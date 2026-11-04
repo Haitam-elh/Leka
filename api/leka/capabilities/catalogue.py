@@ -47,7 +47,7 @@ from leka.capabilities.definition import (
     may_move,
     semver,
 )
-from leka.capabilities.gateway import Gateway, Needs, Route
+from leka.capabilities.gateway import Assignment, Gateway, Needs, Route
 from leka.capabilities.models import (
     CapabilityEvent,
     CapabilityRegistration,
@@ -248,23 +248,13 @@ class Entry:
     enabled: bool
     setting: WorkspaceCapability | None
     favourite: bool
-    # The model that would run it here, chosen by what it needs (LEKA-394).
+    # The model that would run it here: the one assigned to it
+    # (agents/models.yaml, LEKA-530), if it can do what it needs.
     model: Route | None = None
 
     @property
     def definition(self) -> Definition:
         return self.standing.definition
-
-
-# The kind of work a capability is, by its category (LEKA-491): what
-# LEKA_LLM_TASK_ROUTES may give its own models.
-TASK_OF_CATEGORY = {
-    "development": "code",
-    "architecture": "architecture",
-    "infrastructure": "architecture",
-    "documentation": "writing",
-    "data": "data",
-}
 
 
 def needs_of(definition: Definition) -> Needs:
@@ -275,7 +265,6 @@ def needs_of(definition: Definition) -> Needs:
         tools=need.tools,
         context=need.context,
         quality=need.quality,
-        task=TASK_OF_CATEGORY.get(definition.category),
     )
 
 
@@ -342,15 +331,18 @@ class CatalogueService:
         # Said outright (a test), or asked of the router, per what each needs.
         self._model = model
         self._gateway = gateway or Gateway(session, workspace_id)
-        self._routes: dict[Needs, Route | None] = {}
+        self._routes: dict[tuple[Needs, Assignment], Route | None] = {}
 
     async def _route(self, definition: Definition) -> Route | None:
-        """The model that would run it here — none when none can."""
+        """The model that would run it here — the one assigned to it — none
+        when it cannot be reached or cannot do what it needs."""
         needs = needs_of(definition)
-        if needs not in self._routes:
-            routing = await self._gateway.routing(needs)
-            self._routes[needs] = routing.routes[0] if routing.routes else None
-        return self._routes[needs]
+        purpose = f"agent:{definition.key}"
+        key = (needs, self._gateway.assignment(purpose))
+        if key not in self._routes:
+            routing = await self._gateway.routing(needs, purpose)
+            self._routes[key] = routing.routes[0] if routing.routes else None
+        return self._routes[key]
 
     def _all(self) -> Sequence[Definition]:
         return self._definitions if self._definitions is not None else catalogue()

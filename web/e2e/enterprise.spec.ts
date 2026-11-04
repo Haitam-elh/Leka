@@ -280,5 +280,14 @@ test.describe("An Enterprise organisation", () => {
       await nothingSold(page, { money: address !== "/settings" });
       await kept(page, name);
     }
+
+    // Its contract brings a model of its own (LEKA-530): the one thing of
+    // models Paramètres says — never LEKA's, their prices, their tokens.
+    await page.goto("/settings");
+    const company = page.getByTestId("company-model");
+    await expect(page.locator("#main-content")).toContainText("Le modèle de votre entreprise");
+    await expect(company).toContainText("Votre contrat Enterprise");
+    await expect(company.getByTestId("model-bring")).toBeVisible();
+    await expect(page.locator("#main-content")).not.toContainText("Gemini");
   });
 });

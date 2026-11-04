@@ -656,7 +656,6 @@ def gemini(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
             "google_api_key": SecretStr("g-key"),
             "mistral_api_key": None,
             "anthropic_api_key": None,
-            "llm_fallbacks": "",
         }
     )
     monkeypatch.setattr(gateway_service, "settings", configured)

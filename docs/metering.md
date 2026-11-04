@@ -19,8 +19,9 @@ Every call to a model is kept by the gateway (`model_calls`, see
   read again.
 
 `cost_usd` keeps its meaning — the call's cost at the rate in force, none
-when it is not known — and the AI controls' usage limits (LEKA-406) and
-`GET /models/usage` read it as before.
+when it is not known — and the AI controls' usage limits (LEKA-406) read it
+as before. No customer route serves it (LEKA-530): the LEKA team reads it,
+§ 6.
 
 ## 2. The rates
 
@@ -196,6 +197,35 @@ price. A plan without a price has no margin.
 **Before and after** (`compare`): each agent and purpose in two periods
 `[start, end)`: what an execution cost, its calls, tokens in, retry and
 invalid rates — and the change, in parts of one (−0.25: a quarter less).
+
+**Every call, for the LEKA team** (`usage`, LEKA-530) — the backoffice of
+what models were asked, never a customer's: no route of the API serves a
+call's tokens or cost (`tests/test_usage_report.py` walks them all), and
+Paramètres says nothing of LEKA's models. Each call: its workspace, the
+person it was asked for (their address), **the agent and the operation**
+(`agent` from `agent:<key>[:<step>]`, `operation` the purpose), **the
+provider and the model** and the version that answered, the route (assigned,
+fallback, own…), when, how it ended and why, **its tokens** in, out, cached,
+in all, **its cost** in US dollars (`currency`) with **its basis** said — the
+rate it was priced on, from which day, per million tokens; "not known" when
+no rate or no usage was said; the workspace's own model is its account — and
+**the AI credits it used** (LEKA's models that answered; none for a failure
+or the company's model).
+
+    python -m leka.metering.cli usage --from 2026-10-01 --to 2026-11-01
+    python -m leka.metering.cli usage --workspace <id> --user nora@acme.example
+    python -m leka.metering.cli usage --agent code-review --by model --format json
+    python -m leka.metering.cli usage --provider mistral --status failed
+    python -m leka.metering.cli usage --by workspace      # with each one's AI capacity this month
+
+Filtered by period (`[from, to)`, the last 30 days by default), workspace,
+person (an id or an address), agent, provider, model, operation (a purpose
+or its family: `intention`, `agent:code-review`), status; the latest 1000
+calls, or **summed** `--by` workspace, user, agent, model, operation or day —
+calls, failures, tokens, cost, costs not known, credits. By workspace, the
+**AI capacity of its month** beside it: its plan, allowance, credits used,
+share, period — what its customer sees in Facturation, never confused with
+tokens.
 
 On the server: `docker compose -f docker-compose.production.yml --env-file
 production.env run --rm migrate python -m leka.metering.cli …`.

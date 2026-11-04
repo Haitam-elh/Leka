@@ -119,14 +119,11 @@ for; no longer (intelligence.md § 13).
 `llm_runs`: purpose, ref (`intention:<id>`…), status, provider, model,
 version, calls, tokens in and out, cost at list price, latency, the context's
 reference and how many items it held, the error, when. `model_calls.run_id`
-ties each call to it. `GET /models/usage` counts them by status and lists the
-latest — and what an intention costs, measured: every call made for it
-(`ref` `intention:<id>`), understanding and answer, summed, averaged
-(`per_intention_usd`, `intentions`); the share of tokens read from the
-provider's cache. Paramètres › Modèle de langage says « Exécutions : 9
-réussie(s) · 1 hors délai », « Une intention coûte en moyenne 1,1 ¢, mesuré
-sur 12 intention(s) : environ 900 intentions pour 10 $ », and what each use
-cost.
+ties each call to it. The LEKA team reads them — by status, what an
+intention costs end to end (`ref` `intention:<id>`), the share of tokens read
+from the provider's cache — with `python -m leka.metering.cli` (`usage`,
+`report intentions`, [metering.md](metering.md) § 6); no customer route
+serves them, and Paramètres says nothing of them (LEKA-530).
 
 ## Tested
 

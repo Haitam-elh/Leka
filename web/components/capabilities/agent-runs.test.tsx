@@ -91,7 +91,6 @@ function run(overrides: Partial<AgentRun> = {}): AgentRun {
 const DONE: AgentRunDetail = {
   ...run(),
   output: "# Architecture — Paiement CB",
-  usage: { calls: 3, tokens_in: 3000, tokens_out: 900, cost_usd: 0.0056 },
   events: [
     { seq: 1, kind: "queued", at: "2026-10-09T10:00:00Z", detail: {} },
     { seq: 2, kind: "started", at: "2026-10-09T10:00:01Z", detail: {} },
@@ -223,9 +222,9 @@ describe("its runs", () => {
     expect(steps).toHaveTextContent("Contexte : 12 éléments fournis, 2 écartés");
     expect(steps).toHaveTextContent("Outil non proposé : restart_service (il agirait)");
     expect(steps).toHaveTextContent("Outil search_entities : lu");
-    expect(within(detail).getByTestId("agent-run-usage")).toHaveTextContent(
-      "3 appels au modèle · 3900 tokens",
-    );
+    // What it used — calls, tokens, cost — the LEKA team's, never said here (LEKA-530).
+    expect(within(detail).queryByTestId("agent-run-usage")).toBeNull();
+    expect(detail).not.toHaveTextContent(/tokens|\$/);
   });
 
   it("offers the architect's dossier on a Confluence space: PDF, Word, Markdown, JSON (2026-10-25)", async () => {

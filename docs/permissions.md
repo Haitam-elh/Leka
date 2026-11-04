@@ -393,12 +393,15 @@ An intention's routing (`GET /intentions/{id}/routing`) takes
 a capability their role may not use is excluded from their routing, said
 why. [capability-router.md](capability-router.md).
 
-## Modèle de langage (LEKA-394)
+## Le modèle de votre entreprise (LEKA-394, LEKA-530)
 
-`GET /models` (what answers here, the providers one may bring) and
-`GET /models/usage` (calls, tokens, cost) — any member. Bringing, changing,
-testing or removing the workspace's own model (`PUT`, `DELETE
-/models/settings`, `POST /models/settings/test`) takes `workspace:update`.
-Its key is never sent back, to anyone: its last four characters are.
-[model-gateway.md](model-gateway.md).
+`GET /models` (whether its contract brings a model of its own, the
+providers one may bring, its own model) — any member. Bringing or changing
+it (`PUT /models/settings`) takes `workspace:update` **and an Enterprise
+contract** (`403 plan_required` otherwise); testing or removing it (`POST
+/models/settings/test`, `DELETE /models/settings`) takes `workspace:update`,
+on any plan. Its key is never sent back, to anyone: its last four characters
+are. What models used — tokens, costs, by model or agent — is the LEKA
+team's only, by its server command (`python -m leka.metering.cli usage`),
+never a route. [model-gateway.md](model-gateway.md).
 

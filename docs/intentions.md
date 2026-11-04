@@ -1026,7 +1026,7 @@ What it costs, measured on the demo with Gemini 3.8 Flash: a question the
 rules already answered, one call, about 1 cent; one it looks into, two to
 six calls, 1.3 to 2 cents — the start of each round read from Google's
 cache, billed a tenth (model-gateway.md). The intention's cost, average,
-is in Paramètres › Modèle de langage.
+is the LEKA team's to read (`python -m leka.metering.cli report intentions`).
 
 Every sentence is worded from its code and values (`lib/intention-analysis.ts`),
 a finding LEKA already concluded as Insights words it — the API's English

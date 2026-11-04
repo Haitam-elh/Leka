@@ -1,53 +1,27 @@
 /**
- * The language model of a workspace (LEKA-394): what answers here — LEKA's
- * default, Gemini 3.8 Flash, its fallbacks — the company's own model if it
- * brings one, and what was asked of models: calls, tokens, estimated cost.
+ * The workspace's own language model (LEKA-394), under an Enterprise
+ * contract that brings it (LEKA-530): whether its contract does, the
+ * providers it may bring, its own model if it set one. Never LEKA's models,
+ * their prices or what they used: the LEKA team assigns a model to each
+ * agent and reads that internally.
  */
 
 import { apiFetch } from "@/lib/api";
 import type { components } from "@/lib/api-types";
 
-export type ModelGateway = components["schemas"]["ModelGatewayRead"];
-export type ModelProfile = components["schemas"]["ModelProfileRead"];
+export type ModelSettings = components["schemas"]["ModelSettingsRead"];
 export type ModelProvider = components["schemas"]["ModelProviderRead"];
 export type WorkspaceModel = components["schemas"]["WorkspaceModelRead"];
 export type WorkspaceModelUpdate = components["schemas"]["WorkspaceModelUpdate"];
 export type ModelTest = components["schemas"]["ModelTestRead"];
-export type ModelUsage = components["schemas"]["ModelUsageRead"];
-export type ModelTally = components["schemas"]["ModelTallyRead"];
-export type ModelCall = components["schemas"]["ModelCallRead"];
 
 export const models = {
-  get: () => apiFetch<ModelGateway>("/models"),
+  get: () => apiFetch<ModelSettings>("/models"),
   save: (body: WorkspaceModelUpdate) =>
-    apiFetch<ModelGateway>("/models/settings", { method: "PUT", body: JSON.stringify(body) }),
+    apiFetch<ModelSettings>("/models/settings", { method: "PUT", body: JSON.stringify(body) }),
   remove: () => apiFetch<void>("/models/settings", { method: "DELETE" }),
-  /** Which of LEKA's models answers first here (2026-10-21). */
-  choose: (provider: string, model: string) =>
-    apiFetch<ModelGateway>("/models/default", { method: "PUT", body: JSON.stringify({ provider, model }) }),
-  /** LEKA's default again. */
-  unchoose: () => apiFetch<ModelGateway>("/models/default", { method: "DELETE" }),
   test: () => apiFetch<ModelTest>("/models/settings/test", { method: "POST" }),
-  usage: (days = 30) => apiFetch<ModelUsage>(`/models/usage?days=${days}`),
 };
-
-/** A price per million tokens, in dollars, as said: « 0,75 $ ». */
-export function dollars(value: number, locale: string): string {
-  return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: value > 0 && value < 0.01 ? 4 : 2,
-    maximumFractionDigits: value > 0 && value < 0.01 ? 4 : 2,
-  }).format(value);
-}
-
-/** A cost under a dollar as people say it, in cents: « 1,1 ¢ ». Under a
- * cent, its first two figures — « 0,02 ¢ », never a rounded « 0 ¢ ». */
-export function cents(value: number, locale: string): string {
-  const said = value * 100;
-  const digits = said > 0 && said < 1 ? { maximumSignificantDigits: 2 } : { maximumFractionDigits: 1 };
-  return `${new Intl.NumberFormat(locale, digits).format(said)} ¢`;
-}
 
 /** A model's name as people say it: « gemini-3.8-flash » → « Gemini 3.8 Flash ». */
 export function modelTitle(model: string): string {

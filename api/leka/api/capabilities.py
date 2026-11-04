@@ -139,9 +139,6 @@ def capability_read(entry: Entry, use: Use) -> CapabilityRead:
         ),
         answering=(
             CapabilityModelRead(
-                provider=entry.model.endpoint.provider,
-                model=entry.model.profile.model,
-                title=entry.model.profile.title,
                 owner="workspace" if entry.model.endpoint.owner == "workspace" else "leka",
             )
             if entry.model is not None

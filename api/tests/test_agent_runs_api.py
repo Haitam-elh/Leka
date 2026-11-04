@@ -137,7 +137,6 @@ def leka_gemini(monkeypatch: pytest.MonkeyPatch) -> Callable[..., Script]:
             "google_api_key": SecretStr("g-key"),
             "mistral_api_key": None,
             "anthropic_api_key": None,
-            "llm_fallbacks": "",
         }
     )
     monkeypatch.setattr(service, "settings", configured)
@@ -299,8 +298,17 @@ async def test_the_architect_runs_end_to_end(
         ("delete_everything", "unknown"),
     ]
     assert called[1]["detail"]["why"] == "out_of_scope"
-    assert done["usage"]["calls"] == 5
-    assert done["usage"]["tokens_in"] == 5000
+    # What it used — its calls, tokens, cost — kept, for the LEKA team only
+    # (LEKA-530): never in what the customer reads of its run.
+    assert "usage" not in done and "cost_usd" not in json.dumps(done)
+    with workspace_scope(acme["acme"]):
+        async with session_factory() as session:
+            metered = (
+                await session.scalars(
+                    select(ModelCall).where(ModelCall.ref == f"agent_run:{started['id']}")
+                )
+            ).all()
+    assert (len(metered), sum(c.tokens_in for c in metered)) == (5, 5000)
     # An agent's instructions never leave the server.
     assert "PRINCIPE ABSOLU" not in json.dumps(done)
 

@@ -52,7 +52,6 @@ from leka.capabilities import (
     AgentRunFiles,
     AgentRunRead,
     AgentRuntime,
-    AgentRunUsage,
     AgentUsageRead,
     CapabilityRunRepository,
     CodeChange,
@@ -572,7 +571,9 @@ async def get_run(run_id: uuid.UUID, session: SessionDep, principal: Reader) -> 
     found = await AgentRuntime(session, principal.workspace_id).run(run_id)
     if found is None:
         raise _missing()
-    run, events, (calls, tokens_in, tokens_out, cost) = found
+    # What the run used — its tokens, its cost — is the LEKA team's to read
+    # internally, never the customer's (LEKA-530).
+    run, events, _ = found
     return AgentRunDetail(
         **run_read(run, principal).model_dump(),
         output=run.output,
@@ -580,7 +581,6 @@ async def get_run(run_id: uuid.UUID, session: SessionDep, principal: Reader) -> 
         review=review_read(run.detail),
         design=design_read(run.detail),
         events=[AgentRunEventRead.model_validate(e) for e in events],
-        usage=AgentRunUsage(calls=calls, tokens_in=tokens_in, tokens_out=tokens_out, cost_usd=cost),
     )
 
 

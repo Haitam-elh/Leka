@@ -11,10 +11,18 @@ force; what is not known is said, never counted as 0.
                 optimisation: by agent or purpose, the cost of an execution,
                 its calls, tokens, retries, invalid answers, and the change
     workspaces()  every workspace, its plan now
+    usage()     every call to a model (LEKA-530), for the LEKA team only:
+                its workspace, the person, the agent and the operation, the
+                provider and the model, when, how it ended, its tokens in
+                and out, its cost — in US dollars, on the rate it was priced
+                with, said — and the AI credits it used; filtered by period,
+                workspace, person, agent, provider, model, operation,
+                status; or summed by any of them
 """
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Sequence
 from datetime import date, datetime
 from decimal import Decimal
@@ -161,6 +169,153 @@ async def workspaces(session: AsyncSession) -> list[dict[str, Any]]:
         )
     )
     return _rows(found)
+
+
+# ── every call, for the LEKA team (LEKA-530) ────────────────────────────────
+
+CALLS = (
+    "SELECT c.at, c.workspace_id, w.name AS workspace, u.email AS user_email, c.user_id,"
+    " CASE WHEN c.purpose LIKE 'agent:%' THEN split_part(c.purpose, ':', 2) END AS agent,"
+    " c.purpose AS operation, c.provider, c.model, c.version, c.route, c.owner, c.status,"
+    " c.attempt, c.error, c.tokens_in, c.tokens_out, c.tokens_cached, c.tokens_thinking,"
+    " c.tokens_in + c.tokens_out AS tokens_total, c.cost_usd, c.usage_reported,"
+    " r.since AS rate_since, r.per_million_in, r.per_million_out, r.per_million_cached,"
+    " c.latency_ms, c.run_id, c.ref"
+    " FROM model_calls c JOIN workspaces w ON w.id = c.workspace_id"
+    " LEFT JOIN users u ON u.id = c.user_id"
+    " LEFT JOIN model_rates r ON r.id = c.rate_id"
+    " WHERE c.at >= :start AND c.at < :end"
+    " AND (CAST(:workspace AS uuid) IS NULL OR c.workspace_id = :workspace)"
+    " AND (CAST(:user_id AS uuid) IS NULL OR c.user_id = :user_id)"
+    " AND (CAST(:email AS text) IS NULL OR lower(u.email) = lower(:email))"
+    " AND (CAST(:agent AS text) IS NULL OR c.purpose = 'agent:' || :agent"
+    " OR c.purpose LIKE 'agent:' || :agent || ':%')"
+    " AND (CAST(:provider AS text) IS NULL OR c.provider = :provider)"
+    " AND (CAST(:model AS text) IS NULL OR c.model = :model)"
+    " AND (CAST(:operation AS text) IS NULL OR c.purpose = :operation"
+    " OR c.purpose LIKE :operation || ':%' OR c.purpose LIKE :operation || '.%')"
+    " AND (CAST(:status AS text) IS NULL OR c.status = :status)"
+    " ORDER BY c.at DESC, c.id"
+)
+# What a call can be summed by.
+BY = {
+    "workspace": ("workspace_id", "workspace"),
+    "user": ("user_id", "user_email"),
+    "agent": ("agent",),
+    "model": ("provider", "model"),
+    "operation": ("operation",),
+    "day": ("day",),
+}
+SUMMED = ("tokens_in", "tokens_out", "tokens_cached", "tokens_total")
+
+
+def _basis(row: dict[str, Any]) -> str:
+    """How a call's cost was reached, said."""
+    if row["owner"] == "workspace":
+        return "the workspace's own model: its account, not LEKA's"
+    if row["cost_usd"] is None:
+        return "not known: no rate for this model at the time, or no usage said"
+    if row["rate_since"] is None:
+        return "list price"
+    said = (
+        f"rate from {row['rate_since']}: {row['per_million_in']:g} in,"
+        f" {row['per_million_out']:g} out per million tokens"
+    )
+    if row["per_million_cached"] is not None:
+        said += f", {row['per_million_cached']:g} cached"
+    return said
+
+
+def _credits(row: dict[str, Any]) -> float | None:
+    """The AI credits a call used: LEKA's models that answered, at its cost."""
+    if row["owner"] != "leka" or row["status"] == "failed":
+        return 0.0
+    if row["cost_usd"] is None:
+        return None
+    return round(float(row["cost_usd"]) / settings.credit_usd, 4)
+
+
+async def usage(
+    session: AsyncSession,
+    *,
+    start: date,
+    end: date,
+    workspace: uuid.UUID | None = None,
+    user: str | None = None,
+    agent: str | None = None,
+    provider: str | None = None,
+    model: str | None = None,
+    operation: str | None = None,
+    status: str | None = None,
+    by: str | None = None,
+    limit: int = 1000,
+) -> list[dict[str, Any]]:
+    """Every call in [start, end) that matches, the latest first — or summed
+    `by` workspace, user, agent, model, operation or day. `user`: an id or
+    an e-mail address. Costs in US dollars, LEKA's; the basis said."""
+    person: uuid.UUID | None = None
+    email: str | None = None
+    if user:
+        try:
+            person = uuid.UUID(user)
+        except ValueError:
+            email = user
+    found = await session.execute(
+        text(CALLS if by else f"{CALLS} LIMIT :limit"),
+        {
+            "start": start,
+            "end": end,
+            "workspace": workspace,
+            "user_id": person,
+            "email": email,
+            "agent": agent,
+            "provider": provider,
+            "model": model,
+            "operation": operation,
+            "status": status,
+            "limit": limit,
+        },
+    )
+    rows = _rows(found)
+    for row in rows:
+        row["currency"] = "USD"
+        row["cost_basis"] = _basis(row)
+        row["credits_used"] = _credits(row)
+        row["day"] = str(row["at"])[:10]
+    if not by:
+        return rows
+    keys = BY[by]
+    summed: dict[tuple[Any, ...], dict[str, Any]] = {}
+    for row in rows:
+        key = tuple(row[k] for k in keys)
+        into = summed.setdefault(
+            key,
+            {
+                **{k: row[k] for k in keys},
+                "calls": 0,
+                "failed": 0,
+                **dict.fromkeys(SUMMED, 0),
+                "cost_usd": 0.0,
+                "cost_not_known": 0,
+                "credits_used": 0.0,
+                "currency": "USD",
+                "first_at": row["at"],
+                "last_at": row["at"],
+            },
+        )
+        into["calls"] += 1
+        into["failed"] += row["status"] != "ok"
+        for field in SUMMED:
+            into[field] += row[field]
+        if row["cost_usd"] is None:
+            into["cost_not_known"] += 1
+        else:
+            into["cost_usd"] = round(into["cost_usd"] + row["cost_usd"], 6)
+        if row["credits_used"] is not None:
+            into["credits_used"] = round(into["credits_used"] + row["credits_used"], 4)
+        into["first_at"] = min(into["first_at"], row["at"])
+        into["last_at"] = max(into["last_at"], row["at"])
+    return sorted(summed.values(), key=lambda r: -r["cost_usd"])
 
 
 def columns(rows: Sequence[dict[str, Any]]) -> list[str]:

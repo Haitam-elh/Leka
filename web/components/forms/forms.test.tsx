@@ -7,7 +7,7 @@
  * twenty forms cannot each decide differently.
  */
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -149,6 +149,27 @@ describe("submitting", () => {
 
     // Name comes before city and note, and all three are empty.
     await waitFor(() => expect(screen.getByLabelText("Nom")).toHaveFocus());
+  });
+
+  it("keeps the focus in the field while its submit button is pressed (2026-11-04)", async () => {
+    // Left on the way to the button, the field was checked first: its error
+    // pushed the button down under the mouse, the click landed beside it.
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    mount({ onSubmit });
+
+    const name = screen.getByLabelText("Nom");
+    await user.click(name);
+    await user.type(name, "ab");
+    const save = screen.getByRole("button", { name: "Enregistrer" });
+    expect(fireEvent.mouseDown(save)).toBe(false);
+    expect(name).toHaveFocus();
+    // Nothing said yet: the field was not left.
+    expect(screen.queryByText("Au moins 3 caractères.")).toBeNull();
+
+    await user.click(save);
+    await waitFor(() => expect(name).toHaveFocus());
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it("refuses a second submission while the first is in flight", async () => {
