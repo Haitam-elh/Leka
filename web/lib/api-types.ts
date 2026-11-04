@@ -6733,6 +6733,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/billing/credits/prompt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Credits Prompt
+         * @description What the reader is offered as the month's AI credits run out (LEKA-527).
+         */
+        get: operations["credits_prompt_api_v1_billing_credits_prompt_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/credits/prompt/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Prompt
+         * @description Put aside by the reader: that threshold, this month — the next comes.
+         */
+        post: operations["dismiss_prompt_api_v1_billing_credits_prompt_dismiss_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/credits/prompt/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask Admins
+         * @description One who may not change the plan asks its admins to — told once.
+         */
+        post: operations["ask_admins_api_v1_billing_credits_prompt_ask_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/pricing": {
         parameters: {
             query?: never;
@@ -12994,6 +13054,148 @@ export interface components {
             credentials: {
                 [key: string]: string;
             };
+        };
+        /**
+         * CreditPlanRead
+         * @description A plan as an AI capacity prompt shows it (LEKA-527): its credits a
+         *     month and what it costs on the cadence asked — from metering and the
+         *     catalogue, as checkout would charge it; nothing stated of its own.
+         */
+        CreditPlanRead: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /**
+             * Credits
+             * @description Its AI credits a month; None: per contract.
+             */
+            credits: number | null;
+            /**
+             * Self Service
+             * @description Bought in LEKA; else through LEKA's sales.
+             */
+            self_service: boolean;
+            /**
+             * Interval
+             * @description The cadence its price is for: the subscription's; None: no price.
+             */
+            interval: ("month" | "year") | null;
+            /**
+             * Monthly
+             * @description What it comes to a month, in cents, discounts in.
+             */
+            monthly: number | null;
+            /**
+             * List Monthly
+             * @description Its list price a month, in cents.
+             */
+            list_monthly: number | null;
+            /**
+             * Charged
+             * @description What is charged each period, in cents.
+             */
+            charged: number | null;
+            /** Discount */
+            discount?: ("annual" | "launch") | null;
+            /**
+             * Percent
+             * @description The discount's percentage.
+             * @default 0
+             */
+            percent: number;
+            /**
+             * For Months
+             * @description A launch price: for how long.
+             */
+            for_months?: number | null;
+        };
+        /**
+         * CreditPromptChoice
+         * @description A prompt put aside, or an admin asked — for the threshold seen.
+         */
+        CreditPromptChoice: {
+            /** Threshold */
+            threshold: number;
+        };
+        /**
+         * CreditPromptRead
+         * @description What the application offers a person as a workspace's AI credits run
+         *     out (LEKA-527): past 90 % or 100 % of the month's, where it stands, what
+         *     happens next, and the plan that gives more — or, when there is none to
+         *     buy, when the credits come back and whom to ask. Never blocking, never
+         *     a promise of credits before the plan is paid and applied.
+         */
+        CreditPromptRead: {
+            /**
+             * Threshold
+             * @description The share passed: 90 or 100.
+             */
+            threshold: number;
+            /** Used */
+            used: number;
+            /** Allowance */
+            allowance: number;
+            /** Remaining */
+            remaining: number;
+            /** Percent */
+            percent: number;
+            /**
+             * Period Start
+             * Format: date-time
+             */
+            period_start: string;
+            /**
+             * Period End
+             * Format: date-time
+             * @description When the month's credits come back.
+             */
+            period_end: string;
+            /**
+             * Enforced
+             * @description Spent, LEKA's models are refused until then.
+             */
+            enforced: boolean;
+            current: components["schemas"]["CreditPlanRead"];
+            /** @description The next plan with more credits; None: none above, or a contract. */
+            recommended: components["schemas"]["CreditPlanRead"] | null;
+            /**
+             * More Credits
+             * @description What the recommended plan adds a month.
+             */
+            more_credits: number | null;
+            /**
+             * More Monthly
+             * @description What it adds a month on the same cadence, in cents: the year's price with its discount, the month's list price (never a launch offer's).
+             */
+            more_monthly: number | null;
+            /**
+             * Currency
+             * @description The catalogue's currency, every price's.
+             */
+            currency: string;
+            /**
+             * Path
+             * @description upgrade: buy the recommended plan; sales: talk to LEKA's sales for it; contract: a contract or the highest plan — the date the credits come back, and whom to ask.
+             * @enum {string}
+             */
+            path: "upgrade" | "sales" | "contract";
+            /**
+             * Contact Url
+             * @description Where LEKA's sales and support are reached.
+             */
+            contact_url: string;
+            /**
+             * Can Pay
+             * @description Whether the reader may change the plan.
+             */
+            can_pay: boolean;
+            /**
+             * Asked
+             * @description Whether the reader already asked an admin, this month.
+             * @default false
+             */
+            asked: boolean;
         };
         /**
          * CreditWarningRead
@@ -60303,6 +60505,288 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ContractRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    credits_prompt_api_v1_billing_credits_prompt_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditPromptRead"] | null;
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    dismiss_prompt_api_v1_billing_credits_prompt_dismiss_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreditPromptChoice"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    ask_admins_api_v1_billing_credits_prompt_ask_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreditPromptChoice"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditPromptRead"];
                 };
             };
             /** @description The request could not be understood. */

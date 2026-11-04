@@ -29,6 +29,7 @@ const state = vi.hoisted(() => ({
   },
   checkout: vi.fn(),
   portal: vi.fn(),
+  search: "",
 }));
 
 const quote = (interval: "month" | "year", list: number, monthly: number, charged: number, discount: "launch" | "annual" | null) => ({
@@ -101,6 +102,8 @@ vi.mock("@/lib/subscription-queries", () => ({
     portal: { mutate: state.portal, isPending: false },
   }),
 }));
+// Opened from the AI credits' prompt (LEKA-527): the plan and cadence asked.
+vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(state.search) }));
 vi.mock("@/lib/billing-queries", () => ({ useCredits: () => ({ data: state.plan ? { plan: state.plan } : undefined }) }));
 vi.mock("@/components/shell/shell-provider", async (original) => ({
   ...(await original<typeof import("@/components/shell/shell-provider")>()),
@@ -115,6 +118,7 @@ afterEach(() => {
   state.subscription = { status: null, launch_offer_available: true, available: true, interval: null };
   state.checkout.mockReset();
   state.portal.mockReset();
+  state.search = "";
 });
 
 function show() {
@@ -225,6 +229,21 @@ describe("the plans compared", () => {
     );
     // The way back home, as on the other pages.
     expect(screen.getByTestId("back-home")).toBeInTheDocument();
+  });
+
+  it("opened from the AI credits' prompt: the plan offered chosen, on the subscription's cadence", async () => {
+    const user = userEvent.setup();
+    state.search = "plan=growth&interval=year";
+    show();
+    expect(card("growth")).toHaveAttribute("data-selected", "true");
+    expect(card("starter")).toHaveAttribute("data-selected", "false");
+    expect(screen.getByTestId("plans-year")).toHaveAttribute("aria-checked", "true");
+    expect(within(card("growth")).getByTestId("plan-recap")).toHaveTextContent(
+      /125,30 € HT par mois, soit 1\s503,60 € HT facturés chaque année/,
+    );
+    // Bought here, as any plan: through Checkout, on that cadence.
+    await user.click(within(card("growth")).getByTestId("plan-choose"));
+    expect(state.checkout).toHaveBeenCalledWith({ plan: "growth", interval: "year" }, expect.anything());
   });
 
   it("a member reads the plans and never buys", () => {

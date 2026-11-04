@@ -196,12 +196,13 @@ async def test_each_share_passed_is_told_to_owners_and_admins_once(
                     select(CreditWarning.threshold).where(CreditWarning.workspace_id == workspace)
                 )
             ).all()
-    assert sorted(kept) == [80, 100]
+    # 90 too: the application's prompt's (LEKA-527), kept, never mailed.
+    assert sorted(kept) == [80, 90, 100]
     # Read back, each share passed and when (LEKA-463): what the screens date.
     with workspace_scope(workspace):
         async with session_factory() as session:
             read = await credits_now(session, workspace, now=datetime.now(UTC))
-    assert [w.threshold for w in read.warned] == [80, 100]
+    assert [w.threshold for w in read.warned] == [80, 90, 100]
     assert all(w.at is not None and w.used > 0 for w in read.warned)
 
 

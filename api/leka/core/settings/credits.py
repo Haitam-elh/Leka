@@ -33,6 +33,9 @@ class CreditSettings:
     )
     # Percentages of the month's credits; each told once a month.
     credit_warnings: list[int] = Field(default_factory=lambda: [80, 100])
+    # Percentages past which the application offers the next plan (LEKA-527),
+    # in a banner: each once a month and for each person until dismissed.
+    credit_prompts: list[int] = Field(default_factory=lambda: [90, 100])
     credits_enforced: bool = True
     # Each plan's price a month, in US dollars — list and promotional — for
     # the margins of the internal reports (python -m leka.metering.cli report

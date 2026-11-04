@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 
+import { CreditPrompt } from "@/components/billing/credit-prompt";
 import { DemoBanner } from "@/components/demo/demo";
 import { entityHref, typeLabel } from "@/components/environment/parts";
 import { AppHeader } from "@/components/shell/app-header";
@@ -87,6 +88,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {/* An account with no language yet: the one found, kept or changed. */}
             {state.status === "ready" && <LanguageNotice />}
           </div>
+          {/* The month's AI credits past 90 % (LEKA-527): at the top of the
+              content, scrolled away with it, never over what is read. */}
+          {state.status === "ready" && <CreditPrompt />}
           {state.status === "loading" && <LoadingState />}
           {state.status === "failed" && (
             <ErrorState error={state.error} onRetry={retry} headingLevel={1} />

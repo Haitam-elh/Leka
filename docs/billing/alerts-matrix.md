@@ -5,8 +5,8 @@ channel, how often and to whom — as the code and its configuration do it
 today. Every value comes from a configuration, never from this page:
 
 - the plans' watch: `monitoring` of each plan in `api/leka/billing/catalogue.yaml`;
-- the AI credits: `plan_credits`, `credit_warnings`, `credits_enforced` in
-  `api/leka/core/settings/credits.py`;
+- the AI credits: `plan_credits`, `credit_warnings`, `credit_prompts`,
+  `credits_enforced` in `api/leka/core/settings/credits.py`;
 - the schedules: `api/leka/background/schedule.py`;
 - the plans' users and sources: `quotas` in the catalogue, enforced by the
   server (#288).
@@ -19,7 +19,8 @@ channel (Slack, Teams, SMS, webhook) is offered as available.
 | Alert | Free | Starter | Growth | Business | Enterprise |
 |---|---|---|---|---|---|
 | AI capacity — 80 % of the month's credits used | in LEKA + e-mail | in LEKA + e-mail | in LEKA + e-mail | in LEKA + e-mail | in LEKA + e-mail |
-| AI capacity — 100 %: spent | in LEKA + e-mail; LEKA's analyses paused until the month ends, a plan with more capacity offered | same | same | same | same (contract) |
+| AI capacity — 90 %: the next plan offered (LEKA-527) | in LEKA: banner + notification | same | same | same (Enterprise, through sales) | same (contract: when the credits come back) |
+| AI capacity — 100 %: spent | in LEKA (banner + notification) + e-mail; LEKA's analyses paused until the month ends, a plan with more capacity offered | same | same | same | same (contract) |
 | Environment — a thing unavailable (severity high) or degraded (medium) | — (states seen on its screens, no alert) | in LEKA | in LEKA + e-mail | in LEKA + e-mail | in LEKA + e-mail (contract) |
 | Environment — a source failing | — | in LEKA | in LEKA + e-mail | in LEKA + e-mail | in LEKA + e-mail |
 | Users / sources beyond the plan (1/3, 1/5, 5/15, 15/30) | refused when adding, said why and the plan that holds more | same | same | same | contract |
@@ -30,6 +31,7 @@ channel (Slack, Teams, SMS, webhook) is offered as available.
 | Alert | Threshold | Evaluated | Frequency | Recipients |
 |---|---|---|---|---|
 | AI capacity | `credit_warnings` = 80, 100 (% of the month's allowance: plan credits + packs) | every quarter of an hour (`credit-watch`, :03 :18 :33 :48) | once per threshold per month (unique `workspace, period, threshold`); a new month starts again | e-mail: the workspace's owners and admins; in LEKA: every member who reads Mon environnement (`source:read`), each threshold dated |
+| AI capacity, the prompt (LEKA-527) | `credit_prompts` = 90, 100 | on each page read (`GET /billing/credits/prompt`, every minute) and by `credit-watch` | kept once per threshold per month with the warnings, never mailed; put aside by each person for that month, the 100 % still comes | every member, in a banner: who may pay (`workspace:update`) opens the plan, who may not asks the admins (once) |
 | Environment | the Digital Twin's states: unavailable, degraded; a source in error | every quarter of an hour (`monitoring-sweep`, :14 :29 :44 :59), after the sources are read | one open alert per thing and family — seen again, its last sighting moves, never a second; e-mail once, when it opens | e-mail: owners and admins (Growth and above); in LEKA: every member (`source:read`) |
 
 ## How an alert is kept
@@ -54,6 +56,10 @@ channel (Slack, Teams, SMS, webhook) is offered as available.
 
 ## Proofs (tests)
 
+- Capacity prompts: `api/tests/test_credit_prompts.py` — thresholds, a new
+  month, an upgrade, the cadence, top tier and contract, asking the admins,
+  concurrent reads; `web/components/billing/credit-prompt.test.tsx` — each
+  state of the banner.
 - Capacity: `api/tests/test_ai_credits.py` — each threshold told once to
   owners and admins, past it all the same day told once more, read back
   dated; `web/components/environment/twin.test.tsx` — thresholds and

@@ -129,3 +129,30 @@ class CreditWarning(Base, WorkspaceScopedMixin):
     credits: Mapped[int] = mapped_column(Integer, nullable=False)
     used: Mapped[float] = mapped_column(Float, nullable=False)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class CreditPromptDismissal(Base, WorkspaceScopedMixin):
+    """A prompt to upgrade a person put aside (LEKA-527): « Plus tard » on
+    the 90 % one, « Fermer » on the 100 % one — for that threshold, that
+    month and the allowance it was seen on. Another threshold still comes;
+    a new month, or a plan changed mid-month, prompts anew."""
+
+    __tablename__ = "credit_prompt_dismissals"
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "user_id",
+            "period",
+            "threshold",
+            "allowance",
+            name="uq_credit_prompt_dismissals_once",
+        ),
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    period: Mapped[date] = mapped_column(Date, nullable=False)
+    threshold: Mapped[int] = mapped_column(Integer, nullable=False)
+    allowance: Mapped[int] = mapped_column(Integer, nullable=False)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

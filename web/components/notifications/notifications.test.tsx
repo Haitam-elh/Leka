@@ -82,11 +82,11 @@ beforeEach(() => {
 });
 
 describe("the words of every kind", () => {
-  // The kinds the server tells, read from its projector.
-  const projector = readFileSync(
-    join(__dirname, "../../../api/leka/notifications/projector.py"),
-    "utf8",
-  );
+  // The kinds the server tells, read from its projector and from what a
+  // person asks of the admins (LEKA-527).
+  const projector = ["projector.py", "asks.py"]
+    .map((file) => readFileSync(join(__dirname, "../../../api/leka/notifications", file), "utf8"))
+    .join("\n");
   const told = [
     ...new Set(
       [...projector.matchAll(/"((?:intention|agent|alert|source|billing|capacity|workspace)\.[a-z_]+)"/g)].map(
@@ -117,6 +117,12 @@ describe("the words of every kind", () => {
     expect(
       wordsOf(fr, note("billing.cancellation_scheduled", { params: {} }), "fr-FR").body,
     ).toBe("L'abonnement prendra fin à la fin de la période.");
+    expect(
+      wordsOf(fr, note("billing.upgrade_asked", { params: { name: "Nora", plan: "Starter", threshold: 90 } }), "fr-FR"),
+    ).toEqual({
+      title: "Demande de crédits IA",
+      body: "Nora demande une formule avec plus de crédits IA : 90 % de ceux du mois sont utilisés.",
+    });
     expect(
       wordsOf(fr, note("billing.cancellation_scheduled", { params: { until: "2026-11-30T00:00:00Z" } }), "fr-FR")
         .body,
