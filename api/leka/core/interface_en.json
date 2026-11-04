@@ -50,7 +50,7 @@
  "shell.main.environment": "My environment",
  "shell.main.agents": "Agents",
  "shell.main.bundles": "Bundles",
- "shell.main.history": "History",
+ "shell.main.intentions": "Intentions",
  "shell.main.approvals": "Decisions",
  "shell.sidebar": "Sidebar",
  "shell.breadcrumb": "Breadcrumb",

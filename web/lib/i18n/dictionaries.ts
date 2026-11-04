@@ -86,7 +86,8 @@ const fr = {
       environment: "Mon environnement",
       agents: "Agents",
       bundles: "Bundles",
-      history: "Historique",
+      /** « Historique » until LEKA-529; the page keeps its own title. */
+      intentions: "Intentions",
       approvals: "Décisions",
     },
     sidebar: "Barre latérale",
@@ -9411,7 +9412,7 @@ const en: Dictionary = {
       environment: "My environment",
       agents: "Agents",
       bundles: "Bundles",
-      history: "History",
+      intentions: "Intentions",
       approvals: "Decisions",
     },
     sidebar: "Sidebar",
