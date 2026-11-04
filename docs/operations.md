@@ -181,6 +181,10 @@ What it runs, each time:
 docker build -q -f backup.Dockerfile --build-arg API_IMAGE=<the running api image> \
   -t leka-backup .
 
+# The cache nothing has used for two days goes: each new API image adds to it,
+# and nothing else empties it on the box.
+docker builder prune -f --filter until=48h
+
 # On the compose network, with what docker-compose gives the services and
 # production.env does not hold — the environment, Redis (the upload tells the
 # alerts through it). Without them the settings refuse to load.
