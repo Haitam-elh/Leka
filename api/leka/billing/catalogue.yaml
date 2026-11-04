@@ -17,6 +17,12 @@
 #
 # Users (members and pending invitations) and sources: each plan's `quotas`,
 # enforced by the server (leka/billing/limits.py, LEKA-463).
+#
+# A plan's words — `tagline`, `features`, `audience` — are the site's pricing
+# page's, the same as the platform's plans compared (Karim's grid,
+# LEKA-466: web/lib/i18n/dictionaries.ts, billing.compare): one card, said
+# the same on both, held so by e2e/pricing.spec.ts. `value`: what Stripe
+# describes the plan with.
 # Values not decided yet are absent, never guessed: workspaces per plan;
 # agent and bundle prices.
 #
@@ -37,10 +43,10 @@
 version: "2026-10-14"
 currency: EUR
 
-# 20% off when billed yearly.
+# 30% off when billed yearly.
 annual_discount_percent: 30
 
-# The launch offer: 30% off the first 12 months, on monthly billing only —
+# The launch offer: 20% off the first 12 months, on monthly billing only —
 # never stacked with the annual discount.
 launch_offer:
   percent: 20
@@ -54,9 +60,17 @@ plans:
     name: Free
     monthly_price: 0
     self_service: true
+    tagline:
+      fr: "Découvrez votre environnement"
+      en: "Discover your environment"
     audience:
-      fr: "Découvrir LEKA sur un premier périmètre."
-      en: "Try LEKA on a first scope."
+      fr: "Pour découvrir LEKA."
+      en: "To discover LEKA."
+    features:
+      - fr: "Explorez services et dépendances accessibles"
+        en: "Explore the services and dependencies you can reach"
+      - fr: "Posez vos questions et consultez vos résultats"
+        en: "Ask your questions and see your results"
     value:
       fr: "Connectez vos premières sources et posez vos premières intentions."
       en: "Connect your first sources and ask your first intentions."
@@ -73,9 +87,17 @@ plans:
     name: Starter
     monthly_price: 5900
     self_service: true
+    tagline:
+      fr: "Résolvez plus vite"
+      en: "Solve faster"
     audience:
-      fr: "Une petite équipe technique qui veut une vue claire de son SI."
-      en: "A small engineering team that wants a clear view of its systems."
+      fr: "Pour un usage individuel régulier."
+      en: "For regular individual use."
+    features:
+      - fr: "Analysez un problème et ses dépendances"
+        en: "Analyse a problem and its dependencies"
+      - fr: "Historique de vos investigations"
+        en: "History of your investigations"
     value:
       fr: "Le modèle de votre environnement tenu à jour, et les alertes quand quelque chose ne va pas."
       en: "A continuously updated model of your environment, and alerts when something goes wrong."
@@ -95,9 +117,15 @@ plans:
     # 14 days, a card required; then the subscription starts and the card is
     # charged, unless cancelled before (decided 2026-10-12). Once a workspace.
     trial_days: 14
+    tagline:
+      fr: "Anticipez et automatisez"
+      en: "Anticipate and automate"
     audience:
-      fr: "Les équipes qui pilotent leur SI au quotidien avec LEKA."
-      en: "Teams that run their systems with LEKA every day."
+      fr: "Pour les équipes techniques en croissance."
+      en: "For growing technical teams."
+    features:
+      - fr: "Partagez le contexte et les résultats en équipe"
+        en: "Share context and results with your team"
     value:
       fr: "Plus de capacité IA pour vos architectures, vos analyses et vos intentions, sur tout votre périmètre."
       en: "More AI capacity for your architectures, analyses and intentions, across your whole scope."
@@ -113,9 +141,15 @@ plans:
     name: Business
     monthly_price: 59900
     self_service: true
+    tagline:
+      fr: "Coordonnez votre environnement"
+      en: "Coordinate your environment"
     audience:
-      fr: "Les organisations à plusieurs équipes et plusieurs périmètres."
-      en: "Organisations with several teams and scopes."
+      fr: "Pour plusieurs équipes et systèmes."
+      en: "For several teams and systems."
+    features:
+      - fr: "Contrôles d'équipe renforcés"
+        en: "Stronger team controls"
     value:
       fr: "La capacité IA d'une organisation à plusieurs équipes, sur tout son SI."
       en: "The AI capacity of an organisation with several teams, across its systems."
@@ -132,9 +166,21 @@ plans:
     # Priced per contract: never a self-service checkout.
     monthly_price: null
     self_service: false
+    tagline:
+      fr: "Adaptez LEKA à votre organisation"
+      en: "Fit LEKA to your organisation"
     audience:
-      fr: "Les grandes organisations, avec leurs exigences de sécurité et leur propre modèle."
-      en: "Large organisations, with their security requirements and their own model."
+      fr: "Pour les environnements exigeants."
+      en: "For demanding environments."
+    features:
+      - fr: "Périmètre d'intégration personnalisé"
+        en: "Custom integration scope"
+      - fr: "Gouvernance et sécurité selon contrat"
+        en: "Governance and security by contract"
+      - fr: "Connexion de votre propre LLM"
+        en: "Connect your own LLM"
+      - fr: "Support et engagements adaptés"
+        en: "Tailored support and commitments"
     value:
       fr: "Une capacité IA définie au contrat, et la possibilité de connecter votre propre modèle de langage."
       en: "AI capacity set by contract, and the option to connect your own language model."
@@ -150,7 +196,9 @@ plans:
 # « no agent in a plan »): LEKA's own capabilities — understanding, the
 # analysis, its answer: LEKA Assistant — are every plan's, its fundamental
 # agents. Each plan also includes registry agents (`included`, decided by
-# Karim on 2026-10-15): Starter three, Growth eight, Business all thirteen.
+# Karim on 2026-10-15): Starter three, Growth eight, Business twelve (the
+# architect dedicated since 2026-10-25), Enterprise every one — the count
+# both pricing pages say.
 # Every agent its plan does not include is a specialised option, sold
 # monthly, alone at its tier's price or in a bundle, from Starter; it runs
 # while its option is active — granted only once Stripe confirms the

@@ -92,7 +92,11 @@ class Plan(_Model):
     monthly_price: int | None = Field(ge=0)
     self_service: bool
     recommended: bool = False
+    # Its card's words, on the site's pricing page as on the platform's plans.
+    tagline: Words
     audience: Words
+    features: tuple[Words, ...] = ()
+    # What Stripe describes it with.
     value: Words
     ai_credits_per_month: Allowance
     managed_llm: bool

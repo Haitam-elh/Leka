@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Info, User } from "lucide-react";
+import { Check, Gift, Info, User } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
@@ -37,10 +37,16 @@ import { usePayment, usePricing, useSubscription } from "@/lib/subscription-quer
  *
  * Opened from the AI credits' prompt (LEKA-527): `?plan=` and `?interval=`
  * choose the plan offered and the subscription's cadence, as it said them.
+ *
+ * Each card says what the site's pricing page says (2026-11-04): the same
+ * lines in the same order, its AI credits, the specialised agents it
+ * includes, Growth's trial while this workspace may take it — and why its
+ * prices are the list ones once it has had the launch offer.
  */
 
 type Interval = "month" | "year";
 type PlanKey = "free" | "starter" | "growth" | "business" | "enterprise";
+type Feature = { text: string; soon?: boolean; strong?: boolean; trial?: boolean };
 const PAYING = new Set(["active", "trialing", "past_due"]);
 
 export function PlansPage() {
@@ -114,10 +120,10 @@ export function PlansPage() {
       : fill(w.recapMonth, { price: shown });
   }
 
-  function features(plan: PricedPlan): { text: string; soon?: boolean; strong?: boolean }[] {
+  function features(plan: PricedPlan): Feature[] {
     const q = plan.quotas;
     const key = plan.key as PlanKey;
-    const found: { text: string; soon?: boolean; strong?: boolean }[] = [];
+    const found: Feature[] = [];
     if (q.users) {
       found.push({
         text: q.users > 1 ? fill(w.usersIncluded, { count: number(q.users) }) : fill(w.users, { count: q.users }),
@@ -125,7 +131,10 @@ export function PlansPage() {
       });
     }
     if (q.sources) found.push({ text: fill(w.sources, { count: number(q.sources) }) });
-    if (q.analyses) found.push({ text: fill(w.analyses, { count: number(q.analyses) }) });
+    if (q.analyses) {
+      const credits = plan.ai_credits_per_month ? fill(w.credits, { count: number(plan.ai_credits_per_month) }) : "";
+      found.push({ text: `${fill(w.analyses, { count: number(q.analyses) })}${credits}` });
+    }
     // Not built yet (Karim, 15/10): said, never announced as working.
     if (q.alert_rules) {
       found.push({
@@ -134,7 +143,13 @@ export function PlansPage() {
       });
     }
     if (q.workflows) found.push({ text: fill(w.workflows, { count: number(q.workflows) }), soon: true });
+    if (plan.agents_every) found.push({ text: w.agentsEvery });
+    else if (plan.agents_included) found.push({ text: fill(w.agentsIncluded, { count: number(plan.agents_included) }) });
     for (const text of (w.features as Record<PlanKey, readonly string[]>)[key] ?? []) found.push({ text });
+    // Once a workspace: said only while this one may still have it.
+    if (plan.trial_days && said?.trial_available !== false) {
+      found.push({ text: fill(w.trial, { days: plan.trial_days }), strong: true, trial: true });
+    }
     return found;
   }
 
@@ -243,6 +258,12 @@ export function PlansPage() {
             {fill(w.launch, { percent: launch.percent, months: launch.months })}
           </p>
         ) : null}
+        {/* Already had here: the list prices, and why they are not the site's. */}
+        {launch?.open && said?.launch_offer_available === false && interval === "month" ? (
+          <p className="text-[0.8125rem] text-shell-muted" data-testid="plans-launch-used">
+            {w.launchUsed}
+          </p>
+        ) : null}
       </div>
 
       {offer === undefined ? (
@@ -295,7 +316,7 @@ export function PlansPage() {
                     {plan.name}
                   </button>
                 </h2>
-                <p className="mt-1 min-h-10 text-[0.9375rem] text-shell-muted">
+                <p className="mt-1 min-h-10 text-[0.9375rem] text-shell-muted" data-testid="plan-tagline">
                   {(w.taglines as Record<PlanKey, string>)[key]}
                 </p>
                 <p className="mt-4 text-[2rem] leading-none font-bold text-brand-navy tabular-nums" data-testid="plan-price">
@@ -310,8 +331,10 @@ export function PlansPage() {
                 <hr className="my-4 border-shell-line" />
                 <ul className="flex flex-1 flex-col gap-2 text-[0.875rem] text-brand-navy">
                   {features(plan).map((f) => (
-                    <li key={f.text} className="flex items-start gap-2">
-                      {f.strong ? (
+                    <li key={f.text} className="flex items-start gap-2" data-testid={f.trial ? "plan-trial" : "plan-line"}>
+                      {f.trial ? (
+                        <Gift className="mt-0.5 size-4 shrink-0 text-brand-violet" aria-hidden="true" />
+                      ) : f.strong ? (
                         <User className="mt-0.5 size-4 shrink-0 text-shell-muted" aria-hidden="true" />
                       ) : (
                         <Check className="mt-0.5 size-4 shrink-0 text-brand-violet" aria-hidden="true" />
@@ -330,7 +353,7 @@ export function PlansPage() {
                     {subscribed ? <span className="block text-shell-muted">{w.changeNote}</span> : null}
                   </p>
                 ) : null}
-                <p className="mt-3 text-center text-xs text-shell-muted">
+                <p className="mt-3 text-center text-xs text-shell-muted" data-testid="plan-audience">
                   {(w.audiences as Record<PlanKey, string>)[key]}
                 </p>
               </li>

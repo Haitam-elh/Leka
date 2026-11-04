@@ -20783,7 +20783,10 @@ export interface components {
             self_service: boolean;
             /** Recommended */
             recommended: boolean;
+            tagline: components["schemas"]["Words"];
             audience: components["schemas"]["Words"];
+            /** Features */
+            features: components["schemas"]["Words"][];
             value: components["schemas"]["Words"];
             /** Quotes */
             quotes: components["schemas"]["Quote"][];
@@ -20800,6 +20803,16 @@ export interface components {
             /** Trial Days */
             trial_days: number | null;
             quotas: components["schemas"]["QuotasRead"];
+            /**
+             * Agents Included
+             * @description The specialised agents it runs as part of it, with every plan's below.
+             */
+            agents_included: number;
+            /**
+             * Agents Every
+             * @description Every specialised agent on sale is included.
+             */
+            agents_every: boolean;
         };
         /**
          * PlanStartRequest
@@ -21061,6 +21074,34 @@ export interface components {
             missing?: string[];
         };
         /**
+         * PricingAddOnsRead
+         * @description The agents sold apart, as the site's pricing page sums them up: the
+         *     range of their prices, the best a bundle saves — what the platform's
+         *     marketplace says.
+         */
+        PricingAddOnsRead: {
+            /**
+             * Minimum Plan
+             * @description The least plan that buys an agent.
+             */
+            minimum_plan: string;
+            /**
+             * Lowest Price
+             * @description The cheapest agent alone, cents a month.
+             */
+            lowest_price: number | null;
+            /**
+             * Highest Price
+             * @description The dearest agent alone, cents a month.
+             */
+            highest_price: number | null;
+            /**
+             * Best Saving Percent
+             * @description The most a bundle on sale saves; none when no saving is said.
+             */
+            best_saving_percent: number | null;
+        };
+        /**
          * PricingRead
          * @description The catalogue as the pricing page shows it: every price computed here,
          *     from catalogue.yaml — the page states none of its own.
@@ -21077,6 +21118,7 @@ export interface components {
             plans: components["schemas"]["PlanRead"][];
             /** Add Ons Available */
             add_ons_available: boolean;
+            add_ons: components["schemas"]["PricingAddOnsRead"];
             /**
              * Automatic Overage
              * @default false

@@ -3,8 +3,9 @@ LEKA-446) — pure, and over HTTP.
 
 What these protect:
 - The catalogue LEKA ships is whole and coherent: five plans in order,
-  Growth the one recommended, with a 14-day trial; no agent in any plan —
-  every agent an add-on, none on sale until available; connecting one's
+  Growth the one recommended, with a 14-day trial; LEKA's own agents every
+  plan's, some of the registry's included from Starter, every other an
+  add-on, none on sale until available; connecting one's
   own model only on Enterprise, priced per contract and never self-service;
   AI credits a number marked provisional (Enterprise: by contract); no AI
   capacity sold apart, never an automatic overage charge. A catalogue that
@@ -39,6 +40,7 @@ from leka.api import pricing as pricing_api
 from leka.billing import Catalogue, catalogue, load, quote
 from leka.billing.catalogue import CATALOGUE_FILE
 from leka.core.config import settings
+from leka.core.languages import interface_english
 from leka.db import session_factory, system_scope
 
 TODAY = date(2026, 10, 17)
@@ -264,6 +266,23 @@ def test_the_offer_closed_or_a_plan_without_it_pays_the_list_price() -> None:
 # ── over HTTP ───────────────────────────────────────────────────────────────
 
 
+def test_the_sites_cards_say_the_platforms_words() -> None:
+    """2026-11-04: the site's pricing page and the platform's plans said two
+    offers — other taglines, « une petite équipe » for a one-user Starter.
+    The catalogue's card words are the platform's own (its English
+    dictionary, exported to interface_en.json); the French, the e2e compares
+    on screen (e2e/pricing.spec.ts)."""
+    said = interface_english()
+    for plan in catalogue().plans:
+        compare = f"billing.compare.{{}}.{plan.key}"
+        assert plan.tagline.en == said[compare.format("taglines")], plan.key
+        assert plan.audience.en == said[compare.format("audiences")], plan.key
+        assert [f.en for f in plan.features] == [
+            said[f"{compare.format('features')}.{i}"] for i in range(len(plan.features))
+        ], plan.key
+        assert f"{compare.format('features')}.{len(plan.features)}" not in said, plan.key
+
+
 @pytest.mark.integration
 async def test_anyone_reads_the_pricing_as_checkout_charges_it(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
@@ -302,6 +321,25 @@ async def test_anyone_reads_the_pricing_as_checkout_charges_it(
         "analyses": 500,
     }
     assert enterprise["quotas"]["contractual"] is True
+    # The site's cards say what the platform's do (2026-11-04): the same
+    # words, the specialised agents each plan includes, and what the agents
+    # sold apart cost — the marketplace's range and best bundle saving.
+    assert growth["tagline"] == {"fr": "Anticipez et automatisez", "en": "Anticipate and automate"}
+    assert growth["audience"]["fr"] == "Pour les équipes techniques en croissance."
+    assert [len(p["features"]) for p in said["plans"]] == [2, 2, 1, 1, 4]
+    assert [(p["agents_included"], p["agents_every"]) for p in said["plans"]][:4] == [
+        (0, False),
+        (3, False),
+        (8, False),
+        (12, False),
+    ]
+    assert enterprise["agents_every"] is True
+    assert said["add_ons"] == {
+        "minimum_plan": "starter",
+        "lowest_price": 900,
+        "highest_price": 2500,
+        "best_saving_percent": 40,
+    }
     # No booking page configured: none guessed; the contact form always.
     assert said["booking"]["url"] is None
     assert said["booking"]["contact_url"].startswith("https://")

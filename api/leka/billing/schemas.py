@@ -35,7 +35,10 @@ class PlanRead(_Read):
     name: str
     self_service: bool
     recommended: bool
+    # Its card's words: the platform's plans say the same.
+    tagline: Words
     audience: Words
+    features: list[Words]
     value: Words
     # Monthly and yearly, as checkout charges them; none for Enterprise.
     quotes: list[Quote]
@@ -47,6 +50,10 @@ class PlanRead(_Read):
     # Days free before the first charge, a card required; None: none.
     trial_days: int | None
     quotas: QuotasRead
+    agents_included: int = Field(
+        description="The specialised agents it runs as part of it, with every plan's below."
+    )
+    agents_every: bool = Field(description="Every specialised agent on sale is included.")
 
 
 class LaunchOfferRead(_Read):
@@ -65,6 +72,19 @@ class BookingRead(_Read):
     contact_url: str
 
 
+class PricingAddOnsRead(_Read):
+    """The agents sold apart, as the site's pricing page sums them up: the
+    range of their prices, the best a bundle saves — what the platform's
+    marketplace says."""
+
+    minimum_plan: str = Field(description="The least plan that buys an agent.")
+    lowest_price: int | None = Field(description="The cheapest agent alone, cents a month.")
+    highest_price: int | None = Field(description="The dearest agent alone, cents a month.")
+    best_saving_percent: int | None = Field(
+        description="The most a bundle on sale saves; none when no saving is said."
+    )
+
+
 class PricingRead(_Read):
     """The catalogue as the pricing page shows it: every price computed here,
     from catalogue.yaml — the page states none of its own."""
@@ -75,6 +95,7 @@ class PricingRead(_Read):
     launch_offer: LaunchOfferRead
     plans: list[PlanRead]
     add_ons_available: bool
+    add_ons: PricingAddOnsRead
     # The AI capacity is the plan's: never sold apart, never an overage.
     automatic_overage: Literal[False] = False
     booking: BookingRead
