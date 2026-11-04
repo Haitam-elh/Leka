@@ -15,6 +15,11 @@ import { signIn } from "./sign-in";
  *   the bundles, the bundles' own cards lower on the page (its mockup).
  * - The agents dense: six a row on a wide screen, two a row and six at
  *   most on a phone, nothing wider than the screen.
+ * - The hero simplified (LEKA-528): the title on one line on a laptop, its
+ *   « ? » never alone on a phone; no subtitle; the field's text in the
+ *   middle of the field, of its spark and its buttons. Each agent's card
+ *   one target: clicked anywhere, or reached by the keyboard, it opens the
+ *   agent's page — no description, no button of its own.
  */
 
 async function home(page: Page) {
@@ -29,6 +34,58 @@ const box = async (page: Page, testId: string) => {
   if (!found) throw new Error(`${testId} not laid out`);
   return found;
 };
+
+/** The lines a node's text is laid on, by their tops — of one of its
+ * children when `child` is given. */
+const linesOf = (page: Page, selector: string, child?: number) =>
+  page.evaluate(
+    ([selector, child]) => {
+      const found = document.querySelector(selector as string);
+      if (!found) throw new Error(`${selector} not found`);
+      const node = child === undefined ? found : found.childNodes[child as number];
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      return new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size;
+    },
+    [selector, child] as const,
+  );
+
+/** Where the field's first line sits, and the middles of the field, its
+ * spark and its button. */
+const centres = (page: Page) =>
+  page.evaluate(() => {
+    const field = document.querySelector('[data-testid="intention-input"]') as HTMLElement;
+    const row = field.parentElement as HTMLElement;
+    const style = getComputedStyle(field);
+    const box = field.getBoundingClientRect();
+    const middle = (el: Element) => {
+      const r = el.getBoundingClientRect();
+      return r.top + r.height / 2;
+    };
+    return {
+      line: box.top + parseFloat(style.paddingTop) + parseFloat(style.lineHeight) / 2,
+      // Above and below its text, the same: the text's block in its middle.
+      even: style.paddingTop === style.paddingBottom,
+      field: middle(field),
+      spark: middle(row.firstElementChild as Element),
+      submit: middle(row.querySelector('[data-testid="intention-submit"]') as Element),
+    };
+  });
+
+for (const width of [1280, 1440, 1536]) {
+  test.describe(`The hero at ${width} px (LEKA-528)`, () => {
+    test.use({ viewport: { width, height: 900 } });
+
+    test("the title on one line, no subtitle, the field's text in its middle", async ({ page }) => {
+      await home(page);
+      await expect(page.locator("#compact-composer-title")).toHaveText("Que souhaitez\u2011vous accomplir ?");
+      expect(await linesOf(page, "#compact-composer-title")).toBe(1);
+      await expect(page.getByText(/Posez votre question, lancez une analyse/)).toHaveCount(0);
+      const at = await centres(page);
+      for (const other of [at.field, at.spark, at.submit]) expect(Math.abs(at.line - other)).toBeLessThanOrEqual(1);
+    });
+  });
+}
 
 test.describe("The home on a wide screen", () => {
   test.use({ viewport: { width: 1536, height: 1024 } });
@@ -97,12 +154,29 @@ test.describe("The home on a wide screen", () => {
     }
   });
 
-  test("an agent's card opens its page; its state says what may be done (LEKA-497)", async ({ page }) => {
+  test("an agent's card is one target: clicked anywhere, or by the keyboard, it opens its page (LEKA-528)", async ({ page }) => {
     await home(page);
+    const grid = page.getByTestId("home-agents-grid");
     const first = page.getByTestId("home-agent").filter({ visible: true }).first();
     const key = await first.getAttribute("data-key");
     await expect(first.getByTestId("agent-state")).toBeVisible();
-    await first.getByTestId("home-agent-open").click();
+    // Its domain, its name, its state: no description, no generic line, no button.
+    await expect(first.getByRole("link")).toHaveCount(1);
+    await expect(first.getByRole("button")).toHaveCount(0);
+    for (const gone of ["Fonctionne avec vos sources connectées", "Ouvrir l'agent", "Acheter l'agent", "Voir les options"]) {
+      await expect(grid.getByText(gone)).toHaveCount(0);
+    }
+    // The keyboard reaches it right after « Voir tous les agents et bundles », the card says so.
+    const ring = () => first.evaluate((card) => getComputedStyle(card).boxShadow);
+    const resting = await ring();
+    await page.getByRole("link", { name: "Voir tous les agents et bundles" }).focus();
+    await page.keyboard.press("Tab");
+    await expect(first.getByTestId("home-agent-open")).toBeFocused();
+    expect(await ring()).not.toBe(resting);
+    // Clicked by its lower corner, far from its title: its page.
+    const at = await first.boundingBox();
+    if (!at) throw new Error("no card");
+    await first.click({ position: { x: 12, y: at.height - 10 } });
     await expect(page).toHaveURL(new RegExp(`/capabilities/${key}$`));
   });
 
@@ -128,6 +202,16 @@ test.describe("The home on a phone", () => {
       }),
     ).toBeLessThanOrEqual(0);
     await expect(page.getByRole("link", { name: "Historique des analyses" })).toBeVisible();
+    // The title wraps on a phone: « Que souhaitez-vous », never cut at its
+    // hyphen, then « accomplir ? », its « ? » with its word (LEKA-528).
+    expect(await linesOf(page, "#compact-composer-title")).toBe(2);
+    expect(await linesOf(page, "#compact-composer-title", 0)).toBe(1);
+    expect(await linesOf(page, "#compact-composer-title span")).toBe(1);
+    // The placeholder takes lines here: their block in the field's middle,
+    // level with the spark and the button.
+    const at = await centres(page);
+    expect(at.even).toBe(true);
+    for (const other of [at.spark, at.submit]) expect(Math.abs(at.field - other)).toBeLessThanOrEqual(1);
 
     const cards = await page.getByTestId("home-agent").filter({ visible: true }).all();
     // One row: two on a phone (LEKA-488).

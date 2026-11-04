@@ -280,21 +280,20 @@ export function IntentionComposer({
     // The home's hero (LEKA-456, the sprint's mockup): the question as the
     // page's title, a white field — the spark, the paperclip, a round
     // violet button to send. No suggestion under it (LEKA-470): the
-    // question is one's own.
+    // question is one's own. The title on one line from 1280 px, balanced
+    // when it wraps on a phone, never its « ? » alone; no subtitle: the
+    // field says what to write (LEKA-528).
     return (
       <section aria-labelledby="compact-composer-title" className={cn("text-center", className)}>
         <h1
           id="compact-composer-title"
-          className="text-[2rem] leading-tight font-bold tracking-[-0.02em] text-brand-navy md:text-[2.5rem]"
+          className="text-[2rem] leading-tight font-bold tracking-[-0.02em] text-balance text-brand-navy md:text-[2.5rem]"
         >
           {t.composer.compactTitle}{" "}
           <span className="bg-gradient-to-r from-brand-navy to-brand-violet bg-clip-text text-transparent">
             {t.composer.compactTitleHighlight}
           </span>
         </h1>
-        <p className="mx-auto mt-3 max-w-2xl text-[0.9375rem] text-shell-muted md:text-[1.0625rem]">
-          {t.composer.compactSubtitle}
-        </p>
         <div className="mx-auto mt-6 max-w-4xl text-start">
           <div className="flex items-center gap-3 rounded-[20px] border-[1.5px] border-shell-line bg-white p-2.5 ps-3.5 shadow-[0_4px_20px_-2px_rgba(7,17,67,0.05)] transition-[border-color,box-shadow] duration-160 ease-[var(--ease-out)] focus-within:border-brand-violet focus-within:ring-3 focus-within:ring-brand-violet/15">
             <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-violet-soft">
@@ -315,7 +314,11 @@ export function IntentionComposer({
               placeholder={t.composer.compactPlaceholder}
               rows={1}
               data-testid="intention-input"
-              className="min-h-[52px] flex-1 resize-none border-0 bg-transparent px-1 py-3 text-base shadow-none placeholder:text-shell-muted focus-visible:ring-0"
+              // One line in the middle of its 52 px, at every width: its
+              // line 24 px whatever the text's size (16 px on a phone, 14 px
+              // from md), 14 px above and below — centred on the spark and
+              // the buttons (LEKA-528: it sat 4 px high).
+              className="min-h-[52px] flex-1 resize-none border-0 bg-transparent px-1 py-[14px] text-base leading-6 shadow-none placeholder:text-shell-muted focus-visible:ring-0"
             />
             {dictateButton}
             {files ? <AttachmentPicker files={files} compact /> : null}

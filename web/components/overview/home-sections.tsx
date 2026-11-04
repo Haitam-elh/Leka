@@ -13,7 +13,6 @@ import { cn } from "cn";
 import { InstallAgent } from "@/components/capabilities/install-dialog";
 import { MarketTile, marketOf } from "@/components/capabilities/market-mark";
 import {
-  AgentCardAction,
   agentStateOf,
   AgentStateSaid,
   Bundles,
@@ -215,10 +214,16 @@ export function HistoryLink({ className }: { className?: string } = {}) {
 
 /** « Agents disponibles » (LEKA-470, its mockup): the agents on sale,
  * dense — six a row on a wide screen, four, three, two on a phone, twelve
- * at most (six on a phone) so no row is left half empty — each its name,
- * what it does, where this workspace stands with it in the marketplace's
- * words, its price only where there is one to pay — an option not bought —
- * and there its « + » to buy it. Nothing while nothing is on sale. */
+ * at most (six on a phone) so no row is left half empty — each its domain,
+ * its name, where this workspace stands with it in the marketplace's
+ * words, its price only where there is one to pay. Nothing while nothing
+ * is on sale.
+ *
+ * Each card is one target (LEKA-528): the whole of it opens the agent's
+ * page, where it is described, bought or opened — no description, no
+ * button of its own, nothing nested. Its title is the link (what a screen
+ * reader names it), stretched over the card; the card shows the pointer
+ * over it, the keyboard's focus and the press. */
 export function AgentsSection() {
   const t = useDictionary();
   const w = t.overview.home;
@@ -268,7 +273,10 @@ export function AgentsSection() {
               key={agent.key}
               className={cn(
                 CARD,
-                "relative flex flex-col p-3.5 [@media(hover:hover)_and_(pointer:fine)]:hover:border-brand-violet/40 max-md:nth-[n+3]:hidden md:max-lg:nth-[n+4]:hidden lg:max-xl:nth-[n+5]:hidden",
+                "group relative flex cursor-pointer flex-col p-3.5 transition-[border-color,box-shadow,scale] duration-150 ease-[var(--ease-out)]",
+                "[@media(hover:hover)_and_(pointer:fine)]:hover:border-brand-violet/40 [@media(hover:hover)_and_(pointer:fine)]:hover:shadow-[0_6px_18px_-6px_rgba(7,17,67,0.14)]",
+                "has-[a:focus-visible]:border-brand-violet has-[a:focus-visible]:ring-3 has-[a:focus-visible]:ring-brand-violet/30 motion-safe:has-[a:active]:scale-[0.98]",
+                "max-md:nth-[n+3]:hidden md:max-lg:nth-[n+4]:hidden lg:max-xl:nth-[n+5]:hidden",
               )}
               data-testid="home-agent"
               data-key={agent.key}
@@ -276,30 +284,33 @@ export function AgentsSection() {
             >
               <div className="flex items-center gap-2">
                 <MarketTile market={market} label={marketName} />
-                <span className="min-w-0 truncate text-xs text-shell-muted" data-testid="home-agent-market">
+                <span className="min-w-0 flex-1 truncate text-xs text-shell-muted" data-testid="home-agent-market">
                   {marketName}
                 </span>
+                {/* Said clickable without a button: the way in, brighter under
+                    the pointer. Not on a phone: its domain's name needs the room. */}
+                <ChevronRight
+                  className="hidden size-4 shrink-0 text-shell-muted sm:block transition-[color,translate] duration-150 ease-[var(--ease-out)] rtl:-scale-x-100 group-hover:text-shell-nav-active motion-safe:group-hover:translate-x-0.5"
+                  aria-hidden="true"
+                />
               </div>
-              <h3 className="mt-2.5 text-[0.875rem] leading-snug font-semibold text-brand-navy">
-                {/* The whole card opens its page (LEKA-497); its action stays its own. */}
+              <h3 className="mt-2.5 text-[0.875rem] leading-snug font-semibold text-brand-navy transition-colors duration-150 group-hover:text-shell-nav-active">
                 <Link
                   href={routes.capability(agent.key)}
-                  className="rounded outline-none after:absolute after:inset-0 after:rounded-2xl hover:underline focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+                  className="outline-none after:absolute after:inset-0 after:rounded-2xl"
                   data-testid="home-agent-open"
                 >
                   {agentTitle(t, agent.key, agent.title)}
                 </Link>
               </h3>
-              <p className="mt-1 line-clamp-2 flex-1 text-xs text-shell-muted">
-                {(t.catalogue.summaries as Record<string, string>)[agent.key] ?? agent.summary}
-              </p>
-              {/* Why it is here: what it reads, against what is connected. */}
-              {fit === "connected" || fit === "to_connect" ? (
-                <p className="mt-2 text-xs text-shell-muted" data-testid="home-agent-fit">
-                  {w.fit[fit]}
+              {/* A source it reads is not connected yet: said, as what is
+                  missing — what it works with needs no word. */}
+              {fit === "to_connect" ? (
+                <p className="mt-1 text-xs text-shell-muted" data-testid="home-agent-fit">
+                  {w.fit.to_connect}
                 </p>
               ) : null}
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
+              <div className="mt-auto flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 pt-3">
                 <AgentStateSaid agentKey={agent.key} />
                 {payable ? (
                   <span
@@ -313,9 +324,6 @@ export function AgentsSection() {
                     </span>
                   </span>
                 ) : null}
-              </div>
-              <div className="mt-2.5">
-                <AgentCardAction agentKey={agent.key} />
               </div>
             </li>
           );
