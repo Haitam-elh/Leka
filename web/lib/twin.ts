@@ -27,9 +27,8 @@ export type TwinCoverage = components["schemas"]["TwinCoverageRead"];
 export type TwinFreshness = components["schemas"]["TwinFreshnessRead"];
 export type Monitoring = components["schemas"]["MonitoringRead"];
 export type Alert = components["schemas"]["AlertRead"];
-/** What LEKA went through overnight, and what it found (2026-10-29). */
-export type NightReview = components["schemas"]["NightReviewRead"];
-export type NightPoint = components["schemas"]["NightPointRead"];
+/** Whether the night review runs, an alert each workspace chooses (LEKA-526). */
+export type NightReviewSetting = components["schemas"]["NightReviewSettingRead"];
 /** One piece of work under way (2026-10-29). */
 export type Working = components["schemas"]["WorkingRead"];
 
@@ -138,10 +137,14 @@ export const monitoring = {
   /** Taken in hand (LEKA-463): by whom, when — the first only. */
   acknowledge: (id: string) =>
     apiFetch<Alert>(`/monitoring/alerts/${encodeURIComponent(id)}/acknowledge`, { method: "POST" }),
-  /** The last night review — null before the first. */
-  night: () => apiFetch<NightReview | null>("/monitoring/night-review"),
-  /** Gone through again now. */
-  nightAgain: () => apiFetch<NightReview>("/monitoring/night-review", { method: "POST" }),
+  /** Whether the night review runs, and whether the reader may change it. */
+  nightSetting: () => apiFetch<NightReviewSetting>("/monitoring/night-review/setting"),
+  /** Turned on or off, from the next night. */
+  setNightSetting: (enabled: boolean) =>
+    apiFetch<NightReviewSetting>("/monitoring/night-review/setting", {
+      method: "PUT",
+      body: JSON.stringify({ enabled }),
+    }),
   /** What LEKA is working on, now. */
   now: () => apiFetch<Working[]>("/monitoring/now"),
 };

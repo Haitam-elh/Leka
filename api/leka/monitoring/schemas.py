@@ -209,6 +209,32 @@ class NightReviewRead(BaseModel):
     settled: int = Field(default=0, description="Its points settled since it ran.")
 
 
+class NightReviewSettingRead(BaseModel):
+    """Whether the workspace's night review runs (LEKA-526): an alert it
+    chooses, with what it does when on."""
+
+    model_config = ConfigDict(frozen=True)
+
+    enabled: bool = Field(
+        description="On: LEKA goes through the environment every hour of the night and tells "
+        "the morning, in the application and by e-mail. Off: no review at night and nothing "
+        "told; past reviews stay."
+    )
+    default: bool = Field(description="What a workspace has until someone chooses.")
+    hours_utc: list[str] = Field(
+        description="When it runs, in UTC: each hour of the night at half past."
+    )
+    can_change: bool = Field(description="Whether the reader may turn it on or off.")
+
+
+class NightReviewSettingChange(BaseModel):
+    """The night review turned on or off."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool
+
+
 class WorkingRead(BaseModel):
     """One piece of work under way (monitoring/now.py)."""
 
