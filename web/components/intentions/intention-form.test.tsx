@@ -318,6 +318,23 @@ describe("the new intention's context and scope", () => {
     window.sessionStorage.clear(); // the draft it kept, not the next test's
   });
 
+  it("says it too when pressed before the sources are known: read, then said", async () => {
+    // The sources still on their way when « Continuer » is pressed.
+    let arrive: (value: unknown) => void = () => undefined;
+    sourcesApi.list.mockImplementation(
+      () => new Promise((resolve) => (arrive = () => resolve({ data: [], next_cursor: null }))),
+    );
+    show();
+    const user = userEvent.setup();
+    await user.type(screen.getByTestId("intention-input"), "Qui est responsable de la facturation ?");
+    await user.click(screen.getByTestId("intention-submit"));
+    expect(screen.queryByRole("alert")).toBeNull();
+    arrive(undefined);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Aucune source connectée");
+    expect(intentionsApi.brief).not.toHaveBeenCalled();
+    window.sessionStorage.clear();
+  });
+
   it("scopes to the environments and services the company model knows", async () => {
     const user = userEvent.setup();
     show();
