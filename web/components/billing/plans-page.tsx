@@ -2,6 +2,7 @@
 
 import { Check, Info, User } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { cn } from "cn";
@@ -33,6 +34,9 @@ import { usePayment, usePricing, useSubscription } from "@/lib/subscription-quer
  * plan — Checkout for a first plan, Stripe's portal once subscribed —, every
  * other member reads. Billing (credits, invoices, payment methods) stays its
  * own page.
+ *
+ * Opened from the AI credits' prompt (LEKA-527): `?plan=` and `?interval=`
+ * choose the plan offered and the subscription's cadence, as it said them.
  */
 
 type Interval = "month" | "year";
@@ -49,10 +53,13 @@ export function PlansPage() {
   // Read only by who may pay: a member reads the plans, never their checkout.
   const said = useSubscription().data;
   const { checkout, portal } = usePayment();
-  const [interval, setInterval] = useState<Interval>("month");
+  const asked = useSearchParams();
+  const [interval, setInterval] = useState<Interval>(() =>
+    asked?.get("interval") === "year" ? "year" : "month",
+  );
   // The plan chosen on the page (LEKA-490): the workspace's until another
   // card is clicked — never stuck on « Votre formule ».
-  const [picked, setPicked] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string | null>(() => asked?.get("plan") ?? null);
   const selected = picked ?? current;
 
   const money = (cents: number) =>

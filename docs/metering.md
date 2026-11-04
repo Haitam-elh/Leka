@@ -117,6 +117,37 @@ still answers.
 80 %, 100 %) is told by email to its owners and admins, once a month
 (`credit_warnings`, the `credit-watch` schedule every quarter of an hour).
 
+**The prompts** (LEKA-527). Past 90 % and 100 % of the month's credits
+(`LEKA_CREDIT_PROMPTS`), a banner at the top of every page, under what stays
+pinned, never over what is being read (`GET /billing/credits/prompt`,
+`components/billing/credit-prompt.tsx`):
+
+- the usage, used of the allowance and in words beside the bar; what 100 %
+  does under `LEKA_CREDITS_ENFORCED` (LEKA's AI paused until the credits come
+  back, or nothing blocked); what AI credits are, and a link to Facturation;
+- the next plan in the catalogue's order that gives more credits: its credits
+  and its price as `quote` makes it, on the subscription's own cadence (the
+  year only when that plan is sold yearly), with the launch offer when the
+  workspace may still take it; what it adds a month, in credits and in price
+  (the year's with its discount, the month's list price);
+- who may pay (`workspace:update`) opens that plan on the plans page
+  (`/billing/plans?plan=…&interval=…`), the one place it is bought: the
+  credits come once Stripe confirms the payment, said so. Who may not asks
+  the admins (`POST …/prompt/ask`): a notification to whoever may pay
+  (`billing.upgrade_asked`), once a month and threshold;
+- above the plans sold (Business), Enterprise through LEKA's sales
+  (`LEKA_SALES_CONTACT_URL`); under a contract (Enterprise, or credits other
+  than the plan's), the day the credits come back and whom to ask. No pack
+  is offered: none is sold.
+
+Each threshold passed is kept once a month, in `credit_warnings` with the
+e-mails' (only the e-mails' thresholds are mailed), whoever reads first and
+however many at once. « Plus tard » (90 %) or « Fermer » (100 %) puts that
+threshold aside for its reader (`POST …/prompt/dismiss`,
+`credit_prompt_dismissals`), for that month and that allowance: the 100 %
+prompt still comes; a new month starts over; a plan changed mid-month shows
+what now applies (an upgrade hides what no longer does).
+
 **Facturation** shows the plan, the credits used and left, until when, the
 packs, and — near or past the limit — what to do (`GET /billing/credits`).
 

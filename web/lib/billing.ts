@@ -6,6 +6,9 @@ import type { components } from "@/lib/api-types";
 export type WorkspaceUsage = components["schemas"]["WorkspaceUsageRead"];
 /** Its plan and its AI credits this month (LEKA-430). */
 export type Credits = components["schemas"]["CreditsRead"];
+/** Past 90 % or 100 % of the month's AI credits, what a person is offered (LEKA-527). */
+export type CreditPrompt = components["schemas"]["CreditPromptRead"];
+export type CreditPlan = components["schemas"]["CreditPlanRead"];
 
 /** Agents and bundles sold besides a plan (2026-10-14). */
 export type AddOns = components["schemas"]["AddOnsRead"];
@@ -17,6 +20,20 @@ export type AddOnCheckout = components["schemas"]["AddOnCheckoutCreate"];
 export const billing = {
   usage: () => apiFetch<WorkspaceUsage>("/billing/usage"),
   credits: () => apiFetch<Credits>("/billing/credits"),
+  /** The prompt the reader sees now — null under 90 %, or once put aside. */
+  creditPrompt: () => apiFetch<CreditPrompt | null>("/billing/credits/prompt"),
+  /** « Plus tard » / « Fermer »: that threshold, for the reader, this month. */
+  dismissCreditPrompt: (threshold: number) =>
+    apiFetch<void>("/billing/credits/prompt/dismiss", {
+      method: "POST",
+      body: JSON.stringify({ threshold }),
+    }),
+  /** One who may not change the plan asks its admins to. */
+  askUpgrade: (threshold: number) =>
+    apiFetch<CreditPrompt>("/billing/credits/prompt/ask", {
+      method: "POST",
+      body: JSON.stringify({ threshold }),
+    }),
   addOns: () => apiFetch<AddOns>("/billing/add-ons"),
   entitlements: () => apiFetch<Entitlement[]>("/billing/entitlements"),
   /** « Annuler l'abonnement » / « Réactiver le renouvellement » of what was

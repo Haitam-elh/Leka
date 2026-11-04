@@ -100,3 +100,68 @@ class CreditsRead(BaseModel):
     warned: list[CreditWarningRead] = Field(
         default_factory=list, description="The shares passed this month, each when (LEKA-463)."
     )
+
+
+class CreditPlanRead(BaseModel):
+    """A plan as an AI capacity prompt shows it (LEKA-527): its credits a
+    month and what it costs on the cadence asked — from metering and the
+    catalogue, as checkout would charge it; nothing stated of its own."""
+
+    key: str
+    name: str
+    credits: int | None = Field(description="Its AI credits a month; None: per contract.")
+    self_service: bool = Field(description="Bought in LEKA; else through LEKA's sales.")
+    interval: Literal["month", "year"] | None = Field(
+        description="The cadence its price is for: the subscription's; None: no price."
+    )
+    monthly: int | None = Field(description="What it comes to a month, in cents, discounts in.")
+    list_monthly: int | None = Field(description="Its list price a month, in cents.")
+    charged: int | None = Field(description="What is charged each period, in cents.")
+    discount: Literal["annual", "launch"] | None = None
+    percent: int = Field(default=0, description="The discount's percentage.")
+    for_months: int | None = Field(default=None, description="A launch price: for how long.")
+
+
+class CreditPromptRead(BaseModel):
+    """What the application offers a person as a workspace's AI credits run
+    out (LEKA-527): past 90 % or 100 % of the month's, where it stands, what
+    happens next, and the plan that gives more — or, when there is none to
+    buy, when the credits come back and whom to ask. Never blocking, never
+    a promise of credits before the plan is paid and applied."""
+
+    threshold: int = Field(description="The share passed: 90 or 100.")
+    used: float
+    allowance: int
+    remaining: float
+    percent: float
+    period_start: datetime
+    period_end: datetime = Field(description="When the month's credits come back.")
+    enforced: bool = Field(description="Spent, LEKA's models are refused until then.")
+    current: CreditPlanRead
+    recommended: CreditPlanRead | None = Field(
+        description="The next plan with more credits; None: none above, or a contract."
+    )
+    more_credits: int | None = Field(description="What the recommended plan adds a month.")
+    more_monthly: int | None = Field(
+        description="What it adds a month on the same cadence, in cents: the year's "
+        "price with its discount, the month's list price (never a launch offer's)."
+    )
+    currency: str = Field(description="The catalogue's currency, every price's.")
+    path: Literal["upgrade", "sales", "contract"] = Field(
+        description="upgrade: buy the recommended plan; sales: talk to LEKA's sales for it; "
+        "contract: a contract or the highest plan — the date the credits come back, and "
+        "whom to ask."
+    )
+    contact_url: str = Field(description="Where LEKA's sales and support are reached.")
+    can_pay: bool = Field(description="Whether the reader may change the plan.")
+    asked: bool = Field(
+        default=False, description="Whether the reader already asked an admin, this month."
+    )
+
+
+class CreditPromptChoice(BaseModel):
+    """A prompt put aside, or an admin asked — for the threshold seen."""
+
+    model_config = {"extra": "forbid"}
+
+    threshold: int
