@@ -1,6 +1,7 @@
 """The notification centre (LEKA-476): what happened in the workspace, told
 to whom it concerns — from what the systems kept, once each."""
 
+from leka.notifications.asks import ask_for_upgrade, upgrade_asked
 from leka.notifications.models import (
     CATEGORIES,
     SEVERITIES,
@@ -37,7 +38,9 @@ __all__ = [
     "NotificationSeen",
     "Notifications",
     "UnreadCount",
+    "ask_for_upgrade",
     "project",
     "run_sweep",
     "sweep",
+    "upgrade_asked",
 ]

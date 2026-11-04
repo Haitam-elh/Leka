@@ -119,33 +119,52 @@ async def watch_credits(*, now: datetime | None = None) -> dict[str, list[int]]:
     return told
 
 
+async def keep_passed(
+    session: AsyncSession,
+    workspace_id: uuid.UUID,
+    read: CreditsRead,
+    now: datetime,
+    thresholds: list[int],
+) -> list[int]:
+    """Each of `thresholds` passed this month and not kept yet, kept — once
+    (unique): a watch run twice, a prompt read twice, two at once, keep it
+    once. What was kept now, the caller tells."""
+    passed: list[int] = []
+    for threshold in thresholds:
+        if read.percent < threshold:
+            continue
+        kept = await session.scalar(
+            insert(CreditWarning)
+            .values(
+                workspace_id=workspace_id,
+                id=uuid.uuid4(),
+                period=read.period_start.date(),
+                threshold=threshold,
+                credits=read.allowance,
+                used=read.used,
+                at=now,
+            )
+            .on_conflict_do_nothing(constraint="uq_credit_warnings_once")
+            .returning(CreditWarning.id)
+        )
+        if kept is not None:
+            passed.append(threshold)
+    return passed
+
+
 async def _watch(workspace_id: uuid.UUID, now: datetime) -> list[int]:
+    # The e-mails' shares and the application's prompts' (LEKA-527): each
+    # kept once; only the e-mails' are mailed.
+    prompts = sorted({int(t) for t in settings.credit_prompts if 0 < int(t) <= 100})
     with workspace_scope(workspace_id):
         async with session_factory() as session:
             read = await credits_now(session, workspace_id, now=now)
-            passed: list[int] = []
-            for threshold in read.warn_at:
-                if read.percent < threshold:
-                    continue
-                kept = await session.scalar(
-                    insert(CreditWarning)
-                    .values(
-                        workspace_id=workspace_id,
-                        id=uuid.uuid4(),
-                        period=read.period_start.date(),
-                        threshold=threshold,
-                        credits=read.allowance,
-                        used=read.used,
-                        at=now,
-                    )
-                    .on_conflict_do_nothing(constraint="uq_credit_warnings_once")
-                    .returning(CreditWarning.id)
-                )
-                if kept is not None:
-                    passed.append(threshold)
+            thresholds = sorted(set(read.warn_at) | set(prompts))
+            passed = await keep_passed(session, workspace_id, read, now, thresholds)
             await session.commit()
-            if passed:
-                await _tell(session, workspace_id, read, max(passed))
+            mailed = [t for t in passed if t in read.warn_at]
+            if mailed:
+                await _tell(session, workspace_id, read, max(mailed))
     return passed
 
 

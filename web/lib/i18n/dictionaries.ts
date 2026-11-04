@@ -1337,6 +1337,43 @@ const fr = {
       exhaustedSoft: "Les crédits IA du mois sont épuisés.",
       how: "Pour continuer, ajoutez un pack de crédits ou passez à une offre supérieure : contactez votre interlocuteur LEKA. Aucun dépassement n'est jamais facturé.",
     },
+    /** Past 90 % or 100 % of the month's AI credits (LEKA-527): a banner at
+     * the top of every page, never in the way. Every figure is the server's. */
+    prompt: {
+      near: "Il ne reste que {left} % de vos crédits IA du mois",
+      spent: "Vos crédits IA du mois sont épuisés",
+      usage: "{used} crédits utilisés sur {allowance} ({percent} %)",
+      remaining: "{remaining} restants jusqu'au {date}.",
+      back: "Ils reviennent le {date}.",
+      bar: "{percent} % des crédits IA du mois utilisés",
+      nearPaused: "À 100 %, l'IA de LEKA sera suspendue jusqu'au {date}.",
+      paused:
+        "L'IA de LEKA est suspendue jusqu'au {date} : ce qui en a besoin est refusé d'ici là, sauf avec le modèle propre à votre organisation. Ce qui est déjà fait reste accessible.",
+      open: "Rien n'est bloqué pour l'instant, et aucun dépassement n'est jamais facturé.",
+      what: "Les crédits IA mesurent le travail de l'IA de LEKA : lire une intention, l'analyser, lancer un agent.",
+      detail: "Voir la consommation",
+      credits: "{credits} crédits IA par mois",
+      quote: "crédits IA et prix sur devis",
+      priceMonth: "{price} HT par mois, facturé chaque mois",
+      priceYear: "{price} HT par mois, soit {total} HT facturés chaque année",
+      priceLaunch: "{price} HT par mois les {months} premiers mois (offre de lancement), puis {then} HT, facturé chaque mois",
+      versus: "Par rapport à votre formule {plan} : {more}.",
+      moreCredits: "{credits} crédits de plus par mois",
+      morePrice: "{price} HT de plus par mois",
+      notYet: "La nouvelle formule et ses crédits s'appliquent une fois le paiement confirmé.",
+      contract:
+        "Vos crédits IA sont fixés par votre contrat : ils reviennent le {date}. Pour en avoir plus d'ici là, contactez LEKA.",
+      contractAsk:
+        "Vos crédits IA sont fixés par votre contrat : ils reviennent le {date}. Pour en avoir plus d'ici là, demandez à un administrateur.",
+      askNote: "Changer de formule est réservé aux administrateurs de l'espace.",
+      see: "Voir l'offre {plan}",
+      contact: "Contacter LEKA",
+      ask: "Demander à un administrateur",
+      asked: "Demande envoyée à vos administrateurs.",
+      later: "Plus tard",
+      close: "Fermer",
+      failed: "Action impossible pour le moment : réessayez.",
+    },
   },
   /** Équipe & accès (mockup 15). */
   /** Sécurité & gouvernance (LEKA-402). */
@@ -8975,6 +9012,10 @@ const fr = {
         title: "Abonnement renouvelé",
         body: "Le paiement du renouvellement est confirmé.",
       },
+      "billing.upgrade_asked": {
+        title: "Demande de crédits IA",
+        body: "{name} demande une formule avec plus de crédits IA : {threshold} % de ceux du mois sont utilisés.",
+      },
       "capacity.threshold": {
         title: "Crédits IA : {threshold} %",
         body: "{threshold} % des crédits IA du mois sont utilisés.",
@@ -10566,6 +10607,43 @@ const en: Dictionary = {
         "This month's AI credits are spent: LEKA's AI is paused until {date}.",
       exhaustedSoft: "This month's AI credits are spent.",
       how: "To go on, add a credit pack or move to a higher plan: contact your LEKA contact. Overage is never billed.",
+    },
+    /** Past 90 % or 100 % of the month's AI credits (LEKA-527): a banner at
+     * the top of every page, never in the way. Every figure is the server's. */
+    prompt: {
+      near: "Only {left}% of this month's AI credits left",
+      spent: "This month's AI credits are spent",
+      usage: "{used} credits used of {allowance} ({percent}%)",
+      remaining: "{remaining} left until {date}.",
+      back: "They come back on {date}.",
+      bar: "{percent}% of this month's AI credits used",
+      nearPaused: "At 100%, LEKA's AI will be paused until {date}.",
+      paused:
+        "LEKA's AI is paused until {date}: what needs it is refused until then, except with your organisation's own model. What is already done stays available.",
+      open: "Nothing is blocked for now, and overage is never billed.",
+      what: "AI credits measure the work of LEKA's AI: reading an intention, analysing it, running an agent.",
+      detail: "See usage",
+      credits: "{credits} AI credits a month",
+      quote: "AI credits and price on quote",
+      priceMonth: "{price} excl. VAT a month, billed monthly",
+      priceYear: "{price} excl. VAT a month, {total} excl. VAT billed yearly",
+      priceLaunch: "{price} excl. VAT a month for the first {months} months (launch offer), then {then} excl. VAT, billed monthly",
+      versus: "Compared with your {plan} plan: {more}.",
+      moreCredits: "{credits} more credits a month",
+      morePrice: "{price} excl. VAT more a month",
+      notYet: "The new plan and its credits apply once the payment is confirmed.",
+      contract:
+        "Your AI credits are set by your contract: they come back on {date}. To get more before then, contact LEKA.",
+      contractAsk:
+        "Your AI credits are set by your contract: they come back on {date}. To get more before then, ask an admin.",
+      askNote: "Only the workspace's admins can change its plan.",
+      see: "See the {plan} plan",
+      contact: "Contact LEKA",
+      ask: "Ask an admin",
+      asked: "Request sent to your admins.",
+      later: "Later",
+      close: "Close",
+      failed: "That did not work: try again.",
     },
   },
   governance: {
@@ -17975,6 +18053,10 @@ const en: Dictionary = {
       "billing.renewed": {
         title: "Subscription renewed",
         body: "The renewal's payment is confirmed.",
+      },
+      "billing.upgrade_asked": {
+        title: "AI credits request",
+        body: "{name} asks for a plan with more AI credits: {threshold}% of this month's are used.",
       },
       "capacity.threshold": {
         title: "AI credits: {threshold}%",

@@ -264,8 +264,11 @@ export function IntentionForm({
   /** What LEKA makes of it before it is asked — nothing kept. */
   async function review(given: IntentionAnswer[] = answers) {
     if (!(await form.trigger())) {
-      // Nothing to read, no source field to show it on: said, not silent (LEKA-445).
-      if (sources.data && sourceItems.length === 0) {
+      // Nothing to read, no source field to show it on: said, not silent
+      // (LEKA-445) — pressed before the sources are known too: read first,
+      // then said (2026-11-04: on a slow page the press said nothing).
+      const known = sources.data ?? (await sources.refetch()).data;
+      if (known && known.filter(readable).length === 0) {
         form.setError("root", {
           type: "client",
           message: t.composer.noSources,
