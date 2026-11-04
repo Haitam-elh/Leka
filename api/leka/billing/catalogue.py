@@ -170,8 +170,10 @@ class Bundle(_Model):
     members: tuple[str, ...] = Field(min_length=2)
     monthly_price: int = Field(gt=0)
     # Resolved when the catalogue is read: the registry's agents among its
-    # members, those no agent stands for, and its members' prices alone —
-    # None when one has no price: no saving shown that cannot be shown.
+    # members, those no agent stands for, and what its agents cost bought
+    # one by one today — each at the price it is sold at alone (LEKA-531),
+    # the one Checkout charges; None when one is not sold alone: no saving
+    # shown that cannot be shown.
     agents: tuple[str, ...] = ()
     missing: tuple[str, ...] = ()
     alone_price: int | None = None
@@ -198,6 +200,9 @@ class AddOns(_Model):
     provisional: bool = False
     # The least plan that buys or runs an option: Free runs none.
     minimum_plan: Literal["starter", "growth", "business", "enterprise"] = "starter"
+    # How often an agent or a bundle bought is billed (LEKA-531): Stripe's
+    # recurring price and what every page says of it.
+    interval: Literal["month"] = "month"
     # A tier's monthly price, cents.
     tiers: dict[Tier, int] = Field(default_factory=dict)
     # Each registry agent sold, its tier and its reference name.
@@ -258,11 +263,10 @@ class AddOns(_Model):
                 raise ValueError(msg)
             agents = tuple(a for m in bundle.members if (a := self.runtime_of(m)) is not None)
             missing = tuple(m for m in bundle.members if self.runtime_of(m) is None)
-            tiers = [self.reference[m].tier for m in bundle.members]
+            prices = self.prices
+            each = [prices.get(a) if (a := self.runtime_of(m)) else None for m in bundle.members]
             alone = (
-                sum(self.tiers[t] for t in tiers if t is not None)
-                if all(t is not None and t in self.tiers for t in tiers)
-                else None
+                sum(p for p in each if p is not None) if all(p is not None for p in each) else None
             )
             if alone is not None and bundle.monthly_price >= alone:
                 msg = f"bundle {bundle.key}: no cheaper than its agents alone"

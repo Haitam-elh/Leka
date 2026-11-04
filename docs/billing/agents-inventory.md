@@ -81,9 +81,9 @@ LEKA's own capabilities — understanding, the analysis, its answer (LEKA Assist
 | Bundle | Price HT / month | Members alone | Saving | Sold | Members not built |
 |---|---|---|---|---|---|
 | Engineering | 49 € | 66 € | 26 % | yes | — |
-| Ship Safe | 79 € | — | not shown | yes | — |
-| Incident Response | 89 € | — | not shown | yes | — |
-| Security & Reliability | 69 € | — | not shown | yes | — |
+| Ship Safe | 79 € | 104 € | 24 % | yes | — |
+| Incident Response | 89 € | 110 € | 19 % | yes | — |
+| Security & Reliability | 69 € | 85 € | 19 % | yes | — |
 | Frontend Craft | 29 € | 48 € | 40 % | yes | — |
 
-A bundle is sold once every member is an agent of the registry on sale; its saving is computed from its members' prices, and shown only when every member has one.
+A bundle is sold once every member is an agent of the registry on sale; its saving is computed from each member's price sold alone today, and shown only when every member has one.

@@ -163,14 +163,16 @@ async def test_what_is_sold_its_prices_and_what_is_owned(
     assert (engineering["sellable"], engineering["monthly_price"]) == (True, 4900)
     assert (engineering["alone_price"], engineering["discount_percent"]) == (6600, 26)
     ship_safe = next(b for b in sold["bundles"] if b["key"] == "ship-safe")
-    # Every agent built (2026-10-22): sold — its saving not shown, the
-    # migration planner having no reference price.
+    # Every agent built (2026-10-22): sold. Its saving from each agent's price
+    # sold alone today (LEKA-531): the migration planner's too, at its tier.
     assert ship_safe["sellable"] is True
-    assert (ship_safe["alone_price"], ship_safe["discount_percent"]) == (None, None)
+    assert (ship_safe["alone_price"], ship_safe["discount_percent"]) == (10400, 24)
     # Acme: every agent, granted by LEKA.
     assert (sold["every"], sold["runs_agents"]) == (True, True)
     assert all(a["owned"] and a["why"] is None for a in sold["agents"])
     assert sold["provisional"] is True
+    # Billed each month, as Stripe's price is (LEKA-531): said by the catalogue.
+    assert sold["interval"] == "month"
     owned_ = (await client.get(f"{API}/billing/entitlements")).json()
     assert [(e["kind"], e["origin"]) for e in owned_] == [("all", "grant")]
 

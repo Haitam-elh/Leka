@@ -1,11 +1,14 @@
 "use client";
 
 import { Bot } from "lucide-react";
+import Link from "next/link";
+import { Fragment } from "react";
 
 import { IconTile, TILE_TONES } from "@/components/environment/parts";
 import { useConfirm } from "@/components/interactions/confirm";
 import { usePermissions } from "@/components/shell/shell-provider";
 import { Button } from "@/components/ui/button";
+import { routes } from "@/config/routes";
 import { ApiError } from "@/lib/api";
 import type { AddOns, Entitlement } from "@/lib/billing";
 import { useAddOnRenewal, useAddOns, useEntitlements } from "@/lib/billing-queries";
@@ -64,7 +67,25 @@ export function AddOnSubscriptions() {
               data-cancelled={cancelled || undefined}
             >
               <div className="min-w-0">
-                <p className="font-medium text-brand-navy">{name}</p>
+                <p className="font-medium text-brand-navy">
+                  {/* Each opens its page: a bundle's (LEKA-531), an agent's. */}
+                  {rows.map((each, index) => (
+                    <Fragment key={`${each.kind}:${each.key}`}>
+                      {index ? ", " : null}
+                      {each.kind === "bundle" || each.kind === "agent" ? (
+                        <Link
+                          href={each.kind === "bundle" ? routes.bundle(each.key) : routes.capability(each.key)}
+                          className="rounded hover:underline focus-visible:ring-3 focus-visible:ring-brand-violet/40 focus-visible:outline-none"
+                          data-testid="billing-add-on-open"
+                        >
+                          {nameOf(each)}
+                        </Link>
+                      ) : (
+                        nameOf(each)
+                      )}
+                    </Fragment>
+                  ))}
+                </p>
                 <p
                   className={cancelled ? `mt-1 rounded-lg px-2 py-1 text-[0.8125rem] ${TILE_TONES.warning}` : "text-xs text-shell-muted"}
                 >

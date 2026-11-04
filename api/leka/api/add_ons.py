@@ -97,12 +97,14 @@ async def read_add_ons(principal: Reader, session: SessionDep) -> AddOnsRead:
         members = []
         for member in bundle.members:
             ref = sold.reference[member]
+            runtime = sold.runtime_of(member)
             members.append(
                 BundleMemberRead(
                     key=member,
                     name=ref.name,
-                    agent=sold.runtime_of(member),
-                    monthly_price=sold.tiers.get(ref.tier) if ref.tier else None,
+                    agent=runtime,
+                    # Its price sold alone today (LEKA-531): its own agent's.
+                    monthly_price=prices.get(runtime) if runtime else None,
                 )
             )
         bundles.append(
@@ -123,6 +125,7 @@ async def read_add_ons(principal: Reader, session: SessionDep) -> AddOnsRead:
         available=sold.available,
         provisional=sold.provisional,
         currency=catalogue().currency,
+        interval=sold.interval,
         minimum_plan=sold.minimum_plan,
         plan=has.plan,
         runs_agents=has.every or plan_runs_agents(has.plan),

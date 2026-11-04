@@ -184,7 +184,7 @@ async def ensure_add_on_price(
             "product": product,
             "currency": offer.currency.lower(),
             "unit_amount": cents,
-            "recurring": {"interval": "month"},
+            "recurring": {"interval": offer.add_ons.interval},
             "tax_behavior": "exclusive",
             "metadata": {"leka_add_on_kind": kind, "leka_add_on_key": key},
         },
