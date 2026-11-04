@@ -14,8 +14,8 @@ import { LANDING, signIn } from "./sign-in";
 /** Every page, the header's entry it marks (LEKA-494), the title it carries. */
 const ZONES = [
   ["/overview", "home", "Mon Dashboard"],
-  ["/intentions/new", "history", "Nouvelle intention"],
-  ["/intentions", "history", "Intentions"],
+  ["/intentions/new", "intentions", "Nouvelle intention"],
+  ["/intentions", "intentions", "Intentions"],
   ["/environment", "environment", "Mon environnement"],
   ["/capabilities", "agents", "Compétences"],
   ["/activity", null, "Activité"],
@@ -47,9 +47,12 @@ test.describe("the information architecture", () => {
   }) => {
     await signIn(page);
     await expect(page.getByTestId("open-navigation")).toHaveCount(0);
-    for (const id of ["home", "environment", "agents", "history"]) {
+    for (const id of ["home", "environment", "agents", "intentions"]) {
       await expect(page.getByTestId(`nav-${id}`)).toBeVisible();
     }
+    // « Intentions », no longer « Historique » (LEKA-529): the same page.
+    await expect(page.getByTestId("nav-intentions")).toHaveText("Intentions");
+    await expect(page.getByTestId("nav-intentions")).toHaveAttribute("href", "/intentions");
 
     for (const [id, path] of [
       ["sources", "/sources"],
@@ -66,6 +69,7 @@ test.describe("the information architecture", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.getByTestId("nav-environment")).toBeHidden();
     await page.getByTestId("user-menu").click();
+    await expect(page.getByTestId("menu-intentions")).toHaveText("Intentions");
     await page.getByTestId("menu-environment").click();
     await expect(page).toHaveURL("http://localhost:3000/environment");
   });

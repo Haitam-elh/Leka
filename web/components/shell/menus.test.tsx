@@ -114,7 +114,20 @@ describe("the account menu", () => {
     expect(screen.queryByTestId("menu-billing")).toBeNull();
     // The main pages, for a phone: what a member may open.
     expect(screen.getByTestId("menu-home")).toHaveTextContent("Accueil");
-    expect(screen.queryByTestId("menu-history")).toBeNull();
+    expect(screen.queryByTestId("menu-intentions")).toBeNull();
+    allowed.value = ["workspace:read"];
+  });
+
+  it("names the intentions « Intentions » on a phone as in the header (LEKA-529)", async () => {
+    allowed.value = ["workspace:read", "intention:read"];
+    const user = userEvent.setup();
+    mount(<UserMenu />);
+    await user.click(await screen.findByTestId("user-menu"));
+    const entry = await screen.findByTestId("menu-intentions");
+    expect(entry).toHaveTextContent("Intentions");
+    expect(screen.queryByText("Historique")).toBeNull();
+    await user.click(entry);
+    expect(router.push).toHaveBeenLastCalledWith("/intentions");
     allowed.value = ["workspace:read"];
   });
 

@@ -31,7 +31,7 @@ test.describe("the shell", () => {
     await expect(page.getByTestId("back-home")).toHaveCount(0);
 
     for (const [href, id] of [
-      ["/intentions", "history"],
+      ["/intentions", "intentions"],
       ["/sources", null],
       ["/team", null],
     ] as const) {
