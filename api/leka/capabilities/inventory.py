@@ -148,7 +148,8 @@ def markdown(offer: Catalogue | None = None) -> str:
     lines += [
         "",
         "A bundle is sold once every member is an agent of the registry on sale; its saving is "
-        "computed from its members' prices, and shown only when every member has one.",
+        "computed from each member's price sold alone today, and shown only when every member "
+        "has one.",
         "",
     ]
     return "\n".join(lines)

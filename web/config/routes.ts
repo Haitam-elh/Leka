@@ -206,6 +206,16 @@ export const ROUTES: readonly RouteEntry[] = [
     availability: "available",
   },
   {
+    // A bundle's page (LEKA-531): what it brings, its agents, its price,
+    // where it stands here — bought from there.
+    id: "bundle-detail",
+    path: "/capabilities/bundles/:bundleKey",
+    labelKey: "bundleDetail",
+    parentId: "capabilities",
+    requiredPermission: "workspace:read",
+    availability: "available",
+  },
+  {
     id: "capability-detail",
     path: "/capabilities/:capabilityId",
     labelKey: "capabilityDetail",
@@ -326,6 +336,7 @@ export const routes = {
   welcome: () => "/welcome",
   capabilities: () => "/capabilities",
   capability: (capabilityId: string) => `/capabilities/${capabilityId}`,
+  bundle: (bundleKey: string) => `/capabilities/bundles/${encodeURIComponent(bundleKey)}`,
   architect: () => "/architecte",
   governance: () => "/governance",
   team: () => "/team",

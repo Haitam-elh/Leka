@@ -175,6 +175,9 @@ add_ons:
   provisional: true
   # The least plan that buys or runs an option.
   minimum_plan: starter
+  # How often an agent or a bundle bought is billed: Stripe's price and what
+  # the pages say, the same (LEKA-531).
+  interval: month
   tiers:
     standard: 900
     specialized: 1500

@@ -1080,8 +1080,8 @@ def test_the_database_review_starts_from_the_catalogue_and_runs_nothing() -> Non
     assert credited(
         "database-review", "affaan-m/ECC", "msitarzewski/agency-agents", "garrytan/gstack"
     )
-    # Its last member built, Security & Reliability is sold — its saving not
-    # shown: the reliability analyst has no reference price.
+    # Its last member built, Security & Reliability is sold, its saving from
+    # each agent's price sold alone today (LEKA-531).
     bundle = commercial().add_ons.bundle("security-reliability")
     assert bundle is not None
     assert (bundle.sellable, bundle.missing) == (True, ())
@@ -1092,7 +1092,7 @@ def test_the_database_review_starts_from_the_catalogue_and_runs_nothing() -> Non
         "database-review",
         "reliability-analysis",
     } == set(bundle.agents)
-    assert bundle.savings_percent is None
+    assert (bundle.alone_price, bundle.savings_percent) == (8500, 19)
 
 
 def test_the_performance_analysis_follows_the_slow_path_and_measures_nothing_it_claims() -> None:
@@ -1148,11 +1148,11 @@ def test_the_performance_analysis_follows_the_slow_path_and_measures_nothing_it_
         "msitarzewski/agency-agents",
         "emilkowalski/skills",
     )
-    # Its last member built, Incident Response is sold — its saving not
-    # shown: the reliability analyst has no reference price.
+    # Its last member built, Incident Response is sold, its saving from each
+    # agent's price sold alone today (LEKA-531).
     bundle = commercial().add_ons.bundle("incident-response")
     assert bundle is not None
-    assert (bundle.sellable, bundle.missing, bundle.savings_percent) == (True, (), None)
+    assert (bundle.sellable, bundle.missing, bundle.savings_percent) == (True, (), 19)
     assert {"performance-analysis", "dependency-analysis", "reliability-analysis"} <= set(
         bundle.agents
     )

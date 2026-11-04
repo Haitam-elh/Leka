@@ -140,8 +140,8 @@ def test_the_catalogue_lekas_ships_is_whole() -> None:
     # The reference's bundles, at its prices (LEKA-454), sold once every
     # agent they name is built: Engineering and Frontend Craft (LEKA-461),
     # Security & Reliability, Incident Response and Ship Safe (2026-10-22):
-    # every one. Their saving computed, shown only when it can be: the
-    # reliability analyst and the migration planner have no reference price.
+    # every one. Their saving from each agent's price sold alone today
+    # (LEKA-531), the price a buyer pays for it: none left unsaid.
     assert {b.key: b.monthly_price for b in sold.bundles} == {
         "engineering": 4900,
         "ship-safe": 7900,
@@ -152,9 +152,9 @@ def test_the_catalogue_lekas_ships_is_whole() -> None:
     assert all(b.sellable for b in sold.bundles)
     assert {b.key: b.savings_percent for b in sold.bundles} == {
         "engineering": 26,
-        "ship-safe": None,
-        "incident-response": None,
-        "security-reliability": None,
+        "ship-safe": 24,
+        "incident-response": 19,
+        "security-reliability": 19,
         "frontend-craft": 40,
     }
     # Each plan's quotas, to validate; Enterprise's by contract.

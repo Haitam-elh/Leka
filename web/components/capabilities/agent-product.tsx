@@ -1333,3 +1333,6 @@ function TrustCard({ capability }: { capability: CapabilityDetail }) {
     </section>
   );
 }
+
+/** The same parts on a bundle's page (LEKA-531): one design for products. */
+export { Section as ProductSection, Tile as ProductTile, useSay };

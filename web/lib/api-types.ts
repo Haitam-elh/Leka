@@ -7757,6 +7757,13 @@ export interface components {
             /** Currency */
             currency: string;
             /**
+             * Interval
+             * @description How often an agent or a bundle bought is billed — as Stripe bills it.
+             * @default month
+             * @constant
+             */
+            interval: "month";
+            /**
              * Minimum Plan
              * @description The least plan that runs an agent.
              */
@@ -9955,7 +9962,7 @@ export interface components {
             agent: string | null;
             /**
              * Monthly Price
-             * @description Its reference price; none when unpriced.
+             * @description Its agent's price sold alone today, cents a month; none when not sold alone.
              */
             monthly_price: number | null;
         };
@@ -9971,7 +9978,7 @@ export interface components {
             monthly_price: number;
             /**
              * Alone Price
-             * @description Its members bought one by one, cents a month — none when one is unpriced.
+             * @description Its agents bought one by one at today's prices, cents a month — none when one is not sold alone.
              */
             alone_price: number | null;
             /**

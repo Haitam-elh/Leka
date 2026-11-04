@@ -449,9 +449,12 @@ describe("the catalogue", () => {
     // A bundle naming an agent not built: not sold, no saving it cannot show
     // (LEKA-454).
     expect(soon).toHaveTextContent("Migration Planner· en préparation");
-    expect(within(soon).getByTestId("bundle-soon")).toBeVisible();
-    expect(within(soon).queryByTestId("bundle-buy")).not.toBeInTheDocument();
+    expect(within(soon).getByTestId("bundle-state")).toHaveTextContent("Bientôt disponible");
     expect(soon).not.toHaveTextContent("%");
+    // Each card one way in, to its page, where it is chosen (LEKA-531).
+    expect(within(bundle).getByRole("link")).toHaveAttribute("href", "/capabilities/bundles/architecture");
+    expect(within(soon).getByRole("link")).toHaveAttribute("href", "/capabilities/bundles/engineering");
+    expect(screen.queryByTestId("bundle-buy")).not.toBeInTheDocument();
     // The figures beside the title: counted, the saving the bundle on sale shows.
     expect(screen.getByTestId("catalogue-stat-bundles")).toHaveTextContent("Jusqu'à 23 % d'économie");
     await user.click(within(price).getByTestId("agent-buy"));

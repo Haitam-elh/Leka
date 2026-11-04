@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, BadgeCheck, Check, Clock, Lock, Package, Plus, ShoppingCart } from "lucide-react";
+import { BadgeCheck, Check, ChevronRight, Clock, Lock, Package, Plus, ShoppingCart } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -11,7 +11,7 @@ import { Pill } from "@/components/intelligence/pill";
 import { MarketTile, marketOf } from "@/components/capabilities/market-mark";
 import { useConfirm } from "@/components/interactions/confirm";
 import { useCurrentWorkspace, usePermissions } from "@/components/shell/shell-provider";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { routes } from "@/config/routes";
 import { agentTitle } from "@/lib/agent-title";
 import { ApiError } from "@/lib/api";
@@ -325,56 +325,159 @@ export function AgentPrice({ agentKey, compact = false }: { agentKey: string; co
   );
 }
 
+/** Where a bundle stands for this workspace (LEKA-531): one word, the same on
+ * its card and its page.
+ *
+ *     contract     under an Enterprise contract: every agent its own, none sold
+ *     unavailable  no agent on sale yet
+ *     soon         some of its agents not built yet: not sold (LEKA-454)
+ *     owned        bought: its agents active here
+ *     upgrade      its plan runs no agent: a plan above first
+ *     option       on sale here */
+export type BundleState = "contract" | "unavailable" | "soon" | "owned" | "upgrade" | "option";
+
+export function bundleStateOf(offers: AddOns | undefined, bundle: BundleOffer): BundleState | null {
+  if (!offers) return null;
+  if (isEnterprise(offers)) return "contract";
+  if (!offers.available) return "unavailable";
+  if (!bundle.sellable) return "soon";
+  if (bundle.owned) return "owned";
+  if (!offers.runs_agents) return "upgrade";
+  return "option";
+}
+
+export function bundleName(bundle: BundleOffer, locale: string): string {
+  return locale.startsWith("en") ? bundle.name.en : bundle.name.fr;
+}
+
+export function bundleValue(bundle: BundleOffer, locale: string): string | null {
+  return bundle.value ? (locale.startsWith("en") ? bundle.value.en : bundle.value.fr) : null;
+}
+
+/** A saving said only where it is computed from every agent's price, today,
+ * and the bundle on sale (Karim, 2026-10-15). */
+export function bundleSaving(bundle: BundleOffer): { alone: number; amount: number; percent: number } | null {
+  if (!bundle.sellable || bundle.alone_price === null || bundle.discount_percent === null) return null;
+  return {
+    alone: bundle.alone_price,
+    amount: bundle.alone_price - bundle.monthly_price,
+    percent: bundle.discount_percent,
+  };
+}
+
+/** Its state in words, where it is not simply on sale. */
+export function BundleStateSaid({ state, minimum }: { state: BundleState | null; minimum: string }) {
+  const t = useDictionary();
+  const w = t.catalogue.bundle.states;
+  if (!state || state === "option") return null;
+  const tone = state === "owned" ? "success" : state === "upgrade" ? "warning" : "neutral";
+  return (
+    <Pill tone={tone} dot={state === "owned"} data-testid="bundle-state" data-state={state}>
+      {state === "upgrade" ? fill(w.upgrade, { plan: planName(minimum) }) : w[state]}
+    </Pill>
+  );
+}
+
+/** « Choisir ce bundle » (LEKA-531): its price and cadence said, confirmed,
+ * then Stripe's Checkout — the flow every purchase takes; its agents active
+ * once Stripe says paid. Who may not pay is never offered it. */
+export function useBundlePurchase() {
+  const t = useDictionary();
+  const w = t.catalogue.bundle;
+  const { format, locale } = useLocale();
+  const confirm = useConfirm();
+  const buy = useBuy();
+  const may = useMayBuy();
+  return {
+    may,
+    pending: buy.isPending,
+    buy: async (bundle: BundleOffer, interval: AddOns["interval"]) => {
+      const ok = await confirm({
+        title: fill(w.buyTitle, { name: bundleName(bundle, locale) }),
+        description: fill(w.buyBody, {
+          price: euros(bundle.monthly_price, format),
+          cadence: w.cadences[interval],
+        }),
+        confirmLabel: t.catalogue.offers.buyConfirm,
+      });
+      if (ok) buy.mutate({ kind: "bundle", key: bundle.key }, { onError: (error) => bought(t, error) });
+    },
+  };
+}
+
+/** A bundle's card (LEKA-470, LEKA-531): one target — the whole card opens
+ * the bundle's page, where it is explained and bought. Its name, what it
+ * brings, its price and the saving where computed, its agents, where it
+ * stands here. In the marketplace, a box to buy it with others (LEKA-500),
+ * a control of its own above the card's link. */
 function BundleCard({
   bundle,
+  offers,
   titles,
   markets,
-  minimum,
-  runsAgents,
   picked,
   onPick,
 }: {
   bundle: BundleOffer;
+  offers: AddOns;
   titles: Map<string, string>;
   /** In the marketplace: picked to buy with others, in one order (LEKA-500). */
   picked?: boolean;
   onPick?: () => void;
   /** Each agent's domain, to draw it as on its own card (LEKA-493). */
   markets: Map<string, string>;
-  minimum: string;
-  runsAgents: boolean;
 }) {
   const t = useDictionary();
   const w = t.catalogue.offers;
   const { format, locale } = useLocale();
-  const buy = useBuy();
   const may = useMayBuy();
-  const name = locale.startsWith("en") ? bundle.name.en : bundle.name.fr;
-  const value = bundle.value ? (locale.startsWith("en") ? bundle.value.en : bundle.value.fr) : null;
-  const tone = BUNDLE_TONES[bundle.key] ?? BUNDLE_TONES.default;
+  const name = bundleName(bundle, locale);
+  const value = bundleValue(bundle, locale);
+  const tone = bundleTone(bundle.key);
   const members = bundle.members ?? [];
-  // A saving only where it can be shown (Karim, 2026-10-15): computed from
-  // every member's price, and the bundle on sale.
-  const saving = bundle.sellable && bundle.alone_price !== null && bundle.discount_percent !== null;
+  const saving = bundleSaving(bundle);
+  const state = bundleStateOf(offers, bundle);
   return (
     <li
-      className="flex flex-col overflow-hidden rounded-xl border border-shell-line bg-white"
+      className={cn(
+        "group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border border-shell-line bg-white transition-[border-color,box-shadow,scale] duration-150 ease-[var(--ease-out)]",
+        "[@media(hover:hover)_and_(pointer:fine)]:hover:border-brand-violet/40 [@media(hover:hover)_and_(pointer:fine)]:hover:shadow-[0_6px_18px_-6px_rgba(7,17,67,0.14)]",
+        "has-[a:focus-visible]:border-brand-violet has-[a:focus-visible]:ring-3 has-[a:focus-visible]:ring-brand-violet/30 motion-safe:has-[a:active]:scale-[0.98]",
+      )}
       data-testid="bundle"
       data-key={bundle.key}
+      data-state={state ?? undefined}
     >
       <div className={cn("flex items-center gap-2 bg-linear-to-r px-4 py-2.5 text-white", tone.band)}>
-        <Package className="size-4.5" aria-hidden="true" />
-        <h3 className="text-[0.9375rem] font-semibold">{name}</h3>
+        <Package className="size-4.5 shrink-0" aria-hidden="true" />
+        <h3 className="min-w-0 flex-1 text-[0.9375rem] font-semibold">
+          {/* The whole card opens its page (LEKA-531): its name is the link. */}
+          <Link
+            href={routes.bundle(bundle.key)}
+            className="outline-none after:absolute after:inset-0 after:rounded-xl"
+            data-testid="bundle-open"
+          >
+            {name}
+          </Link>
+        </h3>
+        <ChevronRight
+          className="size-4 shrink-0 opacity-80 transition-transform duration-150 ease-[var(--ease-out)] rtl:-scale-x-100 motion-safe:group-hover:translate-x-0.5"
+          aria-hidden="true"
+        />
       </div>
       <div className="flex flex-1 flex-col gap-3 p-4">
         {value ? <p className="text-[0.8125rem] text-shell-muted">{value}</p> : null}
         <p className="flex flex-wrap items-baseline gap-2">
-          <span className="text-[1.5rem] font-bold text-brand-navy">{euros(bundle.monthly_price, format)}</span>
+          <span className="text-[1.5rem] font-bold text-brand-navy tabular-nums" data-testid="bundle-price">
+            {euros(bundle.monthly_price, format)}
+          </span>
           <span className="text-xs text-shell-muted">{w.month}</span>
           {saving ? (
             <>
-              <span className="text-xs text-shell-muted line-through">{euros(bundle.alone_price as number, format)}</span>
-              <Pill tone="success">{fill(w.save, { percent: bundle.discount_percent as number })}</Pill>
+              <span className="text-xs text-shell-muted line-through">{euros(saving.alone, format)}</span>
+              <Pill tone="success" data-testid="bundle-saving">
+                {fill(w.save, { percent: saving.percent })}
+              </Pill>
             </>
           ) : null}
         </p>
@@ -405,44 +508,20 @@ function BundleCard({
             </li>
           ))}
         </ul>
-        <p className="mt-auto text-center text-xs font-medium text-brand-navy">
-          {fill(w.agentsIn, { count: members.length })}
-        </p>
-        {!bundle.sellable ? (
-          // Some of its agents are not built: not sold (LEKA-454).
-          <p
-            className="flex h-9 items-center justify-center rounded-lg bg-shell-canvas text-[0.8125rem] font-medium text-shell-muted"
-            title={w.bundleSoon}
-            data-testid="bundle-soon"
+        <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1">
+          <span className="text-xs font-medium text-brand-navy">{fill(w.agentsIn, { count: members.length })}</span>
+          {state === "option" ? (
+            <span className="text-xs font-semibold text-shell-nav-active">{t.catalogue.bundle.open}</span>
+          ) : (
+            <BundleStateSaid state={state} minimum={offers.minimum_plan} />
+          )}
+        </div>
+        {onPick && state === "option" && may ? (
+          // A control of its own, above the card's link (LEKA-500).
+          <label
+            className="relative z-10 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-shell-line py-1.5 text-xs text-brand-navy hover:bg-shell-canvas"
+            data-testid="bundle-pick"
           >
-            {w.soon}
-          </p>
-        ) : bundle.owned ? (
-          <Pill tone="success" dot>
-            {w.active}
-          </Pill>
-        ) : !runsAgents ? (
-          <Link href={routes.billingPlans()} className={buttonVariants({ variant: "outline", className: "w-full" })}>
-            {fill(w.fromPlan, { plan: planName(minimum) })}
-          </Link>
-        ) : may ? (
-          <Button
-            type="button"
-            className={cn("w-full text-white", tone.button)}
-            disabled={buy.isPending}
-            onClick={() =>
-              buy.mutate({ kind: "bundle", key: bundle.key }, { onError: (error) => bought(t, error) })
-            }
-            data-testid="bundle-buy"
-          >
-            {w.choose}
-            <ArrowRight className="size-4 rtl:-scale-x-100" aria-hidden="true" />
-          </Button>
-        ) : (
-          <p className="text-xs text-shell-muted">{w.askAdmin}</p>
-        )}
-        {onPick && bundle.sellable && !bundle.owned && runsAgents && may ? (
-          <label className="flex cursor-pointer items-center justify-center gap-2 text-xs text-brand-navy" data-testid="bundle-pick">
             <input
               type="checkbox"
               checked={Boolean(picked)}
@@ -457,18 +536,23 @@ function BundleCard({
   );
 }
 
-/** Each bundle's colour, as the mockup gives it (LEKA-460). */
-const BUNDLE_TONES: Record<string, { band: string; button: string }> = {
-  engineering: { band: "from-blue-600 to-blue-500", button: "bg-blue-600 hover:bg-blue-700" },
-  "ship-safe": { band: "from-violet-600 to-violet-500", button: "bg-violet-600 hover:bg-violet-700" },
-  "incident-response": { band: "from-rose-600 to-rose-500", button: "bg-rose-600 hover:bg-rose-700" },
+/** Each bundle's colour, as the mockup gives it (LEKA-460) — its card and its page. */
+const BUNDLE_TONES: Record<string, { band: string; button: string; soft: string }> = {
+  engineering: { band: "from-blue-600 to-blue-500", button: "bg-blue-600 hover:bg-blue-700", soft: "bg-blue-50 text-blue-700" },
+  "ship-safe": { band: "from-violet-600 to-violet-500", button: "bg-violet-600 hover:bg-violet-700", soft: "bg-violet-50 text-violet-700" },
+  "incident-response": { band: "from-rose-600 to-rose-500", button: "bg-rose-600 hover:bg-rose-700", soft: "bg-rose-50 text-rose-700" },
   "security-reliability": {
     band: "from-emerald-600 to-emerald-500",
     button: "bg-emerald-600 hover:bg-emerald-700",
+    soft: "bg-emerald-50 text-emerald-700",
   },
-  "frontend-craft": { band: "from-orange-500 to-amber-500", button: "bg-orange-500 hover:bg-orange-600" },
-  default: { band: "from-brand-violet to-brand-violet", button: "bg-brand-violet" },
+  "frontend-craft": { band: "from-orange-500 to-amber-500", button: "bg-orange-500 hover:bg-orange-600", soft: "bg-orange-50 text-orange-700" },
+  default: { band: "from-brand-violet to-brand-violet", button: "bg-brand-violet hover:bg-brand-violet/90", soft: "bg-brand-violet-soft text-shell-nav-active" },
 };
+
+export function bundleTone(key: string): { band: string; button: string; soft: string } {
+  return BUNDLE_TONES[key] ?? BUNDLE_TONES.default;
+}
 
 /** The bundles, as the reference composes them: sold once every agent they
  * name is built, their saving computed (LEKA-454). */
@@ -519,8 +603,7 @@ export function Bundles({ selectable = false }: { selectable?: boolean }) {
                     )
                 : undefined
             }
-            minimum={data.minimum_plan}
-            runsAgents={data.runs_agents}
+            offers={data}
           />
         ))}
       </ul>

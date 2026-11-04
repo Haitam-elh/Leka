@@ -187,7 +187,9 @@ class BundleMemberRead(_Read):
     key: str
     name: str
     agent: str | None
-    monthly_price: int | None = Field(description="Its reference price; none when unpriced.")
+    monthly_price: int | None = Field(
+        description="Its agent's price sold alone today, cents a month; none when not sold alone."
+    )
 
 
 class BundleOfferRead(_Read):
@@ -197,7 +199,8 @@ class BundleOfferRead(_Read):
     agents: list[str]
     monthly_price: int
     alone_price: int | None = Field(
-        description="Its members bought one by one, cents a month — none when one is unpriced."
+        description="Its agents bought one by one at today's prices, cents a month — none when "
+        "one is not sold alone."
     )
     discount_percent: int | None = Field(
         description="Computed from the members' prices; none when it cannot be shown."
@@ -214,6 +217,10 @@ class AddOnsRead(_Read):
     available: bool
     provisional: bool = Field(description="Prices to validate: said so where shown.")
     currency: str
+    interval: Literal["month"] = Field(
+        default="month",
+        description="How often an agent or a bundle bought is billed — as Stripe bills it.",
+    )
     minimum_plan: str = Field(description="The least plan that runs an agent.")
     plan: str
     runs_agents: bool = Field(description="Its plan runs agents, or LEKA granted every one.")
