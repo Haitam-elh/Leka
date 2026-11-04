@@ -18,6 +18,10 @@ case "${1:-}" in
 esac
 api=$(docker inspect --format '{{.Config.Image}}' leka-api-1)
 docker build -q -f backup.Dockerfile --build-arg "API_IMAGE=$api" -t leka-backup . > /dev/null
+# Each new API image leaves its layers in the build cache, and nothing else
+# empties it on the box: on 2026-11-04 it held about 9 GB of the 19 GB disk.
+# What the nightly build reuses was used last night, so it stays.
+docker builder prune -f --filter until=48h > /dev/null || true
 echo "$(date -u +%FT%TZ) $1 with $api"
 exec docker run --rm --network leka_default --env-file production.env \
   -e LEKA_ENVIRONMENT=production -e LEKA_REDIS_URL=redis://redis:6379/0 \
