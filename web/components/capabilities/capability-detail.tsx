@@ -222,31 +222,8 @@ function Technical({
                   <span className="text-brand-navy">{w.model}</span>
                   <span className="text-shell-muted">
                     {" · "}
-                    {data.answering
-                      ? fill(w.modelChosen, {
-                          model: data.answering.title,
-                          owner: t.languageModel.owners[data.answering.owner],
-                        })
-                      : w.modelWaiting}
+                    {data.answering ? w.modelReady[data.answering.owner] : w.modelWaiting}
                   </span>
-                  {data.model_needs ? (
-                    <span className="w-full ps-6 text-xs text-shell-muted">
-                      {[
-                        data.model_needs.structured ? w.modelNeeds.structured : null,
-                        data.model_needs.tools ? w.modelNeeds.tools : null,
-                        data.model_needs.context
-                          ? fill(w.modelNeeds.context, {
-                              tokens: String(data.model_needs.context),
-                            })
-                          : null,
-                        (w.modelNeeds.quality as Record<string, string>)[
-                          String(data.model_needs.quality)
-                        ],
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </span>
-                  ) : null}
                 </li>
               ) : null}
             </ul>

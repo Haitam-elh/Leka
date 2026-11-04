@@ -69,7 +69,6 @@ NO_MODEL = {
     "mistral_api_key": None,
     "anthropic_api_key": None,
     "llm_api_url": None,
-    "llm_fallbacks": "",
 }
 
 

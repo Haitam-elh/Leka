@@ -12,12 +12,14 @@ a feature asks — a Request: what it is for, its messages, how much it asks
     │   and says what it needs — Needs: a structured answer, tools, a
     │   context this long, a quality at least
     ▼
-routing.py     the models that can answer, in order — the workspace's own,
-               LEKA's default, the fallbacks, the others; what cannot do what
-               is asked passed over, and why
+routing.py     the model the LEKA team assigned to the agent, or to LEKA's
+               own work (agents/models.yaml, LEKA-530), then the fallbacks
+               approved for it — after the company's own model under an
+               Enterprise contract; what cannot do what is asked passed over,
+               and why; never a model chosen per task
     ▼
 service.py     each tried: a temporary failure tried again, then the next
-               model (three at most); a structured answer checked against its
+               approved model (three at most); a structured answer checked against its
                model, asked again when it does not match; tools called until
                the model answers; every attempt kept (model_calls)
     ▼
@@ -95,48 +97,74 @@ Gemini's `cachedContentTokenCount`, the chat-completions APIs'
 when it is published, else as any token in: what a call cost is what was
 billed.
 
-## 3. Routing
+## 3. Routing: the model assigned to each agent (LEKA-530)
 
-`routing.py`, pure. The order is a policy:
+`routing.py`, pure. **No model is chosen per task while it runs**: each agent
+runs on the model the LEKA team validated for it, every step of it — and so
+does LEKA's own work (reading an intention, its analysis, its answer, the
+company model's enrichment, the interface's words). The order is a policy:
 
-1. **the workspace's own model**, when it brought one and it is on — its
-   account, its contract, its data residency; when it said **"ours only"**
-   (`exclusive`), nothing else, even when it fails;
-1b. **the models its kind of work is given** (LEKA-491) —
-   `LEKA_LLM_TASK_ROUTES`, `code=anthropic:claude-sonnet-5;
-   vision=openai:gpt-4.1, google` — in their order, when LEKA holds their key
-   and they can do what is asked (route `task`); none configured, or none of
-   them able: on to the default;
-2. **LEKA's default** — `LEKA_LLM_PROVIDER` + `LEKA_LLM_MODEL`, Gemini 3.8
-   Flash; configured, never written where it is used;
-3. **the fallbacks** — `LEKA_LLM_FALLBACKS` (`mistral:mistral-large-latest`),
-   in their order; none configured, every other provider LEKA holds a key
-   for, with its default;
-4. **the others** LEKA holds a key for, by what the task prefers — the best,
-   the cheapest, the fastest.
+1. **the workspace's own model**, under an Enterprise contract that brings it
+   (§ 6) and when it is on — its account, its contract, its data residency;
+   when it said **"ours only"** (`exclusive`), nothing else, even when it
+   fails. A step its own model cannot do (a code change asked of a mid-range
+   model) goes to the strongest model of its provider, on its key (route
+   `own_stronger`);
+2. **the model assigned to the work** — the agent's, from the purpose of the
+   call (`agent:<key>` or `agent:<key>:<step>`), or LEKA's own work's — in
+   [`agents/models.yaml`](../agents/models.yaml) (route `assigned`);
+3. **the fallbacks approved for that same agent**, in their order (route
+   `fallback`). **None approved: none tried** — the agent tries its model
+   again (§ 4), then says it failed. Never another model LEKA holds a key
+   for, never an untested one in its place.
 
-A model that cannot do what is asked — a structured answer, tools, a context
-that long, a quality that high — **is not offered, and why is kept**
-(`Passed`: structured, tools, context, quality, vision, no_key, exclusive). **A
-capability's needs choose its model**: its definition says them
-(`ModelNeed`, [capabilities.md](capabilities.md) § 1), the catalogue asks the
-router, the capability's sheet says which model would run it here.
+A model that cannot do what a step asks — a structured answer, tools, a
+context that long, a quality that high, images — **is not tried, and why is
+kept** (`Passed`: structured, tools, context, quality, vision, no_key,
+exclusive). That never happens to a validated agent:
+`tests/test_model_assignments.py` holds every agent's model, and every
+fallback approved for it, to every step it asks (its definition's
+`ModelNeed`, [capabilities.md](capabilities.md) § 1, and the hardest steps of
+a code change, quality 3). The catalogue says whether the assigned model can
+run each capability here; a capability's page says it is ready, on LEKA's
+model or the company's — never which one.
 
-**Its kind of work** (`Needs.task`, LEKA-491) comes from its category
-(`TASK_OF_CATEGORY` in `catalogue.py`): development `code`; architecture and
-infrastructure `architecture`; documentation `writing`; data `data`. Which
-models each kind is given is **configuration, never code**: a first strategy
-to validate in staging — Claude for code and reviews, OpenAI where images are
-read, Gemini where it is already good and cheap — is
-`code=anthropic:claude-sonnet-5; architecture=anthropic:claude-sonnet-5;
-vision=openai:gpt-4.1`. Every call keeps its route: `task` says the kind of
-work chose it.
+### Assigning a model to an agent
+
+`agents/models.yaml`, one line per agent of `agents/registry.yaml` (the test
+fails on an agent without one, or a line without its agent), and one for
+LEKA's own work:
+
+    operations:
+      model: google:gemini-3.8-flash
+      fallbacks: []
+    agents:
+      code-review:
+        model: google:gemini-3.8-flash
+        fallbacks: [mistral:mistral-large-latest]   # once tested for it
+
+Changing one is **engineering work, by the LEKA team**:
+
+1. **Try the candidate on the agent's real work**, outside production:
+   `LEKA_LLM_TRIAL_MODEL=provider:model` puts every agent on it (refused in
+   production, `config.py`); run the agent on its usual requests — its
+   instructions, its tools, the deliverable it owes.
+2. **Compare**: what it delivered (the deliverable checks, the intention
+   benchmark, [benchmarks/intentions.md](benchmarks/intentions.md)), how
+   reliably (`python -m leka.metering.cli usage --agent <key> --by model`:
+   failures, invalid answers), how fast, what it cost
+   (`python -m leka.metering.cli compare`).
+3. **Write it** in `agents/models.yaml`, the comparison in the pull request.
+   A fallback is the same work, for that agent.
+
+LEKA needs the key of each provider the file names (`LEKA_<PROVIDER>_API_KEY`).
 
 ## 4. Retry and fallback
 
 `LEKA_LLM_RETRIES` (1): a failure the provider says is temporary is tried
 again — after what it asks, else 1 s, 2 s…, never more than 10 s — then the
-next model. **Three models at most** for one request. A workspace's model
+agent's next approved model, if it has one. **Three models at most** for one
+request. A workspace's model
 refusing its key is **marked failed**, for its admin to see, and LEKA's
 answers instead (unless "ours only"). A `budget` (seconds) bounds it all —
 reading an intention while its asker waits: 12 s. **Nothing answers: a
@@ -146,22 +174,26 @@ without (the rules).
 ## 5. What is kept
 
 `model_calls` — one row per attempt: purpose, ref, tier, provider, model,
-the version that answered, the route (own, default, fallback, alternative)
-and which try, whose model (LEKA's or the workspace's), ok · failed ·
+the version that answered, the route (own, own_stronger, assigned,
+fallback, trial; `default`, `alternative` and `task` in what was kept before
+LEKA-530) and which try, whose model (LEKA's or the workspace's), ok · failed ·
 invalid and why, tokens in, out, thinking, tool calls, **whether the
 provider said what it used** (`usage_reported`: an answer without it reads 0
 tokens — not known, not free; none for the calls kept before LEKA-430),
 **the cost at the rate in force** and that rate (`rate_id`; none when the
 model has no rate, or its usage was not said), latency, the provider's
 request id. What answers « why did LEKA say that? » and « what does it
-spend? ». `GET /models/usage` reads it.
+spend? » — **for the LEKA team only** (LEKA-530):
+`python -m leka.metering.cli usage` ([metering.md](metering.md) § 6). No
+customer route serves its tokens or its cost
+(`tests/test_usage_report.py` walks every route of the API).
 
 The rates are in the database (`model_rates`, LEKA-430): what a model costs
 from a day on, seeded with the list prices above — a new price is a new
 rate, a rate never rewritten. Routing still reads the list prices here.
 [metering.md](metering.md) says how a rate is added.
 
-## 6. A workspace's own model
+## 6. A workspace's own model (an Enterprise contract)
 
 `workspace_models` — one per workspace: provider (Google, Mistral, OpenAI or
 compatible, Azure OpenAI, Anthropic), the model or the Azure deployment, its
@@ -171,18 +203,25 @@ back — its last four characters are; on or off; "ours only"; whether it
 answered when last tested. A customer's address is reached through the
 connectors' transport: **public https only**, pinned against DNS rebinding.
 
+**Brought under an Enterprise contract only** (the catalogue's `own_llm`,
+LEKA-530): a public plan is refused (`403 plan_required`). A model brought
+before that is kept, still answers, is said in Paramètres, and can be
+removed — never changed again there. Customers never choose, compare or
+switch LEKA's models: `PUT /models/default` and `GET /models/usage` are gone
+(a choice kept from before, `workspace_model_defaults`, is never read).
+
 **Microsoft 365 Copilot** is no API a platform can call; a company on Copilot
 holds **Azure OpenAI** — that is what it plugs in.
 
 | Route | | Permission |
 | --- | --- | --- |
-| `GET /models` | LEKA's default (its price, the next one), the fallbacks, the providers one may bring and what each takes, the workspace's model, who answers in order | `workspace:read` |
-| `PUT /models/settings` | bring or change its own — a key needed to bring one, and again for another provider; left out, kept | `workspace:update` |
-| `DELETE /models/settings` | back to LEKA's | `workspace:update` |
+| `GET /models` | whether its contract brings a model of its own, the providers it may bring and what each takes, its own model — never LEKA's models, their prices, an order of answer | `workspace:read` |
+| `PUT /models/settings` | bring or change its own, under the contract — a key needed to bring one, and again for another provider; left out, kept | `workspace:update` |
+| `DELETE /models/settings` | back to LEKA's, on any plan | `workspace:update` |
 | `POST /models/settings/test` | asked a few words: did it answer, how fast, which version — LEKA's never tried in its place | `workspace:update` |
-| `GET /models/usage?days=` | calls, failures, tokens, cost — LEKA's and its own apart, by day, model, purpose; the latest | `workspace:read` |
 
-In the app: **Paramètres › Modèle de langage**.
+In the app: **Paramètres › Le modèle de votre entreprise**, under the
+contract only.
 
 ## 7. Who uses it
 
@@ -201,20 +240,21 @@ and gets an execution back; it never imports the gateway.
   what they found and nothing else; each point cites the findings, causes
   and evidence it rests on — a citation the result does not hold is
   dropped, an answer resting on nothing is not kept. The intention's summary
-  is that answer. Its needs (a structured answer, quality 2) choose its
-  model.
+  is that answer. It runs on LEKA's own work's model, which its needs (a
+  structured answer, quality 2) are held to.
 - **The agents** (LEKA-395, [agent-runtime.md](agent-runtime.md)) —
-  `run_tools`, `deep` tier, what the agent needs choosing the model; each
-  call kept with its run (`agent_run:<id>`).
+  `run_tools`, `deep` tier, on the model assigned to the agent; each call
+  kept with its run (`agent_run:<id>`).
 
 No model configured, or none answering: the rules read and analyse, as
 before LEKA-394, and the screens say so.
 
 ## 8. Configuration
 
-`LEKA_LLM_PROVIDER` (`google`, `mistral`, `anthropic`, `openai`),
-`LEKA_LLM_MODEL` (`gemini-3.8-flash`), `LEKA_LLM_FALLBACKS`,
-`LEKA_LLM_TASK_ROUTES` (LEKA-491), `LEKA_LLM_RETRIES`, `LEKA_GOOGLE_API_KEY`,
+Which model each agent runs on: [`agents/models.yaml`](../agents/models.yaml)
+(§ 3), never an environment. `LEKA_LLM_RETRIES`, `LEKA_LLM_PROVIDER` and
+`LEKA_LLM_API_URL` (a provider reached at another address), `LEKA_LLM_TRIAL_MODEL`
+(a candidate, outside production), `LEKA_GOOGLE_API_KEY`,
 `LEKA_MISTRAL_API_KEY`, `LEKA_ANTHROPIC_API_KEY`, `LEKA_OPENAI_API_KEY` —
 [configuration.md](configuration.md). The keys are **server-side only**:
 never sent to the browser, never logged, rotated every 90 days
@@ -237,9 +277,9 @@ production:
 | OpenAI (API) | API data not used to train by default; kept up to 30 days for abuse checks | zero data retention if the contract needs it; the project's region |
 | Mistral | per its API terms | as above |
 
-Then: set the key (`LEKA_<PROVIDER>_API_KEY`), name it in
-`LEKA_LLM_FALLBACKS` or `LEKA_LLM_TASK_ROUTES`, and read `GET /models` (who
-answers, in order) and `GET /models/usage` (what each costs) on the first
-days. A provider down or without a key is passed over — said `no_key` — and the
-next answers: never a loop, never billed twice (a failed attempt is kept as
-failed, its tokens as said).
+Then: set the key (`LEKA_<PROVIDER>_API_KEY`), assign its model to the
+agents it was validated for (`agents/models.yaml`, § 3), and read
+`python -m leka.metering.cli usage --provider <name> --by agent` on the first
+days. A provider without a key is passed over — said `no_key` — and only an
+approved fallback answers in its place: never a loop, never billed twice (a
+failed attempt is kept as failed, its tokens as said).

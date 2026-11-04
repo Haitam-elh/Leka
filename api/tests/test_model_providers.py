@@ -37,7 +37,6 @@ from leka.capabilities.gateway import (
     Needs,
     Output,
     Own,
-    Prefer,
     ProviderError,
     Request,
     Role,
@@ -49,8 +48,8 @@ from leka.capabilities.gateway import (
     profile,
     route,
 )
+from leka.capabilities.gateway.assignment import Assignment
 from leka.capabilities.gateway.contract import Call
-from leka.capabilities.gateway.routing import fallbacks_of, task_routes_of
 
 
 class Verdict(BaseModel):
@@ -459,126 +458,72 @@ def test_mistral_costs_what_it_lists_from_the_day_it_was_read() -> None:
 
 KEYS: dict[str, str | None] = {"google": "g", "mistral": "m", "anthropic": None}
 DEFAULT = ("google", "gemini-3.8-flash")
+# What agents/models.yaml gives an agent: its model, no fallback approved.
+ASSIGNED = Assignment(model=DEFAULT)
 
 
 def _order(routing: Any) -> list[tuple[str, str, str]]:
     return [(r.endpoint.provider, r.profile.model, r.why) for r in routing.routes]
 
 
-def test_the_default_answers_first_then_the_fallbacks_then_the_rest() -> None:
+def test_the_assigned_model_answers_then_its_approved_fallback_and_nothing_else() -> None:
+    # LEKA-530: never another model LEKA holds a key for, never one by task.
     routing = route(
-        Needs(), own=None, keys=KEYS, default=DEFAULT, fallbacks=fallbacks_of("mistral")
+        Needs(),
+        own=None,
+        keys=ALL_KEYS,
+        assignment=Assignment(DEFAULT, fallbacks=(("mistral", "mistral-large-latest"),)),
     )
-    assert _order(routing)[:2] == [
-        ("google", "gemini-3.8-flash", "default"),
+    assert _order(routing) == [
+        ("google", "gemini-3.8-flash", "assigned"),
         ("mistral", "mistral-large-latest", "fallback"),
     ]
-    assert {r.why for r in routing.routes[2:]} == {"alternative"}
-    # No key for Anthropic: not offered, and said.
-    assert all(r.endpoint.provider != "anthropic" for r in routing.routes)
 
 
 def test_a_workspace_model_comes_first_and_ours_only_means_nothing_else() -> None:
     own = Own(Endpoint("azure_openai", "k", base_url="https://acme", owner="workspace"), "gpt-prod")
-    routing = route(Needs(), own=own, keys=KEYS, default=DEFAULT)
-    assert _order(routing)[0] == ("azure_openai", "gpt-prod", "own")
-    assert _order(routing)[1] == ("google", "gemini-3.8-flash", "default")
+    routing = route(Needs(), own=own, keys=KEYS, assignment=ASSIGNED)
+    assert _order(routing) == [
+        ("azure_openai", "gpt-prod", "own"),
+        ("google", "gemini-3.8-flash", "assigned"),
+    ]
 
     only = route(
         Needs(),
         own=Own(own.endpoint, own.model, exclusive=True),
         keys=KEYS,
-        default=DEFAULT,
+        assignment=ASSIGNED,
     )
     assert _order(only) == [("azure_openai", "gpt-prod", "own")]
     assert only.passed[-1].reason == "exclusive"
 
 
-def test_what_a_task_needs_passes_over_models_that_cannot_and_says_why() -> None:
-    # A context past what Mistral takes: only Gemini, a million tokens in.
-    routing = route(Needs(context=500_000), own=None, keys=KEYS, default=DEFAULT)
-    assert [r.profile.model for r in routing.routes] == ["gemini-3.8-flash"]
-    assert {(p.model, p.reason) for p in routing.passed} >= {
-        ("mistral-large-latest", "context"),
-        ("mistral-small-latest", "context"),
-    }
-    # The best only: Mistral Small and Medium are not offered.
-    best = route(Needs(quality=3), own=None, keys=KEYS, default=DEFAULT)
-    assert [r.profile.model for r in best.routes] == ["gemini-3.8-flash", "mistral-large-latest"]
-    # No key for the default: said, and the next one answers.
-    without = route(Needs(), own=None, keys={"mistral": "m"}, default=DEFAULT)
-    assert without.passed[0].reason == "no_key"
-    assert without.routes[0].profile.model == "mistral-large-latest"
+def test_what_a_step_needs_its_model_cannot_do_is_said_never_handed_to_another() -> None:
+    # A context past what Mistral Large takes: not tried, said — and no
+    # other model in its place.
+    large = Assignment(("mistral", "mistral-large-latest"))
+    routing = route(Needs(context=500_000), own=None, keys=ALL_KEYS, assignment=large)
+    assert routing.routes == ()
+    assert [(p.model, p.reason) for p in routing.passed] == [("mistral-large-latest", "context")]
+    # No key for the assigned model: said, and nothing answers in its place.
+    without = route(Needs(), own=None, keys={"mistral": "m"}, assignment=ASSIGNED)
+    assert without.routes == ()
+    assert [p.reason for p in without.passed] == ["no_key"]
 
-
-def test_beyond_the_fallbacks_the_task_says_what_it_prefers() -> None:
-    keys: dict[str, str | None] = {"mistral": "m"}
-    default = ("mistral", "mistral-large-latest")
-    by_cost = route(Needs(prefer=Prefer.COST), own=None, keys=keys, default=default)
-    by_quality = route(Needs(prefer=Prefer.QUALITY), own=None, keys=keys, default=default)
-    # Large first either way: it is the default; then the order differs.
-    assert by_cost.routes[0].profile.model == by_quality.routes[0].profile.model
-    assert [r.profile.model for r in by_quality.routes[1:]] == [
-        "mistral-medium-latest",
-        "mistral-small-latest",
-    ]
-
-
-def test_fallbacks_are_read_as_configured() -> None:
-    assert fallbacks_of(" mistral:mistral-small-latest , anthropic ,, ") == [
-        ("mistral", "mistral-small-latest"),
-        ("anthropic", "claude-sonnet-5-5"),
-    ]
-    assert fallbacks_of("") == []
-
-
-# ── each kind of work its models (LEKA-491) ─────────────────────────────────
 
 ALL_KEYS: dict[str, str | None] = {"google": "g", "mistral": "m", "anthropic": "a", "openai": "o"}
 
 
-def test_a_kind_of_work_tries_its_own_models_first_said_why_then_the_default() -> None:
-    tasks = task_routes_of("code=anthropic:claude-sonnet-5; vision=openai:gpt-4.1")
-    assert tasks == {
-        "code": [("anthropic", "claude-sonnet-5")],
-        "vision": [("openai", "gpt-4.1")],
-    }
-    code = route(Needs(task="code"), own=None, keys=ALL_KEYS, default=DEFAULT, tasks=tasks)
-    assert _order(code)[:2] == [
-        ("anthropic", "claude-sonnet-5", "task"),
-        ("google", "gemini-3.8-flash", "default"),
-    ]
-    # Another kind of work, or none: the default first, as before.
-    writing = route(Needs(task="writing"), own=None, keys=ALL_KEYS, default=DEFAULT, tasks=tasks)
-    assert _order(writing)[0] == ("google", "gemini-3.8-flash", "default")
-    # The workspace's own model still comes before any of LEKA's.
-    own = Own(Endpoint("azure_openai", "k", base_url="https://acme", owner="workspace"), "gpt")
-    mine = route(Needs(task="code"), own=own, keys=ALL_KEYS, default=DEFAULT, tasks=tasks)
-    assert _order(mine)[0][2] == "own" and _order(mine)[1][2] == "task"
-
-
-def test_a_kind_of_work_s_model_without_its_key_falls_back_said_never_retried_in_a_loop() -> None:
-    tasks = task_routes_of("code=openai:gpt-4.1")
-    routing = route(Needs(task="code"), own=None, keys=KEYS, default=DEFAULT, tasks=tasks)
-    assert ("openai", "gpt-4.1", "no_key") in {
-        (p.provider, p.model, p.reason) for p in routing.passed
-    }
-    assert _order(routing)[0] == ("google", "gemini-3.8-flash", "default")
-    # Each model offered once, whatever names it twice.
-    twice = route(
-        Needs(task="code"),
+def test_images_to_read_only_to_a_model_that_reads_them() -> None:
+    routing = route(Needs(vision=True), own=None, keys=ALL_KEYS, assignment=ASSIGNED)
+    assert all(r.profile.vision for r in routing.routes) and routing.routes
+    blind = route(
+        Needs(vision=True),
         own=None,
         keys=ALL_KEYS,
-        default=("openai", "gpt-4.1"),
-        tasks=tasks,
+        assignment=Assignment(("mistral", "mistral-large-latest")),
     )
-    assert [r.profile.model for r in twice.routes].count("gpt-4.1") == 1
-
-
-def test_images_to_read_only_to_a_model_that_reads_them() -> None:
-    routing = route(Needs(vision=True), own=None, keys=ALL_KEYS, default=DEFAULT)
-    assert all(r.profile.vision for r in routing.routes)
-    assert ("mistral-large-latest", "vision") in {(p.model, p.reason) for p in routing.passed}
+    assert ("mistral-large-latest", "vision") in {(p.model, p.reason) for p in blind.passed}
 
 
 async def test_openai_is_asked_in_chat_completions_with_leka_s_key() -> None:
@@ -710,13 +655,16 @@ def test_a_step_its_own_model_cannot_do_goes_to_its_provider_s_strongest_on_its_
     # on the workspace's own key; the rest stays with Medium.
     endpoint = Endpoint("mistral", "ws-key", owner="workspace")
     own = Own(endpoint, "mistral-medium-latest")
-    hard = route(Needs(quality=3), own=own, keys=KEYS, default=DEFAULT)
+    hard = route(Needs(quality=3), own=own, keys=KEYS, assignment=ASSIGNED)
     assert _order(hard)[0] == ("mistral", "mistral-large-latest", "own_stronger")
     assert hard.routes[0].endpoint.api_key == "ws-key"
-    easy = route(Needs(), own=own, keys=KEYS, default=DEFAULT)
+    easy = route(Needs(), own=own, keys=KEYS, assignment=ASSIGNED)
     assert _order(easy)[0] == ("mistral", "mistral-medium-latest", "own")
     # Ours only: still its provider's strongest, never LEKA's.
     only = route(
-        Needs(quality=3), own=Own(endpoint, own.model, exclusive=True), keys=KEYS, default=DEFAULT
+        Needs(quality=3),
+        own=Own(endpoint, own.model, exclusive=True),
+        keys=KEYS,
+        assignment=ASSIGNED,
     )
     assert [r[2] for r in _order(only)] == ["own_stronger"]

@@ -176,7 +176,6 @@ function detail(more: Partial<AgentRunDetail> = {}): AgentRunDetail {
       dropped: 1,
     },
     events: [],
-    usage: { calls: 3, tokens_in: 1000, tokens_out: 300, cost_usd: null },
     ...more,
   };
 }

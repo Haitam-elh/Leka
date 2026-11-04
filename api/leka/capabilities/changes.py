@@ -2810,7 +2810,7 @@ class ChangeService:
         needs = (
             replace(needs_of(definition), tools=False, quality=HARD_QUALITY)
             if definition is not None
-            else Needs(structured=True, quality=3, task="code")
+            else Needs(structured=True, quality=3)
         )
         loop = asyncio.get_running_loop()
         deadline = loop.time() + budget

@@ -6,7 +6,8 @@ what each did.
     PUT    /governance/ai/controls/{id}     changed — its kind kept
     DELETE /governance/ai/controls/{id}     removed; what it did stays
     GET    /governance/ai/events            what the controls did, the latest first
-    GET    /governance/ai/calls             the model calls, whom each was for
+    GET    /governance/ai/calls             the model calls, whom each was for —
+                                            never its tokens or cost (LEKA-530)
 
 Reading the controls is any member's — what they may ask a model is theirs
 to know; changing one takes `policy:manage`; what the controls did and the
@@ -24,7 +25,7 @@ from fastapi import APIRouter, Depends, Query, Response, status
 
 from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
-from leka.capabilities import ModelCallRead, model_calls
+from leka.capabilities import AICallRead, model_calls
 from leka.core.errors import ErrorCode, FieldError
 from leka.governance import (
     AIControl,
@@ -183,17 +184,15 @@ async def events(
     return [AIControlEventRead.model_validate(r) for r in rows]
 
 
-@router.get(
-    "/calls", response_model=list[ModelCallRead], summary="The model calls, whom each was for"
-)
+@router.get("/calls", response_model=list[AICallRead], summary="The model calls, whom each was for")
 async def calls(
     session: SessionDep,
     principal: Auditor,
     user_id: Annotated[uuid.UUID | None, Query()] = None,
     run_id: Annotated[uuid.UUID | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
-) -> list[ModelCallRead]:
+) -> list[AICallRead]:
     rows = await model_calls(
         session, principal.workspace_id, user_id=user_id, run_id=run_id, limit=limit
     )
-    return [ModelCallRead.model_validate(r) for r in rows]
+    return [AICallRead.model_validate(r) for r in rows]

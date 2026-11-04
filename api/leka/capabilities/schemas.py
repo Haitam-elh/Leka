@@ -230,14 +230,12 @@ class CapabilityUsageRead(BaseModel):
 
 
 class CapabilityModelRead(BaseModel):
-    """The model that would run a capability here, chosen by what it needs
-    (LEKA-394)."""
+    """Whose model would run a capability here (LEKA-394): LEKA's — the one
+    the LEKA team assigned to it — or the workspace's own, under an
+    Enterprise contract. Never which model, nor what it costs (LEKA-530)."""
 
     model_config = ConfigDict(frozen=True)
 
-    provider: str
-    model: str
-    title: str
     owner: Literal["leka", "workspace"]
 
 
@@ -414,34 +412,10 @@ class CapabilityMatch(BaseModel):
     reasons: list[str] = Field(description="goal, kind, entity:<type>, words, always")
 
 
-# ── language models (LEKA-394) ───────────────────────────────────────────────
-
-
-class ModelPriceRead(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    since: str = Field(description="The day this price applies from (ISO).")
-    per_million_in: float
-    per_million_out: float
-
-
-class ModelProfileRead(BaseModel):
-    """A model LEKA knows: what it takes, what it can do, what it costs."""
-
-    model_config = ConfigDict(frozen=True)
-
-    provider: str
-    model: str
-    title: str
-    context: int
-    output: int
-    structured: bool
-    tools: bool
-    quality: int = Field(description="1 enough to classify · 2 good analysis · 3 the best")
-    speed: int = Field(description="1 slow · 3 fast")
-    price: ModelPriceRead | None = Field(description="Today's list price; none: not published.")
-    next_price: ModelPriceRead | None = Field(description="A published change to come.")
-    known: bool = Field(description="False: a model the table does not know, assumed.")
+# ── language models (LEKA-394, LEKA-530) ─────────────────────────────────────
+# What a customer reads of models: its own, when its contract brings one.
+# Which model each agent runs on, what it costs, the tokens it used — the
+# LEKA team's, internal (agents/models.yaml, python -m leka.metering.cli).
 
 
 class ModelProviderRead(BaseModel):
@@ -453,8 +427,6 @@ class ModelProviderRead(BaseModel):
     title: str
     needs: list[str] = Field(description="What it takes: key, url, model.")
     default_model: str | None
-    leka_holds: bool = Field(description="LEKA holds a key for it.")
-    models: list[ModelProfileRead]
 
 
 class WorkspaceModelRead(BaseModel):
@@ -476,46 +448,17 @@ class WorkspaceModelRead(BaseModel):
     changed_at: datetime
 
 
-class ModelRouteRead(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    provider: str
-    model: str
-    title: str
-    owner: Literal["leka", "workspace"]
-    why: Literal["own", "default", "fallback", "alternative"]
-
-
-class ModelGatewayRead(BaseModel):
-    """What answers in this workspace, and what it could bring."""
+class ModelSettingsRead(BaseModel):
+    """The workspace's own model, under an Enterprise contract that brings it
+    (LEKA-530): never LEKA's models, their prices or what they used."""
 
     model_config = ConfigDict(frozen=True)
 
-    default: ModelProfileRead
-    default_ready: bool = Field(description="LEKA holds a key for its default model.")
-    fallbacks: list[ModelProfileRead]
+    offered: bool = Field(description="Its contract brings a model of its own (Enterprise).")
     providers: list[ModelProviderRead]
-    own: WorkspaceModelRead | None
-    answering: list[ModelRouteRead] = Field(description="Who would answer now, in order.")
-    ready: bool = Field(description="A model can answer here.")
-    chosen: ModelProfileRead | None = Field(
-        default=None,
-        description="Which of LEKA's models its admin chose to answer first here; none: "
-        "LEKA's default.",
+    own: WorkspaceModelRead | None = Field(
+        description="Its own model, when it set one — kept, and removable, on any plan."
     )
-    choosable: list[ModelProfileRead] = Field(
-        default_factory=list,
-        description="LEKA's models one may choose here: those of a provider LEKA holds a key for.",
-    )
-
-
-class ModelDefaultUpdate(BaseModel):
-    """Which of LEKA's models answers first in this workspace."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    provider: Literal["google", "mistral", "openai", "anthropic"]
-    model: str = Field(min_length=1, max_length=120)
 
 
 class WorkspaceModelUpdate(BaseModel):
@@ -540,48 +483,11 @@ class ModelTestRead(BaseModel):
     version: str | None
 
 
-class ModelTallyRead(BaseModel):
-    model_config = ConfigDict(frozen=True)
+class AICallRead(BaseModel):
+    """A call to a model, for the workspace's AI governance (LEKA-406): when,
+    for what, whom, which provider handled its data, how it ended — never
+    its tokens or its cost (LEKA-530)."""
 
-    calls: int
-    failed: int
-    tokens_in: int
-    tokens_out: int
-    tokens_cached: int = Field(
-        default=0, description="Of tokens_in, those read from the provider's cache: billed less."
-    )
-    cost_usd: float
-    unpriced: int = Field(description="Calls to a model without a published price.")
-    average_latency_ms: int
-
-
-class ModelDayRead(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    day: str
-    calls: int
-    failed: int
-    tokens: int
-    cost_usd: float
-
-
-class ModelBreakdownRead(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    provider: str
-    model: str
-    title: str
-    tally: ModelTallyRead
-
-
-class ModelPurposeRead(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    purpose: str
-    tally: ModelTallyRead
-
-
-class ModelCallRead(BaseModel):
     model_config = ConfigDict(frozen=True, from_attributes=True)
 
     id: uuid.UUID
@@ -590,72 +496,11 @@ class ModelCallRead(BaseModel):
     ref: str | None
     provider: str
     model: str
-    version: str | None
     owner: str
-    route: str
-    attempt: int
     status: Literal["ok", "failed", "invalid"]
-    error: str | None
-    tokens_in: int
-    tokens_out: int
-    tokens_cached: int = 0
-    cost_usd: float | None
-    latency_ms: int
     # Whom it was asked for (LEKA-406); none: LEKA's own work.
     user_id: uuid.UUID | None = None
     run_id: uuid.UUID | None = None
-
-
-class LLMRunRead(BaseModel):
-    """One piece of work a model did for LEKA (LEKA-429), and how it ended."""
-
-    model_config = ConfigDict(frozen=True, from_attributes=True)
-
-    id: uuid.UUID
-    purpose: str
-    ref: str | None
-    status: Literal["succeeded", "invalid", "no_model", "timed_out", "failed"]
-    provider: str | None
-    model: str | None
-    version: str | None
-    calls: int
-    tokens_in: int
-    tokens_out: int
-    cost_usd: float | None
-    latency_ms: int
-    context_items: int
-    error: str | None
-    started_at: datetime
-
-
-class ModelUsageRead(BaseModel):
-    """What this workspace asked of models: LEKA's and its own apart."""
-
-    model_config = ConfigDict(frozen=True)
-
-    days: int
-    total: ModelTallyRead
-    previous: ModelTallyRead
-    leka: ModelTallyRead
-    own: ModelTallyRead
-    fallbacks: int = Field(description="Answers that came from another model than the first.")
-    by_day: list[ModelDayRead]
-    by_model: list[ModelBreakdownRead]
-    by_purpose: list[ModelPurposeRead]
-    latest: list[ModelCallRead]
-    runs: dict[str, int] = Field(
-        description="The work models did (LEKA-429), by how it ended: succeeded, invalid, "
-        "no_model, timed_out, failed."
-    )
-    latest_runs: list[LLMRunRead]
-    intentions: int = Field(
-        default=0, description="The intentions of the period a model worked for."
-    )
-    per_intention_usd: float | None = Field(
-        default=None,
-        description="What one of them cost, on average: every call made for it, "
-        "understanding and answer, at list price.",
-    )
 
 
 # ── agent runs (LEKA-395) ───────────────────────────────────────────────────
@@ -852,15 +697,6 @@ class AgentRunEventRead(BaseModel):
     detail: dict[str, object]
 
 
-class AgentRunUsage(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    calls: int = Field(description="Calls to a model, every attempt.")
-    tokens_in: int
-    tokens_out: int
-    cost_usd: float | None = Field(description="At list price; none when a price is not known.")
-
-
 class PullBriefRead(BaseModel):
     """A pull request as a repository lists it."""
 
@@ -1012,7 +848,6 @@ class AgentRunDetail(AgentRunRead):
         "with GET /agent-runs/{id}/design",
     )
     events: list[AgentRunEventRead]
-    usage: AgentRunUsage
 
 
 # ── routing (LEKA-398) ──────────────────────────────────────────────────────

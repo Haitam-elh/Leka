@@ -150,6 +150,19 @@ class Settings(
         return self
 
     @model_validator(mode="after")
+    def _refuse_a_trial_model_in_production(self) -> Self:
+        """An agent runs in production on the model the LEKA team validated
+        for it (agents/models.yaml, LEKA-530) — never on one put in its
+        place by an environment."""
+        if self.environment == "production" and self.llm_trial_model:
+            msg = (
+                "LEKA_LLM_TRIAL_MODEL is set in production: every agent would run on a model "
+                "not validated for it. Assign models in agents/models.yaml."
+            )
+            raise ValueError(msg)
+        return self
+
+    @model_validator(mode="after")
     def _refuse_silent_email_online(self) -> Self:
         """Online, an API that cannot send email must not start.
 

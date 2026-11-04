@@ -25,7 +25,7 @@ capabilities are made of in `skills.py` ([skills.md](skills.md), LEKA-396).
 | `version` | semver |
 | `lifecycle` | `draft` → `review` → `active` ⇄ `deprecated` → `retired`; only active and deprecated run; **retired is final** |
 | contract | `inputs` (name, type text·number·boolean·choice·entity, required, choices), `output` (finding, analysis, document, proposal), `formats` (json, markdown, pptx, pdf, docx, xlsx, csv) |
-| needs | `sources` — each a source kind, or alternatives (`confluence|microsoft_365`); `model` — run by a language model, and `model_needs` — what that model must do: a structured answer, tools, a context this long, a quality at least: **the router picks the model by them** ([model-gateway.md](model-gateway.md) § 3) |
+| needs | `sources` — each a source kind, or alternatives (`confluence|microsoft_365`); `model` — run by a language model, and `model_needs` — what that model must do: a structured answer, tools, a context this long, a quality at least: **the model assigned to it is held to them** (`agents/models.yaml`, [model-gateway.md](model-gateway.md) § 3) |
 | who | `permission` (default `intention:create`), `mode` (`read_only`, `proposes_action`), `risk` |
 | discovery | `goals` (LEKA-385), `kinds` (LEKA-373), `entity_types`, `examples` (how people ask for it) |
 

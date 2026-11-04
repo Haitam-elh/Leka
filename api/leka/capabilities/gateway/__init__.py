@@ -16,6 +16,7 @@ docs/model-gateway.md says how, and why.
 """
 
 from leka.capabilities.gateway.anthropic import Anthropic
+from leka.capabilities.gateway.assignment import Assignment, AssignmentError, assigned, problems
 from leka.capabilities.gateway.contract import (
     Completion,
     Endpoint,
@@ -49,7 +50,7 @@ from leka.capabilities.gateway.profiles import (
     register_model,
 )
 from leka.capabilities.gateway.rates import Rate, Rates, load_rates
-from leka.capabilities.gateway.routing import Needs, Own, Passed, Prefer, Route, Routing, route
+from leka.capabilities.gateway.routing import Needs, Own, Passed, Route, Routing, route
 from leka.capabilities.gateway.service import (
     Attempt,
     Gateway,
@@ -57,13 +58,16 @@ from leka.capabilities.gateway.service import (
     NoModelError,
     Tested,
     ToolRoundsError,
-    default_ready,
     leka_complete,
-    leka_default,
     leka_keys,
+    leka_ready,
 )
-from leka.capabilities.gateway.usage import ModelUsage, leka_cost, model_calls, model_usage
-from leka.capabilities.gateway.workspace import ModelSettingError, ModelSettings
+from leka.capabilities.gateway.usage import leka_cost, model_calls
+from leka.capabilities.gateway.workspace import (
+    ModelSettingError,
+    ModelSettings,
+    OwnModelNotOfferedError,
+)
 
 for _provider in (Google(), MISTRAL, OPENAI, AZURE_OPENAI, Anthropic()):
     register_provider(_provider)
@@ -74,6 +78,8 @@ __all__ = [
     "MISTRAL",
     "OPENAI",
     "Anthropic",
+    "Assignment",
+    "AssignmentError",
     "Attempt",
     "Completion",
     "Endpoint",
@@ -83,13 +89,12 @@ __all__ = [
     "Message",
     "ModelSettingError",
     "ModelSettings",
-    "ModelUsage",
     "Needs",
     "NoModelError",
     "Output",
     "Own",
+    "OwnModelNotOfferedError",
     "Passed",
-    "Prefer",
     "Price",
     "Profile",
     "Provider",
@@ -108,17 +113,17 @@ __all__ = [
     "ToolChoice",
     "ToolRoundsError",
     "Usage",
+    "assigned",
     "cost_at",
-    "default_ready",
     "leka_complete",
     "leka_cost",
-    "leka_default",
     "leka_keys",
+    "leka_ready",
     "load_rates",
     "model_calls",
-    "model_usage",
     "of_provider",
     "plain_schema",
+    "problems",
     "profile",
     "profiles",
     "provider",

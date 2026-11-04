@@ -1,35 +1,28 @@
-"""Which model answers (LEKA-394): what a task needs, matched against the
-models that can be reached — in an order that is a policy, not a guess.
+"""Which model answers (LEKA-394, LEKA-530): the one assigned to the work —
+never one chosen per task while it runs.
 
-    1. the workspace's own model, when it set one and it is on — its
-       account, its contract; when it said "ours only", nothing else
-    2. LEKA's default (LEKA_LLM_PROVIDER, LEKA_LLM_MODEL: Gemini 3.8 Flash)
-    3. the fallbacks configured (LEKA_LLM_FALLBACKS), in their order
-    4. every other model LEKA holds a key for, by what the task prefers:
-       the cheapest, the fastest, the best
+    1. the workspace's own model, under an Enterprise contract that brings
+       it — its account; when it said "ours only", nothing else
+    2. the model the LEKA team validated for the agent, or for LEKA's own
+       work (agents/models.yaml, gateway/assignment.py)
+    3. the fallbacks approved for that same agent, in their order — none:
+       the agent tries its model again, then says it failed
 
-A model that cannot do what is asked — a structured answer, tools, a
-context that long, a quality that high — is not offered, and why is kept:
-the route says what it passed over. A task never names a model; it says
-what it needs, and a capability's needs come with its definition.
+A model that cannot do what a step asks — a structured answer, tools, a
+context that long, a quality that high — is not tried, and why is kept: the
+route says what it passed over. The assignment is checked against what each
+agent needs (tests/test_model_assignments.py), so that never happens to a
+validated agent.
 """
 
 from __future__ import annotations
 
-import enum
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 
+from leka.capabilities.gateway.assignment import Assignment
 from leka.capabilities.gateway.contract import Endpoint
-from leka.capabilities.gateway.profiles import DEFAULTS, Profile, of_provider, profile
-
-
-class Prefer(enum.StrEnum):
-    """How the models beyond the default and the fallbacks are ordered."""
-
-    COST = "cost"
-    SPEED = "speed"
-    QUALITY = "quality"
+from leka.capabilities.gateway.profiles import Profile, of_provider, profile
 
 
 @dataclass(frozen=True)
@@ -42,10 +35,6 @@ class Needs:
     context: int = 0
     # The least quality it accepts (profiles.py: 1 to 3).
     quality: int = 1
-    prefer: Prefer = Prefer.QUALITY
-    # What kind of work it is (LEKA-491): code, architecture, writing, data,
-    # vision — LEKA_LLM_TASK_ROUTES may name the models for it.
-    task: str | None = None
     # Images to read: only a model that reads them.
     vision: bool = False
 
@@ -69,7 +58,7 @@ class Route:
     endpoint: Endpoint
     profile: Profile
     # own, own_stronger (its provider's best, for what its own model cannot
-    # do), task (LEKA-491), default, fallback, alternative
+    # do), assigned, fallback (approved for the agent), trial
     why: str
 
 
@@ -79,7 +68,7 @@ class Passed:
 
     provider: str
     model: str
-    reason: str  # structured, tools, context, quality, exclusive, no_key
+    reason: str  # structured, tools, context, quality, vision, exclusive, no_key
 
 
 @dataclass(frozen=True)
@@ -98,41 +87,9 @@ class Own:
     exclusive: bool = False
 
 
-def fallbacks_of(said: str) -> list[tuple[str, str]]:
-    """LEKA_LLM_FALLBACKS — "mistral:mistral-large-latest, anthropic" — as
-    (provider, model) pairs; a provider alone means its default."""
-    pairs: list[tuple[str, str]] = []
-    for item in said.split(","):
-        item = item.strip()
-        if not item:
-            continue
-        name, _, model = item.partition(":")
-        model = model.strip() or DEFAULTS.get(name.strip(), "")
-        if model:
-            pairs.append((name.strip(), model))
-    return pairs
-
-
-def task_routes_of(said: str) -> dict[str, list[tuple[str, str]]]:
-    """LEKA_LLM_TASK_ROUTES — "code=anthropic:claude-sonnet-5;
-    vision=openai:gpt-4.1, google" — each kind of work and the models to
-    try first for it, in order (LEKA-491). Configured, never written where
-    it is used; empty: no kind of work has its own."""
-    routes: dict[str, list[tuple[str, str]]] = {}
-    for part in said.split(";"):
-        task, _, models = part.partition("=")
-        if task.strip() and models.strip():
-            routes[task.strip()] = fallbacks_of(models)
-    return routes
-
-
-def _rank(model: Profile, prefer: Prefer) -> tuple[float, ...]:
+def _strongest_first(model: Profile) -> tuple[float, ...]:
     price = model.price()
     cost = (price.per_million_in + price.per_million_out) if price else float("inf")
-    if prefer is Prefer.COST:
-        return (cost, -model.quality, -model.speed)
-    if prefer is Prefer.SPEED:
-        return (-model.speed, -model.quality, cost)
     return (-model.quality, -model.speed, cost)
 
 
@@ -141,15 +98,12 @@ def route(
     *,
     own: Own | None,
     keys: dict[str, str | None],
-    default: tuple[str, str],
-    fallbacks: Sequence[tuple[str, str]] = (),
+    assignment: Assignment | None,
     urls: Mapping[str, str] | None = None,
-    tasks: Mapping[str, Sequence[tuple[str, str]]] | None = None,
 ) -> Routing:
     """The models to try, in order, for what is needed."""
     routes: list[Route] = []
     passed: list[Passed] = []
-    tried: set[tuple[str, str]] = set()
 
     def offer(endpoint: Endpoint, model: str, why: str) -> None:
         if (endpoint.provider, model, endpoint.owner) in {
@@ -168,10 +122,9 @@ def route(
         if not routes:
             # Its own model cannot do this step — a code change, a mock-up
             # drawn, asked of a mid-range model (2026-10-29: Mistral Medium):
-            # the strongest of the same provider that can, on the same key.
-            for stronger in sorted(
-                of_provider(own.endpoint.provider), key=lambda p: _rank(p, Prefer.QUALITY)
-            ):
+            # the strongest of the same provider that can, on the same key —
+            # its account, its contract.
+            for stronger in sorted(of_provider(own.endpoint.provider), key=_strongest_first):
                 if stronger.model != own.model and needs.unmet(stronger) is None:
                     offer(own.endpoint, stronger.model, "own_stronger")
                     break
@@ -179,50 +132,17 @@ def route(
             passed.append(Passed("leka", "*", "exclusive"))
             return Routing(tuple(routes), tuple(passed))
 
-    def leka(provider: str, model: str, why: str) -> None:
-        if (provider, model) in tried:
-            return
-        tried.add((provider, model))
-        key = keys.get(provider)
+    if assignment is None:
+        return Routing(tuple(routes), tuple(passed))
+    first = "trial" if assignment.trial else "assigned"
+    for index, (name, model) in enumerate(assignment.models()):
+        key = keys.get(name)
         if key is None:
-            passed.append(Passed(provider, model, "no_key"))
-            return
-        offer(
-            Endpoint(
-                provider=provider, api_key=key, base_url=(urls or {}).get(provider), owner="leka"
-            ),
-            model,
-            why,
-        )
-
-    # The models its kind of work is given first (LEKA-491), when LEKA holds
-    # their key and they can do what is asked — else on to the default.
-    for provider, model in (tasks or {}).get(needs.task or "", ()):
-        leka(provider, model, "task")
-    leka(*default, "default")
-    for provider, model in fallbacks:
-        leka(provider, model, "fallback")
-    if not fallbacks:
-        # None configured: every other provider LEKA holds a key for.
-        for provider in keys:
-            if provider != default[0] and provider in DEFAULTS:
-                leka(provider, DEFAULTS[provider], "fallback")
-    others = sorted(
-        (p for name, key in keys.items() if key is not None for p in of_provider(name)),
-        key=lambda p: _rank(p, needs.prefer),
-    )
-    for other in others:
-        if (other.provider, other.model) in tried:
+            passed.append(Passed(name, model, "no_key"))
             continue
-        tried.add((other.provider, other.model))
         offer(
-            Endpoint(
-                provider=other.provider,
-                api_key=keys[other.provider],
-                base_url=(urls or {}).get(other.provider),
-                owner="leka",
-            ),
-            other.model,
-            "alternative",
+            Endpoint(provider=name, api_key=key, base_url=(urls or {}).get(name), owner="leka"),
+            model,
+            first if index == 0 else "fallback",
         )
     return Routing(tuple(routes), tuple(passed))

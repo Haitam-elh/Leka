@@ -38,6 +38,7 @@ from leka.capabilities import (
     WorkspaceModel,
     WorkspaceModelDefault,
 )
+from leka.capabilities.gateway.assignment import Assignment, assigned
 from leka.db import session_factory, system_scope, workspace_scope
 from leka.platform import Workspace, secret_box
 
@@ -194,7 +195,7 @@ def test_a_long_answer_is_waited_for_as_long_as_it_takes_to_write() -> None:
     assert wait_of(deep) == 800.0 > TIMEOUTS[Tier.DEEP]
 
 
-async def test_the_default_answers_and_the_call_is_kept_with_what_it_cost(
+async def test_the_assigned_model_answers_and_the_call_is_kept_with_what_it_cost(
     workspace: uuid.UUID,
 ) -> None:
     script = Script({GOOGLE: [gemini("Because of the 14:02 deploy.")]})
@@ -211,7 +212,7 @@ async def test_the_default_answers_and_the_call_is_kept_with_what_it_cost(
         "gemini-3.8-flash",
         "gemini-3.8-flash-001",
     )
-    assert (call.route, call.owner, call.status, call.attempt) == ("default", "leka", "ok", 1)
+    assert (call.route, call.owner, call.status, call.attempt) == ("assigned", "leka", "ok", 1)
     assert (call.tokens_in, call.tokens_out) == (1000, 300)
     # 1000 x 0.75 + 300 x 3.75, per million, at today's introductory price.
     assert call.cost_usd == pytest.approx(0.001875)
@@ -292,7 +293,7 @@ async def test_credits_spent_the_workspace_s_own_model_still_answers(
     assert [c.owner for c in await _calls(workspace)][-1] == "workspace"
 
 
-async def test_a_busy_provider_is_tried_again_then_the_fallback_answers(
+async def test_a_busy_provider_is_tried_again_then_the_approved_fallback_answers(
     workspace: uuid.UUID,
 ) -> None:
     busy = httpx.Response(503, json={"error": {"message": "overloaded"}})
@@ -303,8 +304,8 @@ async def test_a_busy_provider_is_tried_again_then_the_fallback_answers(
     assert sleeps == [1.0]
     calls = await _calls(workspace)
     assert [(c.provider, c.attempt, c.status, c.route) for c in calls] == [
-        ("google", 1, "failed", "default"),
-        ("google", 2, "failed", "default"),
+        ("google", 1, "failed", "assigned"),
+        ("google", 2, "failed", "assigned"),
         ("mistral", 1, "ok", "fallback"),
     ]
     assert calls[0].error == "503: overloaded"
@@ -485,11 +486,30 @@ async def test_testing_the_workspace_model_says_whether_it_answered(workspace: u
             assert row.status == "ok"
 
 
-async def test_the_model_its_admin_chose_answers_first_and_leka_s_default_after(
+async def test_without_an_approved_fallback_the_agent_s_model_alone_then_it_fails(
     workspace: uuid.UUID,
 ) -> None:
-    """2026-10-21: Mistral chosen in one click — it answers; refused, Gemini
-    does; chosen without a key LEKA holds, LEKA's default answers."""
+    """LEKA-530: busy, the assigned model is tried again — then the agent says
+    it failed; Mistral, whose key LEKA holds, is never asked in its place."""
+    busy = httpx.Response(503, json={"error": {"message": "overloaded"}})
+    script = Script({GOOGLE: [busy, busy], MISTRAL: [chat("Never asked.")]})
+
+    async def alone(g: Gateway) -> Any:
+        g._assignment = Assignment(DEFAULT)
+        return await g.complete(ask("agent:code-review"))
+
+    with pytest.raises(NoModelError):
+        await _ask(workspace, script, alone)
+    assert not script.asked or all("mistral" not in str(r.url) for r in script.asked)
+    calls = await _calls(workspace)
+    assert [(c.provider, c.route) for c in calls] == [("google", "assigned")] * 2
+
+
+async def test_each_call_runs_on_the_model_its_agent_is_assigned_never_a_past_choice(
+    workspace: uuid.UUID,
+) -> None:
+    """agents/models.yaml decides (LEKA-530): a choice of LEKA's model made in
+    Paramètres before it (2026-10-21) is kept, never answers."""
     with workspace_scope(workspace):
         async with session_factory() as session:
             session.add(
@@ -502,17 +522,15 @@ async def test_the_model_its_admin_chose_answers_first_and_leka_s_default_after(
                 )
             )
             await session.commit()
-    script = Script({MISTRAL: [chat("Mistral, chosen.", "mistral-large-2602")]})
-    done = await _ask(workspace, script, lambda g: g.complete(ask()))
-    assert (done.provider, done.text) == ("mistral", "Mistral, chosen.")
-    assert script.asked[0].headers["authorization"] == "Bearer m-key"
+    script = Script({GOOGLE: [gemini("Gemini, assigned.")]})
 
-    refused = httpx.Response(401, json={"message": "Unauthorized"})
-    script = Script({MISTRAL: [refused], GOOGLE: [gemini("Gemini, after.")]})
-    done = await _ask(workspace, script, lambda g: g.complete(ask()))
-    assert done.provider == "google"
+    async def as_assigned(g: Gateway) -> Any:
+        g._assignment = None  # the file's, as in production
+        return await g.complete(ask("agent:code-review:review"))
 
-    no_mistral = {**KEYS, "mistral": None}
-    script = Script({GOOGLE: [gemini("Gemini, LEKA's default.")]})
-    done = await _ask(workspace, script, lambda g: g.complete(ask()), keys=no_mistral)
-    assert done.text == "Gemini, LEKA's default."
+    done = await _ask(workspace, script, as_assigned)
+    assert (done.provider, done.model, done.text) == (
+        "google",
+        assigned("agent:code-review").model[1],
+        "Gemini, assigned.",
+    )

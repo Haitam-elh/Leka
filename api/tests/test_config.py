@@ -177,7 +177,7 @@ def test_no_model_is_configured_by_default(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setitem(Settings.model_config, "env_file", None)
     for name in (
         "LEKA_LLM_PROVIDER",
-        "LEKA_LLM_MODEL",
+        "LEKA_LLM_TRIAL_MODEL",
         "LEKA_GOOGLE_API_KEY",
         "LEKA_ANTHROPIC_API_KEY",
         "LEKA_MISTRAL_API_KEY",
@@ -186,36 +186,38 @@ def test_no_model_is_configured_by_default(monkeypatch: pytest.MonkeyPatch) -> N
 
     config = Settings(_env_file=None, **VALID)  # type: ignore[arg-type]
 
-    # Gemini 3.8 Flash by default — the MVP's choice (LEKA-394) — configured,
-    # never written where it is used. A company that wants its data on its
-    # own contract brings its own model (Paramètres > Modèle de langage).
-    assert (config.llm_provider, config.llm_model) == ("google", "gemini-3.8-flash")
+    # Which model each agent runs on is its own configuration
+    # (agents/models.yaml, LEKA-530), never an environment's.
+    assert not hasattr(config, "llm_model") and not hasattr(config, "llm_fallbacks")
+    assert config.llm_trial_model is None
     assert config.has_model_access is False
-    assert config.llm_api_key is None
 
 
-@pytest.mark.parametrize(
-    ("provider", "variable"),
-    [
-        ("google", "LEKA_GOOGLE_API_KEY"),
-        ("anthropic", "LEKA_ANTHROPIC_API_KEY"),
-        ("mistral", "LEKA_MISTRAL_API_KEY"),
-    ],
-)
-def test_the_selected_provider_key_is_the_one_returned(
-    monkeypatch: pytest.MonkeyPatch, provider: str, variable: str
-) -> None:
+def test_a_key_of_any_provider_gives_access(monkeypatch: pytest.MonkeyPatch) -> None:
     """Two providers from the start: an abstraction validated against one
     implementation only fits that one."""
     monkeypatch.setitem(Settings.model_config, "env_file", None)
-    monkeypatch.setenv("LEKA_LLM_PROVIDER", provider)
-    monkeypatch.setenv(variable, "a-real-looking-key")
+    monkeypatch.setenv("LEKA_MISTRAL_API_KEY", "a-real-looking-key")
 
     config = Settings(_env_file=None, **VALID)  # type: ignore[arg-type]
 
     assert config.has_model_access is True
-    assert config.llm_api_key is not None
-    assert config.llm_api_key.get_secret_value() == "a-real-looking-key"
+    assert config.mistral_api_key is not None
+    assert config.mistral_api_key.get_secret_value() == "a-real-looking-key"
+
+
+def test_a_trial_model_is_refused_in_production(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An agent runs in production on the model the LEKA team validated
+    for it (LEKA-530), never on one an environment put in its place."""
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
+    monkeypatch.setenv("LEKA_ENVIRONMENT", "production")
+    trial = "mistral:mistral-medium-latest"
+    with pytest.raises(ValidationError, match="LEKA_LLM_TRIAL_MODEL"):
+        Settings(_env_file=None, **PRODUCTION, llm_trial_model=trial)  # type: ignore[arg-type]
+    # Outside production, a candidate is tried.
+    monkeypatch.setenv("LEKA_ENVIRONMENT", "local")
+    tried = Settings(_env_file=None, **VALID, llm_trial_model=trial)  # type: ignore[arg-type]
+    assert tried.llm_trial_model == "mistral:mistral-medium-latest"
 
 
 def test_an_empty_key_counts_as_no_key(monkeypatch: pytest.MonkeyPatch) -> None:

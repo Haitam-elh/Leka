@@ -117,19 +117,22 @@ model gateway (LEKA-394, [model-gateway.md](model-gateway.md)). Every key may
 be absent: the platform boots and serves without a model — what needs one
 says so, the rules answer in its place.
 
+Which model each agent runs on is **not** configured here: it is the agent's
+own configuration, [`agents/models.yaml`](../agents/models.yaml) (LEKA-530) —
+chosen and validated by the LEKA team, changed by a reviewed pull request.
+LEKA only needs the key of each provider that file names.
+
 | Variable | Default | What it does |
 | --- | --- | --- |
-| `LEKA_LLM_PROVIDER` | `google` | The default model's provider: `google`, `mistral` or `anthropic` |
-| `LEKA_LLM_MODEL` | `gemini-3.8-flash` | The default model — Gemini 3.8 Flash for the MVP. Configured here, never written where it is used |
-| `LEKA_LLM_FALLBACKS` | — | Tried in order when the default fails or cannot do what is asked: `provider:model`, comma-separated (`mistral:mistral-large-latest`). Empty: every other provider a key is set for, with its default |
-| `LEKA_LLM_RETRIES` | `1` | How many more times a temporary failure (busy, rate-limited, down) is tried before the next model |
-| `LEKA_LLM_API_URL` | — | Where LEKA's default model is reached when not at its provider's own address: a proxy, a regional endpoint — the browser tests point it at a local stand-in. https in production |
+| `LEKA_LLM_RETRIES` | `1` | How many more times a temporary failure (busy, rate-limited, down) is tried before the agent's approved fallback, if it has one |
+| `LEKA_LLM_PROVIDER` | `google` | The provider `LEKA_LLM_API_URL` reaches: `google`, `mistral`, `anthropic` or `openai` |
+| `LEKA_LLM_API_URL` | — | Where `LEKA_LLM_PROVIDER`'s models are reached when not at its own address: a proxy, a regional endpoint — the browser tests point it at a local stand-in. https in production |
+| `LEKA_LLM_TRIAL_MODEL` | — | Every agent and LEKA's own work on this one model, `provider:model`, instead of its assigned one: a candidate tried before it is validated, a development machine without the assigned model's key. **Refused in production** |
 | `LEKA_GOOGLE_API_KEY` | — | Google AI Studio key (paid tier: free-tier prompts may be used by Google) |
 | `LEKA_MISTRAL_API_KEY` | — | |
 | `LEKA_ANTHROPIC_API_KEY` | — | |
 | `LEKA_OPENAI_API_KEY` | — | OpenAI API key, held by LEKA (LEKA-491) — server-side only |
 | `LEKA_AGENT_CORRECTIONS` | `2` | How many times an agent's deliverable that lacks a section its agent gives is said back to the model, to be written again; then delivered, said incomplete. `0`: not checked |
-| `LEKA_LLM_TASK_ROUTES` | — | The models each kind of work tries first: `code=anthropic:claude-sonnet-5; vision=openai:gpt-4.1` ([model-gateway.md](model-gateway.md) § 3) |
 
 ## Object storage and retention
 

@@ -1955,7 +1955,6 @@ const fr = {
       acts: "il agirait",
       not_permitted: "non autorisé pour votre rôle",
     },
-    usage: "{calls} {calls|appel|appels} au modèle · {tokens} tokens",
   },
   /** What the code-change agent proposes: a diff, accepted as a pull request. */
   codeChanges: {
@@ -2963,16 +2962,10 @@ const fr = {
       notConnected: "à connecter",
       model: "Un modèle de langage",
       modelWaiting: "aucun ne peut l'exécuter ici",
-      modelChosen: "{model} ({owner}), choisi selon ses besoins",
-      modelNeeds: {
-        structured: "réponse structurée",
-        tools: "appels d'outils",
-        context: "{tokens} tokens de contexte",
-        quality: {
-          "1": "qualité de base",
-          "2": "bonne qualité d'analyse",
-          "3": "la meilleure qualité",
-        },
+      /** Whose model runs it, never which (LEKA-530). */
+      modelReady: {
+        leka: "prêt : le modèle choisi par LEKA",
+        workspace: "prêt : le modèle de votre entreprise",
       },
       permission: "Droit nécessaire",
       mode: "Mode",
@@ -3154,40 +3147,16 @@ const fr = {
     done: "C'est fait.",
     readOnly: "Seuls les admins autorisent un système.",
   },
-  languageModel: {
-    choose: {
-      title: "Modèle utilisé par défaut ici",
-      body: "Choisissez en un clic lequel des modèles de LEKA répond en premier dans cet espace. Si celui-ci ne répond pas, l'autre prend le relais.",
-      readOnly: "Seuls les admins de l'espace changent le modèle utilisé par défaut.",
-      lekaDefault: "Le modèle par défaut de LEKA",
-      done: "{model} répond maintenant en premier ici.",
-      failed: "Le modèle n'a pas pu être changé.",
-    },
-    title: "Modèle de langage",
-    body: "Le modèle qui lit vos demandes et rédige les réponses de LEKA. Par défaut celui de LEKA ; vous pouvez brancher celui de votre entreprise : votre compte, votre contrat, vos données chez votre fournisseur.",
-    defaultTitle: "Modèle par défaut de LEKA",
-    ready: "Prêt",
-    notReady: "Clé non configurée : LEKA répond avec ses règles seules",
-    price: "{in} / {out} par million de tokens (entrée / sortie)",
-    nextPrice: "Puis {in} / {out} à partir du {since}",
-    noPrice: "Prix non publié : coût non estimé",
-    context: "{tokens} tokens de contexte",
-    fallbacks: "Si le modèle ne répond pas : {models}",
-    noFallback: "Aucun modèle de repli configuré",
-    answering: "Qui répond ici, dans l'ordre",
-    nobody:
-      "Aucun modèle ne peut répondre : les intentions sont lues et analysées par les règles de LEKA.",
+  /** Paramètres > Le modèle de votre entreprise (LEKA-394), under an
+   * Enterprise contract that brings it (LEKA-530): never LEKA's models,
+   * their prices or what they used. */
+  companyModel: {
+    title: "Le modèle de votre entreprise",
+    body: "Votre contrat Enterprise vous permet de brancher le modèle de votre entreprise : votre compte, votre contrat, vos données chez votre fournisseur. Il répond avant les modèles de LEKA. Une entreprise sur Microsoft 365 Copilot branche son Azure OpenAI : Copilot lui-même n'est pas appelable par une plateforme.",
+    legacy:
+      "Ce modèle a été branché avant que cette option soit réservée au contrat Enterprise : il répond toujours, et vous pouvez le retirer. LEKA répondra alors avec les modèles qu'il a choisis pour chaque agent.",
+    none: "Aucun : ce sont les modèles de LEKA qui répondent.",
     owners: { leka: "LEKA", workspace: "Votre entreprise" },
-    why: {
-      own: "votre modèle",
-      default: "par défaut",
-      fallback: "en repli",
-      alternative: "autre option",
-    },
-    ownTitle: "Le modèle de votre entreprise",
-    ownBody:
-      "Il répond avant celui de LEKA. Une entreprise sur Microsoft 365 Copilot branche son Azure OpenAI : Copilot lui-même n'est pas appelable par une plateforme.",
-    ownNone: "Aucun : c'est le modèle de LEKA qui répond.",
     bring: "Brancher notre modèle",
     edit: "Modifier",
     provider: "Fournisseur",
@@ -3198,8 +3167,7 @@ const fr = {
     apiKey: "Clé d'API",
     keyKept: "Clé enregistrée (…{hint}) : laissez vide pour la garder",
     enabled: "Activé",
-    exclusive:
-      "Notre modèle uniquement : jamais celui de LEKA, même en cas d'échec",
+    exclusive: "Notre modèle uniquement : jamais ceux de LEKA, même en cas d'échec",
     save: "Enregistrer",
     saved: "Modèle enregistré : testez-le.",
     test: "Tester",
@@ -3209,46 +3177,12 @@ const fr = {
     remove: "Retirer",
     removeTitle: "Retirer votre modèle ?",
     removeBody:
-      "LEKA répondra de nouveau avec son modèle par défaut. La clé est effacée.",
+      "LEKA répondra de nouveau avec les modèles qu'il a choisis pour chaque agent. La clé est effacée.",
     removed: "Votre modèle est retiré.",
     statuses: { untested: "Non testé", ok: "Répond", failed: "En échec" },
     exclusiveOn: "Uniquement le vôtre",
     readOnly: "Seuls les admins branchent un modèle.",
-    usageTitle: "Utilisation sur 30 jours",
-    calls: "Appels",
-    failed: "Échecs",
-    tokens: "Tokens",
-    cost: "Coût (prix public)",
-    costNote:
-      "Au prix public ; {unpriced} {unpriced|appel|appels} à un modèle sans prix publié non comptés.",
-    perIntention:
-      "Une intention coûte en moyenne {cost}, mesuré sur {count} {count|intention|intentions} : environ {many} intentions pour 10 $.",
-    cached:
-      "{share} % des tokens envoyés relus depuis le cache du fournisseur, facturés moins cher.",
-    split: "LEKA : {leka} appels · votre modèle : {own} appels",
-    fallbacksUsed:
-      "{count} {count|réponse|réponses} venues d'un modèle de repli",
-    byModel: "Par modèle",
-    byPurpose: "Par usage",
-    latest: "Derniers appels",
-    none: "Aucun appel sur la période.",
-    purposes: {
-      "intention.understanding": "Comprendre une demande",
-      "capability.synthesis": "Rédiger une réponse",
-      "enrichment.summary": "Proposer une description (À valider)",
-      "model.test": "Test du modèle",
-    },
-    callStatuses: { ok: "OK", failed: "Échec", invalid: "Réponse invalide" },
-    runsTitle: "Exécutions",
-    runStatuses: {
-      succeeded: "{count} {count|réussie|réussies}",
-      invalid:
-        "{count} {count|réponse écartée|réponses écartées} à la vérification",
-      no_model: "{count} sans modèle disponible",
-      timed_out: "{count} hors délai",
-      failed: "{count} en échec",
-    },
-    failedToLoad: "Le modèle de langage n'a pas pu être lu.",
+    failedToLoad: "Le modèle de votre entreprise n'a pas pu être lu.",
   },
   security: {
     sessions: {
@@ -6837,7 +6771,7 @@ const fr = {
   /** The workspace settings form, and the decision step's actions. */
   settings: {
     subtitle:
-      "Votre langue, votre espace, le modèle qui répond et les systèmes par lesquels LEKA agit.",
+      "Votre langue, votre espace et les systèmes par lesquels LEKA agit.",
     generalTitle: "Votre espace",
     name: "Nom de l'espace",
     slug: "Identifiant",
@@ -11171,7 +11105,6 @@ const en: Dictionary = {
       acts: "it would act",
       not_permitted: "not allowed for your role",
     },
-    usage: "{calls} model {calls|call|calls} · {tokens} tokens",
   },
   codeChanges: {
     title: "Proposed code changes",
@@ -12151,16 +12084,10 @@ const en: Dictionary = {
       notConnected: "to connect",
       model: "A language model",
       modelWaiting: "none can run it here",
-      modelChosen: "{model} ({owner}), chosen by what it needs",
-      modelNeeds: {
-        structured: "structured answer",
-        tools: "tool calls",
-        context: "{tokens} tokens of context",
-        quality: {
-          "1": "basic quality",
-          "2": "good analysis",
-          "3": "the best quality",
-        },
+      /** Whose model runs it, never which (LEKA-530). */
+      modelReady: {
+        leka: "ready: the model LEKA chose",
+        workspace: "ready: your company's model",
       },
       permission: "Permission needed",
       mode: "Mode",
@@ -12333,40 +12260,16 @@ const en: Dictionary = {
     done: "Done.",
     readOnly: "Only admins authorize a system.",
   },
-  languageModel: {
-    choose: {
-      title: "Model used by default here",
-      body: "Choose in one click which of LEKA's models answers first in this workspace. If it does not answer, the other takes over.",
-      readOnly: "Only the workspace's admins change the model used by default.",
-      lekaDefault: "LEKA's default model",
-      done: "{model} now answers first here.",
-      failed: "The model could not be changed.",
-    },
-    title: "Language model",
-    body: "The model that reads your requests and writes LEKA's answers. LEKA's by default; you can plug in your company's own: your account, your contract, your data with your provider.",
-    defaultTitle: "LEKA's default model",
-    ready: "Ready",
-    notReady: "No key configured: LEKA answers with its rules alone",
-    price: "{in} / {out} per million tokens (input / output)",
-    nextPrice: "Then {in} / {out} from {since}",
-    noPrice: "Price not published: cost not estimated",
-    context: "{tokens} tokens of context",
-    fallbacks: "If the model does not answer: {models}",
-    noFallback: "No fallback model configured",
-    answering: "Who answers here, in order",
-    nobody:
-      "No model can answer: intentions are read and analysed by LEKA's rules.",
+  /** Paramètres > Le modèle de votre entreprise (LEKA-394), under an
+   * Enterprise contract that brings it (LEKA-530): never LEKA's models,
+   * their prices or what they used. */
+  companyModel: {
+    title: "Your company's model",
+    body: "Your Enterprise contract lets you plug in your company's own model: your account, your contract, your data with your provider. It answers before LEKA's models. A company on Microsoft 365 Copilot plugs in its Azure OpenAI: Copilot itself cannot be called by a platform.",
+    legacy:
+      "This model was plugged in before this option became part of the Enterprise contract: it still answers, and you can remove it. LEKA will then answer with the models it chose for each agent.",
+    none: "None: LEKA's models answer.",
     owners: { leka: "LEKA", workspace: "Your company" },
-    why: {
-      own: "your model",
-      default: "default",
-      fallback: "fallback",
-      alternative: "other option",
-    },
-    ownTitle: "Your company's model",
-    ownBody:
-      "It answers before LEKA's. A company on Microsoft 365 Copilot plugs in its Azure OpenAI: Copilot itself cannot be called by a platform.",
-    ownNone: "None: LEKA's model answers.",
     bring: "Plug in our model",
     edit: "Edit",
     provider: "Provider",
@@ -12386,45 +12289,12 @@ const en: Dictionary = {
     testFailed: "It does not answer: {detail}",
     remove: "Remove",
     removeTitle: "Remove your model?",
-    removeBody:
-      "LEKA will answer with its default model again. The key is erased.",
+    removeBody: "LEKA will answer again with the models it chose for each agent. The key is erased.",
     removed: "Your model is removed.",
-    statuses: { untested: "Untested", ok: "Answers", failed: "Failing" },
+    statuses: { untested: "Not tested", ok: "Answers", failed: "Failing" },
     exclusiveOn: "Yours only",
     readOnly: "Only admins plug in a model.",
-    usageTitle: "Use over 30 days",
-    calls: "Calls",
-    failed: "Failures",
-    tokens: "Tokens",
-    cost: "Cost (list price)",
-    costNote:
-      "At list price; {unpriced} {unpriced|call|calls} to a model without a published price not counted.",
-    perIntention:
-      "An intention costs {cost} on average, measured over {count} {count|intention|intentions}: about {many} intentions for $10.",
-    cached:
-      "{share}% of the tokens sent read from the provider's cache, billed less.",
-    split: "LEKA: {leka} calls · your model: {own} calls",
-    fallbacksUsed: "{count} {count|answer|answers} from a fallback model",
-    byModel: "By model",
-    byPurpose: "By use",
-    latest: "Latest calls",
-    none: "No calls in the period.",
-    purposes: {
-      "intention.understanding": "Understanding a request",
-      "capability.synthesis": "Writing an answer",
-      "enrichment.summary": "Proposing a description (To review)",
-      "model.test": "Model test",
-    },
-    callStatuses: { ok: "OK", failed: "Failed", invalid: "Invalid answer" },
-    runsTitle: "Executions",
-    runStatuses: {
-      succeeded: "{count} succeeded",
-      invalid: "{count} {count|answer|answers} set aside when checked",
-      no_model: "{count} with no model available",
-      timed_out: "{count} timed out",
-      failed: "{count} failed",
-    },
-    failedToLoad: "The language model could not be read.",
+    failedToLoad: "Your company's model could not be read.",
   },
   security: {
     sessions: {
@@ -15919,7 +15789,7 @@ const en: Dictionary = {
   },
   settings: {
     subtitle:
-      "Your language, your workspace, the model that answers and the systems LEKA acts through.",
+      "Your language, your workspace and the systems LEKA acts through.",
     generalTitle: "Your workspace",
     name: "Workspace name",
     slug: "Identifier",

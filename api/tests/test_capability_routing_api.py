@@ -47,7 +47,6 @@ def leka_gemini(monkeypatch: pytest.MonkeyPatch) -> None:
             "google_api_key": SecretStr("g-key"),
             "mistral_api_key": None,
             "anthropic_api_key": None,
-            "llm_fallbacks": "",
         }
     )
     monkeypatch.setattr(service, "settings", configured)
