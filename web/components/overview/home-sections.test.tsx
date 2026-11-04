@@ -3,8 +3,9 @@
  * « Mon environnement » claims only what is measured — never « Stable » by
  * default — reduced to its state and its last read, the real moment; the
  * way to the analyses asked; the agents on sale, dense, each its state in
- * words, a price and a « + » only where one is to pay; the bundles' cards,
- * no banner; the latest analyses, each to its page.
+ * words, a price only where one is to pay, the whole card one way to its
+ * page (LEKA-528); the bundles' cards, no banner; the latest analyses, each
+ * to its page.
  */
 
 import { render, screen, within } from "@testing-library/react";
@@ -157,7 +158,7 @@ describe("what is on sale", () => {
     expect(screen.getByTestId("home-agents-grid")).toHaveClass("xl:grid-cols-6", "grid-cols-2");
   });
 
-  it("recommends what works with the connected sources first, saying why (LEKA-488)", () => {
+  it("recommends what works with the connected sources first, saying only what is missing (LEKA-488, LEKA-528)", () => {
     offers.data = {
       available: true,
       every: false,
@@ -173,51 +174,59 @@ describe("what is on sale", () => {
     show(<AgentsSection />);
     const cards = screen.getAllByTestId("home-agent");
     expect(cards.map((c) => c.dataset.key)).toEqual(["github-reader", "plain", "jira-reader"]);
-    expect(within(cards[0]).getByTestId("home-agent-fit")).toHaveTextContent(
-      "Fonctionne avec vos sources connectées",
-    );
+    // What it works with needs no word: never « Fonctionne avec vos sources connectées ».
+    expect(cards[0]).toHaveAttribute("data-fit", "connected");
+    expect(within(cards[0]).queryByTestId("home-agent-fit")).toBeNull();
+    expect(screen.queryByText(/Fonctionne avec vos sources connectées/)).toBeNull();
     expect(within(cards[1]).queryByTestId("home-agent-fit")).toBeNull();
     expect(within(cards[2]).getByTestId("home-agent-fit")).toHaveTextContent("Une source à connecter");
     catalogue.data = undefined;
   });
 
-  it("each card opens its agent; its action by its state — a purchase confirmed, its price said (LEKA-497)", async () => {
+  it("each card is one target to its agent: no description, no button, nothing nested (LEKA-528)", async () => {
     offers.data = {
       available: true,
       every: false,
       minimum_plan: "starter",
       agents: [
-        agent("option", { title: "Revue de code" }),
+        agent("option", { title: "Revue de code", summary: "La revue d'une pull request : ce qu'elle touche, ce qu'elle risque" }),
         agent("included", { included: true, owned: true }),
         agent("upgrade", { why: "plan_required" }),
       ],
       bundles: [],
     };
-    const user = userEvent.setup();
-    const { unmount } = show(<AgentsSection />);
-    const cards = () => Object.fromEntries(screen.getAllByTestId("home-agent").map((c) => [c.dataset.key, c]));
-    expect(within(cards().option).getByTestId("home-agent-open")).toHaveAttribute("href", "/capabilities/option");
-    expect(within(cards().included).getByTestId("agent-open")).toHaveTextContent("Ouvrir l'agent");
-    expect(within(cards().upgrade).getByTestId("agent-upgrade")).toHaveAttribute("href", "/billing/plans");
-    // Who may not pay: never a purchase.
-    expect(screen.queryByTestId("agent-buy")).toBeNull();
-    unmount();
-
+    // Who may pay: buying is on the agent's page, never on its card.
     permissions.value = ["workspace:update"];
+    const user = userEvent.setup();
     show(<AgentsSection />);
-    const buying = screen.getByTestId("agent-buy");
-    expect(buying).toHaveAccessibleName("Acheter Revue de code");
-    await user.click(buying);
-    const dialog = await screen.findByRole("alertdialog");
-    expect(dialog).toHaveTextContent(/9\s€ HT par mois/);
-    // Backing out buys nothing.
-    await user.click(within(dialog).getByRole("button", { name: "Annuler" }));
-    expect(buy.mutate).not.toHaveBeenCalled();
-    await user.click(screen.getByTestId("agent-buy"));
-    await user.click(
-      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Continuer vers le paiement" }),
-    );
-    expect(buy.mutate).toHaveBeenCalledWith({ kind: "agent", key: "option" }, expect.anything());
+    for (const card of screen.getAllByTestId("home-agent")) {
+      const key = card.dataset.key ?? "";
+      // One way in, named by the agent: its link spans the whole card.
+      const [open, ...more] = within(card).getAllByRole("link");
+      expect(more).toEqual([]);
+      expect(within(card).queryAllByRole("button")).toEqual([]);
+      expect(open).toHaveAttribute("href", `/capabilities/${key}`);
+      expect(open).toHaveClass("after:absolute", "after:inset-0");
+      // Under the pointer, by the keyboard, pressed: said by the card.
+      expect(card).toHaveClass(
+        "cursor-pointer",
+        "has-[a:focus-visible]:ring-3",
+        "motion-safe:has-[a:active]:scale-[0.98]",
+      );
+      // Its domain, its name, its state: what tells it apart.
+      expect(within(card).getByTestId("home-agent-market")).toBeInTheDocument();
+      expect(within(card).getByTestId("agent-state")).toBeInTheDocument();
+    }
+    expect(screen.getByRole("link", { name: "Revue de code" })).toHaveAttribute("href", "/capabilities/option");
+    expect(screen.queryByText(/La revue d'une pull request/)).toBeNull();
+    for (const gone of ["Ouvrir l'agent", "Acheter l'agent", "Voir les options"]) {
+      expect(screen.queryByText(gone)).toBeNull();
+    }
+    expect(screen.queryByTestId("agent-buy")).toBeNull();
+    // Reached by the keyboard: past « Voir tous les agents et bundles », the first card.
+    await user.tab();
+    await user.tab();
+    expect(within(screen.getAllByTestId("home-agent")[0]).getByRole("link")).toHaveFocus();
     permissions.value = [];
   });
 

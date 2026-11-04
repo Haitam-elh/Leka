@@ -311,10 +311,10 @@ const fr = {
   composer: {
     label: "Votre intention",
     placeholder: "Pourquoi l'API de paiement est-elle plus lente depuis hier ?",
-    compactTitle: "Que souhaitez-vous accomplir",
-    compactTitleHighlight: "aujourd'hui ?",
-    compactSubtitle:
-      "Posez votre question, lancez une analyse ou demandez une recommandation. LEKA comprend votre environnement et transforme vos données en actions.",
+    /** One line on a laptop (LEKA-528); on a phone, never cut at the
+     * hyphen (non-breaking: U+2011) nor the « ? » alone (U+00A0). */
+    compactTitle: "Que souhaitez\u2011vous",
+    compactTitleHighlight: "accomplir\u00a0?",
     submit: "Lancer l'analyse",
     submitHint: "⌘↵ pour lancer",
     sidePanel: "Contexte et périmètre",
@@ -497,7 +497,6 @@ const fr = {
         seeAll: "Voir tous les agents dédiés",
       },
       fit: {
-        connected: "Fonctionne avec vos sources connectées",
         to_connect: "Une source à connecter",
       },
       allAgents: "Voir tous les agents et bundles",
@@ -2629,10 +2628,6 @@ const fr = {
       // LEKA-467: an agent's state, in words, and its action.
       monthHt: "/ mois HT",
       buyNamed: "Acheter {name}",
-      /** From a card of the home (LEKA-497). */
-      open: "Ouvrir l'agent",
-      buyAgent: "Acheter l'agent",
-      seeOptions: "Voir les options",
       buyTitle: "Acheter {name} ?",
       buyBody:
         "{price} HT par mois, ajouté à l'abonnement de votre espace. Vous passez ensuite par le paiement sécurisé de Stripe ; l'agent est activé dès que le paiement est confirmé.",
@@ -9602,10 +9597,9 @@ const en: Dictionary = {
   composer: {
     label: "Your intention",
     placeholder: "Why has the payment API been slower since yesterday?",
-    compactTitle: "What would you like to achieve",
-    compactTitleHighlight: "today?",
-    compactSubtitle:
-      "Ask a question, run an analysis or ask for a recommendation. LEKA understands your environment and turns your data into actions.",
+    /** One line on a laptop (LEKA-528). */
+    compactTitle: "What would you like to",
+    compactTitleHighlight: "achieve?",
     submit: "Start the analysis",
     submitHint: "⌘↵ to start",
     sidePanel: "Context and scope",
@@ -9778,7 +9772,6 @@ const en: Dictionary = {
         seeAll: "See all dedicated agents",
       },
       fit: {
-        connected: "Works with your connected sources",
         to_connect: "A source to connect",
       },
       allAgents: "See all agents and bundles",
@@ -11832,9 +11825,6 @@ const en: Dictionary = {
       fromPlan: "From the {plan} plan",
       monthHt: "/ month excl. VAT",
       buyNamed: "Buy {name}",
-      open: "Open the agent",
-      buyAgent: "Buy the agent",
-      seeOptions: "See the options",
       buyTitle: "Buy {name}?",
       buyBody:
         "{price} excl. VAT a month, added to your workspace's subscription. You then go through Stripe's secure payment; the agent is turned on as soon as the payment is confirmed.",
