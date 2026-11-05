@@ -14,10 +14,11 @@ from __future__ import annotations
 
 import uuid
 from collections import defaultdict
-from collections.abc import Collection, Iterable, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 
-from leka.connectors import ConnectorCategory, Source, manifests
+from leka.connectors import Capability, ConnectorCategory, Source, SourceKind, manifests
+from leka.connectors.aws.connector import PERMISSIONS
 from leka.ingestion.enrichment import twin, view
 from leka.ingestion.enrichment.twin import IncidentSeen, SourceSeen, TwinState
 from leka.ingestion.enrichment.view import Link, Thing
@@ -38,6 +39,7 @@ from leka.ingestion.schemas import (
     SheetLinkRead,
     SheetPersonRead,
     SheetTeamRead,
+    TrackedRead,
     TwinCoverageRead,
     TwinFreshnessRead,
     TwinIncidentRead,
@@ -68,6 +70,11 @@ SHEET_LINKS = (
     "depends_on",
     "owned_by",
     "in_network",
+    # What runs it, where it is deployed (LEKA-532): a resource's dependants.
+    "runs_in",
+    "deployed_to",
+    "uses",
+    "reads_from",
     "affects",
     "mentions",
     # A document is about it (LEKA-366): its documentation.
@@ -190,6 +197,7 @@ def sources_seen(rows: Iterable[Source]) -> list[SourceSeen]:
         kind = row.kind.value
         found = manifest.get(kind)
         error = row.last_error or {}
+        unread = _unread(kind, found.capabilities if found else frozenset(), row.capabilities)
         out.append(
             SourceSeen(
                 id=row.id,
@@ -202,9 +210,22 @@ def sources_seen(rows: Iterable[Source]) -> list[SourceSeen]:
                 last_synced_at=row.last_synced_at,
                 error=str(error.get("message") or error.get("code") or "") or None,
                 webhooks=bool(found and found.receives),
+                unread=tuple(c.value for c in unread),
+                needs=tuple(p for c in unread for p in PERMISSIONS.get(c, ())),
             )
         )
     return out
+
+
+def _unread(
+    kind: str, offered: frozenset[Capability], granted: Sequence[str] | None
+) -> list[Capability]:
+    """What a cloud source's connector reads and its credentials could not,
+    at its last test (LEKA-532) — said only once a test said what they
+    could: AWS's, whose policy decides it, each with its permissions."""
+    if kind != SourceKind.AWS.value or not granted:
+        return []
+    return sorted((c for c in offered if c in PERMISSIONS and c.value not in granted), key=str)
 
 
 async def twin_states(
@@ -271,6 +292,7 @@ def twin_read(found: TwinState | None) -> TwinStateRead | None:
         )
         if incident is not None
         else None,
+        said=found.said,
     )
 
 
@@ -284,6 +306,8 @@ def source_read(source: SourceSeen, now: datetime) -> TwinSourceRead:
         last_synced_at=source.last_synced_at,
         error=source.error,
         webhooks=source.webhooks,
+        unread=list(source.unread),
+        needs=list(source.needs),
     )
 
 
@@ -334,7 +358,7 @@ async def _events(
 async def environment(repository: EnrichmentRepository, *, now: datetime) -> EnvironmentRead:
     things = await _things(repository, types=view.MAP_TYPES)
     statuses, deduced = await _states(repository, things, now)
-    twins, seen, _ = await twin_states(repository, things, now)
+    twins, seen, shown_by = await twin_states(repository, things, now)
     # A provider's box: the worst of its resources' states.
     boxes: dict[str, list[TwinState]] = defaultdict(list)
     for thing in things.values():
@@ -404,6 +428,7 @@ async def environment(repository: EnrichmentRepository, *, now: datetime) -> Env
         attention=await _attention(repository, things, statuses, open_incidents, deduced),
         events=await _events(repository, moved),
         states=twin.counted(twins),
+        tracked=_tracked(things, twins, shown_by),
         freshness=_freshness(seen, now),
         coverage=[
             TwinCoverageRead(
@@ -415,6 +440,54 @@ async def environment(repository: EnrichmentRepository, *, now: datetime) -> Env
         ],
         sources=[source_read(s, now) for s in seen],
     )
+
+
+def _tracked(
+    things: Mapping[uuid.UUID, Thing],
+    twins: Mapping[uuid.UUID, TwinState | None],
+    shown_by: Mapping[uuid.UUID, set[uuid.UUID]],
+) -> list[TrackedRead]:
+    """Every thing with a state, one row each — a cloud resource on its own,
+    not its provider's box —, the worst first, then by name (LEKA-532)."""
+    rows: list[TrackedRead] = []
+    for thing_id, found in twins.items():
+        read = twin_read(found)
+        thing = things.get(thing_id)
+        if read is None or thing is None:
+            continue
+        at = view.provider_of(thing) if thing.type == "infra_resource" else None
+        rows.append(
+            TrackedRead(
+                entity=_ref(thing),
+                resource_type=_word(thing.attributes.get("resource_type")),
+                provider=at[0] if at else None,
+                region=at[1] if at else None,
+                environment=_word(thing.attributes.get("environment")),
+                twin=read,
+                sources=sorted(shown_by.get(thing_id, ()), key=str),
+            )
+        )
+    order = {state: rank for rank, state in enumerate(twin.STATES)}
+    return sorted(rows, key=lambda r: (order[r.twin.state], r.entity.name.lower()))
+
+
+def _stated_by(
+    provenance: Sequence[Mapping[str, object]], names: Mapping[uuid.UUID, str]
+) -> list[str]:
+    """The sources a relationship's records come from, by name."""
+    found: list[str] = []
+    for said in provenance:
+        try:
+            name = names.get(uuid.UUID(str(said.get("source_id"))))
+        except ValueError:
+            continue
+        if name and name not in found:
+            found.append(name)
+    return found
+
+
+def _word(value: object) -> str | None:
+    return value if isinstance(value, str) and value else None
 
 
 def _freshness(seen: Sequence[SourceSeen], now: datetime) -> TwinFreshnessRead:
@@ -529,6 +602,7 @@ async def sheet(
     shown_by = of.get(this.id, set())
     if not shown_by:
         shown_by = set((await repository.sources_of([this.id])).get(this.id, set()))
+    names = {s.id: s.name for s in seen}
     edges = {(e.from_entity.id, e.to_entity.id, e.type): e for e in enriched.outgoing}
     edges |= {(e.from_entity.id, e.to_entity.id, e.type): e for e in enriched.incoming}
 
@@ -573,6 +647,9 @@ async def sheet(
                     origin=edge.origin,
                     confidence=edge.confidence,
                     cross_source=edge.cross_source,
+                    rule=edge.rule,
+                    evidence=edge.evidence,
+                    stated_by=_stated_by(edge.provenance, names),
                 )
             )
 

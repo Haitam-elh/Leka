@@ -115,10 +115,29 @@ async def test_the_twin_says_each_state_where_it_comes_from_and_how_fresh(
     )
     assert payment["signal"] == ["acme-eu"] and payment["fresh"]
     auth = nodes["auth-service"]["twin"]
-    # Nothing says how it is: unknown — never « sain ».
-    assert (auth["state"], auth["reason"]) == ("unknown", "no_signal")
+    # Nothing says how it is: unknown — never « sain » —, and why: the
+    # monitoring tool connected watches other services (LEKA-532).
+    assert (auth["state"], auth["reason"]) == ("unknown", "not_watched")
     assert nodes["acme/backend"]["twin"] is None
     assert env["states"]["operational"] == 1 and env["states"]["unknown"] >= 1
+    # One row per thing with a state, what the counts count: the score is
+    # made of them (LEKA-532) — a cloud resource on its own, never its
+    # provider's box.
+    tracked = env["tracked"]
+    assert {
+        state: sum(1 for row in tracked if row["twin"]["state"] == state) for state in env["states"]
+    } == env["states"]
+    assert all(
+        row["entity"]["type"] in ("service", "database", "infra_resource") for row in tracked
+    )
+    rows = {row["entity"]["name"]: row for row in tracked}
+    assert rows["auth-service"]["twin"]["reason"] == "not_watched"
+    assert rows["auth-service"]["sources"]
+    # The worst first.
+    order = ["unavailable", "degraded", "stale", "unknown", "not_covered", "operational"]
+    assert [order.index(r["twin"]["state"]) for r in tracked] == sorted(
+        order.index(r["twin"]["state"]) for r in tracked
+    )
     sources = {s["name"]: s for s in env["sources"]}
     assert sources["Runbooks space"]["state"] == "error"
     assert sources["#platform"]["state"] == "never"

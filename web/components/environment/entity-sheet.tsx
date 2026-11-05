@@ -265,6 +265,9 @@ function realModel(t: ReturnType<typeof useDictionary>, sheet: EntitySheet): She
       const notes = [link.direction === "out" ? relation.out : relation.in];
       if (link.origin === "inferred") {
         notes.push(fill(w.dependencies.inferred, { score: Math.round(link.confidence * 100) }));
+      } else if (link.stated_by?.length) {
+        // Which sources state it (LEKA-532): observed, not deduced.
+        notes.push(fill(w.dependencies.statedBy, { sources: link.stated_by.join(", ") }));
       }
       if (link.cross_source) notes.push(w.dependencies.crossSource);
       return {

@@ -181,10 +181,20 @@ export function EnvironmentCard() {
           {fill(w.sourcesFailing, { count: failing })}
         </Link>
       ) : null}
-      {/* Its rule, its states, what would raise it: on Mon environnement,
-          the same definition (LEKA-489). */}
+      {/* The things « Inconnu » counts, one click away (LEKA-532). */}
+      {(env.states?.unknown ?? 0) > 0 ? (
+        <Link
+          href={`${routes.environment()}?state=unknown`}
+          className="mt-2 block rounded text-center text-xs font-medium text-brand-navy outline-none hover:underline focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+          data-testid="home-unknown"
+        >
+          {fill(w.unknownSee, { count: env.states?.unknown ?? 0 })}
+        </Link>
+      ) : null}
+      {/* Its rule, its states, what would raise it: the diagnosis on Mon
+          environnement, the same definition (LEKA-489, LEKA-532). */}
       <Link
-        href={routes.environment()}
+        href={`${routes.environment()}?state=all`}
         className="mt-2 block rounded text-center text-xs text-shell-nav-active outline-none hover:underline focus-visible:ring-3 focus-visible:ring-brand-violet/40"
         data-testid="home-health-explained"
       >

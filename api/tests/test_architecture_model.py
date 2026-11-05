@@ -339,6 +339,15 @@ async def test_the_architecture_in_columns_its_links_named(
         (POSTGRES, "hosted_on", RDS),
         (S3, "hosted_on", BUCKET),
     } <= links
+    # Each link says what states it (LEKA-532): the source whose records say
+    # it, by kind; none for what enrichment inferred.
+    said = {(key_of[li["from_id"]], li["role"], key_of[li["to_id"]]): li for li in found["links"]}
+    stores = said[(LEKA_API, "stores", POSTGRES)]
+    # The one source the repository's records come from (the fixture's
+    # helper gives it its own kind).
+    assert stores["origin"] == "stated" and len(stores["sources"]) == 1
+    hosted = said[(LEKA_API, "deployed_on", BOX)]
+    assert (hosted["origin"], hosted["sources"]) == ("inferred", [])
     # One arrow a column, until a card is chosen: the API's to the data says
     # what most of its links there are, and reaches all three.
     bundles = {(key_of[b["from_id"]], b["column"]): b for b in found["bundles"]}

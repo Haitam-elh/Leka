@@ -60,7 +60,8 @@ describe("StatusBadge", () => {
     const { container } = mount(<StatusBadge variant="entity.operational" dot />);
 
     expect(container.querySelector("svg")).toBeNull();
-    expect(screen.getByText("Opérationnel")).toBeVisible();
+    // The six states' word for it, everywhere (LEKA-532).
+    expect(screen.getByText("En bonne santé")).toBeVisible();
   });
 
   it("is announced only when it is live", () => {

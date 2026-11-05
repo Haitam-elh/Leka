@@ -1570,7 +1570,7 @@ class ArchitectureLinkRead(BaseModel):
     to_id: str
     role: str = Field(
         description="source_code, routes, calls, queue, cache, stores, files, email, uses, "
-        "depends, deployed_on, hosted_on, monitored_by, part_of."
+        "depends, deployed_on, hosted_on, monitored_by, in_network, part_of."
     )
     origin: str = Field(
         description="stated by a source, inferred by enrichment, or accepted (LEKA-380)."
@@ -1581,6 +1581,10 @@ class ArchitectureLinkRead(BaseModel):
     confidence: float
     evidence: str | None
     status: str | None = Field(description="The worse of its ends' states.")
+    sources: list[str] = Field(
+        default_factory=list,
+        description="The kinds of the sources whose records state it: aws, github… (LEKA-532).",
+    )
 
 
 class ArchitectureBundleRead(BaseModel):

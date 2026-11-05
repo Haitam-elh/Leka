@@ -13,9 +13,18 @@ silence. « Inconnu » is not « sain ».
     stale         what it rests on was last read more than STALE_AFTER ago,
                   or every source that states it is failing: what it was
                   then is not what it is now
-    unknown       a connected source could tell, and says nothing of it
+    unknown       a connected source could tell, and says nothing of it —
+                  each said why (LEKA-532): a monitoring tool is connected
+                  and none watches this service (`not_watched`); its
+                  provider lists it and gives no state for its kind, an S3
+                  bucket (`provider_no_state`); its provider says a word
+                  LEKA does not read as running, paused or failed
+                  (`state_unrecognised`, the word kept); else `no_signal`
     not_covered   no connected source could tell: no monitoring tool for a
-                  service — connect one to know
+                  service (`no_monitoring_source`); a database or a resource
+                  no connected cloud account lists — its schemas or its
+                  definition read, its state nowhere (`no_cloud_source`) —
+                  connect one to know
 
 Where a state comes from (`basis`): measured (a monitoring tool, an
 incident record), declared (a provider's word on its resource), deduced
@@ -78,6 +87,10 @@ class SourceSeen:
     last_synced_at: datetime | None
     error: str | None = None
     webhooks: bool = False
+    # What its connector reads and these credentials could not at its last
+    # test, and the permissions that would let it (LEKA-532).
+    unread: tuple[str, ...] = ()
+    needs: tuple[str, ...] = ()
 
     @property
     def connected(self) -> bool:
@@ -127,6 +140,8 @@ class TwinState:
     certainty: str = "confirmed"  # confirmed, suspected, unverified
     incident: IncidentSeen | None = None
     incidents: tuple[IncidentSeen, ...] = field(default_factory=tuple)
+    # Its provider's own word for it, when the state rests on it.
+    said: str | None = None
 
 
 def _deduced(thing: Thing) -> str | None:
@@ -166,11 +181,17 @@ def state_of(
             incidents=tuple(incidents),
         )
     elif thing.type in ("database", "infra_resource") and resource in FAILED:
-        found = TwinState("unavailable", "declared", "resource_failed", observed, names)
+        found = TwinState(
+            "unavailable", "declared", "resource_failed", observed, names, said=str(resource)
+        )
     elif thing.type in ("database", "infra_resource") and resource in PAUSED:
-        found = TwinState("degraded", "declared", "resource_paused", observed, names)
+        found = TwinState(
+            "degraded", "declared", "resource_paused", observed, names, said=str(resource)
+        )
     elif thing.type in ("database", "infra_resource") and resource in RUNNING:
-        found = TwinState("operational", "declared", "resource_running", observed, names)
+        found = TwinState(
+            "operational", "declared", "resource_running", observed, names, said=str(resource)
+        )
     elif thing.type == "service" and any(s.category == "observability" for s in sources):
         watching = [s for s in sources if s.category == "observability"]
         found = TwinState(
@@ -192,6 +213,23 @@ def state_of(
         )
     elif thing.type == "service" and not monitoring_connected:
         found = TwinState("not_covered", "none", "no_monitoring_source", observed, names)
+    elif thing.type == "service":
+        # A monitoring tool is connected; none of this service's sources is
+        # one: it watches others, or this one under another name.
+        found = TwinState("unknown", "none", "not_watched", observed, names)
+    elif resource is None and sources and not any(s.category == "cloud" for s in sources):
+        # Read only where it is described — a database's schemas, a
+        # resource's definition —, no cloud account listing it: no source
+        # could say its state.
+        found = TwinState("not_covered", "none", "no_cloud_source", observed, names)
+    elif resource is None and sources:
+        # Its provider lists it and gives no state for its kind.
+        found = TwinState("unknown", "none", "provider_no_state", observed, names)
+    elif resource is not None:
+        # Its provider's word, read neither as running, paused nor failed.
+        found = TwinState(
+            "unknown", "declared", "state_unrecognised", observed, names, said=str(resource)
+        )
     else:
         found = TwinState("unknown", "none", "no_signal", observed, names)
     if not fresh and sources:
@@ -209,6 +247,7 @@ def state_of(
                 certainty="unverified",
                 incident=found.incident,
                 incidents=found.incidents,
+                said=found.said,
             )
         return TwinState(
             found.state,
@@ -220,6 +259,7 @@ def state_of(
             certainty="unverified",
             incident=found.incident,
             incidents=found.incidents,
+            said=found.said,
         )
     return found
 

@@ -8,15 +8,13 @@ import {
   Clock,
   type LucideIcon,
   RefreshCw,
-  Sparkles,
   TriangleAlert,
 } from "lucide-react";
 import Link from "next/link";
 
 import { cn } from "cn";
 
-import { Card, CardLink, entityHref, IconTile, typeLabel } from "@/components/environment/parts";
-import { KnowledgeTable, type KnowledgeColumn } from "@/components/knowledge/knowledge-table";
+import { Card, CardLink, IconTile } from "@/components/environment/parts";
 import { StatusBadge } from "@/components/knowledge/status-badge";
 import { TONES } from "@/components/knowledge/status";
 import { timeAgo } from "@/components/knowledge/time";
@@ -28,11 +26,9 @@ import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import type { Credits } from "@/lib/billing";
 import { useCredits } from "@/lib/billing-queries";
 import { ENTERPRISE } from "@/lib/contract";
-import type { EnvironmentNode } from "@/lib/environment";
 import { useAcknowledge } from "@/lib/environment-queries";
 import {
   type Alert,
-  byState,
   type Monitoring,
   TWIN_STATES,
   type TwinCoverage,
@@ -55,7 +51,7 @@ const STATE_TONE: Record<TwinStateName, keyof typeof TONES> = {
   degraded: "warning",
   stale: "info",
   unknown: "neutral",
-  not_covered: "neutral",
+  not_covered: "hollow",
   operational: "success",
 };
 
@@ -139,6 +135,8 @@ export function twinHow(t: ReturnType<typeof useDictionary>, twin: TwinState): s
     // A key people use (« OPS-9 »), else its name: « incident:datadog:0000… »
     // is LEKA's own, no word (LEKA-469).
     key: twin.incident?.key.includes(":") ? twin.incident.name : (twin.incident?.key ?? ""),
+    // Its provider's own word (LEKA-532): « modifying ».
+    said: twin.said ?? "",
   });
   return [
     reason,
@@ -226,112 +224,6 @@ export function TwinCounts({
         );
       })}
     </ul>
-  );
-}
-
-/** Why a thing is unknown, uncovered or stale is a source's to fix. */
-const SOURCE_REASONS = new Set(["no_monitoring_source", "no_signal", "sources_stale", "sources_failing"]);
-
-/** The readable alternative to the map: every thing with a state, the
- * worst first — its state, how it is known, when last observed, and the
- * way to ask LEKA about it. */
-export function TwinList({
-  nodes,
-  filter,
-}: {
-  nodes: readonly EnvironmentNode[];
-  filter?: TwinStateName | null;
-}) {
-  const t = useDictionary();
-  const w = t.environment.twin.list;
-  const next = t.environment.twin.next;
-  const rows = byState(
-    nodes.filter((node) => node.twin && (!filter || node.twin.state === filter)),
-  );
-  const columns: KnowledgeColumn<EnvironmentNode>[] = [
-    {
-      id: "name",
-      header: w.name,
-      sortValue: (node) => node.name,
-      cell: (node) =>
-        node.entity_id ? (
-          <Link
-            href={entityHref({ id: node.entity_id, type: node.type })}
-            className="font-medium text-brand-navy outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
-          >
-            {node.name}
-          </Link>
-        ) : (
-          <span className="font-medium text-brand-navy">{node.name}</span>
-        ),
-    },
-    { id: "type", header: w.type, cell: (node) => typeLabel(t, node.type) },
-    {
-      id: "state",
-      header: w.state,
-      sortValue: (node) => (node.twin ? TWIN_STATES.indexOf(node.twin.state) : 9),
-      cell: (node) => (node.twin ? <TwinBadge state={node.twin.state} size="sm" /> : null),
-    },
-    {
-      id: "how",
-      header: w.how,
-      cell: (node) =>
-        node.twin ? <span className="text-xs text-shell-muted">{twinHow(t, node.twin)}</span> : null,
-    },
-    {
-      id: "observed",
-      header: w.observed,
-      sortValue: (node) => node.twin?.observed_at ?? "",
-      cell: (node) =>
-        node.twin?.observed_at ? (
-          <span className="text-xs">{timeAgo(t, node.twin.observed_at)}</span>
-        ) : (
-          <span className="text-xs text-shell-muted">{w.never}</span>
-        ),
-    },
-    {
-      // What to do about it, by why it is in its state (LEKA-489).
-      id: "next",
-      header: w.next,
-      cell: (node) => {
-        const reason = node.twin?.reason as keyof typeof next | undefined;
-        if (!reason || !(reason in next)) return null;
-        return SOURCE_REASONS.has(reason) ? (
-          <Link href={routes.sources()} className="text-xs text-shell-nav-active hover:underline" data-testid="twin-next">
-            {next[reason]}
-          </Link>
-        ) : (
-          <span className="text-xs" data-testid="twin-next">
-            {next[reason]}
-          </span>
-        );
-      },
-    },
-    {
-      id: "ask",
-      header: w.ask,
-      cell: (node) =>
-        node.twin ? (
-          <Link
-            href={intentionHref(askAbout(t, node.name, node.twin.state))}
-            className="inline-flex items-center gap-1 text-xs font-medium text-shell-nav-active hover:underline"
-          >
-            <Sparkles className="size-3.5" aria-hidden="true" />
-            {w.ask}
-          </Link>
-        ) : null,
-    },
-  ];
-  return (
-    <div data-testid="twin-list">
-      <KnowledgeTable
-        caption={w.caption}
-        columns={columns}
-        rows={rows}
-        rowKey={(node) => node.id}
-        empty={{ title: w.none }}
-      />
-    </div>
   );
 }
 
@@ -646,78 +538,6 @@ export function TwinProvenance({
             .join(", ")}
         </p>
       ) : null}
-    </div>
-  );
-}
-
-const DISCLOSURE =
-  "group mt-3 border-t border-shell-line pt-2 text-[0.8125rem] [&_summary]:cursor-pointer [&_summary]:font-medium [&_summary]:text-shell-nav-active [&_summary]:outline-none [&_summary]:focus-visible:ring-2 [&_summary]:focus-visible:ring-brand-violet/40";
-
-/** Why the score is what it is (LEKA-489): its rule, when it was reckoned
- * and its limit; what each state means; what would raise it — never a
- * promise of 100 % where nothing can observe. */
-export function ScoreExplained({
-  states,
-  total,
-  operational,
-  lastRead,
-}: {
-  states: Readonly<Record<string, number>>;
-  total: number;
-  operational: number;
-  lastRead: string | null;
-}) {
-  const t = useDictionary();
-  const w = t.environment.overall;
-  const n = (state: TwinStateName) => states[state] ?? 0;
-  const todo = [
-    { key: "troubled", count: n("unavailable") + n("degraded"), href: null },
-    { key: "not_covered", count: n("not_covered"), href: routes.sources() },
-    { key: "unknown", count: n("unknown"), href: routes.sources() },
-    { key: "stale", count: n("stale"), href: routes.sources() },
-  ] as const;
-  const left = todo.filter((item) => item.count > 0);
-  return (
-    <div data-testid="score-explained">
-      <details className={DISCLOSURE} data-testid="score-method">
-        <summary>{w.method}</summary>
-        <div className="mt-2 space-y-1.5 text-shell-muted">
-          <p>{fill(w.rule, { operational, total })}</p>
-          <p>{lastRead ? fill(w.at, { ago: timeAgo(t, lastRead).toLowerCase() }) : w.never}</p>
-          <p>{w.limit}</p>
-        </div>
-      </details>
-      <details className={DISCLOSURE} data-testid="score-states">
-        <summary>{w.states}</summary>
-        <dl className="mt-2 space-y-1.5">
-          {TWIN_STATES.map((state) => (
-            <div key={state} data-state={state}>
-              <dt className="font-medium text-brand-navy">{t.environment.twin.states[state]}</dt>
-              <dd className="text-shell-muted">{t.environment.twin.definitions[state]}</dd>
-            </div>
-          ))}
-        </dl>
-      </details>
-      <div className="mt-3 border-t border-shell-line pt-2 text-[0.8125rem]" data-testid="score-improve">
-        <p className="font-medium text-brand-navy">{w.improve}</p>
-        {left.length ? (
-          <ul className="mt-1.5 list-disc space-y-1 ps-5 text-shell-muted">
-            {left.map((item) => (
-              <li key={item.key} data-todo={item.key}>
-                {item.href ? (
-                  <Link href={item.href} className="text-shell-nav-active hover:underline">
-                    {fill(w.todo[item.key], { count: item.count })}
-                  </Link>
-                ) : (
-                  fill(w.todo[item.key], { count: item.count })
-                )}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-1 text-shell-muted">{w.done}</p>
-        )}
-      </div>
     </div>
   );
 }

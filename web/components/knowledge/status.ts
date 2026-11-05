@@ -34,7 +34,7 @@ import {
 
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 
-export type Tone = "success" | "warning" | "danger" | "info" | "accent" | "neutral";
+export type Tone = "success" | "warning" | "danger" | "info" | "accent" | "neutral" | "hollow";
 
 /** Token classes per tone — no component writes a colour of its own. */
 export const TONES: Record<Tone, { badge: string; dot: string; stroke: string }> = {
@@ -68,6 +68,13 @@ export const TONES: Record<Tone, { badge: string; dot: string; stroke: string }>
     dot: "bg-shell-muted",
     stroke: "var(--shell-muted)",
   },
+  // What no source can see (LEKA-532): an empty ring, never the grey of
+  // « Inconnu », whose source exists and says nothing.
+  hollow: {
+    badge: "border border-dashed border-shell-muted/60 bg-white text-shell-muted",
+    dot: "border-[1.5px] border-shell-muted bg-white",
+    stroke: "var(--shell-muted)",
+  },
 };
 
 type Look = readonly [Tone, LucideIcon];
@@ -84,7 +91,7 @@ const FAMILIES = {
     degraded: ["warning", CircleAlert],
     unavailable: ["danger", OctagonAlert],
     stale: ["info", Clock],
-    not_covered: ["neutral", EyeOff],
+    not_covered: ["hollow", EyeOff],
   },
   /** HealthStatus, leka/connectors. */
   health: {

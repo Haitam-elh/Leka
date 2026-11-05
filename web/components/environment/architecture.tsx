@@ -41,7 +41,16 @@ import {
   Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { cn } from "cn";
 
@@ -56,10 +65,13 @@ import {
   type TileTone,
 } from "@/components/environment/parts";
 import { TONES } from "@/components/knowledge/status";
+import { timeAgo } from "@/components/knowledge/time";
+import { twinHow } from "@/components/environment/twin";
 import { hasSourceLogo, sourceTitle } from "@/components/sources/source-logo";
 import { closeOnEscape, useReturnFocus } from "@/components/interactions/escape";
 import { routes } from "@/config/routes";
-import { useEntitySheet } from "@/lib/environment-queries";
+import { useEntitySheet, useEnvironment } from "@/lib/environment-queries";
+import type { TwinState } from "@/lib/twin";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import type {
@@ -185,7 +197,7 @@ export const STATUS_TONE: Record<string, keyof typeof TONES> = {
   unavailable: "danger",
   stale: "info",
   unknown: "neutral",
-  not_covered: "neutral",
+  not_covered: "hollow",
 };
 
 /** What a state's colour says: in trouble, worth a look, or nothing. */
@@ -232,6 +244,34 @@ export function roleWords(w: Words, role: string) {
 /** What inferred a link, in the screen's words: "same public address". */
 export function ruleWords(w: Words, rule: string): string {
   return (w.rules as Record<string, string>)[rule] ?? w.rules.other;
+}
+
+/** Each thing's state in the twin, by entity id (LEKA-532): what a dot says
+ * on hover and the panel explains — the same state as the counts'. */
+const TwinStates = createContext<ReadonlyMap<string, TwinState>>(new Map());
+export const TwinStatesProvider = TwinStates.Provider;
+
+function useTwinOf(card: ArchitectureCard): TwinState | undefined {
+  const states = useContext(TwinStates);
+  return card.entity_id ? states.get(card.entity_id) : undefined;
+}
+
+/** Where a link comes from: deduced by a rule, read in a file, or stated by
+ * the sources that show it — never left unsaid (LEKA-532). */
+export function originWords(w: Words, link: ArchitectureLink, from: ArchitectureCard | undefined): string {
+  if (link.origin === "inferred") {
+    return fill(w.panel.inferredBy, {
+      rule: ruleWords(w, link.rule),
+      confidence: Math.round(link.confidence * 100),
+    });
+  }
+  if (link.evidence && /[/.]\w+:\d+/.test(link.evidence)) {
+    return fill(w.panel.statedIn, { evidence: link.evidence });
+  }
+  // The sources whose records state it; else, those showing where it starts.
+  const kinds = link.sources?.length ? link.sources : (from?.sources ?? []);
+  const sources = [...new Set(kinds)].map((kind) => (hasSourceLogo(kind) ? sourceTitle(kind) : kind));
+  return fill(w.panel.statedBy, { sources: sources.join(", ") || "-" });
 }
 
 function engineLogo(card: ArchitectureCard): SourceKind | null {
@@ -311,7 +351,13 @@ function subtitle(w: Words, card: ArchitectureCard, number: Intl.NumberFormat): 
 // ── the figures above ───────────────────────────────────────────────────────
 
 /** The mockup's tiles: how many of each kind, and how they are doing. */
-export function ArchitectureFigures({ data }: { data: Architecture | undefined }) {
+export function ArchitectureFigures({
+  data,
+  states,
+}: {
+  data: Architecture | undefined;
+  states?: Readonly<Record<string, number>>;
+}) {
   const t = useDictionary();
   const w = t.environment.architecture;
   const { format: locale } = useLocale();
@@ -378,7 +424,12 @@ export function ArchitectureFigures({ data }: { data: Architecture | undefined }
       label: w.figures.teams,
     },
   ];
-  const health = data?.health;
+  // The twin's counts when the screen has them (LEKA-532): the same figures
+  // as the overall state's, never the shown cards' alone.
+  const health =
+    states && Object.values(states).some((n) => n > 0)
+      ? (states as Architecture["health"])
+      : data?.health;
   const total = health ? Object.values(health).reduce((sum, count) => sum + count, 0) : 0;
   const percent = new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 0 });
   // The twin's states once the screen has them (LEKA-442); each said when
@@ -1390,12 +1441,27 @@ export function PanelHeader({
 
 export function StatusDot({ card }: { card: ArchitectureCard }) {
   const t = useDictionary();
+  const twin = useTwinOf(card);
   if (!card.status) return null;
   const label =
     t.environment.architecture.health[card.status as keyof Words["health"]] ?? card.status;
+  // Its state, why, and when last observed, on hover (LEKA-532).
+  const said = twin
+    ? [
+        label,
+        twinHow(t, twin),
+        twin.observed_at
+          ? fill(t.environment.architecture.panel.stateSeen, { ago: timeAgo(t, twin.observed_at).toLowerCase() })
+          : t.environment.architecture.panel.stateNever,
+      ].join(" · ")
+    : card.deduced
+      ? `${label} · ${t.environment.architecture.panel.deduced}`
+      : label;
   return (
     <span
-      title={card.deduced ? `${label} · ${t.environment.architecture.panel.deduced}` : label}
+      title={said}
+      data-testid="status-dot"
+      data-state={card.status}
       className={cn(
         "size-2.5 shrink-0 rounded-full",
         TONES[STATUS_TONE[card.status] ?? "neutral"].dot,
@@ -1579,6 +1645,8 @@ export function DetailPanel({
             ))
           : null}
       </div>
+      {/* Why it is in its state, and what LEKA cannot read (LEKA-532). */}
+      <CardState card={card} />
       {/* An alert on it, when its state is read (LEKA-477). */}
       <AlertOnThing entityId={card.entity_id} />
       {tab === "overview" ? (
@@ -1589,6 +1657,56 @@ export function DetailPanel({
         <Events card={card} />
       )}
     </section>
+  );
+}
+
+/** Its state explained (LEKA-532): how it is known, when last observed, the
+ * way to the diagnosis — and, for a cloud resource, what AWS refuses LEKA. */
+function CardState({ card }: { card: ArchitectureCard }) {
+  const t = useDictionary();
+  const p = t.environment.architecture.panel;
+  const twin = useTwinOf(card);
+  const environment = useEnvironment().data;
+  const unread =
+    card.column === "cloud"
+      ? (environment?.sources ?? []).filter((s) => s.kind === "aws" && (s.unread ?? []).length > 0)
+      : [];
+  if (!twin && unread.length === 0) return null;
+  const what = t.environment.diagnostic.unread.what as Record<string, string>;
+  const look =
+    "font-medium text-shell-nav-active outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40";
+  return (
+    <div className="flex flex-col gap-1 rounded-lg bg-shell-canvas px-2.5 py-2 text-[0.75rem]" data-testid="architecture-state-why">
+      {twin ? (
+        <>
+          <p className="text-brand-navy">
+            <span className="font-medium">{p.state} : </span>
+            {twinHow(t, twin)}
+          </p>
+          <p className="text-shell-muted">
+            {twin.observed_at
+              ? fill(p.stateSeen, { ago: timeAgo(t, twin.observed_at).toLowerCase() })
+              : p.stateNever}
+          </p>
+          {twin.state !== "operational" ? (
+            <Link href={`${routes.environment()}?state=${twin.state}`} className={look}>
+              {p.diagnose}
+            </Link>
+          ) : null}
+        </>
+      ) : null}
+      {unread.map((source) => (
+        <p key={source.id} className="text-state-warning" data-testid="architecture-unread">
+          {fill(p.unread, {
+            source: source.name,
+            what: (source.unread ?? []).map((c) => what[c] ?? c).join(", "),
+          })}{" "}
+          <Link href={`${routes.environment()}?state=all`} className={look}>
+            {p.unreadSee}
+          </Link>
+        </p>
+      ))}
+    </div>
   );
 }
 
@@ -1948,14 +2066,6 @@ function Relations({
             <li key={`${link.from_id}:${link.role}:${link.to_id}`} className="flex items-center gap-2">
               <span className="w-24 shrink-0 text-[0.6875rem] leading-tight text-shell-muted">
                 {out ? words.out : words.in}
-                {link.origin === "inferred" ? (
-                  <span className="block text-[0.625rem] text-state-warning">
-                    {fill(w.panel.inferredBy, {
-                      rule: ruleWords(w, link.rule),
-                      confidence: Math.round(link.confidence * 100),
-                    })}
-                  </span>
-                ) : null}
               </span>
               <button
                 type="button"
@@ -1973,6 +2083,17 @@ function Relations({
                   </span>
                   <span className="block truncate text-[0.6875rem] text-shell-muted">
                     {kindLabel(w, card)}
+                  </span>
+                  {/* Observed or deduced, and from what (LEKA-532). */}
+                  <span
+                    className={cn(
+                      "block text-[0.625rem] leading-tight",
+                      link.origin === "inferred" ? "text-state-warning" : "text-shell-muted",
+                    )}
+                    data-testid="relation-origin"
+                    data-origin={link.origin}
+                  >
+                    {originWords(w, link, byId.get(link.from_id))}
                   </span>
                 </span>
                 <StatusDot card={card} />
