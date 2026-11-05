@@ -30,7 +30,7 @@ from leka.knowledge import EntityType
 from tests.leka_voice import carries_a_credit
 
 VERSIONS = {
-    "architecture-analysis": "1.4.0",
+    "architecture-analysis": "1.5.0",
     "build-fixer": "1.3.0",
     "code-review": "1.4.0",
     "data-analysis": "1.4.0",
@@ -45,6 +45,7 @@ VERSIONS = {
 # The code an agent may read, beside the runtime's tools: the code review its
 # pull requests, the documentation assistant its files (2026-10-18).
 CODE_READ = {
+    "architecture-analysis": {"list_files", "read_file"},
     "code-review": {"list_pull_requests", "read_pull_request"},
     "documentation-assistant": {"list_files", "read_file"},
     "build-fixer": {"list_pull_requests", "read_pull_request", "read_file"},
@@ -482,6 +483,18 @@ def test_the_architecture_analysis_reads_the_real_links() -> None:
     assert "pas seulement ceux reliés au premier\n   trouvé" in said
     assert "Jamais une action sur la façon dont LEKA range ses données" in said
     assert "« à désigner par l'équipe »" in said
+    # 2026-11-05, « les points faibles du front web de LEKA »: answered on the
+    # hosting, the code it could not read left unsaid, a fallback and a
+    # monitoring the repository has called absent. It reads the code, keeps
+    # to the question, looks for an absence before writing it, says what of
+    # the code it read.
+    agent = {d.key: d for d in catalogue()}["architecture-analysis"]
+    assert {"list_files", "read_file"} <= set(agent.tools)
+    assert agent.rounds == 30
+    assert "**La question d'abord.**" in said
+    assert "**Une absence se cherche avant de s'écrire.**" in said
+    assert "jamais « aucun »" in said
+    assert "ce qui a été lu du code" in said
     assert own_words("architecture-analysis")
 
 
