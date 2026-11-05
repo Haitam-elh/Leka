@@ -7,7 +7,8 @@ import { useRef } from "react";
 import { Form } from "@/components/forms/form";
 import { FormAlert } from "@/components/forms/form-alert";
 import { useAttachments } from "@/components/intentions/attachments";
-import { IntentionComposer } from "@/components/intentions/intention-composer";
+import { clearDraft, IntentionComposer } from "@/components/intentions/intention-composer";
+import { useCurrentWorkspace } from "@/components/shell/shell-provider";
 import { SourceLocked, useSourceLock } from "@/components/sources/source-lock";
 import { routes } from "@/config/routes";
 import { ApiError } from "@/lib/api";
@@ -27,6 +28,9 @@ import { type IntentionDraft, intentionDraftSchema } from "@/lib/validation/inte
  * — about anything but technology, or naming nothing it knows — is said
  * above the box. Its files are attached here: sent as they are chosen, and
  * only those kept go with it — refused, the words and the files stay.
+ *
+ * Asked, the box is empty again (2026-11-05): its draft goes with the
+ * intention, so coming back to the overview does not show it typed again.
  */
 export function CompactIntentionComposer() {
   const router = useRouter();
@@ -37,6 +41,7 @@ export function CompactIntentionComposer() {
   const requestKey = useRef<{ said: string; key: string } | null>(null);
   const files = useAttachments();
   const locked = useSourceLock();
+  const workspace = useCurrentWorkspace();
 
   const form = useLekaForm<IntentionDraft>({
     schema: intentionDraftSchema,
@@ -64,6 +69,10 @@ export function CompactIntentionComposer() {
           requestKey.current.key,
         );
         files.clear();
+        // Asked: its words are the intention's now, never a draft waiting
+        // in the box on the way back.
+        clearDraft(workspace?.id);
+        form.reset({ text: "" });
         client.setQueryData(intentionKeys.one(made.intention.id), made.intention);
         void client.invalidateQueries({ queryKey: intentionKeys.all });
         router.push(`${routes.intentions()}/${made.intention.id}`);
