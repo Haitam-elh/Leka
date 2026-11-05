@@ -23,7 +23,11 @@ import { KnowledgeTable, type KnowledgeColumn } from "@/components/knowledge/kno
 import { StatusBadge } from "@/components/knowledge/status-badge";
 import { timeAgo } from "@/components/knowledge/time";
 import { AlertRuleProvider, AlertRulesCard, CreateAlertButton } from "@/components/environment/alert-rules";
-import { ArchitectureBoard, ArchitectureFigures } from "@/components/environment/architecture";
+import {
+  ArchitectureBoard,
+  ArchitectureFigures,
+  TwinStatesProvider,
+} from "@/components/environment/architecture";
 import { LekaInsights } from "@/components/insights/leka-insights";
 import { Cartography } from "@/components/environment/cartography";
 import { QualityTab } from "@/components/environment/knowledge-quality";
@@ -66,18 +70,18 @@ import {
 import { ENVIRONMENT_VIEWS, routes } from "@/config/routes";
 import type { Environment, EnvironmentStatus } from "@/lib/environment";
 import { useEnvironment, useMonitoring } from "@/lib/environment-queries";
-import { overallOf, type TwinStateName, twinOf, withTwin } from "@/lib/twin";
+import { diagnose, overallOf, TWIN_STATES, type TwinStateName, twinOf, withTwin } from "@/lib/twin";
+import { EnvironmentDiagnostic } from "@/components/environment/diagnostic";
 import {
   AlertsCard,
   FreshnessLine,
-  ScoreExplained,
   SourcesCoverage,
   TwinCounts,
   TwinLegend,
-  TwinList,
 } from "@/components/environment/twin";
 import type { LandscapeView, ViewName, ViewNode } from "@/lib/knowledge-graph";
 import { useArchitecture, useLandscapeView } from "@/lib/knowledge-graph-queries";
+import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import type { Source } from "@/lib/sources";
 import { useSources } from "@/lib/sources-queries";
@@ -102,6 +106,9 @@ import { useSources } from "@/lib/sources-queries";
  * The tab is in the URL (`?tab=applications`, LEKA-428): the sidebar opens
  * each view of "Mon environnement" by it, and a view can be shared or
  * reloaded. No `tab`, or one that is not a tab, is the architecture.
+ *
+ * `?state=unknown` (LEKA-532) opens the diagnosis — the score made of each
+ * thing tracked — on the things in that state; `?state=all`, on all of them.
  */
 
 const TABS = ENVIRONMENT_VIEWS;
@@ -217,9 +224,23 @@ export function EnvironmentScreen() {
   const w = t.environment;
   const { model, error, retry } = useModel();
   const [tab, setTab] = useTab();
-  const [view, setView] = useState<"map" | "list">("map");
+  // Asked by the address (LEKA-532): the diagnosis, on one state or all.
+  const asked = useSearchParams()?.get("state") ?? null;
+  const [view, setView] = useState<"map" | "list">(asked ? "list" : "map");
   const [scope, setScope] = useState(GLOBAL);
-  const [only, setOnly] = useState<TwinStateName | null>(null);
+  const [only, setOnly] = useState<TwinStateName | null>(() =>
+    (TWIN_STATES as readonly (string | null)[]).includes(asked) ? (asked as TwinStateName) : null,
+  );
+  // Asked again from the page itself — a card's « Pourquoi cet état »: the
+  // diagnosis, on what is asked.
+  const [seen, setSeen] = useState(asked);
+  if (asked !== seen) {
+    setSeen(asked);
+    if (asked) {
+      setView("list");
+      setOnly((TWIN_STATES as readonly string[]).includes(asked) ? (asked as TwinStateName) : null);
+    }
+  }
   const viewName = VIEWS_OF[tab] ?? null;
   const landscape = useLandscapeView(viewName);
   const architectureRead = useArchitecture(scope === GLOBAL ? null : scope);
@@ -242,16 +263,22 @@ export function EnvironmentScreen() {
       ? all
       : all.filter((node) => !node.environment || node.environment === scope);
   }, [landscape.data, scope, twin]);
-  const tracked = useMemo(
+  // What the diagnosis counts: every thing tracked in the environment chosen.
+  const diagnosed = useMemo(
     () =>
-      (environment.data?.nodes ?? []).filter(
-        (node) => scope === GLOBAL || !node.environment || node.environment === scope,
-      ),
+      environment.data
+        ? {
+            ...environment.data,
+            tracked: (environment.data.tracked ?? []).filter(
+              (row) => scope === GLOBAL || !row.environment || row.environment === scope,
+            ),
+          }
+        : undefined,
     [environment.data, scope],
   );
-  function pick(state: TwinStateName | null) {
+  function pick(state: TwinStateName | null, open = false) {
     setOnly(state);
-    if (state) setView("list");
+    if (state || open) setView("list");
   }
   const environments = useMemo(
     () => [
@@ -267,12 +294,16 @@ export function EnvironmentScreen() {
     ) : architecture.data ? (
       <div className="flex flex-col gap-3">
         {view === "list" ? (
-          // The readable alternative to the map (LEKA-442).
-          <Card title={t.environment.twin.list.caption}>
-            <TwinList nodes={tracked} filter={only} />
-          </Card>
+          // The readable alternative to the map (LEKA-442): each thing
+          // tracked, the score made of them (LEKA-532).
+          diagnosed ? (
+            <EnvironmentDiagnostic environment={diagnosed} filter={only} onFilter={setOnly} />
+          ) : null
         ) : (
-          <ArchitectureBoard data={architecture.data} />
+          // Each card's state explained on hover and in its panel (LEKA-532).
+          <TwinStatesProvider value={twin}>
+            <ArchitectureBoard data={architecture.data} />
+          </TwinStatesProvider>
         )}
         {/* The mockup's foot (LEKA-459): the overall state — each state the
             way to the list of its things —, the sources, the alerts, what
@@ -280,7 +311,7 @@ export function EnvironmentScreen() {
         <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
           <Overall
             states={environment.data?.states ?? {}}
-            lastRead={environment.data?.freshness?.last_read_at ?? null}
+            tracked={environment.data?.tracked ?? []}
             active={only}
             onPick={pick}
           />
@@ -383,7 +414,7 @@ export function EnvironmentScreen() {
         <ErrorState error={error} onRetry={retry} />
       ) : (
         <div className="flex flex-col gap-4">
-          <ArchitectureFigures data={architecture.data} />
+          <ArchitectureFigures data={architecture.data} states={environment.data?.states} />
           <ViewBar
             tab={tab}
             onTab={setTab}
@@ -402,25 +433,29 @@ export function EnvironmentScreen() {
   );
 }
 
-/** The overall state (LEKA-459): the share of what is tracked that is
- * operational, and each state counted — each the way to its list. */
+/** The overall state (LEKA-459): the share of what is tracked that is in
+ * good health, each state counted — each the way to the diagnosis of its
+ * things —, the coverage apart, and what keeps it from 100 % (LEKA-532). */
 function Overall({
   states,
-  lastRead,
+  tracked,
   active,
   onPick,
 }: {
   states: Readonly<Record<string, number>>;
-  lastRead: string | null;
+  tracked: Environment["tracked"];
   active: TwinStateName | null;
-  onPick: (state: TwinStateName | null) => void;
+  onPick: (state: TwinStateName | null, open?: boolean) => void;
 }) {
   const t = useDictionary();
   const w = t.environment.overall;
   const { format: locale } = useLocale();
   // The overview's « Mon environnement » reads the same rule (LEKA-468).
-  const { total, operational, share: counted } = overallOf({ states });
+  const { total, share: counted } = overallOf({ states });
   const share = counted ?? 0;
+  const found = useMemo(() => diagnose(tracked ?? []), [tracked]);
+  const percent = (value: number) =>
+    new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 0 }).format(value);
   return (
     <Card title={w.title}>
       <div className="flex flex-wrap items-center gap-4" data-testid="overall">
@@ -453,7 +488,27 @@ function Overall({
         </div>
       </div>
       {total ? (
-        <ScoreExplained states={states} total={total} operational={operational} lastRead={lastRead} />
+        <div className="mt-3 space-y-1 border-t border-shell-line pt-2 text-[0.8125rem]" data-testid="score-explained">
+          {found.coverage !== null ? (
+            <p className="text-brand-navy" data-testid="overall-coverage">
+              {fill(w.coverage, { percent: percent(found.coverage), known: found.known, total: found.total })}
+            </p>
+          ) : null}
+          <p className="text-shell-muted" data-testid="overall-blocked">
+            {found.blockers.length ? fill(w.blocked, { count: found.blockers.length }) : w.done}
+            {found.reachable !== null ? ` · ${fill(w.reachable, { percent: percent(found.reachable) })}` : ""}
+          </p>
+          {found.blockers.length ? (
+            <button
+              type="button"
+              onClick={() => onPick(null, true)}
+              className="font-medium text-shell-nav-active outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+              data-testid="overall-diagnose"
+            >
+              {w.diagnose}
+            </button>
+          ) : null}
+        </div>
       ) : null}
     </Card>
   );

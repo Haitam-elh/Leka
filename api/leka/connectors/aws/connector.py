@@ -85,6 +85,17 @@ CLOUD_CAPABILITIES = frozenset(
         Capability.ACCOUNTS,
     }
 )
+# What each capability needs of the policy (docs/connectors/cloud.md): what
+# the screens ask an admin to grant when a test found it refused (LEKA-532).
+PERMISSIONS: dict[Capability, tuple[str, ...]] = {
+    Capability.INSTANCES: ("ec2:DescribeInstances",),
+    Capability.DB_INSTANCES: ("rds:DescribeDBInstances",),
+    Capability.BUCKETS: ("s3:ListAllMyBuckets",),
+    Capability.FUNCTIONS: ("lambda:ListFunctions",),
+    Capability.CLUSTERS: ("eks:ListClusters", "eks:DescribeCluster"),
+    Capability.NETWORKS: ("ec2:DescribeVpcs",),
+    Capability.LOAD_BALANCERS: ("elasticloadbalancing:DescribeLoadBalancers",),
+}
 # Where the calls that are not regional go (STS, the region list).
 HOME_REGION = "us-east-1"
 REGION = re.compile(r"^[a-z]{2}(-[a-z]+)+-\d$")

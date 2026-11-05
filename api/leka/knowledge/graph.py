@@ -556,6 +556,9 @@ class GraphService:
             for thing, entity in zip(placed, drawn, strict=True)
         ]
         ties = await self._graph.between(ids, types=arch.LINKS, limit=MAX_RELATIONSHIPS)
+        stating = await self._graph.source_kinds(
+            list({s for edge in ties for s in _stated_by(edge)})
+        )
         edges = [
             arch.Edge(
                 from_id=edge.from_entity_id,
@@ -565,6 +568,7 @@ class GraphService:
                 rule=edge.rule,
                 confidence=edge.confidence,
                 evidence=_evidence(edge),
+                sources=tuple(sorted({stating[s] for s in _stated_by(edge) if s in stating})),
             )
             for edge in ties
         ]
@@ -1484,6 +1488,7 @@ def _link_read(link: arch.Link) -> ArchitectureLinkRead:
         confidence=link.confidence,
         evidence=link.evidence,
         status=link.status,
+        sources=list(link.sources),
     )
 
 
@@ -1494,6 +1499,18 @@ def _why(entity: Entity) -> str | None:
     origin = origins.get("deduced_health") if isinstance(origins, dict) else None
     said = origin.get("evidence") if isinstance(origin, dict) else None
     return said if isinstance(said, str) and said else None
+
+
+def _stated_by(edge: Relationship) -> list[uuid.UUID]:
+    """The sources whose records state a relationship (LEKA-532)."""
+    found: list[uuid.UUID] = []
+    for record in edge.provenance or []:
+        said = record.get("source_id") if isinstance(record, dict) else None
+        try:
+            found.append(uuid.UUID(str(said)))
+        except ValueError:
+            continue
+    return found
 
 
 def _evidence(edge: Relationship) -> str | None:

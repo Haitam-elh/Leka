@@ -23,12 +23,9 @@ import {
   SourcesCoverage,
   TwinCounts,
   TwinLegend,
-  ScoreExplained,
-  TwinList,
   twinHow,
 } from "@/components/environment/twin";
 import { DICTIONARIES } from "@/lib/i18n/dictionaries";
-import type { EnvironmentNode } from "@/lib/environment";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import type { Credits } from "@/lib/billing";
 import { makeQueryClient } from "@/lib/query";
@@ -80,43 +77,6 @@ function twin(more: Partial<TwinState>): TwinState {
     ...more,
   };
 }
-
-function node(name: string, state: Partial<TwinState>): EnvironmentNode {
-  return {
-    id: name,
-    type: "service",
-    layer: "services",
-    name,
-    status: null,
-    entity_id: `00000000-0000-0000-0000-${String(name.length).padStart(12, "0")}`,
-    key: name,
-    detail: null,
-    count: 1,
-    environment: null,
-    team: null,
-    twin: twin(state),
-  };
-}
-
-const NODES = [
-  node("normal", { state: "operational", basis: "measured", reason: "monitored_quiet", signal: ["acme-eu"] }),
-  node("confirmed", {
-    state: "unavailable",
-    basis: "measured",
-    reason: "incident_open",
-    incident: { id: "i", key: "OPS-9", name: "down", severity: "sev1" },
-  }),
-  node("suspected", { state: "degraded", basis: "deduced", reason: "deduced_health", certainty: "suspected" }),
-  node("silent", { state: "unknown" }),
-  node("old", {
-    state: "stale",
-    basis: "measured",
-    reason: "sources_stale",
-    fresh: false,
-    was: "operational",
-    certainty: "unverified",
-  }),
-];
 
 function source(name: string, state: TwinSource["state"], category = "code"): TwinSource {
   return {
@@ -172,7 +132,11 @@ describe("the Digital Twin", () => {
     show(<TwinLegend />);
     const legend = screen.getByTestId("twin-legend");
     expect(within(legend).getAllByRole("listitem")).toHaveLength(6);
-    expect(legend).toHaveTextContent("Inconnu : Une source pourrait le dire et ne dit rien : inconnu ne veut pas dire sain.");
+    // What sets each apart (LEKA-532): unknown has a source that says nothing.
+    expect(legend).toHaveTextContent(
+      "Inconnu : Une source connectée le décrit mais ne dit rien de son état. Inconnu ne veut dire ni sain, ni en panne.",
+    );
+    expect(legend).toHaveTextContent("En bonne santé");
     expect(legend).toHaveTextContent("Non couvert");
     expect(legend).toHaveTextContent("Données obsolètes");
   });
@@ -186,91 +150,25 @@ describe("the Digital Twin", () => {
     expect(screen.getByTestId("twin-late")).toHaveTextContent("En retard : aucune lecture depuis plus de 2 h");
   });
 
-  it("lists every thing the worst first, each state with how it is known", () => {
-    show(<TwinList nodes={NODES} />);
-    const rows = within(screen.getByTestId("twin-list")).getAllByRole("row").slice(1);
-    expect(rows.map((row) => row.querySelector("a")?.textContent)).toEqual([
-      "confirmed",
-      "suspected",
-      "old",
-      "silent",
-      "normal",
-    ]);
-    expect(rows[0]).toHaveTextContent("Indisponible");
-    expect(rows[0]).toHaveTextContent("incident « OPS-9 » ouvert · mesuré");
-    expect(rows[1]).toHaveTextContent("Dégradé");
-    expect(rows[1]).toHaveTextContent("état déduit · déduit de ce qui le fait tourner · soupçonné");
-    expect(rows[2]).toHaveTextContent("Données obsolètes");
-    expect(rows[2]).toHaveTextContent("non vérifié · était opérationnel");
-    expect(rows[3]).toHaveTextContent("Inconnu");
-    expect(rows[4]).toHaveTextContent("surveillé, rien à signaler · mesuré · par acme-eu");
-    // Each the way to an intention about it.
-    expect(within(rows[0]).getByRole("link", { name: /Demander à LEKA/ })).toHaveAttribute(
-      "href",
-      `/intentions/new?q=${encodeURIComponent("Pourquoi confirmed est indisponible ?")}`,
+  it("says how each state is known, the provider's word kept (LEKA-532)", () => {
+    const t = DICTIONARIES.fr;
+    expect(twinHow(t, twin({ reason: "state_unrecognised", basis: "declared", said: "modifying", signal: ["production account"] }))).toBe(
+      "état « modifying » que LEKA ne sait pas classer · déclaré par son fournisseur · par production account",
+    );
+    expect(twinHow(t, twin({ reason: "provider_no_state" }))).toBe(
+      "son fournisseur ne donne pas d'état pour ce type · rien ne le dit",
+    );
+    expect(twinHow(t, twin({ state: "not_covered", reason: "no_cloud_source" }))).toBe(
+      "aucun compte cloud connecté ne le liste · rien ne le dit",
     );
   });
 
-  it("filters to one state, counted, the way to the list", () => {
-    show(<TwinList nodes={NODES} filter="degraded" />);
-    expect(within(screen.getByTestId("twin-list")).getAllByRole("row")).toHaveLength(2);
+  it("counts each state, every one said, none hidden at 0", () => {
     show(<TwinCounts states={{ unavailable: 1, degraded: 1, stale: 1, unknown: 1, not_covered: 0, operational: 1 }} />);
     const counts = screen.getByTestId("twin-counts");
     expect(within(counts).getAllByRole("listitem")).toHaveLength(6);
     expect(counts).toHaveTextContent("0Non couvert");
-  });
-
-  it("says each thing's next step by why it is in its state — the sources' to fix, to Sources (LEKA-489)", () => {
-    show(<TwinList nodes={NODES} />);
-    const rows = within(screen.getByTestId("twin-list")).getAllByRole("row").slice(1);
-    const next = (i: number) => within(rows[i]).queryByTestId("twin-next");
-    expect(next(0)).toHaveTextContent("Suivre l'incident jusqu'à sa résolution");
-    expect(next(0)?.tagName).toBe("SPAN");
-    expect(next(2)).toHaveTextContent("Relancer la synchronisation de ses sources");
-    expect(next(2)).toHaveAttribute("href", "/sources");
-    expect(next(3)).toHaveTextContent("Vérifier qu'une source le surveille vraiment");
-    // Nothing to do about what is fine.
-    expect(next(4)).toBeNull();
-  });
-
-  it("explains the score: its rule, when, its limit; each state; what would raise it (LEKA-489)", async () => {
-    const user = userEvent.setup();
-    show(
-      <ScoreExplained
-        states={{ unavailable: 1, degraded: 0, stale: 2, unknown: 1, not_covered: 3, operational: 5 }}
-        total={12}
-        operational={5}
-        lastRead={read(10)}
-      />,
-    );
-    const method = screen.getByTestId("score-method");
-    await user.click(within(method).getByText("Comment ce score est calculé"));
-    expect(method).toHaveTextContent("5 éléments opérationnels sur 12 suivis.");
-    expect(method).toHaveTextContent("la plus récente il y a 10 min");
-    expect(method).toHaveTextContent("100 % n'est atteignable que si");
-
-    const states = screen.getByTestId("score-states");
-    await user.click(within(states).getByText("Que veut dire chaque état ?"));
-    expect(within(states).getAllByRole("term")).toHaveLength(6);
-    expect(states).toHaveTextContent("inconnu ne veut pas dire sain");
-
-    const improve = screen.getByTestId("score-improve");
-    expect([...improve.querySelectorAll("li")].map((li) => li.dataset.todo)).toEqual([
-      "troubled",
-      "not_covered",
-      "unknown",
-      "stale",
-    ]);
-    expect(within(improve).getByRole("link", { name: /3 éléments ne sont décrits par aucune source/ })).toHaveAttribute(
-      "href",
-      "/sources",
-    );
-  });
-
-  it("nothing to improve when all is verified — never a promise", () => {
-    show(<ScoreExplained states={{ operational: 4 }} total={4} operational={4} lastRead={null} />);
-    expect(screen.getByTestId("score-improve")).toHaveTextContent("Rien à améliorer");
-    expect(screen.getByTestId("score-method")).toHaveTextContent("Aucune source n'a encore été lue.");
+    expect(counts).toHaveTextContent("1En bonne santé");
   });
 
   it("says each source in its state and what covers each part", () => {

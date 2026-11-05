@@ -28,6 +28,8 @@ named by what it is, the words its evidence gives:
     hosted_on     the code's store → the cloud's (only_instance,
                   named_for_repository, only_bucket)
     monitored_by  a service → the monitoring tool that shows it
+    in_network    a cloud resource → the network it is in, as its provider
+                  says it (an instance's, a database's VPC — LEKA-532)
     part_of       anything else part of a card
 
 A repository that says what it is made of (its `modules`, read from its
@@ -57,7 +59,7 @@ CLOUD_PROVIDERS = frozenset({"aws", "azure", "gcp"})
 CODE_HOSTS = (("github.com/", "github"), ("gitlab.com/", "gitlab"), ("bitbucket.org/", "bitbucket"))
 # What the architecture reads of the graph.
 TYPES = (E.REPOSITORY, E.APPLICATION, E.SERVICE, E.DATABASE, E.INFRA_RESOURCE)
-LINKS = (R.PART_OF, R.DEPENDS_ON, R.USES, R.DEPLOYED_TO)
+LINKS = (R.PART_OF, R.DEPENDS_ON, R.USES, R.DEPLOYED_TO, R.IN_NETWORK, R.RUNS_IN)
 # The roles a repository's configuration names (leka/connectors/components.py),
 # as the evidence of a `depends_on` begins: "queue: deploy/….yml:12 — REDIS_URL".
 CODE_ROLES = frozenset(
@@ -82,6 +84,7 @@ ROLE_ORDER = (
     "uses",
     "depends",
     "monitored_by",
+    "in_network",
     "part_of",
 )
 # What is relied on — what "the most depended on" counts.
@@ -228,6 +231,8 @@ class Edge:
     confidence: float
     # The first evidence its records give, when stated.
     evidence: str | None = None
+    # The kinds of the sources whose records state it (LEKA-532).
+    sources: tuple[str, ...] = ()
 
 
 @dataclass
@@ -280,6 +285,8 @@ class Link:
     status: str | None
     # What inferred it: enrichment's rule — public_address, only_instance…
     rule: str = "stated"
+    # The kinds of the sources stating it: aws, github… (LEKA-532).
+    sources: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -431,8 +438,10 @@ def role(edge: Edge, things: Mapping[uuid.UUID, Thing]) -> tuple[uuid.UUID, uuid
             return edge.from_id, edge.to_id, "deployed_on"
         said = (edge.evidence or "").split(":", 1)[0].strip()
         return edge.from_id, edge.to_id, said if said in CODE_ROLES else "depends"
-    if edge.type == R.DEPLOYED_TO:
+    if edge.type in (R.DEPLOYED_TO, R.RUNS_IN):
         return edge.from_id, edge.to_id, "deployed_on"
+    if edge.type == R.IN_NETWORK:
+        return edge.from_id, edge.to_id, "in_network"
     return edge.from_id, edge.to_id, "uses"
 
 
@@ -481,7 +490,15 @@ def build(
             (cards[str(a)].status, cards[str(b)].status), key=lambda s: WORST.get(s or "", -1)
         )
         links[key] = Link(
-            str(a), str(b), named, edge.origin, edge.confidence, edge.evidence, worse, edge.rule
+            str(a),
+            str(b),
+            named,
+            edge.origin,
+            edge.confidence,
+            edge.evidence,
+            worse,
+            edge.rule,
+            edge.sources,
         )
     for link in links.values():
         if link.role == "source_code":

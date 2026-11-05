@@ -487,6 +487,15 @@ class TwinSourceRead(BaseModel):
     last_synced_at: datetime | None
     error: str | None = Field(description="What its last check or read said, cleaned.")
     webhooks: bool = Field(description="It receives what its system sends, as it is sent.")
+    unread: list[str] = Field(
+        default_factory=list,
+        description="What its connector reads and these credentials could not at its last "
+        "test (LEKA-532): instances, buckets… — what is missing from the map because of it.",
+    )
+    needs: list[str] = Field(
+        default_factory=list,
+        description="The permissions that would let it read them: ec2:DescribeInstances…",
+    )
 
 
 class TwinIncidentRead(BaseModel):
@@ -509,8 +518,8 @@ class TwinStateRead(BaseModel):
     )
     reason: str = Field(
         description="incident_open, resource_failed, resource_paused, resource_running, "
-        "monitored_quiet, deduced_health, no_monitoring_source, no_signal, sources_stale, "
-        "sources_failing."
+        "monitored_quiet, deduced_health, no_monitoring_source, no_cloud_source, not_watched, "
+        "provider_no_state, state_unrecognised, no_signal, sources_stale, sources_failing."
     )
     observed_at: datetime | None = Field(description="When a source last read it.")
     signal: list[str] = Field(description="The sources it rests on, by name.")
@@ -518,6 +527,9 @@ class TwinStateRead(BaseModel):
     was: TwinStateName | None = Field(description="What it was, when stale.")
     certainty: Literal["confirmed", "suspected", "unverified"]
     incident: TwinIncidentRead | None
+    said: str | None = Field(
+        default=None, description="Its provider's own word for it, when the state rests on it."
+    )
 
 
 class TwinCoverageRead(BaseModel):
@@ -560,6 +572,20 @@ class EnvironmentNodeRead(BaseModel):
         default=None,
         description="Its state in the Digital Twin (LEKA-442); a provider's box: its worst.",
     )
+
+
+class TrackedRead(BaseModel):
+    """One thing the twin gives a state (LEKA-532): each service, database
+    and cloud resource on its own — never a provider's box —, what `states`
+    counts, one row each: what the score is made of."""
+
+    entity: EntityRef
+    resource_type: str | None = Field(description="Its provider's kind: s3:bucket, rds:db…")
+    provider: str | None = Field(description="aws, azure or gcp, for a cloud resource.")
+    region: str | None
+    environment: str | None
+    twin: TwinStateRead
+    sources: list[uuid.UUID] = Field(description="The sources that show it.")
 
 
 class EnvironmentEdgeRead(BaseModel):
@@ -621,6 +647,11 @@ class EnvironmentRead(BaseModel):
     )
     freshness: TwinFreshnessRead | None = None
     coverage: list[TwinCoverageRead] = Field(default_factory=list)
+    tracked: list[TrackedRead] = Field(
+        default_factory=list,
+        description="Every thing with a state, one row each, the worst first: `states` "
+        "counted from them (LEKA-532).",
+    )
     sources: list[TwinSourceRead] = Field(default_factory=list)
 
 
@@ -692,6 +723,11 @@ class SheetLinkRead(BaseModel):
     origin: str
     confidence: float
     cross_source: bool
+    rule: str = Field(default="", description="What inferred it, or the source's own word.")
+    evidence: str = Field(default="", description="What says it: a record, a file, a rule.")
+    stated_by: list[str] = Field(
+        default_factory=list, description="The sources that state it, by name; none inferred."
+    )
 
 
 class EntitySheetRead(BaseModel):

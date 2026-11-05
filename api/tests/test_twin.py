@@ -8,7 +8,10 @@ What these protect:
 - a suspected anomaly: a degradation deduced from what runs it — suspected,
   never confirmed;
 - an unknown thing: a source could tell, says nothing — unknown, never
-  operational; no source could tell — not covered;
+  operational; no source could tell — not covered; each said why, from
+  what the sources really say (LEKA-532): a monitoring tool watching other
+  services, a provider giving no state for a kind, a provider's word LEKA
+  does not read, nothing that runs a database connected;
 - a stale source: what it rests on not read for three hours — stale, what
   it was said; an incident read from it stays an incident, unverified;
 - an unavailable source: every source of it failing — stale, said failing;
@@ -130,7 +133,7 @@ def test_silence_is_never_health_unknown_or_not_covered() -> None:
         thing(), sources=[GITHUB], incidents=[], monitoring_connected=False, now=NOW
     )
     assert watched_elsewhere is not None and nothing_could_tell is not None
-    assert (watched_elsewhere.state, watched_elsewhere.reason) == ("unknown", "no_signal")
+    assert (watched_elsewhere.state, watched_elsewhere.reason) == ("unknown", "not_watched")
     assert (nothing_could_tell.state, nothing_could_tell.reason) == (
         "not_covered",
         "no_monitoring_source",
@@ -140,6 +143,64 @@ def test_silence_is_never_health_unknown_or_not_covered() -> None:
         state_of(thing("repository"), sources=[], incidents=[], monitoring_connected=True, now=NOW)
         is None
     )
+
+
+AWS = source("production account", "cloud")
+POSTGRES = source("postgres-prod", "data")
+
+
+def test_each_unknown_says_why_from_what_its_sources_say() -> None:
+    """LEKA-532: « Inconnu », and why — only what the sources show."""
+    # AWS lists a bucket and gives no state for its kind.
+    bucket = state_of(
+        thing("infra_resource", resource_type="s3:bucket"),
+        sources=[AWS],
+        incidents=[],
+        monitoring_connected=True,
+        now=NOW,
+    )
+    # AWS says a word LEKA reads neither as running, paused nor failed.
+    modifying = state_of(
+        thing("database", state="modifying"),
+        sources=[AWS],
+        incidents=[],
+        monitoring_connected=True,
+        now=NOW,
+    )
+    # Its schemas read by its own connector, nothing that runs it connected:
+    # no source could say its state — not covered, not unknown.
+    schemas_only = state_of(
+        thing("database"), sources=[POSTGRES], incidents=[], monitoring_connected=True, now=NOW
+    )
+    running = state_of(
+        thing("database", state="running"),
+        sources=[AWS],
+        incidents=[],
+        monitoring_connected=True,
+        now=NOW,
+    )
+    assert bucket is not None and modifying is not None
+    assert schemas_only is not None and running is not None
+    assert (bucket.state, bucket.reason, bucket.basis) == ("unknown", "provider_no_state", "none")
+    assert bucket.signal == ("production account",)
+    assert (modifying.state, modifying.reason, modifying.said) == (
+        "unknown",
+        "state_unrecognised",
+        "modifying",
+    )
+    assert (schemas_only.state, schemas_only.reason) == ("not_covered", "no_cloud_source")
+    # The provider's word kept with what it says.
+    assert (running.state, running.said) == ("operational", "running")
+    # Read long ago: what it was, its reason and word kept.
+    old = state_of(
+        thing("infra_resource", resource_type="s3:bucket"),
+        sources=[source("production account", "cloud", ago=timedelta(hours=5))],
+        incidents=[],
+        monitoring_connected=True,
+        now=NOW,
+    )
+    assert old is not None
+    assert (old.state, old.was, old.reason) == ("stale", "unknown", "sources_stale")
 
 
 def test_what_was_read_long_ago_is_stale_never_operational() -> None:

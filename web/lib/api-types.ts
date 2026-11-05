@@ -9404,7 +9404,7 @@ export interface components {
             to_id: string;
             /**
              * Role
-             * @description source_code, routes, calls, queue, cache, stores, files, email, uses, depends, deployed_on, hosted_on, monitored_by, part_of.
+             * @description source_code, routes, calls, queue, cache, stores, files, email, uses, depends, deployed_on, hosted_on, monitored_by, in_network, part_of.
              */
             role: string;
             /**
@@ -9426,6 +9426,11 @@ export interface components {
              * @description The worse of its ends' states.
              */
             status: string | null;
+            /**
+             * Sources
+             * @description The kinds of the sources whose records state it: aws, github… (LEKA-532).
+             */
+            sources?: string[];
         };
         /** ArchitectureRankRead */
         ArchitectureRankRead: {
@@ -15785,6 +15790,11 @@ export interface components {
             freshness?: components["schemas"]["TwinFreshnessRead"] | null;
             /** Coverage */
             coverage?: components["schemas"]["TwinCoverageRead"][];
+            /**
+             * Tracked
+             * @description Every thing with a state, one row each, the worst first: `states` counted from them (LEKA-532).
+             */
+            tracked?: components["schemas"]["TrackedRead"][];
             /** Sources */
             sources?: components["schemas"]["TwinSourceRead"][];
         };
@@ -23372,6 +23382,23 @@ export interface components {
             confidence: number;
             /** Cross Source */
             cross_source: boolean;
+            /**
+             * Rule
+             * @description What inferred it, or the source's own word.
+             * @default
+             */
+            rule: string;
+            /**
+             * Evidence
+             * @description What says it: a record, a file, a rule.
+             * @default
+             */
+            evidence: string;
+            /**
+             * Stated By
+             * @description The sources that state it, by name; none inferred.
+             */
+            stated_by?: string[];
         };
         /** SheetPersonRead */
         SheetPersonRead: {
@@ -24630,6 +24657,35 @@ export interface components {
             origin: "source" | "model";
         };
         /**
+         * TrackedRead
+         * @description One thing the twin gives a state (LEKA-532): each service, database
+         *     and cloud resource on its own — never a provider's box —, what `states`
+         *     counts, one row each: what the score is made of.
+         */
+        TrackedRead: {
+            entity: components["schemas"]["EntityRef"];
+            /**
+             * Resource Type
+             * @description Its provider's kind: s3:bucket, rds:db…
+             */
+            resource_type: string | null;
+            /**
+             * Provider
+             * @description aws, azure or gcp, for a cloud resource.
+             */
+            provider: string | null;
+            /** Region */
+            region: string | null;
+            /** Environment */
+            environment: string | null;
+            twin: components["schemas"]["TwinStateRead"];
+            /**
+             * Sources
+             * @description The sources that show it.
+             */
+            sources: string[];
+        };
+        /**
          * TranscriptRead
          * @description What was said, written.
          */
@@ -24770,6 +24826,16 @@ export interface components {
              * @description It receives what its system sends, as it is sent.
              */
             webhooks: boolean;
+            /**
+             * Unread
+             * @description What its connector reads and these credentials could not at its last test (LEKA-532): instances, buckets… — what is missing from the map because of it.
+             */
+            unread?: string[];
+            /**
+             * Needs
+             * @description The permissions that would let it read them: ec2:DescribeInstances…
+             */
+            needs?: string[];
         };
         /**
          * TwinStateRead
@@ -24790,7 +24856,7 @@ export interface components {
             basis: "measured" | "declared" | "deduced" | "none";
             /**
              * Reason
-             * @description incident_open, resource_failed, resource_paused, resource_running, monitored_quiet, deduced_health, no_monitoring_source, no_signal, sources_stale, sources_failing.
+             * @description incident_open, resource_failed, resource_paused, resource_running, monitored_quiet, deduced_health, no_monitoring_source, no_cloud_source, not_watched, provider_no_state, state_unrecognised, no_signal, sources_stale, sources_failing.
              */
             reason: string;
             /**
@@ -24819,6 +24885,11 @@ export interface components {
              */
             certainty: "confirmed" | "suspected" | "unverified";
             incident: components["schemas"]["TwinIncidentRead"] | null;
+            /**
+             * Said
+             * @description Its provider's own word for it, when the state rests on it.
+             */
+            said?: string | null;
         };
         /**
          * Understanding

@@ -209,10 +209,16 @@ describe("the board", () => {
     const rows = within(panel.getByTestId("architecture-relations")).getAllByRole("listitem");
     expect(rows.map((row) => row.textContent)).toEqual([
       // Inferred: by which rule, how surely.
-      expect.stringMatching(/^Hébergé surdéduit : seule base de ce moteur dans le cloud · 70 %leka/),
-      expect.stringMatching(/^Stockage de.*Leka API/),
-      expect.stringMatching(/^Stockage de.*Leka Worker/),
+      expect.stringMatching(/^Hébergé sur.*leka.*déduit : seule base de ce moteur dans le cloud · 70 %$/),
+      // Stated: observed, by the sources that show it (LEKA-532).
+      expect.stringMatching(/^Stockage de.*Leka API.*observé : déclaré par GitHub$/),
+      expect.stringMatching(/^Stockage de.*Leka Worker.*observé : déclaré par GitHub$/),
     ]);
+    expect(
+      within(panel.getByTestId("architecture-relations"))
+        .getAllByTestId("relation-origin")
+        .map((origin) => origin.getAttribute("data-origin")),
+    ).toEqual(["inferred", "stated", "stated"]);
     // A relation is a way to the other card.
     await user.click(within(rows[0]).getByRole("button"));
     const chosen = within(screen.getByTestId("architecture-panel"));

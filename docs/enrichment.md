@@ -456,8 +456,8 @@ never « sain ». See `leka/ingestion/enrichment/twin.py`.
 | `degraded` | an open incident of lower severity affects it; its provider says it is starting, stopping, stopped or deleting; its health deduced from what runs it is degraded | measured, declared, deduced (then only *suspected*) |
 | `operational` | a monitoring source (category `observability`) shows it, read recently, and raises nothing; its provider says it is `running`; its health deduced from what runs it is good | measured, declared, deduced: always said which |
 | `stale` | every source showing it was last read more than **3 hours** ago (three missed reads), or is failing: what it was then is said (`was`), *unverified* | as it was |
-| `unknown` | a connected source could tell (a monitoring tool is connected), and says nothing of it | none |
-| `not_covered` | no connected source could tell: no monitoring tool for a service | none |
+| `unknown` | a connected source could tell, and says nothing of it — a monitoring tool connected watching other services (`not_watched`); its provider listing it without a state for its kind, an S3 bucket (`provider_no_state`); its provider's word LEKA reads neither as running, paused nor failed (`state_unrecognised`, the word kept in `said`); else `no_signal` | none, declared |
+| `not_covered` | no connected source could tell: no monitoring tool for a service (`no_monitoring_source`); a database or a resource no connected cloud account lists, only its schemas or its definition read (`no_cloud_source`) | none |
 
 An incident read from a stale source stays an incident, said *unverified*.
 A closed incident is not health. It resolves nothing until a fresh signal
@@ -469,7 +469,34 @@ says the thing is well.
 - `signal`: the sources it rests on, by name, read from `resolved_keys`;
 - `fresh`;
 - `certainty`: confirmed, suspected or unverified;
-- the open `incident` it rests on.
+- the open `incident` it rests on;
+- `said`: its provider's own word, when the state rests on it (LEKA-532).
+
+**The score, thing by thing (LEKA-532).** `GET .../environment` lists every
+thing with a state in `tracked`, one row each — a cloud resource on its
+own, never folded into its provider's box — with its resource type,
+provider, region, environment and the sources showing it; `states` counts
+them. The screens make the score of them, so it is counted again from the
+rows shown:
+
+- **health** = in good health ÷ tracked; **coverage** = a known state (not
+  stale, unknown or not covered) ÷ tracked — seen is not well, and 100 %
+  is said to guarantee nothing beyond the last read;
+- each thing weighs the same; services, databases and cloud resources
+  count; repositories, teams, documents and incidents have no state;
+- what keeps it from 100 %, the most urgent first, each with its fix by
+  its reason: an incident, a deduced trouble, a failing or late source, a
+  monitoring tool or a cloud account to connect, a service to add in the
+  monitoring tool, LEKA unable to say — and **the ceiling**: what a
+  provider gives no readable state for never counts healthy, so the most
+  reachable today is said when there is any.
+
+A cloud source says what its credentials could not read at its last test
+(`unread`) and the permissions that would let it (`needs`): AWS's, from
+`leka.connectors.aws.connector.PERMISSIONS`. A relationship says which
+sources state it — `stated_by` on a sheet, `sources` on the architecture's
+links — and the architecture draws a cloud resource's network
+(`in_network`) and what runs in it.
 
 **Freshness, as it really is.** Sources are read every hour
 (`leka.ingestion.sync.SYNC_INTERVAL`), and the twin says so: « Sources lues
