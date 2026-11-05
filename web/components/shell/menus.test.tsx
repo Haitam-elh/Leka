@@ -131,6 +131,21 @@ describe("the account menu", () => {
     allowed.value = ["workspace:read"];
   });
 
+  it("lists the main pages on a phone in the journey's order, as the header does (LEKA-533)", async () => {
+    allowed.value = ["workspace:read", "intention:read"];
+    const user = userEvent.setup();
+    mount(<UserMenu />);
+    await user.click(await screen.findByTestId("user-menu"));
+    await screen.findByTestId("menu-intentions");
+    const main = screen
+      .getAllByRole("menuitem")
+      .map((item) => item.getAttribute("data-testid"))
+      .filter((id) => ["menu-home", "menu-intentions", "menu-agents", "menu-environment"].includes(id ?? ""));
+    expect(main).toEqual(["menu-home", "menu-intentions", "menu-agents", "menu-environment"]);
+    expect(screen.getByTestId("menu-environment")).toHaveTextContent("Mon environnement");
+    allowed.value = ["workspace:read"];
+  });
+
   it("says the language, and opens the picker of every one LEKA offers", async () => {
     const user = userEvent.setup();
     mount(<UserMenu />);

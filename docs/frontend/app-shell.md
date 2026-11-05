@@ -20,7 +20,7 @@ web/
     app-shell.tsx           the header, then <main> — the content scrolls, the header does not
     app-header.tsx          the logo (the way home), the main pages, the running intentions,
                             the plan, the notifications, the workspace, who you are
-    main-nav.tsx            the main pages: Accueil, Mon environnement, Agents, Historique;
+    main-nav.tsx            the main pages: Accueil, Intentions, Agents, Mon environnement;
                             the decisions waiting, beside the bell, only while one waits
     user-menu.tsx           the account, the pages of running the workspace, the language
     workspace-switcher.tsx  the current workspace, and the ones to switch to
