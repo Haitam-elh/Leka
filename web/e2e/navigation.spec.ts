@@ -47,9 +47,16 @@ test.describe("the information architecture", () => {
   }) => {
     await signIn(page);
     await expect(page.getByTestId("open-navigation")).toHaveCount(0);
-    for (const id of ["home", "environment", "agents", "intentions"]) {
+    for (const id of ["home", "intentions", "agents", "environment"]) {
       await expect(page.getByTestId(`nav-${id}`)).toBeVisible();
     }
+    // In the order of the journey (LEKA-533), left to right.
+    await expect(page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link")).toHaveText([
+      "Accueil",
+      "Intentions",
+      "Agents",
+      "Mon environnement",
+    ]);
     // « Intentions », no longer « Historique » (LEKA-529): the same page.
     await expect(page.getByTestId("nav-intentions")).toHaveText("Intentions");
     await expect(page.getByTestId("nav-intentions")).toHaveAttribute("href", "/intentions");
@@ -70,6 +77,11 @@ test.describe("the information architecture", () => {
     await expect(page.getByTestId("nav-environment")).toBeHidden();
     await page.getByTestId("user-menu").click();
     await expect(page.getByTestId("menu-intentions")).toHaveText("Intentions");
+    // The same order on a phone (LEKA-533).
+    const order = await page
+      .locator('[data-testid="menu-home"], [data-testid="menu-intentions"], [data-testid="menu-agents"], [data-testid="menu-environment"]')
+      .evaluateAll((items) => items.map((item) => item.getAttribute("data-testid")));
+    expect(order).toEqual(["menu-home", "menu-intentions", "menu-agents", "menu-environment"]);
     await page.getByTestId("menu-environment").click();
     await expect(page).toHaveURL("http://localhost:3000/environment");
   });

@@ -12,10 +12,11 @@ import { canOpen } from "@/lib/navigation/access";
 import { useNavBadges } from "@/lib/nav-badges";
 
 /**
- * The header's navigation (LEKA-494): the five pages of the mockup —
- * Accueil, Mon environnement, Agents, Intentions (« Historique » until
- * LEKA-529: what one finds there is one's intentions) —; the decisions
- * waiting beside the bell, only while one waits. The pages of running the
+ * The header's navigation (LEKA-494), in the order of the journey
+ * (LEKA-533): Accueil, Intentions (« Historique » until LEKA-529: what one
+ * finds there is one's intentions), Agents, Mon environnement; the
+ * decisions waiting beside the bell, only while one waits. The same order
+ * on a phone, in the profile menu (useMainNav). The pages of running the
  * workspace are in the profile menu; every other page is one ⌘K away.
  */
 
@@ -23,9 +24,9 @@ type Entry = { id: string; routeId: string; href: string; active: (path: string)
 
 const ENTRIES: readonly Entry[] = [
   { id: "home", routeId: "overview", href: routes.overview(), active: (p) => p === routes.overview() },
-  { id: "environment", routeId: "environment", href: routes.environment(), active: (p) => p.startsWith("/environment") },
-  { id: "agents", routeId: "capabilities", href: routes.capabilities(), active: (p) => p.startsWith("/capabilities") },
   { id: "intentions", routeId: "intentions", href: routes.intentions(), active: (p) => p.startsWith("/intentions") },
+  { id: "agents", routeId: "capabilities", href: routes.capabilities(), active: (p) => p.startsWith("/capabilities") },
+  { id: "environment", routeId: "environment", href: routes.environment(), active: (p) => p.startsWith("/environment") },
 ];
 
 /** The entries this person may open — the decisions waiting last, only
