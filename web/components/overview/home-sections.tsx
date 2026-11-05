@@ -21,7 +21,6 @@ import {
 } from "@/components/capabilities/offers";
 import { type TileTone } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
-import { StatusPill } from "@/components/intentions/intentions-list";
 import { exactDate, timeAgo } from "@/components/knowledge/time";
 import { buttonVariants } from "@/components/ui/button";
 import { routes } from "@/config/routes";
@@ -32,7 +31,6 @@ import { useCapabilities } from "@/lib/capabilities-queries";
 import { useEnvironment } from "@/lib/environment-queries";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
-import { useIntentions } from "@/lib/intentions/queries";
 import { recommend } from "@/lib/recommend-agents";
 import { isConnected } from "@/lib/sources";
 import { useSources } from "@/lib/sources-queries";
@@ -41,8 +39,8 @@ import { type Health, overallOf } from "@/lib/twin";
 /**
  * The home's blocks of the sprint's mockup (LEKA-456), the question their
  * focus (LEKA-470): « Mon environnement » reduced to its state and its last
- * read, the way to the analyses already asked, the agents on sale, the
- * latest analyses. Every figure is the API's; what is not known is said so
+ * read, the way to the analyses already asked, the agents on sale. Every
+ * figure is the API's; what is not known is said so
  * — never « 100 % Stable » by default.
  */
 
@@ -433,73 +431,5 @@ export function HomeBundles() {
     <div className="mt-10" data-testid="home-bundles-cards">
       <Bundles />
     </div>
-  );
-}
-
-/** « Dernières analyses »: the four latest intentions, where each stands. */
-export function LatestAnalyses() {
-  const t = useDictionary();
-  const w = t.overview.home;
-  const list = useIntentions(null, "");
-  const rows = list.data?.pages.flatMap((page) => page.data).slice(0, 4) ?? [];
-  if (list.isPending || rows.length === 0) return null;
-  return (
-    <section
-      className="mt-10"
-      aria-labelledby="home-latest"
-      data-testid="home-latest"
-    >
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2
-            id="home-latest"
-            className="text-xl font-bold tracking-[-0.01em] text-brand-navy"
-          >
-            {w.latest}
-          </h2>
-          <p className="mt-1 text-[0.875rem] text-shell-muted">
-            {w.latestBody}
-          </p>
-        </div>
-        <Link href={routes.intentions()} className={LINK}>
-          {w.allHistory}
-          <ArrowRight className="rtl:-scale-x-100 size-4" aria-hidden="true" />
-        </Link>
-      </div>
-      <ul className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {rows.map((intention) => (
-          <li key={intention.id}>
-            <Link
-              href={routes.intention(intention.id)}
-              className={cn(
-                CARD,
-                "flex h-full flex-col gap-2 p-4 outline-none hover:border-brand-violet/40 focus-visible:ring-3 focus-visible:ring-brand-violet/40",
-              )}
-              data-testid="home-latest-item"
-            >
-              <span className="flex items-start justify-between gap-2">
-                <span className="line-clamp-2 font-semibold text-brand-navy">
-                  {intention.title}
-                </span>
-                <span className="shrink-0 text-xs text-shell-muted">
-                  {timeAgo(t, intention.updated_at)}
-                </span>
-              </span>
-              <span>
-                <StatusPill
-                  status={intention.status}
-                  journey={intention.journey}
-                />
-              </span>
-              {intention.summary ? (
-                <span className="line-clamp-2 text-[0.8125rem] text-shell-muted">
-                  {intention.summary}
-                </span>
-              ) : null}
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </section>
   );
 }

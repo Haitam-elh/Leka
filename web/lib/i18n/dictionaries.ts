@@ -506,9 +506,6 @@ const fr = {
       allAgents: "Voir tous les agents et bundles",
       /** Under an Enterprise contract (2026-10-25): no bundle to see. */
       allAgentsOnly: "Voir tous les agents",
-      latest: "Dernières analyses",
-      latestBody: "Vos demandes et analyses récentes.",
-      allHistory: "Voir tout l'historique",
     },
     /** What needs someone first, and whether what LEKA sees can be trusted (LEKA-442). */
     twin: {
@@ -9914,9 +9911,6 @@ const en: Dictionary = {
       allAgents: "See all agents and bundles",
       /** Under an Enterprise contract (2026-10-25): no bundle to see. */
       allAgentsOnly: "See all agents",
-      latest: "Latest analyses",
-      latestBody: "Your recent requests and analyses.",
-      allHistory: "See the whole history",
     },
     twin: {
       statusTrouble: "{count} {count|element is|elements are} in trouble.",
