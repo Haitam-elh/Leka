@@ -19,13 +19,17 @@ Admin's own role is never stored here: it may do everything.
 
 `admin_sessions`: one signed-in device of an admin. The token is hashed; it
 is carried as a bearer by the Android app, never as a cookie, so no customer
-session can ever stand in for it.
+session can ever stand in for it. Renewing it (LEKA-546) ends the row and
+opens the next one of the same `family_id`, with a new token and the same
+end: a device keeps one family from sign-in to its end, and an ended token
+shown again ends the whole family. Why a row ended is `ended_reason`.
 
 `admin_audit_events`: everything LEKA's team did and read through LEKA
 ADMIN — signed in, refused, viewed what a customer wrote, suspended an
 organisation, added credits. Append-only: the database refuses to change a
 row, except to forget who it was about when an admin or an organisation is
-deleted. Kept apart from the customers' audit trail and from its retention.
+deleted, and to delete one, except the nightly sweep's, past the retention
+(LEKA-546). Kept apart from the customers' audit trail and its retention.
 
 `admin_idempotency_keys`: the answer to a sensitive operation, kept under
 the key the client sent with it, so the same request sent twice is done
@@ -66,6 +70,19 @@ from leka.db import Base, TimestampMixin, UUIDPrimaryKeyMixin
 ROLES = tuple(role.value for role in AdminRole)
 ACCOUNT_STATUSES = ("invited", "active", "disabled")
 CODE_PURPOSES = ("invite", "reset")
+# Why a session ended (LEKA-546): signed out on it; renewed into the next of
+# its family; closed from another of the admin's devices; closed by a Super
+# Admin; the password chosen or changed; the account disabled; an ended token
+# shown again, which ends the family.
+SESSION_END_REASONS = (
+    "signed_out",
+    "renewed",
+    "ended_by_self",
+    "ended_by_admin",
+    "password",
+    "disabled",
+    "reused",
+)
 OUTCOMES = ("succeeded", "refused", "failed")
 
 
@@ -96,7 +113,11 @@ class AdminAccount(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
 class AdminSession(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "admin_sessions"
-    __table_args__ = (UniqueConstraint("token_hash", name="uq_admin_sessions_token"),)
+    __table_args__ = (
+        UniqueConstraint("token_hash", name="uq_admin_sessions_token"),
+        CheckConstraint(_among("ended_reason", SESSION_END_REASONS), name="ended_reason"),
+        Index("ix_admin_sessions_family_id", "family_id"),
+    )
 
     admin_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -105,9 +126,13 @@ class AdminSession(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         index=True,
     )
     token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    # The first session of the device; its own id when it is the first.
+    family_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    signed_in_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ended_reason: Mapped[str | None] = mapped_column(String(20), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(400), nullable=True)
     ip_prefix: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
@@ -137,6 +162,9 @@ class AdminAuditEvent(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     route: Mapped[str | None] = mapped_column(String(200), nullable=True)
     request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     ip_prefix: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # The admin's session it was done in (LEKA-546). No foreign key: ended
+    # sessions are deleted after a while, the trail says which it was still.
+    session_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
 
 

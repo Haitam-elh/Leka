@@ -92,7 +92,7 @@ async def _change(
         if status is not None:
             account.status = status
             if status == "disabled":
-                ended = await accounts.revoke_all(account.id, now)
+                ended = await accounts.revoke_all(account.id, now, "disabled")
             else:
                 account.failed_sign_ins = 0
                 account.locked_until = None
@@ -101,7 +101,7 @@ async def _change(
             if len(secret) < MIN_PASSWORD_LENGTH:
                 raise AdminAccountError(f"A password of {MIN_PASSWORD_LENGTH} characters at least.")
             account.password_hash = hash_password(secret)
-            ended = await accounts.revoke_all(account.id, now)
+            ended = await accounts.revoke_all(account.id, now, "password")
         audit.record(
             session,
             "admin.account_changed",

@@ -58,6 +58,9 @@ class SecuritySettings:
     admin_session_idle_minutes: int = Field(default=120, ge=5, le=480)
     admin_sign_in_attempts: int = Field(default=5, ge=3, le=20)
     admin_lockout_minutes: int = Field(default=15, ge=1, le=1440)
+    # Its trail (LEKA-546): kept a year, then deleted by the nightly sweep.
+    # Never under six months: the database refuses to delete a younger row.
+    admin_audit_retention_days: int = Field(default=365, ge=180, le=2555)
 
     verification_token_lifetime_hours: int = Field(default=24, ge=1, le=168)
     # Deliberately short. A reset link sits in an inbox, which is the least

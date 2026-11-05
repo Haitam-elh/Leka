@@ -85,8 +85,18 @@ one key on the unique index.
 ## Consequences
 
 - An admin token opens every customer: sessions end after 12 hours or 2 idle,
-  five wrong passwords lock the account, sign-in is rate-limited, and LEKA-546
-  adds the rest (renewal, device storage, retention of the trail).
+  five wrong passwords lock the account, sign-in is rate-limited. Since
+  LEKA-546, renewing rotates the token without moving the session's end, an
+  ended token shown again ends its device's sessions, an admin sees and
+  closes their own devices, and the app keeps the token under a key of
+  Android's Keystore.
+- Since LEKA-546 the trail refuses deletion and truncation too, but the
+  nightly sweep past its retention (a year, never under six months); each
+  row names the session it was done in, every action is declared in one
+  catalogue, and reading the trail is itself kept. Someone with the database
+  owner's credentials could still drop a trigger: the sweep checks them each
+  night and says so, and separating the API's database role from the
+  migrations' is left to the security audit (LEKA-558).
 - What models cost is visible through the Admin API. LEKA-530 keeps it from
   customers; `tests/test_usage_report.py` still holds that for every other
   route.

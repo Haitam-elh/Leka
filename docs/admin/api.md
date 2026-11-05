@@ -1,4 +1,4 @@
-# L'Admin API de LEKA ADMIN (LEKA-544, LEKA-545)
+# L'Admin API de LEKA ADMIN (LEKA-544, LEKA-545, LEKA-546)
 
 Le contrat entre LEKA CORE et LEKA ADMIN : ce que l'application Android envoie et reçoit aujourd'hui, et ce que la version web recevra demain, à l'identique. Les routes sont sous `/api/v1/admin`. Le schéma OpenAPI de LEKA CORE (`/api/v1/openapi.json`, étiquette `admin`) en est la source exacte ; ce document dit le sens.
 
@@ -17,13 +17,23 @@ Le code : `api/leka/admin/` (règles et lectures), `api/leka/api/admin.py` (rout
 | Mot de passe oublié | `POST /admin/auth/forgot-password` `{email}` | Un code par e-mail, valable 15 minutes, si l'adresse est celle d'un admin actif. Toujours `202`, quelle que soit l'adresse |
 | Choisir son mot de passe avec le code | `POST /admin/auth/reset-password` `{email, code, password}` | Pour le premier mot de passe d'un admin invité, ou après un oubli. Toutes ses sessions sont fermées (204) |
 | Changer son mot de passe | `POST /admin/auth/change-password` `{current_password, password}` | Connecté ; ses autres sessions sont fermées |
+| Renouveler sa session | `POST /admin/auth/renew` | Un nouveau jeton, l'ancien prend fin ; la session garde sa fin (LEKA-546) |
+| Voir ses appareils connectés | `GET /admin/auth/sessions` | Ses sessions ouvertes : depuis quand, dernier appel, fin, appareil, réseau, et celle qui demande (`current`) |
+| Fermer une de ses sessions | `DELETE /admin/auth/sessions/{id}` | Un autre de ses appareils, ou celui-ci (204) ; `404` si ce n'est pas une session ouverte à soi |
 
 Règles de connexion :
 - **Une seule réponse pour tout échec** : adresse inconnue, mauvais mot de passe, compte désactivé ou verrouillé répondent tous `401 invalid_credentials`, après le même travail. La vraie raison va dans le journal admin.
 - **Verrou** : 5 mauvais mots de passe d'affilée verrouillent le compte 15 minutes.
 - **Limite de débit** : 5 tentatives par minute par adresse, 20 par réseau.
 - **Session** : elle finit après 12 heures quoi qu'il arrive, ou après 2 heures sans appel. Un compte désactivé perd ses sessions à l'instant.
-- **Sur Android**, le jeton est gardé dans le stockage sécurisé du téléphone (LEKA-546), jamais dans le code ni dans l'APK.
+- **Sur Android**, le jeton est chiffré par une clé du Keystore du téléphone, qui ne quitte jamais sa puce (LEKA-546) : jamais dans le code, l'APK, le stockage du navigateur intégré ni une sauvegarde.
+
+**Le cycle d'une session** (LEKA-546) :
+- **Renouveler** donne un nouveau jeton à l'appareil et met fin à l'ancien. La session garde la fin qu'elle avait : renouveler ne la fait jamais durer plus que la journée de travail pour laquelle elle a été ouverte. L'application renouvelle à son ouverture et quand elle revient au premier plan.
+- **L'ancien jeton reste valable 30 secondes**, pour les appels partis avec lui ; il ne se renouvelle pas une seconde fois (`409`).
+- **Présenté après ces 30 secondes**, c'est une copie, ou un appareil qui a perdu le nouveau : toutes les sessions de cet appareil (sa « famille », de la connexion à la fin) prennent fin, et le journal le dit (`admin.session_reused`). Les autres appareils de l'admin ne sont pas touchés.
+- **Une session prend fin** et garde pourquoi (`ended_reason`) : déconnexion (`signed_out`), renouvellement (`renewed`), fermée depuis un autre de ses appareils (`ended_by_self`), par un Super Admin (`ended_by_admin`), mot de passe choisi ou changé (`password`), compte désactivé (`disabled`), jeton réutilisé (`reused`). Sinon elle expire : 12 heures, ou 2 heures sans appel.
+- **Contre les essais répétés** : la limite de débit et le verrou ci-dessus pour la connexion ; 5 essais par code, 3 demandes de code par adresse en 15 minutes, 20 essais par réseau et par minute pour les codes.
 
 **Les codes envoyés par e-mail** : 8 caractères (`ABCD-EFGH`), sans caractères ambigus, gardés hachés. Un code est à usage unique : il vaut 72 heures pour une invitation, 15 minutes pour un oubli, et il est brûlé après 5 essais faux. Un nouveau code remplace le précédent. Un code plutôt qu'un lien, parce que l'application est sur un téléphone. Le mot de passe fait 14 caractères au moins.
 
@@ -107,7 +117,7 @@ Chaque permission a un **module** et un **niveau d'action** (`GET /admin/roles`)
 | `POST /admin/admins/{id}/sign-out` | `admins:manage` | | toutes ses sessions fermées : `{sessions_ended}` |
 | `GET /admin/roles` | connecté | | les 4 rôles, ce que chacun accorde, et chaque permission avec son module et son niveau |
 | `PUT /admin/roles/{role}/permissions` | `admins:manage` | corps `{permissions}` (la liste entière) | le rôle changé ; refusé pour `super_admin` et pour ce qui n'appartient qu'au Super Admin |
-| `GET /admin/audit` | `audit:read` | `admin_id`, `action` (`*` joker), `organisation_id`, `outcome`, `from`, `to` ; tri `at` | le journal admin |
+| `GET /admin/audit` | `audit:read` | `admin_id`, `action` (`*` joker), `organisation_id`, `outcome`, `from`, `to` ; tri `at` | le journal admin (§ 8). **Lecture journalisée**, avec les filtres |
 
 **Pas encore de données** (le ticket qui les apporte) : le pays d'une organisation (pas collecté), les notes internes (LEKA-549), le registre des crédits (LEKA-553), les factures, paiements et MRR (LEKA-554), les incidents de la plateforme (LEKA-556).
 
@@ -186,12 +196,49 @@ Suspendre, réactiver, ajouter des crédits : chacune appelle la règle du modul
 
 ## 8. Le journal admin
 
-`admin_audit_events` garde tout ce que l'équipe LEKA fait et lit de sensible :
-- `admin.signed_in`, `admin.signed_out`, `admin.sign_in_failed` avec sa raison ;
-- `admin.refused` ;
-- `admin.viewed` et `admin.viewed_content` ;
-- `admin.organisation_suspended` et `_reactivated`, `admin.credits_added` ;
-- `admin.account_created`, `admin.invited`, `admin.invitation_sent`, `admin.account_changed`, `admin.signed_out_everywhere`, `admin.role_changed` (avant et après) ;
-- `admin.password_reset_asked`, `admin.code_refused`, `admin.password_set`, `admin.password_changed`, `admin.password_change_refused`.
+`admin_audit_events` garde tout ce que l'équipe LEKA fait et lit de sensible à travers LEKA ADMIN. Il est à part du journal des clients et de sa rétention.
 
-La base refuse de modifier une ligne (déclencheur), sauf pour oublier qui elle concernait quand l'admin ou l'organisation est supprimé. Il est indépendant de la rétention des journaux clients. Sa durée de conservation et ses accès sont précisés par LEKA-546.
+**Ce qu'une ligne dit** (LEKA-546) :
+
+| Champ | Ce qu'il dit |
+| --- | --- |
+| `admin_id`, `admin_email` | l'acteur : l'admin, ou l'adresse tapée quand aucun compte ne correspond (connexion refusée) ; rien pour la tâche de nuit |
+| `action` | ce qui a été fait, l'une des actions ci-dessous et aucune autre : une action que le code n'a pas déclarée est refusée |
+| `target_type`, `target_id` | l'objet : une organisation, une personne, une intention, un admin, une session, un rôle |
+| `for_workspace_id` | l'organisation concernée, quand il y en a une |
+| `at` | l'horodatage |
+| `outcome` | le résultat : `succeeded`, `refused` ou `failed` |
+| `route`, `request_id` | la requête : la méthode et le chemin, et son identifiant, le même que dans les logs |
+| `session_id` | la session de l'admin, donc l'appareil |
+| `ip_prefix` | le réseau d'où c'est venu, jamais l'adresse entière (/24 en IPv4, /48 en IPv6) |
+| `detail` | un petit contexte utile : le motif, avant et après, les filtres d'une lecture, la raison d'un refus. Jamais les données lues |
+
+**Les actions** (`api/leka/admin/audit.py`, `ACTIONS`) :
+
+| Domaine | Actions |
+| --- | --- |
+| Connexion et sessions | `admin.signed_in`, `admin.sign_in_failed` (avec sa raison), `admin.signed_out`, `admin.session_renewed`, `admin.session_ended`, `admin.session_reused`, `admin.signed_out_everywhere` |
+| Mots de passe et codes | `admin.password_reset_asked`, `admin.code_refused`, `admin.password_set`, `admin.password_changed`, `admin.password_change_refused` |
+| Lectures | `admin.refused` (un rôle qui n'accorde pas), `admin.viewed` (une organisation, une personne, une intention), `admin.viewed_content` (ce que le client a écrit, les livrables), `admin.viewed_trail` (ce journal) |
+| Clients, crédits | `admin.organisation_suspended`, `admin.organisation_reactivated`, `admin.credits_added`, chacune avec son motif |
+| L'équipe, les rôles, les permissions | `admin.account_created`, `admin.invited`, `admin.invitation_sent`, `admin.account_changed` (nom, rôle, accès : avant et après), `admin.role_changed` (les permissions d'un rôle : avant et après) |
+| Le journal lui-même | `admin.trail_expired` (ce que la tâche de nuit a supprimé), `admin.trail_unprotected` (sa protection trouvée absente) |
+
+Les abonnements ne changent aujourd'hui que par Stripe, côté client : ils sont dans le journal d'activité (§ 7). Quand LEKA ADMIN pourra les changer (LEKA-554), et quand il exportera (LEKA-557), chaque opération ajoutera son action ici, dans `ACTIONS` et dans ce tableau. `tests/test_admin_security.py` refuse une action enregistrée par le code qui manque à l'un ou à l'autre.
+
+**Protégé contre la modification** :
+- **Aucune route** n'écrit dans ce journal autrement qu'en ajoutant une ligne, ni ne le modifie ni ne le supprime.
+- **La base refuse** de réécrire une ligne, de la supprimer et de vider la table (déclencheurs). Deux exceptions seulement : oublier qui une ligne concernait quand l'admin ou l'organisation est supprimé ; la tâche de nuit qui supprime ce qui a dépassé la conservation, et jamais une ligne de moins de six mois, quoi que dise le réglage.
+- **Chaque nuit**, la tâche vérifie que ces déclencheurs sont là et actifs. S'il en manque un, elle le dit en erreur dans les logs et dans le journal (`admin.trail_unprotected`), et ne supprime rien.
+- **Limite connue** : quelqu'un qui a les accès du propriétaire de la base sur le serveur peut retirer un déclencheur. C'est un accès au serveur, pas à LEKA ADMIN ; la vérification de chaque nuit le rend visible. Séparer le rôle de base de l'API de celui des migrations est un sujet de l'audit de sécurité (LEKA-558).
+
+**Accès** : seul un Super Admin le lit (`audit:read`, qu'aucun autre rôle ne peut recevoir), depuis LEKA ADMIN ou l'API, et chaque lecture est elle-même gardée (`admin.viewed_trail`, avec les filtres). Personne ne le modifie.
+
+**Conservation** :
+
+| Quoi | Gardé | Puis |
+| --- | --- | --- |
+| Le journal admin | 1 an (`LEKA_ADMIN_AUDIT_RETENTION_DAYS`, de 180 jours à 7 ans) | supprimé par la tâche `admin-retention` (chaque nuit à 04:25 UTC), qui le dit dans le journal |
+| Les sessions terminées | 30 jours après leur fin | supprimées ; le journal garde quelle session a fait quoi |
+| Les codes utilisés ou expirés | 7 jours | supprimés |
+| Le journal d'activité, les clés d'idempotence | 25 mois, 7 jours | § 6 et 7 |
