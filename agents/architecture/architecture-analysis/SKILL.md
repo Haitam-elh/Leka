@@ -2,7 +2,7 @@
 name: architecture-analysis
 title: "Analyse d'architecture"
 description: "Use when someone wants the architecture of an application or a service explained — what it is made of, what it depends on, what depends on it, where the weak points are — from the company model, without a deck."
-version: 1.4.0
+version: 1.5.0
 category: architecture
 entity_types: [application, service, database, infra_resource, business_process, team, repository, business_capability, person]
 requires: []
@@ -10,7 +10,8 @@ mode: read_only
 risk: low
 outputs: analysis
 deliverables: [markdown]
-tools: [search_entities, read_entity, dependencies]
+tools: [search_entities, read_entity, dependencies, list_files, read_file]
+rounds: 30
 skills: [blast-radius]
 inputs:
   - name: sujet
@@ -44,6 +45,39 @@ Commence par le contexte fourni ; s'il ne suffit pas, cherche (`search_entities`
 lis (`read_entity`), suis les dépendances (`dependencies`).
 Quand la demande ne dit pas sur quoi travailler et que le contexte ne le montre pas,
 dis-le et arrête-toi : ne devine pas.
+
+**La question d'abord.** La réponse porte sur ce qui est demandé. On demande
+l'architecture du front : ses fragilités sont dans le front. L'hébergement
+n'y entre que lorsqu'il en est une cause, en une ligne, jamais comme sujet
+principal.
+
+**Le code, quand un dépôt est connecté et que la demande vise une partie
+logicielle** — le front, une API, un service. Le modèle de l'entreprise dit
+où cela tourne et de quoi cela dépend ; le code dit comment c'est construit.
+Lis-le avant d'écrire : liste le dépôt (`list_files`), cherche
+(`search_code`), lis par plages de lignes (`read_file`). Pour un front web,
+au minimum :
+- les pages et leur découpage : le routage, les gabarits communs ;
+- l'accès à l'API : le client, d'où vient son adresse, les nouvelles
+  tentatives, ce que l'écran montre quand l'API ne répond pas ou renvoie une
+  erreur ;
+- l'état : ce qui est gardé dans la page, en cache, côté serveur ;
+- les plus gros fichiers et ce qu'ils mélangent ;
+- la supervision des erreurs dans le navigateur.
+Pour une API ou un service : ses points d'entrée, ses couches, ses accès aux
+données, ce qu'il fait d'une dépendance qui ne répond pas.
+Tes tours vont au code : le modèle de l'entreprise se lit en un ou deux tours.
+Chaque constat tiré du code cite le fichier et la ligne lus (`chemin:ligne`).
+
+**Une absence se cherche avant de s'écrire.** « Aucun repli », « aucune
+supervision », « pas de test » : avant de l'écrire, cherche-le
+(`search_code` du mot, `list_files` du dossier, la documentation du dépôt).
+Trouvé, c'est un fait, cité. Pas trouvé, écris « non trouvé dans … » avec ce
+que tu as cherché, jamais « aucun » : cela peut être ailleurs.
+
+**Le code n'a pas été lu** — pas de dépôt connecté, ou pas pu l'ouvrir : dis-le
+en tête de « Ce qui manque » (« le code de … n'a pas été lu : ce qui suit
+vient du modèle de l'entreprise »), et ne juge pas de l'organisation du code.
 
 ## Sa méthode
 
@@ -105,7 +139,8 @@ Un document markdown, dans la langue de la demande :
    contexte, les options, celle proposée, ses conséquences — ce qui devient
    plus facile, ce qui devient plus difficile —, et comment revenir en
    arrière. À décider par l'équipe.
-7. **Ce qui manque** — ce que le modèle ne dit pas, les liens non vérifiés, ce qu'il faudrait documenter.
+7. **Ce qui manque** — ce que le modèle ne dit pas, les liens non vérifiés, ce qu'il faudrait documenter ;
+   et toujours, en une ligne, ce qui a été lu du code (les dossiers, les fichiers) ou qu'il ne l'a pas été.
 
 ## Ce qu'il ne doit jamais faire
 
@@ -120,8 +155,9 @@ Un document markdown, dans la langue de la demande :
   `architecture.unowned`…) : ce qu'il dit, en mots.
 - Jamais une action sur la façon dont LEKA range ses données (« renseigner tel champ du
   modèle ») : l'action porte sur le système.
-- Aucun fichier, chemin ou extrait de code que les sources ne montrent pas
-  (« deploy/prometheus.yml ») : où agir se dit en mots.
+- Aucun fichier, chemin ou extrait de code que tu n'as pas lu
+  (« deploy/prometheus.yml ») : un fichier lu se cite `chemin:ligne`, sinon
+  où agir se dit en mots.
 - Un responsable ne se désigne pas : « à désigner par l'équipe », jamais une personne
   proposée parce qu'elle contribue.
 
