@@ -44,6 +44,10 @@ ALLOWED_IN_RESPONSES: dict[tuple[str, str], str] = {
     ("SourceFindingsRead", "secrets"): "what was found, by kind and count",
     ("SourceFindingsRead", "with_secrets"): "how many records held one",
     ("AIControlRead", "max_tokens"): "a usage limit in model tokens: a count (LEKA-406)",
+    (
+        "AdminSignedIn",
+        "token",
+    ): "an admin's session token, shown once at sign-in, kept hashed (LEKA-544)",
 }
 COUNTS = re.compile(r"^tokens(_|$)")
 # Binary columns that are not a ciphertext, and why each may be.

@@ -141,7 +141,6 @@ def main(argv: list[str] | None = None) -> int:
         command.add_argument("email")
     args = parser.parse_args(argv)
 
-    load_schema()
     try:
         if args.command == "create":
             said = asyncio.run(_create(args.email, args.name, args.role))
@@ -162,4 +161,5 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    load_schema()
     raise SystemExit(main())
