@@ -44,6 +44,17 @@ from leka.core.config import settings
 
 LAST_BACKUP = "leka:ops:backup:last"
 
+# Nothing in the night's backup waits forever. The dump of 2026-11-01 waited
+# four days for an answer on a connection the database no longer had (no
+# session on its side): asyncpg waits for a statement's answer without end
+# unless told otherwise. Past these, the night's backup fails, said in
+# backup.log and by the backup_stale alert, and the next night tries again.
+# Measured on 2026-11-05: counting every table and dumping 2.2 million rows
+# took 192 s; the monthly restore of 2026-11-01, 558 s.
+CONNECT_SECONDS = 60.0
+STATEMENT_SECONDS = 30 * 60.0
+TOOL_SECONDS = 3 * 3600.0
+
 
 def libpq_url(url: str) -> str:
     """postgresql+asyncpg://… as the PostgreSQL tools — and asyncpg's own
@@ -59,17 +70,31 @@ def _tools(name: str) -> list[str]:
 
 
 def _run(command: list[str], *, write: Path | None = None, read: Path | None = None) -> None:
-    """One PostgreSQL tool, its output to `write` or its input from `read`."""
+    """One PostgreSQL tool, its output to `write` or its input from `read`;
+    stopped past TOOL_SECONDS."""
+    tool = next(part for part in command if part.startswith("pg_"))
     with (
         write.open("wb") if write else Path(os.devnull).open("wb") as out,
         read.open("rb") if read else Path(os.devnull).open("rb") as into,
     ):
-        done = subprocess.run(  # noqa: S603 — the tools named by the operator
-            command, stdout=out, stdin=into, stderr=subprocess.PIPE, check=False
-        )
+        try:
+            done = subprocess.run(  # noqa: S603 — the tools named by the operator
+                command,
+                stdout=out,
+                stdin=into,
+                stderr=subprocess.PIPE,
+                check=False,
+                timeout=TOOL_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"{tool} did not finish within {TOOL_SECONDS:.0f} s.") from None
     if done.returncode != 0:
-        tool = next(part for part in command if part.startswith("pg_"))
         raise RuntimeError(f"{tool} failed: {done.stderr.decode()[-500:]}")
+
+
+async def _connect(url: str) -> asyncpg.Connection:
+    """A connection whose every statement gives up past STATEMENT_SECONDS."""
+    return await asyncpg.connect(url, timeout=CONNECT_SECONDS, command_timeout=STATEMENT_SECONDS)
 
 
 def _sha256(path: Path) -> str:
@@ -107,7 +132,7 @@ async def dump(path: Path, *, url: str | None = None) -> Dumped:
     """The dump and its manifest, from one snapshot."""
     source = libpq_url(url or str(settings.database_url))
     began = time.monotonic()
-    conn = await asyncpg.connect(source)
+    conn = await _connect(source)
     try:
         async with conn.transaction(isolation="repeatable_read", readonly=True):
             snapshot = await conn.fetchval("SELECT pg_export_snapshot()")
@@ -160,7 +185,7 @@ async def verify(path: Path, *, url: str | None = None, keep: bool = False) -> V
         return Verified(False, {"<sha256>": (0, None)}, 0, 0, 0.0)
     source = libpq_url(url or str(settings.database_url))
     scratch = f"leka_restore_{uuid.uuid4().hex[:8]}"
-    admin = await asyncpg.connect(_with_database(source, "postgres"))
+    admin = await _connect(_with_database(source, "postgres"))
     try:
         await admin.execute(f'CREATE DATABASE "{scratch}"')
     finally:
@@ -180,14 +205,14 @@ async def verify(path: Path, *, url: str | None = None, keep: bool = False) -> V
             read=path,
         )
         seconds = time.monotonic() - began
-        conn = await asyncpg.connect(_with_database(source, scratch))
+        conn = await _connect(_with_database(source, scratch))
         try:
             restored = await _counts(conn)
         finally:
             await conn.close()
     finally:
         if not keep:
-            admin = await asyncpg.connect(_with_database(source, "postgres"))
+            admin = await _connect(_with_database(source, "postgres"))
             try:
                 await admin.execute(f'DROP DATABASE IF EXISTS "{scratch}" WITH (FORCE)')
             finally:
@@ -249,7 +274,7 @@ async def upload(dumped: Dumped) -> str:
             f"{prefix}/{file.name}",
             ExtraArgs={"ServerSideEncryption": "AES256"},
         )
-    told = redis.from_url(str(settings.redis_url))
+    told = redis.from_url(str(settings.redis_url), socket_connect_timeout=10, socket_timeout=30)
     try:
         await told.set(
             LAST_BACKUP,

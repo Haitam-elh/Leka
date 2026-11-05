@@ -197,6 +197,13 @@ docker run --rm --network leka_default --env-file production.env \
 `/opt/leka/backups` is the image user's (uid 10001: `sudo install -d -o 10001
 -g 10001 /opt/leka/backups`); the log is `/opt/leka/backup.log`.
 
+Nothing in it waits forever: a connection past 1 minute, a statement past
+30 minutes, `pg_dump` or `pg_restore` past 3 hours, and the night's backup
+fails, said in the log and by [backup_stale](#backup-stale); the next night
+tries again. The dump of 2026-11-01 waited four days for a statement's answer
+on a connection the database no longer had, until stopped by hand (`docker ps`
+shows it: a `leka-backup` container up for days).
+
 **The bucket** — `leka-backups-prod-7c2e`, eu-central-1: public access
 blocked, versioned, encrypted (SSE-S3), every version expired after 60 days.
 Written by the IAM user `leka-backup` alone — an inline policy allowing
