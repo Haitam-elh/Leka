@@ -1,92 +1,53 @@
 ---
-titre: La bonne bibliothèque
-description: Choisir la bibliothèque d'interface adaptée à un besoin (primitives accessibles, palette de commandes, notifications, code à usage unique, animation, nombres animés, graphiques, glisser-déposer, listes longues, état, classes, thèmes) plutôt que de la refaire à la main — et ne jamais changer de dépendance sans le dire.
+titre: "La bonne bibliothèque"
+description: "Choisir la bibliothèque d'interface adaptée à un besoin, en partant de ce qu'on repère dans le code (composant refait à la main, liste énorme, nombre animé à la main) : primitives accessibles, palette de commandes, notifications, code à usage unique, animation, nombres animés, graphiques, glisser-déposer, listes longues, état, classes et thème."
 ---
 
 # La bonne bibliothèque
 
-Beaucoup de défauts d'interface viennent d'un composant refait à la main
-alors qu'une bibliothèque mûre gère déjà l'accessibilité, le focus, les cas
-limites et le mouvement : un menu en `<div>` sans gestion du clavier, des
-notifications bricolées dans une modale, une liste de 2 000 lignes rendue
-d'un coup.
+Beaucoup de défauts d'interface viennent d'un composant refait à la main alors
+qu'une bibliothèque mûre gère déjà l'accessibilité, le focus, les cas limites
+et le mouvement : un menu en `<div>` sans clavier, des notifications bricolées
+dans une modale, une liste de 2 000 lignes rendue d'un coup.
 
-Comment s'en servir :
+## La règle de LEKA
 
-1. **Partir du besoin**, pas du nom de bibliothèque cité : « afficher un menu
-   déroulant », c'est un besoin de primitive accessible.
-2. **Regarder ce que le dépôt a déjà** (`package.json`). S'il utilise déjà une
-   bibliothèque de la liste, on s'en sert. S'il en utilise une concurrente, on
-   le signale sans proposer d'en changer.
-3. **Recommander une seule bibliothèque**, avec ce qu'elle remplace et
+1. **On part du besoin**, jamais d'un nom cité : « afficher un menu
+   déroulant » est un besoin de primitive accessible.
+2. **On regarde ce que le dépôt a déjà** (`package.json`). Une bibliothèque de
+   cette page déjà présente : on s'en sert. Une concurrente présente : on le
+   note, sans proposer d'en changer.
+3. **On recommande une seule bibliothèque**, avec ce qu'elle remplace et
    pourquoi, en une phrase.
-4. Si le besoin n'est pas dans la liste, on le dit, et on recommande en
-   l'indiquant clairement.
+4. **Un besoin absent de cette page** : on le dit, et on recommande en le
+   signalant clairement.
 
-Dans LEKA, une bibliothèque absente du dépôt est **une recommandation du
-livrable** : elle n'entre jamais dans une modification proposée sans être
-dite comme une nouvelle dépendance.
+Une bibliothèque absente du dépôt est **une recommandation du livrable** : elle
+n'entre jamais dans une modification proposée sans être annoncée comme une
+nouvelle dépendance.
 
-## La liste
+## Ce qu'on repère, ce qu'on recommande
 
-**Composants et primitives**
+| Ce qu'on repère dans le code | Le besoin | La bibliothèque |
+| --- | --- | --- |
+| un menu, un dialogue, un popover en `<div>` avec un focus géré à la main | des primitives accessibles (piège du focus, fermeture, clavier) | Base UI, ou Radix s'il est déjà là |
+| une recherche de commandes faite main | une palette de commandes (⌘K) | cmdk |
+| des notifications faites main, ou passées par une bibliothèque de modales | des notifications | Sonner (`notifications-sonner.md`) |
+| six champs d'une lettre pour un code reçu | la saisie d'un code à usage unique | input-otp |
+| des valeurs réglées par essais successifs dans le code | un panneau de réglage à l'œil | Leva |
+| des ressorts, des sorties de composants, des mises en page animées écrits à la main | une animation générale | Motion |
+| un nombre animé en rendant le texte à nouveau à chaque image | des nombres animés (compteurs, prix) | NumberFlow |
+| du code coloré à la main ou mal | la coloration syntaxique | Shiki |
+| des images de partage dessinées à la main | des images générées depuis du HTML et du CSS | Satori |
+| des graphiques dessinés en SVG à la main | des graphiques, tableaux de bord | Recharts |
+| un flux de données qui défile vite | un graphique temps réel | une bibliothèque de graphiques temps réel dédiée, ou Recharts si le flux est lent |
+| un glisser-déposer fait main | le glisser-déposer | dnd kit |
+| plus de 1 000 lignes rendues d'un coup | une liste virtualisée, avant toute astuce de pagination | Virtuoso ou TanStack Virtual |
+| un état partagé passé de props en props sur plusieurs niveaux | un magasin d'état | Zustand |
+| des chaînes de classes en ternaires imbriqués | des classes conditionnelles | clsx |
+| un composant aux vraies variantes (taille, intention, état) écrites en conditions | des variantes typées pour Tailwind | cva |
+| un flash de thème au chargement | thème clair / sombre sans flash | next-themes |
 
-| Besoin | Bibliothèque |
-| --- | --- |
-| composants accessibles sans style (dialogues, popovers, menus, listes de choix) | Base UI (ou Radix, s'il est déjà là) |
-| palette de commandes (⌘K) | cmdk |
-| notifications (toasts) | Sonner |
-| saisie d'un code à usage unique | input-otp |
-| panneau de réglages pour régler des valeurs à l'œil | Leva |
-
-**Mouvement et visuels**
-
-| Besoin | Bibliothèque |
-| --- | --- |
-| animation générale (ressorts, mise en page, sorties) | Motion |
-| nombres animés (compteurs, prix) | NumberFlow |
-| coloration syntaxique | Shiki |
-| images de partage générées (HTML/CSS vers image) | Satori |
-
-Pour un simple survol ou un fondu, pas de bibliothèque : une transition CSS.
-
-**Graphiques**
-
-| Besoin | Bibliothèque |
-| --- | --- |
-| graphiques statiques ou tableaux de bord | Recharts |
-| données en temps réel qui défilent | une bibliothèque de graphiques temps réel dédiée, ou Recharts si le flux est lent |
-
-**Interaction et performance**
-
-| Besoin | Bibliothèque |
-| --- | --- |
-| glisser-déposer | dnd kit |
-| listes et tableaux longs | une liste virtualisée (Virtuoso, TanStack Virtual) |
-
-**État et style**
-
-| Besoin | Bibliothèque |
-| --- | --- |
-| état partagé | Zustand |
-| classes conditionnelles | clsx |
-| variantes typées pour Tailwind | cva |
-| thème clair / sombre sans flash au chargement | next-themes |
-
-clsx pour des conditions ponctuelles ; cva quand un composant a de vraies
-variantes (taille, intention, état) qui méritent une API typée.
-
-## Les erreurs à repérer
-
-- **Des notifications faites main**, ou avec une bibliothèque de modales →
-  une bibliothèque de notifications.
-- **Un menu ou un dialogue en `<div>`** avec un focus géré à la main → des
-  primitives accessibles (piège du focus, fermeture, clavier).
-- **Un nombre animé en rerendant le texte** → une bibliothèque de nombres
-  animés.
-- **Plus de 1 000 lignes rendues d'un coup** → une liste virtualisée avant
-  toute astuce de pagination.
-- **Un état partagé passé de props en props** sur plusieurs niveaux → un
-  magasin d'état.
-- **Des chaînes de classes imbriquées en ternaires** → clsx, ou cva si c'est
-  une variante.
+Pour un survol ou un fondu, aucune bibliothèque : une transition CSS. clsx pour
+une condition ponctuelle ; cva quand un composant a de vraies variantes qui
+méritent une API typée.

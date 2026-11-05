@@ -1,10 +1,9 @@
 /**
  * The mark of each system LEKA connects to, as the mockups show them.
  *
- * From Simple Icons 13.21.0 (https://simpleicons.org), CC0 1.0 — see
- * third_party/NOTICES.md. One path each, in the brand's own colour from
- * the same project. The marks belong to their owners; they are shown to
- * name the system a source reads, which is what they are for.
+ * One SVG path each, in the brand's own colour. The marks belong to their
+ * owners; they are shown to name the system a source reads, which is what
+ * they are for.
  */
 
 import type { SourceKind } from "@/lib/sources";
@@ -46,20 +45,20 @@ const MARKS: Record<SourceKind, { title: string; color: string; path: string }> 
     path: "M2 18.439l3.69-2.828c1.961 2.56 4.044 3.739 6.363 3.739 2.307 0 4.33-1.166 6.203-3.704L22 18.405C19.298 22.065 15.941 24 12.053 24 8.178 24 4.788 22.078 2 18.439zM12.04 6.15l-6.568 5.66-3.036-3.52L12.055 0l9.543 8.296-3.05 3.509z",
   },
   monday: {
-    // Not in Simple Icons. Not monday.com's mark either: three columns of a
+    // A mark of our own, not monday.com's: three columns of a
     // board, in its purple.
     title: "Monday",
     color: "#6161FF",
     path: "M3 3h3a1.5 1.5 0 0 1 1.5 1.5v15A1.5 1.5 0 0 1 6 21H3a1.5 1.5 0 0 1-1.5-1.5v-15A1.5 1.5 0 0 1 3 3ZM10.5 3h3A1.5 1.5 0 0 1 15 4.5v9a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5v-9A1.5 1.5 0 0 1 10.5 3ZM18 3h3a1.5 1.5 0 0 1 1.5 1.5v5A1.5 1.5 0 0 1 21 11h-3a1.5 1.5 0 0 1-1.5-1.5v-5A1.5 1.5 0 0 1 18 3Z",
   },
   slab: {
-    // Not in Simple Icons. Not Slab's mark either: three slabs, stacked.
+    // A mark of our own, not Slab's: three slabs, stacked.
     title: "Slab",
     color: "#4E5BF2",
     path: "M5 4h14a2 2 0 0 1 0 4H5a2 2 0 0 1 0-4ZM5 10h14a2 2 0 0 1 0 4H5a2 2 0 0 1 0-4ZM5 16h14a2 2 0 0 1 0 4H5a2 2 0 0 1 0-4Z",
   },
   guru: {
-    // Not in Simple Icons. Not Guru's mark either: a card and its lines.
+    // A mark of our own, not Guru's: a card and its lines.
     title: "Guru",
     color: "#7B4FE0",
     path: "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM7 7v2h10V7ZM7 11v2h10v-2ZM7 15v2h6v-2Z",
@@ -163,7 +162,7 @@ const MARKS: Record<SourceKind, { title: string; color: string; path: string }> 
   },
   azure: {
     // Not Microsoft's mark: they asked icon sets not to carry it, so it is
-    // not in Simple Icons. A plain cloud, in Azure's blue.
+    // a mark of our own. A plain cloud, in Azure's blue.
     title: "Microsoft Azure",
     color: "#0078D4",
     path: "M18.5 19H7a5 5 0 1 1 .9-9.92A6.5 6.5 0 0 1 20.36 11 4 4 0 0 1 18.5 19Z",

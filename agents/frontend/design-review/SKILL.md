@@ -2,7 +2,7 @@
 name: design-review
 title: "Revue de design"
 description: "Use when someone asks whether the interface of an application built from a connected GitHub repository is well designed and feels right — its design system followed, hierarchy, typography, components, animations and their timing, behaviour on a phone, what breaks with real-world data — reviewed as a senior design engineer would, with the exact fix for each finding, read from its front-end code."
-version: 3.3.0
+version: 3.4.0
 category: development
 entity_types: [repository, application, service, pull_request, release, deployment, team, person, document]
 requires: ["github"]
@@ -384,257 +384,246 @@ Il peut aussi appeler la compétence `repository-profile` de la bibliothèque LE
 
 > Le guide `principes.md` de sa bibliothèque, tel quel : le socle de toute revue.
 
-Une interface réussie ne se remarque pas : chaque élément se comporte comme
-la personne s'y attend, et elle passe à la suite sans y penser. C'est
-l'addition de centaines de petites décisions justes — une courbe, une
-durée, un état d'appui, une origine d'animation — qui donne l'impression
-d'un produit soigné. Ce guide fixe ces décisions, avec leurs valeurs.
+Ce guide sert à toutes les revues. Il dit ce que LEKA attend d'un écran, la
+forme d'un constat, puis, composant par composant, ce qu'on vérifie et ce
+qu'on propose. Les valeurs qu'il donne se reprennent telles quelles.
 
-Trois convictions guident le jugement :
+### 1. Ce qu'on attend d'un écran
 
-- **Le goût se travaille.** Ce n'est pas une préférence : c'est la capacité
-  à voir pourquoi un détail élève l'ensemble. On le justifie toujours par
-  une règle, jamais par « je préfère ».
-- **Les détails invisibles s'additionnent.** Personne ne remarque un menu
-  qui s'ouvre depuis son bouton ; tout le monde ressent une interface où
-  rien n'est à sa place.
-- **La qualité perçue est un avantage.** À fonctions égales, on choisit
-  l'outil qui donne la meilleure sensation d'usage.
+On lit un écran comme la personne qui l'ouvre :
 
-### Le format d'un constat
+1. **Ce qu'elle vient faire.** Une action principale, visible la première.
+   Deux boutons de même poids pour des choses d'importance différente : un
+   constat.
+2. **Dans quel ordre elle lit.** Tailles, graisses et couleurs suivent
+   l'échelle du système et dessinent cet ordre.
+3. **Ce qui se passe quand ça ne va pas.** Chargement, vide, erreur,
+   désactivé, succès, focus : chaque état existe et dit quelque chose.
+4. **Si l'écran parle la même langue que les autres.** Jetons et composants
+   du dépôt ; une valeur écrite en dur là où un jeton existe se signale,
+   regroupée par fichier.
+5. **Si ce qui bouge aide.** Les parties 3 à 5 de ce guide.
+6. **Si l'écran tient dans la vraie vie.** Données longues ou absentes,
+   téléphone, clavier seul.
 
-Chaque problème trouvé dans le code s'écrit dans un tableau, une ligne par
-problème, jamais en liste « Avant : … / Après : … » :
+Un constat repose toujours sur une règle : celles de ce guide, le système du
+dépôt ou le reste de son code. Une préférence de goût, face à un choix
+cohérent du dépôt, se tait. Un détail juste ne se voit pas ; vingt détails
+faux font une interface qui accroche sans qu'on sache dire pourquoi : c'est
+ce que la revue cherche.
 
-| Avant | Après | Pourquoi |
-| --- | --- | --- |
-| `transition: all 250ms` | `transition: transform 180ms var(--ease-out), opacity 180ms var(--ease-out)` | `all` anime aussi des propriétés coûteuses que personne n'a choisies |
-| `transform: scale(0)` à l'entrée | `transform: scale(0.96); opacity: 0` | rien n'apparaît de nulle part : on part d'une forme presque complète |
-| menu ouvert en `ease-in` | `ease-out` avec une courbe forte | `ease-in` retarde le premier mouvement, celui que l'œil attend |
-| bouton sans état `:active` | `transform: scale(0.97)` à l'appui | l'interface doit répondre au doigt ou au clic, immédiatement |
-| popover centré sur lui-même | `transform-origin` sur son déclencheur | un menu naît du bouton qui l'ouvre (les modales, elles, restent centrées) |
+### 2. La forme d'un constat
 
-Le pourquoi tient en une phrase et nomme la règle de ce guide qui fonde le
-constat. L'emplacement (`fichier:ligne`) accompagne chaque ligne.
+Une ligne de tableau par problème, avec son emplacement `fichier:ligne`, sa
+sévérité, l'extrait actuel, le remplacement exact et une phrase de pourquoi :
+la règle et ce que la personne ressent.
 
-### Décider d'une animation
+| Où | Avant | Après | Pourquoi |
+| --- | --- | --- | --- |
+| `ProjectMenu.tsx:31` | `className="transition-all duration-500"` | `className="transition-[opacity,transform] duration-200 ease-[var(--ease-enter)]"` | le menu traîne et anime des propriétés que personne n'a choisies |
+| `Toast.tsx:18` | `from { transform: scale(0) }` | `from { transform: translateY(8px); opacity: 0 }` | une notification arrive, elle ne surgit pas d'un point |
+| `SaveButton.tsx:12` | aucun état pressé | `active:scale-[0.97] transition-transform duration-150` | sans réponse au doigt, on doute que l'appui soit pris |
+| `Popover.tsx:40` | `transition-timing-function: ease-in` | `var(--ease-enter)` | `ease-in` retarde le premier mouvement, celui que l'œil attend |
 
-Quatre questions, dans cet ordre. Les deux premières décident si l'on
-anime ; les deux suivantes, comment.
+Pas de liste « Avant : … / Après : … » : toujours le tableau.
 
-#### 1. À quelle fréquence la personne la verra-t-elle ?
+### 3. Les réglages de mouvement de LEKA
 
-| Fréquence | Décision |
+#### Les durées
+
+| Ce qui bouge | Durée |
 | --- | --- |
-| Des centaines de fois par jour (raccourci clavier, palette de commandes, navigation principale) | Aucune animation |
-| Des dizaines de fois par jour (survol, déplacement dans une liste, interrupteur courant) | La supprimer, ou la rendre presque imperceptible |
-| De temps en temps (modale, tiroir, notification) | Une animation standard |
-| Rarement, ou la première fois (accueil, réussite, célébration) | On peut se faire plaisir |
+| une réponse à l'appui | 100 à 160 ms |
+| une info-bulle, un petit popover | 120 à 200 ms |
+| un menu, une liste de choix | 150 à 250 ms |
+| une modale, un tiroir, une feuille | 200 à 450 ms |
+| une présentation, une page marketing | ce que le propos demande |
 
-**Une action déclenchée au clavier ne s'anime jamais** : répétée sans cesse,
-toute animation la rend lente et détachée du geste. Un outil ouvert cent
-fois par jour s'ouvre instantanément.
+Un élément d'interface reste sous 300 ms. La vitesse ressentie compte autant
+que la vraie : un menu à 180 ms paraît plus vif qu'à 400 ms ; un indicateur
+de chargement qui tourne vite fait paraître l'attente plus courte.
 
-#### 2. À quoi sert-elle ?
-
-Une animation doit pouvoir répondre à « pourquoi bouge-t-elle ? » par l'un
-de ces mots :
-
-- **Continuité spatiale** : une notification sort par où elle est entrée,
-  ce qui rend le geste de la balayer évident.
-- **Indication d'état** : un bouton qui se transforme montre que l'état a
-  changé.
-- **Explication** : une animation de présentation montre comment marche une
-  fonction (pages marketing, premier usage).
-- **Retour** : un bouton qui s'enfonce confirme que l'appui est pris.
-- **Éviter une rupture** : un contenu qui apparaît ou disparaît sans
-  transition donne une impression de panne.
-
-« C'est joli » ne suffit pas pour un élément vu souvent.
-
-#### 3. Quelle courbe ?
-
-- Un élément qui **entre ou sort** : `ease-out` — il démarre vite et paraît
-  réactif.
-- Un élément **déjà à l'écran qui se déplace ou se transforme** :
-  `ease-in-out`.
-- Un **survol, un changement de couleur** : `ease`.
-- Un **mouvement continu** (défilement en boucle, barre de progression) :
-  `linear`.
-- Sinon : `ease-out`.
-
-**`ease-in` n'a pas sa place dans une interface** : il démarre lentement, à
-l'instant précis où l'œil regarde. À durée égale, `ease-out` paraît plus
-rapide. Les courbes intégrées au CSS sont trop molles pour un mouvement
-voulu : on les remplace par des courbes fortes, déclarées en jetons :
+#### Les courbes
 
 ```css
---ease-out: cubic-bezier(0.23, 1, 0.32, 1);      /* entrées, sorties, retours */
---ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);  /* déplacements à l'écran */
---ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);   /* tiroir, à la manière d'iOS */
+--ease-enter: cubic-bezier(0.16, 1, 0.3, 1);   /* ce qui entre, sort ou répond */
+--ease-move: cubic-bezier(0.65, 0, 0.35, 1);   /* ce qui se déplace à l'écran */
+--ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);  /* tiroirs et feuilles */
 ```
 
-Une autre courbe se choisit dans une bibliothèque de courbes éprouvées,
-jamais au hasard.
+- Ce qui entre, sort ou répond **décélère** : rapide au départ, posé à
+  l'arrivée. À durée égale, il paraît plus rapide.
+- Ce qui est déjà à l'écran et change de place **accélère puis freine**.
+- Un survol ou une couleur : une transition douce et courte.
+- `linear` pour ce qui tourne en continu ou suit le temps réel.
+- **`ease-in` jamais** sur un élément d'interface : il part lentement à
+  l'instant où l'œil guette le premier mouvement.
+- Les courbes par défaut du CSS sont trop molles pour un mouvement voulu ;
+  toute autre courbe se prend parmi des courbes connues, jamais au jugé.
 
-#### 4. Quelle durée ?
+#### Les ressorts
 
-| Élément | Durée |
-| --- | --- |
-| Retour d'appui d'un bouton | 100 à 160 ms |
-| Infobulle, petit popover | 125 à 200 ms |
-| Menu déroulant, liste de choix | 150 à 250 ms |
-| Modale, tiroir | 200 à 500 ms |
-| Présentation, marketing | plus long si besoin |
-
-**Une animation d'interface reste sous 300 ms.** Un menu à 180 ms paraît
-plus réactif qu'à 400 ms ; un indicateur de chargement qui tourne vite donne
-l'impression d'un chargement plus court ; une fois une infobulle ouverte,
-ses voisines s'ouvrent sans délai ni animation. La vitesse perçue compte
-autant que la vitesse réelle.
-
-### Les ressorts
-
-Un ressort n'a pas de durée fixe : il se pose selon ses réglages physiques,
-et garde sa vitesse quand on l'interrompt. On l'emploie pour :
-
-- un glisser avec élan, un tiroir qu'on lance ;
-- un élément qui doit sembler vivant ;
-- un geste que la personne peut inverser en cours de route ;
-- une interaction décorative qui suit la souris (et seulement décorative :
-  une donnée qu'on lit ne bouge pas pour le style).
-
-Deux façons de le régler :
+Un ressort se pose selon ses réglages, sans durée fixe, et garde sa vitesse
+si on l'interrompt. On le prend quand un geste porte un élan (tiroir lancé),
+quand la personne peut inverser le mouvement en cours, quand un élément doit
+paraître vivant, ou pour un effet décoratif qui suit la souris (jamais pour
+une donnée qu'on lit).
 
 ```js
-{ type: "spring", duration: 0.5, bounce: 0.2 }          // la plus simple à raisonner
-{ type: "spring", mass: 1, stiffness: 100, damping: 10 } // plus de contrôle
+{ type: "spring", duration: 0.45, bounce: 0.15 }         // simple à raisonner
+{ type: "spring", stiffness: 260, damping: 26, mass: 1 }  // plus fin
 ```
 
-Le rebond reste discret (0,1 à 0,3) et réservé aux gestes qui portent un
-élan ou aux moments ludiques. Une animation CSS par images clés repart de
-zéro quand on l'interrompt ; un ressort repart de là où il est.
+Rebond entre 0,1 et 0,3, réservé aux gestes avec élan et aux moments ludiques.
 
-### Les composants qui donnent une impression de qualité
+### 4. Composant par composant
 
-- **Tout ce qui se presse répond à l'appui** : `transform: scale(0.97)` sur
-  `:active`, avec `transition: transform 160ms ease-out`. L'échelle reste
-  entre 0,95 et 0,98 ; elle entraîne le texte et l'icône, et c'est ce qui
-  la rend physique.
-- **Jamais depuis `scale(0)`** : on part de `scale(0.9)` à `scale(0.97)`,
-  avec l'opacité à 0.
-- **Un menu, un popover, une infobulle naissent de leur déclencheur** :
-  `transform-origin` sur le bouton (`var(--transform-origin)` avec les
-  primitives qui le fournissent). Les modales sont l'exception : elles ne
-  dépendent d'aucun bouton et restent centrées.
-- **Les infobulles attendent avant la première**, puis s'enchaînent sans
-  délai ni animation tant qu'on reste dans la barre.
-- **Une interface déclenchée en rafale utilise des transitions**, pas des
-  images clés : une transition se réoriente en cours de route, des images
-  clés repartent de zéro (notifications empilées, interrupteurs).
-- **Un fondu enchaîné qui montre deux états superposés** se masque avec un
-  léger flou pendant la transition (`filter: blur(2px)`, jamais plus de
-  20 px : le flou coûte cher, surtout sur Safari).
-- **Une entrée sans JavaScript** s'écrit avec `@starting-style` ; à défaut,
-  un attribut posé après le premier rendu.
+Avant d'animer quoi que ce soit, on se demande combien de fois la personne
+le verra et à quoi sert le mouvement :
 
-### Transformations et découpes
+| Usage | Ce qu'on fait |
+| --- | --- |
+| des centaines de fois par jour (raccourci, palette de commandes, navigation) | rien ne bouge |
+| des dizaines de fois (survol, parcours de liste, interrupteur) | rien, ou un retour à peine perceptible |
+| de temps en temps (modale, tiroir, notification) | une animation standard |
+| rarement (premier usage, réussite) | on peut prendre plus de place |
 
-- `translateY(100%)` déplace un élément de sa propre hauteur, quelle
-  qu'elle soit : c'est ainsi qu'on cache un tiroir ou une notification hors
-  de l'écran, sans valeur en pixels.
-- `scale()` agrandit aussi le contenu (texte, icônes) : c'est voulu pour un
-  appui.
-- `rotateX`, `rotateY` et `transform-style: preserve-3d` donnent de la
-  profondeur sans JavaScript.
-- `clip-path: inset(haut droite bas gauche)` est un outil d'animation
-  puissant : une révélation au défilement (`inset(0 0 100% 0)` vers
-  `inset(0 0 0 0)`), un bouton « maintenir pour supprimer » (un calque qui
-  se remplit en 2 s `linear` à l'appui et se vide en 200 ms `ease-out` au
-  relâchement), des onglets dont la couleur change d'un bloc (on duplique
-  la liste, on découpe la copie active), un comparateur avant / après.
+Le mouvement doit orienter (d'où vient l'élément), dire un changement d'état,
+expliquer une fonction, confirmer une action ou éviter qu'un contenu saute.
+Pour un élément vu souvent, « c'est joli » ne suffit pas. Une action lancée
+au clavier ne s'anime jamais.
 
-### Les gestes
+**Un bouton, tout ce qui se presse.** Il répond à l'appui : `scale(0.97)` sur
+`:active`, transition de `transform` en 150 ms, entre 0,95 et 0,98. Le texte
+et l'icône rétrécissent avec lui, c'est ce qui le rend physique. Sa largeur
+ne change pas quand son libellé passe à « Enregistrement… ».
 
-- **Fermer d'un geste vif** : on mesure la vitesse (distance ÷ temps écoulé)
-  et on ferme au-delà d'environ 0,11 px/ms, même si la distance est courte.
-- **Au-delà d'une limite, on résiste** : l'élément suit de moins en moins le
-  doigt, il ne bute pas contre un mur invisible.
-- **On capture le pointeur** dès que le glisser commence, pour le suivre
-  même hors de l'élément.
-- **On ignore un second doigt** une fois le glisser lancé, sinon l'élément
+**Un menu, un popover, une liste de choix.** Il sort de son déclencheur :
+`transform-origin` du côté du bouton (les bibliothèques de primitives
+fournissent souvent la variable), départ à `scale(0.95)` et `opacity: 0`,
+150 à 220 ms en courbe d'entrée. Jamais depuis `scale(0)`.
+
+**Une info-bulle.** La première attend un court instant avant d'apparaître ;
+tant que le pointeur reste dans la même barre, les suivantes s'ouvrent sans
+délai ni animation.
+
+**Une modale.** Elle ne dépend d'aucun bouton : centrée, fondu et léger
+agrandissement (0,96 vers 1), 200 à 300 ms ; le fond s'assombrit en fondu.
+
+**Un tiroir, une feuille.** Caché par `translateY(100%)` ou `translateX(100%)`,
+c'est-à-dire de sa propre taille sans valeur en pixels, courbe de feuille,
+300 à 450 ms ; il se ferme d'un geste (partie 5).
+
+**Une notification.** Elle entre et ressort par le même bord, ce qui rend
+évident le geste de la balayer. Elles s'empilent en transitions, pas en images
+clés : une transition se réoriente en cours de route quand une nouvelle
+arrive, des images clés repartiraient de zéro. Son minuteur se suspend quand
+l'onglet est caché ou quand on la survole.
+
+**Une liste qui arrive.** Les éléments se suivent de 30 à 80 ms chacun ;
+c'est décoratif et ne bloque jamais la saisie. Une liste qu'on filtre au fil
+de la frappe ne s'anime pas.
+
+**Des onglets.** L'indicateur glisse de l'ancien au nouvel onglet avec la
+courbe de déplacement. Pour une couleur de fond qui change d'un bloc, on
+superpose une copie de la liste dans la couleur active et on la découpe sur
+l'onglet choisi avec `clip-path: inset()`.
+
+**Un contenu qui se dévoile.** `clip-path: inset(0 0 100% 0)` vers `inset(0)` ;
+au défilement, seulement sur une page de présentation, et une seule fois.
+
+**Une action destructive.** Lente pour décider, rapide pour répondre : un
+calque se remplit en 2 s `linear` tant qu'on maintient l'appui, et se vide en
+200 ms au relâchement.
+
+**Deux états superposés pendant un fondu.** Un léger flou pendant le passage
+(`filter: blur(2px)`) cache la double image ; jamais au-delà de 20 px, le
+flou coûte cher, surtout dans Safari.
+
+**Une entrée sans JavaScript.** `@starting-style` ; à défaut, un attribut posé
+juste après le premier rendu.
+
+**De la profondeur sans JavaScript.** `rotateX`, `rotateY` et
+`transform-style: preserve-3d`. Un comparateur avant / après se fait avec
+`clip-path`.
+
+### 5. Les gestes
+
+- **Fermer d'un geste vif** : on mesure la vitesse (distance ÷ temps) et on
+  ferme au-delà d'environ 0,11 px/ms, même sur une courte distance.
+- **Résister aux bords** : au-delà d'une limite, l'élément suit de moins en
+  moins le doigt au lieu de s'arrêter net.
+- **Capturer le pointeur** dès le début d'un glisser, pour le suivre même
+  hors de l'élément.
+- **Ignorer un second doigt** une fois le glisser lancé, sinon l'élément
   saute.
+- **Interrompre** : un élément rattrapé en pleine course repart de sa
+  position et de sa vitesse, ce que fait un ressort.
 
-### La performance
+### 6. Ce que ça coûte
 
-- On anime `transform` et `opacity` ; animer `width`, `height`, `margin`,
-  `padding`, `top` ou `left` recalcule la mise en page à chaque image.
-- Changer une variable CSS sur un parent recalcule les styles de tous ses
-  enfants : on écrit `transform` directement sur l'élément qui bouge.
-- Avec Motion (Framer Motion), les raccourcis `x`, `y`, `scale` tournent sur
-  le fil principal ; la chaîne complète (`transform: "translateX(100px)"`)
-  reste fluide quand la page est occupée.
-- Une animation CSS ou WAAPI continue pendant qu'une page charge ; une
-  animation pilotée en JavaScript image par image saccade. CSS pour ce qui
-  est prévu d'avance, JavaScript pour ce qui suit un geste.
+- On anime `transform` et `opacity` ; `width`, `height`, `margin`, `padding`,
+  `top`, `left` refont la mise en page à chaque image.
+- Une variable CSS changée sur un parent recalcule le style de tous ses
+  enfants : on écrit le `transform` sur l'élément qui bouge.
+- Avec Motion, les raccourcis `x`, `y`, `scale` passent par le fil principal ;
+  une valeur `transform` complète reste fluide quand la page travaille.
+- Une animation CSS ou Web Animations API continue pendant un chargement ; une
+  animation pilotée image par image en JavaScript saccade. CSS pour ce qui est
+  prévu d'avance, JavaScript pour ce qui suit un geste.
 
-### L'accessibilité
+Le détail : `performance-animation.md`.
+
+### 7. Pour tout le monde
 
 ```css
 @media (prefers-reduced-motion: reduce) {
-  .panneau { transition: opacity 0.2s ease; transform: none; }
+  .panneau { transition: opacity 200ms ease; transform: none; }
 }
 @media (hover: hover) and (pointer: fine) {
   .carte:hover { transform: translateY(-2px); }
 }
 ```
 
-Le mouvement réduit garde les fondus et les changements de couleur qui
-aident à comprendre, et retire les déplacements. Un survol animé se réserve
-aux pointeurs précis : sur un écran tactile, un appui déclenche un faux
-survol qui reste collé.
+- Le mouvement réduit retire les déplacements et garde les fondus et les
+  changements de couleur qui aident à comprendre.
+- Un survol animé se réserve aux pointeurs précis : sur un écran tactile, un
+  appui laisse un faux survol collé.
+- Tout se fait au clavier, avec un focus visible ; texte à 4,5:1 de contraste ;
+  cible tactile d'au moins 44 px.
 
-### Ce qui fait un composant qu'on aime
+### 8. Ce qui fait la différence
 
-- **De bons réglages par défaut** valent mieux que des options : la courbe,
-  la durée et l'aspect livrés doivent être excellents tels quels.
-- **Les cas limites se traitent sans bruit** : suspendre le minuteur d'une
-  notification quand l'onglet est caché, combler l'espace entre deux
-  éléments empilés pour garder le survol, capturer le pointeur pendant un
-  glisser. Personne ne les voit, c'est le but.
-- **La cohérence** : le mouvement épouse la personnalité du produit. Un
-  outil professionnel reste net et rapide ; une application grand public
-  peut rebondir davantage.
-- **L'asymétrie** : lent là où la personne décide (maintenir 2 s pour
-  supprimer), rapide là où le système répond (200 ms au relâchement).
-- **La cascade** : plusieurs éléments qui entrent ensemble arrivent avec 30
-  à 80 ms d'écart chacun ; c'est décoratif, cela ne bloque jamais la saisie.
+- **Des réglages par défaut excellents** plutôt que des options.
+- **Les cas limites traités en silence** : minuteur suspendu, espace comblé
+  entre deux éléments empilés pour ne pas perdre le survol, pointeur capturé.
+- **Un caractère constant** : un outil professionnel reste net et rapide, une
+  application grand public peut rebondir davantage.
 
-### Vérifier une animation
+### 9. Vérifier
 
-- Au ralenti (durée multipliée par 2 à 5, ou l'inspecteur d'animations du
-  navigateur) : les couleurs se mêlent-elles sans double image ? la courbe
-  s'arrête-t-elle net ? l'origine est-elle juste ? les propriétés restent-
-  elles synchrones ?
-- Image par image, pour les décalages entre propriétés.
-- Sur un vrai téléphone, pour tout geste.
-- Le lendemain, avec un œil neuf.
+- Au ralenti (durées multipliées par 2 à 5, ou l'inspecteur d'animations du
+  navigateur) : pas de double image, une arrivée nette, la bonne origine, des
+  propriétés synchrones.
+- Image par image pour les décalages entre propriétés.
+- Sur un vrai téléphone pour tout geste.
+- Le lendemain, avec un regard neuf.
 
-Ce que seul l'écran révèle se signale « à vérifier à l'écran », avec la
+Ce que seul l'écran révèle se dit « à vérifier à l'écran », avec la
 vérification à faire.
 
-### La liste de contrôle d'une revue
+### 10. Le tableau de contrôle
 
-| Ce qu'on trouve | Ce qu'on propose |
+| On trouve | On propose |
 | --- | --- |
-| `transition: all` | les propriétés exactes, par exemple `transform 200ms var(--ease-out)` |
+| `transition: all` | les propriétés exactes, ex. `transform 200ms var(--ease-enter)` |
 | une entrée depuis `scale(0)` | `scale(0.95)` avec `opacity: 0` |
-| `ease-in` sur un élément d'interface | `ease-out`, ou une courbe forte |
+| `ease-in` sur un élément d'interface | la courbe d'entrée |
 | un popover qui grandit depuis son centre | l'origine sur son déclencheur (sauf modale) |
-| une animation sur une action au clavier | aucune animation |
+| une animation sur une action au clavier | aucune |
 | plus de 300 ms sur un élément d'interface | 150 à 250 ms |
 | un survol animé sans condition | `@media (hover: hover) and (pointer: fine)` |
-| des images clés sur un élément déclenché en rafale | une transition CSS |
-| les raccourcis `x` / `y` de Motion sur une page chargée | la chaîne `transform` complète |
-| une entrée et une sortie de même durée sur un appui | lent pour décider, rapide pour répondre |
-| tous les éléments qui apparaissent d'un coup | une cascade de 30 à 80 ms |
+| des images clés sur un élément déclenché en rafale | une transition |
+| les raccourcis `x` / `y` de Motion sur une page chargée | une valeur `transform` complète |
+| entrée et sortie de même durée sur un appui maintenu | lent pour décider, rapide pour répondre |
+| tout un groupe qui apparaît d'un bloc | une cascade de 30 à 80 ms |
