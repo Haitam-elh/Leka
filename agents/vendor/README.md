@@ -36,7 +36,7 @@ vendor/
 - [ ] Upstream `LICENSE` copied unmodified
 - [ ] Copyright headers kept inside each file
 - [ ] `origin: vendor:<owner>/<repo>` in the front matter
-- [ ] Row added to [`THIRD_PARTY_LICENSES.md`](../../THIRD_PARTY_LICENSES.md),
+- [ ] Row added to [`third_party/NOTICES.md`](../../third_party/NOTICES.md),
       including **what was changed** — Apache 2.0 requires it
 - [ ] Not reformatted in the importing commit, so the diff shows only our edits
 - [ ] `status: review` in [`registry.yaml`](../registry.yaml) until the review

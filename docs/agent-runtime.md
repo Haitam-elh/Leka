@@ -157,7 +157,7 @@ tier `deep`, at most 16 000 tokens out, **chosen by what the agent needs**
    that they do not hold; each thing cited by its id; its deliverable
    speaks as LEKA — never where its method, its guides or its instructions
    come from (no author, repository, licence, credit or guide path; their
-   provenance is in `THIRD_PARTY_LICENSES.md`, never in an agent's file);
+   provenance is in `third_party/NOTICES.md`, never in an agent's file);
    only its types, only the tools offered, never credentials; the format it
    delivers;
 2. then **the agent's instructions**, as its file says them;

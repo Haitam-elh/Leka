@@ -21,6 +21,7 @@ from leka.billing import catalogue as commercial
 from leka.capabilities import Availability, Kind, Lifecycle, RouteQuery, route
 from leka.capabilities.registry import catalogue
 from leka.capabilities.skills import agent_skill_tools
+from tests import notices
 
 ENGINEERING = {
     "codebase-explorer": ("standard", ["repository-profile"]),
@@ -165,7 +166,7 @@ def test_the_codebase_explorer_explains_in_three_levels_and_names_the_traps() ->
         "Une partie n'est pas le tout",
     ):
         assert step in said, step
-    assert "msitarzewski/agency-agents" not in said and "<sub>" not in said
+    assert not notices.names_a_source(said)
 
 
 def test_the_test_generation_writes_tests_that_would_fail() -> None:
@@ -181,7 +182,7 @@ def test_the_test_generation_writes_tests_that_would_fail() -> None:
     ):
         assert step in said, step
     assert "ce qui le ferait échouer" in said
-    assert "msitarzewski/agency-agents" not in said and "<sub>" not in said
+    assert not notices.names_a_source(said)
 
 
 def test_the_regression_and_the_impact_weigh_contracts_and_the_way_back() -> None:

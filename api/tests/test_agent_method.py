@@ -12,7 +12,7 @@ What these protect:
   file; a guide too long is cut, said so. Without a library, no tool.
 - The library is LEKA's own: its fifteen guides and their index, each with
   what it is for, all in French; none names an author, a repository or a
-  licence — a deliverable speaks as LEKA (provenance: THIRD_PARTY_LICENSES.md).
+  licence — a deliverable speaks as LEKA (provenance: third_party/NOTICES.md).
 - End to end, the designer reads a guide while it runs: the tool declared to
   the model, the guide's text given back to it, the call kept with the run.
 """
@@ -35,6 +35,7 @@ from leka.capabilities.loader import AgentLoadError, discover
 from leka.capabilities.method_tools import MOST_CHARS, about, guide, index, method_handlers
 from leka.capabilities.registry import agents, catalogue
 from leka.core.config import settings
+from tests import notices
 from tests.conftest import FakeIdentity
 from tests.test_agent_runs_api import Script, gemini, leka_gemini, queued  # noqa: F401
 from tests.test_code_changes_api import REPO, GitHub, _github_source, github  # noqa: F401
@@ -59,8 +60,9 @@ GUIDES = (
     "telephone-web",
     "vocabulaire-mouvement",
 )
-# What a guide must never say: where a method came from.
-SOURCES = re.compile(r"kowalski|emilkowalski|github\.com|licen[cs]e|copyright|©", re.IGNORECASE)
+# What a guide must never say: where a method came from — the sources the
+# notices name, read from them, a link, a licence.
+SOURCES = re.compile(rf"{notices.SOURCE.pattern}|github\.com|licen[cs]e|copyright|©", re.IGNORECASE)
 
 HEADER = """---
 name: {name}
@@ -205,11 +207,9 @@ def test_the_library_is_leka_s_own_guides_and_names_no_source() -> None:
         assert front.startswith("---\ntitre: ") and "\ndescription: " in front, name
         assert not SOURCES.search(text), (name, SOURCES.search(text))
     # Its provenance is in the licence notices, with the licence's text.
-    notices = (settings.agents_dir.parent / "THIRD_PARTY_LICENSES.md").read_text(encoding="utf-8")
-    assert "`agents/_library/design/`" in notices
-    assert (
-        settings.agents_dir.parent / "third_party" / "licenses" / "emilkowalski-skills-MIT.txt"
-    ).is_file()
+    assert "`agents/_library/design/`" in notices.NOTICES
+    # Each licence's text beside it.
+    assert list((settings.agents_dir.parent / "third_party" / "licenses").glob("*-MIT.txt"))
 
 
 # ── end to end: the designer reads a guide while it runs ────────────────────
