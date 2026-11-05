@@ -369,3 +369,89 @@ async def test_the_build_s_event_queues_a_pass_and_the_sweep_queues_each_that_fo
     later = await sweep_contexts(now=datetime.now(UTC) + timedelta(days=91))
     assert later["pruned"] >= 1
     assert (await _get(client, f"/{context_id}/checks"))["data"] == []
+
+
+# ── held(): the latest assembled version alone (2026-11-05) ─────────────────
+
+
+async def test_held_reads_each_context_s_latest_assembled_version_alone() -> None:
+    """What a context held in an older version is not what it holds; a
+    newer version that failed does not hide the latest that was assembled;
+    an archived context holds nothing. Read version by version, not across
+    every version of every context: the database stopped answering."""
+    from leka.context import ContextElement, ContextVersion
+    from leka.context.models import Context
+    from leka.context.repository import ContextRepository
+    from leka.platform import Workspace
+
+    workspace = Workspace(id=uuid.uuid4(), name="Held", slug=f"held-{uuid.uuid4().hex[:8]}")
+    old, kept = uuid.uuid4(), uuid.uuid4()
+    now = datetime.now(UTC)
+
+    def version(context: uuid.UUID, number: int, status: str) -> ContextVersion:
+        return ContextVersion(
+            id=uuid.uuid4(),
+            workspace_id=workspace.id,
+            context_id=context,
+            version=number,
+            status=status,
+            trigger="created",
+            strategy="hybrid",
+            strategy_version=1,
+            contract_version=1,
+            request={},
+            model_version=1,
+            assembled_at=now,
+        )
+
+    def element(v: ContextVersion, ref: uuid.UUID) -> ContextElement:
+        return ContextElement(
+            workspace_id=workspace.id,
+            version_id=v.id,
+            position=0,
+            kind="entity",
+            ref_id=ref,
+            ref_type="service",
+            label="x",
+            content={},
+            provenance={},
+            reason={},
+        )
+
+    live = Context(
+        id=uuid.uuid4(),
+        workspace_id=workspace.id,
+        title="Live",
+        subject_type="request",
+        request={},
+        status="assembled",
+        current_version=3,
+    )
+    archived = Context(
+        id=uuid.uuid4(),
+        workspace_id=workspace.id,
+        title="Archived",
+        subject_type="request",
+        request={},
+        status="archived",
+        current_version=1,
+    )
+    v1, v2, v3 = (
+        version(live.id, 1, "assembled"),
+        version(live.id, 2, "assembled"),
+        version(live.id, 3, "failed"),
+    )
+    gone = version(archived.id, 1, "assembled")
+    with workspace_scope(workspace.id):
+        async with session_factory() as session:
+            session.add(workspace)
+            await session.flush()
+            session.add_all([live, archived])
+            await session.flush()
+            session.add_all([v1, v2, v3, gone])
+            await session.flush()
+            session.add_all([element(v1, old), element(v2, kept), element(gone, kept)])
+            await session.commit()
+        async with session_factory() as session:
+            held = await ContextRepository(session, workspace.id).held([old, kept])
+    assert [(context, entity) for context, entity, _ in held] == [(live.id, kept)]

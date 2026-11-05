@@ -184,25 +184,37 @@ class ContextRepository(WorkspaceScopedRepository):
     ) -> list[tuple[uuid.UUID, uuid.UUID, datetime | None]]:
         """Which contexts hold these entities in their latest version that
         holds something — each (context, entity, the build it last read) —
-        the archived aside."""
+        the archived aside.
+
+        Read from each context to its latest assembled version, then to that
+        version's elements only (2026-11-05): looked up by entity across every
+        version, a build that touched thousands of entities read hundreds of
+        thousands of old elements, and the database stopped answering."""
         if not ids:
             return []
         rows = await self._session.execute(
             text(
                 """
-                WITH latest AS (
-                    SELECT DISTINCT ON (v.context_id) v.id, v.context_id
-                      FROM context_versions v
-                     WHERE v.workspace_id = :workspace AND v.status = 'assembled'
-                     ORDER BY v.context_id, v.version DESC
-                )
                 SELECT DISTINCT c.id, e.ref_id, c.checked_model_at
-                  FROM context_elements e
-                  JOIN latest ON latest.id = e.version_id
-                  JOIN contexts c ON c.id = latest.context_id AND c.workspace_id = :workspace
-                 WHERE e.workspace_id = :workspace
-                   AND e.kind = 'entity'
-                   AND e.ref_id = ANY(CAST(:ids AS uuid[]))
+                  FROM contexts c
+                  CROSS JOIN LATERAL (
+                      SELECT v.id
+                        FROM context_versions v
+                       WHERE v.context_id = c.id
+                         AND v.workspace_id = :workspace
+                         AND v.status = 'assembled'
+                       ORDER BY v.version DESC
+                       LIMIT 1
+                  ) latest
+                  CROSS JOIN LATERAL (
+                      SELECT e.ref_id
+                        FROM context_elements e
+                       WHERE e.version_id = latest.id
+                         AND e.workspace_id = :workspace
+                         AND e.kind = 'entity'
+                         AND e.ref_id = ANY(CAST(:ids AS uuid[]))
+                  ) e
+                 WHERE c.workspace_id = :workspace
                    AND c.status <> 'archived'
                 """
             ),
