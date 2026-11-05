@@ -31,9 +31,9 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from leka.admin import audit
-from leka.admin.access import AdminRole, permissions_of
-from leka.admin.models import AdminAccount, AdminSession
+from leka.admin import audit, codes
+from leka.admin.access import AdminRole, granted
+from leka.admin.models import AdminAccount, AdminCode, AdminSession
 from leka.admin.repository import AdminRepository
 from leka.admin.schemas import AdminPrincipal
 from leka.core.config import settings
@@ -42,10 +42,12 @@ from leka.core.security import (
     hash_password,
     hash_token,
     password_needs_rehash,
+    tokens_match,
     verify_password,
     waste_time_like_a_real_verification,
 )
 from leka.db import session_factory
+from leka.identity import EmailSender, password_is_breached
 
 MIN_PASSWORD_LENGTH = 14
 
@@ -60,6 +62,18 @@ class AdminAuthError(Exception):
 
 class AdminAccountError(Exception):
     """An account that cannot be made as asked, said so an operator can act."""
+
+
+class CodeError(Exception):
+    """A code that is not one, or no longer: one answer, whatever the cause."""
+
+
+class PasswordRefusedError(Exception):
+    """A new password LEKA will not take; the reason is safe to show."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
 
 
 class IdempotencyConflictError(Exception):
@@ -114,11 +128,11 @@ class AdminAuth:
         account = await self._accounts.account_by_email(email)
         if account is None or account.status != "active":
             waste_time_like_a_real_verification()
-            raise AdminAuthError("no_account" if account is None else "disabled")
+            raise AdminAuthError("no_account" if account is None else account.status)
         if account.locked_until is not None and account.locked_until > moment:
             waste_time_like_a_real_verification()
             raise AdminAuthError("locked")
-        if not verify_password(password, account.password_hash):
+        if account.password_hash is None or not verify_password(password, account.password_hash):
             locked = await _count_failure(account.id, moment)
             raise AdminAuthError("locked_now" if locked else "wrong_password")
 
@@ -165,7 +179,9 @@ class AdminAuth:
             email=account.email,
             name=account.name,
             role=AdminRole(account.role),
-            permissions=permissions_of(account.role),
+            # Read now: a role the Super Admin changes is changed at the
+            # next request, not at the next sign-in (LEKA-545).
+            permissions=granted(account.role, await self._accounts.role_permissions(account.role)),
             session_id=row.id,
             ip_prefix=ip_prefix,
         )
@@ -248,3 +264,120 @@ async def once(
     status_code, answer = await run()
     await keys.answer_key(principal.admin_id, key, status_code, answer)
     return status_code, answer, False
+
+
+# ── Passwords: forgotten, chosen with a code, changed (LEKA-545) ─────────────
+
+
+async def issue_code(
+    session: AsyncSession, account: AdminAccount, purpose: str, now: datetime
+) -> str:
+    """A new code for this purpose; the one sent before stops working."""
+    accounts = AdminRepository(session)
+    await accounts.drop_codes(account.id, purpose)
+    code = codes.new_code()
+    accounts.add(
+        AdminCode(
+            id=uuid.uuid4(),
+            admin_id=account.id,
+            purpose=purpose,
+            code_hash=hash_token(code),
+            expires_at=now + codes.LIFETIME[purpose],
+            attempts=0,
+        )
+    )
+    await accounts.flush()
+    return code
+
+
+async def forgot_password(
+    session: AsyncSession, email: str, sender: EmailSender, *, now: datetime | None = None
+) -> bool:
+    """A reset code to an active admin's address. True if one was sent —
+    for the trail only: the caller answers the same either way."""
+    moment = now or datetime.now(UTC)
+    account = await AdminRepository(session).account_by_email(email)
+    if account is None or account.status != "active":
+        return False
+    code = await issue_code(session, account, "reset", moment)
+    await sender.send(codes.reset(account.email, account.name, code))
+    return True
+
+
+async def _count_wrong_code(code_id: uuid.UUID, now: datetime) -> None:
+    """One more wrong try, committed apart (the request is refused and rolled
+    back); the fifth burns the code. One atomic update each: no lock held
+    while the request waits."""
+    async with session_factory() as session:
+        tries = await session.scalar(
+            update(AdminCode)
+            .where(AdminCode.id == code_id)
+            .values(attempts=AdminCode.attempts + 1)
+            .returning(AdminCode.attempts)
+        )
+        if tries is not None and tries >= codes.MAX_ATTEMPTS:
+            await session.execute(
+                update(AdminCode)
+                .where(AdminCode.id == code_id, AdminCode.consumed_at.is_(None))
+                .values(consumed_at=now)
+            )
+        await session.commit()
+
+
+async def _acceptable(password: str) -> None:
+    if len(password) < MIN_PASSWORD_LENGTH:
+        raise PasswordRefusedError(f"A password of {MIN_PASSWORD_LENGTH} characters at least.")
+    if await password_is_breached(password):
+        raise PasswordRefusedError("This password appears in known breaches: choose another one.")
+
+
+async def redeem_code(
+    session: AsyncSession, email: str, typed: str, password: str, *, now: datetime | None = None
+) -> AdminAccount:
+    """The code sent to this address, and the password chosen with it: an
+    invited admin becomes active, a forgotten password is replaced, and every
+    session of the account ends."""
+    moment = now or datetime.now(UTC)
+    accounts = AdminRepository(session)
+    account = await accounts.account_by_email(email)
+    if account is None or account.status == "disabled":
+        raise CodeError
+    row = await accounts.live_code(account.id, moment)
+    if row is None:
+        raise CodeError
+    if not tokens_match(codes.normalised(typed), row.code_hash):
+        await _count_wrong_code(row.id, moment)
+        raise CodeError
+    await _acceptable(password)
+    if not await accounts.consume_code(row.id, moment):
+        raise CodeError
+    account.password_hash = hash_password(password)
+    account.status = "active"
+    account.failed_sign_ins = 0
+    account.locked_until = None
+    await accounts.revoke_all(account.id, moment)
+    await accounts.flush()
+    return account
+
+
+async def change_password(
+    session: AsyncSession,
+    principal: AdminPrincipal,
+    current: str,
+    password: str,
+    *,
+    now: datetime | None = None,
+) -> int:
+    """A signed-in admin's new password; their other sessions end. Returns
+    how many ended."""
+    moment = now or datetime.now(UTC)
+    accounts = AdminRepository(session)
+    account = await accounts.account(principal.admin_id)
+    if account is None or account.password_hash is None:
+        raise AdminAuthError("no_account")
+    if not verify_password(current, account.password_hash):
+        await _count_failure(account.id, moment)
+        raise AdminAuthError("wrong_password")
+    await _acceptable(password)
+    account.password_hash = hash_password(password)
+    return await accounts.revoke_others(account.id, principal.session_id, moment)

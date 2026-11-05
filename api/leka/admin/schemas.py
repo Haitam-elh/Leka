@@ -396,3 +396,83 @@ class ActivityRow(BaseModel):
     ref: str | None = Field(description="The row it was read from, as `intention:<id>`.")
     request_id: str | None
     properties: dict[str, object]
+
+
+# ── Passwords and the team (LEKA-545) ────────────────────────────────────────
+
+NEW_PASSWORD = Field(min_length=14, max_length=256, description="14 characters at least.")
+
+
+class AdminForgotPassword(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+
+    @field_validator("email")
+    @classmethod
+    def _lower(cls, value: str) -> str:
+        return value.strip().lower()
+
+
+class AdminResetPassword(AdminForgotPassword):
+    code: str = Field(min_length=8, max_length=20, description="As sent by email: ABCD-EFGH.")
+    password: str = NEW_PASSWORD
+
+
+class AdminChangePassword(BaseModel):
+    current_password: str = Field(max_length=256)
+    password: str = NEW_PASSWORD
+
+
+class AdminPasswordChanged(BaseModel):
+    sessions_ended: int = Field(description="The admin's other sessions, ended.")
+
+
+class AdminRead(BaseModel):
+    """An admin, as the Super Admin manages them."""
+
+    id: uuid.UUID
+    email: str
+    name: str
+    role: AdminRole
+    status: Literal["invited", "active", "disabled"]
+    last_sign_in_at: datetime | None
+    locked_until: datetime | None
+    created_at: datetime
+    created_by: str
+    sessions: int = Field(description="Its sessions open now.")
+
+
+class AdminInvite(AdminForgotPassword):
+    name: str = Field(min_length=1, max_length=120)
+    role: AdminRole
+
+
+class AdminChange(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    role: AdminRole | None = None
+    status: Literal["active", "disabled"] | None = None
+
+
+class AdminSessionsEnded(BaseModel):
+    sessions_ended: int
+
+
+class AdminPermissionRead(BaseModel):
+    permission: AdminPermission
+    module: str
+    level: Literal["read", "write", "sensitive"]
+    grantable: bool = Field(description="False: a Super Admin's alone, never given to a role.")
+
+
+class AdminRoleRead(BaseModel):
+    role: AdminRole
+    editable: bool = Field(description="False for super_admin: it may do everything, always.")
+    permissions: list[AdminPermission]
+
+
+class AdminRolesRead(BaseModel):
+    roles: list[AdminRoleRead]
+    permissions: list[AdminPermissionRead]
+
+
+class AdminRolePermissionsUpdate(BaseModel):
+    permissions: list[AdminPermission]

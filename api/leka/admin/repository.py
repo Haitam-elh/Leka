@@ -9,11 +9,17 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from leka.admin.models import AdminAccount, AdminIdempotencyKey, AdminSession
+from leka.admin.models import (
+    AdminAccount,
+    AdminCode,
+    AdminIdempotencyKey,
+    AdminRolePermission,
+    AdminSession,
+)
 
 
 class AdminRepository:
@@ -31,7 +37,7 @@ class AdminRepository:
             (await self._session.scalars(select(AdminAccount).order_by(AdminAccount.email))).all()
         )
 
-    def add(self, row: AdminAccount | AdminSession) -> None:
+    def add(self, row: AdminAccount | AdminSession | AdminCode | AdminRolePermission) -> None:
         self._session.add(row)
 
     async def flush(self) -> None:
@@ -109,3 +115,96 @@ class AdminRepository:
             .where(AdminIdempotencyKey.admin_id == admin_id, AdminIdempotencyKey.key == key)
             .values(status_code=status_code, response=response)
         )
+
+    # ── Accounts, as the Super Admin sees them (LEKA-545) ────────────────────
+
+    async def account(self, admin_id: uuid.UUID) -> AdminAccount | None:
+        return await self._session.get(AdminAccount, admin_id)
+
+    async def live_sessions(self, now: datetime) -> dict[uuid.UUID, int]:
+        rows = await self._session.execute(
+            select(AdminSession.admin_id, func.count())
+            .where(AdminSession.revoked_at.is_(None), AdminSession.expires_at > now)
+            .group_by(AdminSession.admin_id)
+        )
+        return {admin_id: int(count) for admin_id, count in rows.all()}
+
+    async def active_super_admins(self) -> int:
+        return int(
+            await self._session.scalar(
+                select(func.count()).where(
+                    AdminAccount.role == "super_admin", AdminAccount.status == "active"
+                )
+            )
+            or 0
+        )
+
+    async def revoke_others(self, admin_id: uuid.UUID, keep: uuid.UUID, now: datetime) -> int:
+        result = await self._session.execute(
+            update(AdminSession)
+            .where(
+                AdminSession.admin_id == admin_id,
+                AdminSession.revoked_at.is_(None),
+                AdminSession.id != keep,
+            )
+            .values(revoked_at=now)
+        )
+        return int(getattr(result, "rowcount", 0) or 0)
+
+    # ── What each role grants ───────────────────────────────────────────────
+
+    async def role_permissions(self, role: str) -> frozenset[str]:
+        return frozenset(
+            (
+                await self._session.scalars(
+                    select(AdminRolePermission.permission).where(AdminRolePermission.role == role)
+                )
+            ).all()
+        )
+
+    async def set_role_permissions(self, role: str, permissions: frozenset[str], by: str) -> None:
+        await self._session.execute(
+            delete(AdminRolePermission).where(AdminRolePermission.role == role)
+        )
+        for permission in sorted(permissions):
+            self._session.add(
+                AdminRolePermission(
+                    id=uuid.uuid4(), role=role, permission=permission, granted_by=by
+                )
+            )
+        await self._session.flush()
+
+    # ── Single-use codes ─────────────────────────────────────────────────────
+
+    async def drop_codes(self, admin_id: uuid.UUID, purpose: str) -> None:
+        """The codes not used yet of this purpose: a new one replaces them."""
+        await self._session.execute(
+            delete(AdminCode).where(
+                AdminCode.admin_id == admin_id,
+                AdminCode.purpose == purpose,
+                AdminCode.consumed_at.is_(None),
+            )
+        )
+
+    async def live_code(self, admin_id: uuid.UUID, now: datetime) -> AdminCode | None:
+        found: AdminCode | None = await self._session.scalar(
+            select(AdminCode)
+            .where(
+                AdminCode.admin_id == admin_id,
+                AdminCode.consumed_at.is_(None),
+                AdminCode.expires_at > now,
+            )
+            .order_by(AdminCode.created_at.desc())
+            .limit(1)
+        )
+        return found
+
+    async def consume_code(self, code_id: uuid.UUID, now: datetime) -> bool:
+        """Use a code, once: False if it was used in the meantime."""
+        used = await self._session.scalar(
+            update(AdminCode)
+            .where(AdminCode.id == code_id, AdminCode.consumed_at.is_(None))
+            .values(consumed_at=now)
+            .returning(AdminCode.id)
+        )
+        return used is not None

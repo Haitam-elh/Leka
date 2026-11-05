@@ -90,5 +90,7 @@ one key on the unique index.
 - What models cost is visible through the Admin API. LEKA-530 keeps it from
   customers; `tests/test_usage_report.py` still holds that for every other
   route.
-- The admin accounts are made from the server
-  (`python -m leka.admin.cli`) until LEKA-545 gives the Super Admin a screen.
+- Since LEKA-545 a Super Admin invites, changes and disables admins and sets
+  what each role may do through the Admin API (the server's command stays
+  for the first account). What a role grants is read from the database at
+  every request, so a change applies without signing in again.

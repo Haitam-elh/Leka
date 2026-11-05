@@ -1,4 +1,4 @@
-# L'Admin API de LEKA ADMIN (LEKA-544)
+# L'Admin API de LEKA ADMIN (LEKA-544, LEKA-545)
 
 Le contrat entre LEKA CORE et LEKA ADMIN : ce que l'application Android envoie et reçoit aujourd'hui, et ce que la version web recevra demain, à l'identique. Les routes sont sous `/api/v1/admin`. Le schéma OpenAPI de LEKA CORE (`/api/v1/openapi.json`, étiquette `admin`) en est la source exacte ; ce document dit le sens.
 
@@ -14,6 +14,9 @@ Le code : `api/leka/admin/` (règles et lectures), `api/leka/api/admin.py` (rout
 | Appeler | toute autre route | En-tête `Authorization: Bearer <token>` |
 | Savoir qui on est | `GET /admin/me` | L'admin, son rôle, la liste de ses permissions |
 | Se déconnecter | `POST /admin/auth/sign-out` | La session est révoquée (204) |
+| Mot de passe oublié | `POST /admin/auth/forgot-password` `{email}` | Un code par e-mail, valable 15 minutes, si l'adresse est celle d'un admin actif. Toujours `202`, quelle que soit l'adresse |
+| Choisir son mot de passe avec le code | `POST /admin/auth/reset-password` `{email, code, password}` | Pour le premier mot de passe d'un admin invité, ou après un oubli. Toutes ses sessions sont fermées (204) |
+| Changer son mot de passe | `POST /admin/auth/change-password` `{current_password, password}` | Connecté ; ses autres sessions sont fermées |
 
 Règles de connexion :
 - **Une seule réponse pour tout échec** : adresse inconnue, mauvais mot de passe, compte désactivé ou verrouillé répondent tous `401 invalid_credentials`, après le même travail. La vraie raison va dans le journal admin.
@@ -22,14 +25,16 @@ Règles de connexion :
 - **Session** : elle finit après 12 heures quoi qu'il arrive, ou après 2 heures sans appel. Un compte désactivé perd ses sessions à l'instant.
 - **Sur Android**, le jeton est gardé dans le stockage sécurisé du téléphone (LEKA-546), jamais dans le code ni dans l'APK.
 
-Les comptes se créent depuis le serveur, jusqu'à ce que LEKA-545 permette au Super Admin de le faire dans LEKA ADMIN :
+**Les codes envoyés par e-mail** : 8 caractères (`ABCD-EFGH`), sans caractères ambigus, gardés hachés. Un code est à usage unique : il vaut 72 heures pour une invitation, 15 minutes pour un oubli, et il est brûlé après 5 essais faux. Un nouveau code remplace le précédent. Un code plutôt qu'un lien, parce que l'application est sur un téléphone. Le mot de passe fait 14 caractères au moins.
+
+**L'équipe se gère depuis LEKA ADMIN** (LEKA-545), par un Super Admin : inviter, changer un rôle, désactiver, fermer des sessions (§ 4). La commande serveur reste disponible pour le tout premier compte et en secours :
 
 ```bash
 python -m leka.admin.cli create prenom@leka-core.com --name "Prénom" --role super_admin
 python -m leka.admin.cli list | role <email> <rôle> | disable <email> | enable <email> | password <email>
 ```
 
-Le mot de passe se tape deux fois, 14 caractères au moins, jamais sur la ligne de commande. Chaque changement va dans le journal admin.
+Avec la commande, le mot de passe se tape deux fois et jamais sur la ligne de commande. Chaque changement, d'où qu'il vienne, va dans le journal admin.
 
 ## 2. Rôles et permissions
 
@@ -52,7 +57,15 @@ Une route demande une **permission**, jamais un rôle. Ce que le rôle n'accorde
 | `audit:read` journal admin | ✓ | | | |
 | `admins:manage` les admins (LEKA-545) | ✓ | | | |
 
-La matrice est dans `api/leka/admin/access.py`. LEKA-545 la rendra modifiable par le Super Admin.
+C'est la matrice **de départ** (`api/leka/admin/access.py`, `ROLE_PERMISSIONS`). Depuis LEKA-545, le Super Admin modifie ce que chaque rôle peut faire (`PUT /admin/roles/{role}/permissions`), et le changement s'applique à la requête suivante de chaque admin, sans reconnexion. Il y a trois limites que personne ne lève :
+- **le rôle Super Admin peut tout**, toujours ;
+- **`admins:manage` et `audit:read` n'appartiennent qu'au Super Admin** : un rôle qui pourrait gérer les admins se donnerait lui-même tous les droits ;
+- **personne ne change son propre rôle ni son propre accès**, et l'équipe garde toujours au moins un Super Admin actif.
+
+Chaque permission a un **module** et un **niveau d'action** (`GET /admin/roles`) :
+- `read` (lecture) ;
+- `write` (écriture, aucune pour l'instant) ;
+- `sensitive` (opération sensible) : ce qu'un client a écrit, l'accès d'une organisation, les crédits, le journal admin, les admins eux-mêmes.
 
 ## 3. Conventions
 
@@ -87,6 +100,13 @@ La matrice est dans `api/leka/admin/access.py`. LEKA-545 la rendra modifiable pa
 | `GET /admin/billing/events` | `billing:read` | `type` (`*` joker), `outcome` (`applied`, `ignored`, `failed`), `organisation_id`, `received_from`, `received_to` ; tri `received_at` | chaque webhook Stripe reçu et ce qui en a été fait : les erreurs de synchronisation se voient ici |
 | `GET /admin/sources` | `environments:read` | `organisation_id`, `kind`, `status`, `health`, `in_error` ; tri `created_at`, `name` | les intégrations : statut, santé, dernière erreur, dernière synchronisation. Jamais un secret |
 | `GET /admin/activity` | `activity:read` | `kind` (`*` joker), `organisation_id`, `user_id`, `from`, `to` ; tri `at` | le journal d'activité (§ 7) |
+| `GET /admin/admins` | `admins:manage` | | l'équipe : invités, actifs, désactivés, leurs sessions ouvertes |
+| `POST /admin/admins` | `admins:manage` | corps `{email, name, role}` | l'admin invité (201) ; un e-mail lui porte son code |
+| `PATCH /admin/admins/{id}` | `admins:manage` | corps `{name?, role?, status?}` (`active`, `disabled`) | l'admin changé. Le désactiver ferme ses sessions. Jamais son propre rôle ou accès, jamais le dernier Super Admin actif |
+| `POST /admin/admins/{id}/invitation` | `admins:manage` | | un nouveau code à un admin encore invité |
+| `POST /admin/admins/{id}/sign-out` | `admins:manage` | | toutes ses sessions fermées : `{sessions_ended}` |
+| `GET /admin/roles` | connecté | | les 4 rôles, ce que chacun accorde, et chaque permission avec son module et son niveau |
+| `PUT /admin/roles/{role}/permissions` | `admins:manage` | corps `{permissions}` (la liste entière) | le rôle changé ; refusé pour `super_admin` et pour ce qui n'appartient qu'au Super Admin |
 | `GET /admin/audit` | `audit:read` | `admin_id`, `action` (`*` joker), `organisation_id`, `outcome`, `from`, `to` ; tri `at` | le journal admin |
 
 **Pas encore de données** (le ticket qui les apporte) : le pays d'une organisation (pas collecté), les notes internes (LEKA-549), le registre des crédits (LEKA-553), les factures, paiements et MRR (LEKA-554), les incidents de la plateforme (LEKA-556).
@@ -171,6 +191,7 @@ Suspendre, réactiver, ajouter des crédits : chacune appelle la règle du modul
 - `admin.refused` ;
 - `admin.viewed` et `admin.viewed_content` ;
 - `admin.organisation_suspended` et `_reactivated`, `admin.credits_added` ;
-- `admin.account_created` et `admin.account_changed`.
+- `admin.account_created`, `admin.invited`, `admin.invitation_sent`, `admin.account_changed`, `admin.signed_out_everywhere`, `admin.role_changed` (avant et après) ;
+- `admin.password_reset_asked`, `admin.code_refused`, `admin.password_set`, `admin.password_changed`, `admin.password_change_refused`.
 
 La base refuse de modifier une ligne (déclencheur), sauf pour oublier qui elle concernait quand l'admin ou l'organisation est supprimé. Il est indépendant de la rétention des journaux clients. Sa durée de conservation et ses accès sont précisés par LEKA-546.
