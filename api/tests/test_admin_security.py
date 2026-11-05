@@ -265,6 +265,13 @@ async def test_reading_the_trail_is_in_the_trail_with_its_session(
     signed = [r for r in read.json()["data"] if r["session_id"] == str(mine)]
     assert [r["action"] for r in signed] == ["admin.signed_in"]
 
+    # The reading itself kept the admin's id only; read back, it says who by address.
+    again = await client.get(
+        f"{API}/audit", params={"action": "admin.viewed_trail"}, headers=bearer(crew.token)
+    )
+    [viewed] = [r for r in again.json()["data"] if r["session_id"] == str(mine)]
+    assert viewed["admin_email"] == crew.super_email
+
 
 # ── The trail refuses to be rewritten, deleted or emptied ────────────────────
 

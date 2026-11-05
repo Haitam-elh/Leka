@@ -27,7 +27,7 @@ from typing import Any
 from sqlalchemy import Select, distinct, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from leka.admin.models import ActivityEvent, AdminAuditEvent
+from leka.admin.models import ActivityEvent, AdminAccount, AdminAuditEvent
 from leka.admin.schemas import (
     ActivityRow,
     AdminIntentionContent,
@@ -1047,6 +1047,17 @@ def activity_row(event: ActivityEvent) -> ActivityRow:
 # ── The admin trail ──────────────────────────────────────────────────────────
 
 
+async def admin_emails(session: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
+    """The address of each admin a page of the trail names (LEKA-547): most
+    rows keep the admin's id only, and a screen says who by their address."""
+    if not ids:
+        return {}
+    rows = await session.execute(
+        select(AdminAccount.id, AdminAccount.email).where(AdminAccount.id.in_(ids))
+    )
+    return dict(rows.tuples().all())
+
+
 def admin_audit_query(
     *,
     admin_id: uuid.UUID | None = None,
@@ -1078,6 +1089,7 @@ __all__ = [
     "activity_query",
     "activity_row",
     "admin_audit_query",
+    "admin_emails",
     "agent_stats",
     "credits_breakdown",
     "credits_of",

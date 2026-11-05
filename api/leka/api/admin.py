@@ -73,6 +73,7 @@ from leka.admin import (
     activity_row,
     add_credits,
     admin_audit_query,
+    admin_emails,
     agent_stats,
     audit_apart,
     audit_record,
@@ -844,6 +845,10 @@ async def list_admin_audit(
         catalogue=AUDIT_SORTS,
         id_column=AdminAuditEvent.id,
     )
+    # Most rows keep the admin's id only: the page says who by their address.
+    emails = await admin_emails(
+        session, {e.admin_id for e in found.items if e.admin_id and not e.admin_email}
+    )
     # Who read the trail is in the trail (LEKA-546), with what they looked for.
     filters = {
         "admin_id": admin_id,
@@ -871,7 +876,7 @@ async def list_admin_audit(
                 id=e.id,
                 at=e.at,
                 admin_id=e.admin_id,
-                admin_email=e.admin_email,
+                admin_email=e.admin_email or (emails.get(e.admin_id) if e.admin_id else None),
                 action=e.action,
                 outcome=e.outcome,
                 target_type=e.target_type,
