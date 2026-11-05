@@ -7,7 +7,10 @@
  * said only while this workspace may take it; a first plan bought through
  * Checkout, a change once subscribed through Stripe's portal; Enterprise a
  * contact; a member reads, never buys; Billing kept as its own page; alert
- * rules and workflows said to come, never announced as working.
+ * rules and workflows said to come, never announced as working. And each
+ * card says what the site's does (2026-11-04): its AI credits, the agents it
+ * includes, Growth's trial while it may be had; the launch offer already
+ * had, said — the reason its prices are not the site's.
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -24,6 +27,7 @@ const state = vi.hoisted(() => ({
   subscription: {
     status: null as string | null,
     launch_offer_available: true,
+    trial_available: true,
     available: true,
     interval: null as string | null,
   },
@@ -66,6 +70,8 @@ const plan = (key: string, name: string, extra: Record<string, unknown>) => ({
   managed_llm: true,
   own_llm: key === "enterprise",
   trial_days: null,
+  agents_included: 0,
+  agents_every: false,
   ...extra,
 });
 const PRICING = {
@@ -81,16 +87,27 @@ const PRICING = {
     plan("starter", "Starter", {
       quotes: [quote("month", 5900, 4720, 4720, "launch"), quote("year", 5900, 4130, 49560, "annual")],
       quotas: quotas(1, 5, 100, 5, 0),
+      ai_credits_per_month: 2000,
+      agents_included: 3,
     }),
     plan("growth", "Growth", {
       quotes: [quote("month", 17900, 14320, 14320, "launch"), quote("year", 17900, 12530, 150360, "annual")],
       quotas: quotas(5, 15, 500, 20, 10),
+      ai_credits_per_month: 10000,
+      agents_included: 8,
+      trial_days: 14,
     }),
     plan("business", "Business", {
       quotes: [quote("month", 59900, 47920, 47920, "launch"), quote("year", 59900, 41930, 503160, "annual")],
       quotas: quotas(15, 30, 2000, 100, 50),
     }),
-    plan("enterprise", "Enterprise", { quotas: quotas(null, null, null, null, null, true), ai_credits_contractual: true }),
+    plan("enterprise", "Enterprise", {
+      quotas: quotas(null, null, null, null, null, true),
+      ai_credits_per_month: null,
+      ai_credits_contractual: true,
+      agents_included: 27,
+      agents_every: true,
+    }),
   ],
 };
 
@@ -115,7 +132,7 @@ const { PlansPage } = await import("@/components/billing/plans-page");
 afterEach(() => {
   state.plan = "starter";
   state.permissions = ["workspace:read", "workspace:update"];
-  state.subscription = { status: null, launch_offer_available: true, available: true, interval: null };
+  state.subscription = { status: null, launch_offer_available: true, trial_available: true, available: true, interval: null };
   state.checkout.mockReset();
   state.portal.mockReset();
   state.search = "";
@@ -167,11 +184,41 @@ describe("the plans compared", () => {
     expect(screen.queryByTestId("plans-launch")).not.toBeInTheDocument();
   });
 
-  it("the launch offer already used: the list price, said so nowhere", () => {
-    state.subscription = { status: null, launch_offer_available: false, available: true, interval: null };
+  it("the launch offer already used: the list price, and why it is not the site's", () => {
+    state.subscription = { status: null, launch_offer_available: false, trial_available: false, available: true, interval: null };
     show();
     expect(within(card("growth")).getByTestId("plan-price")).toHaveTextContent("179 €");
     expect(screen.queryByTestId("plans-launch")).not.toBeInTheDocument();
+    expect(screen.getByTestId("plans-launch-used")).toHaveTextContent(
+      "L'offre de lancement a déjà servi pour cet espace : les prix affichés sont les prix catalogue.",
+    );
+    // Its trial had too: not offered again.
+    expect(within(card("growth")).queryByTestId("plan-trial")).not.toBeInTheDocument();
+  });
+
+  it("each card as the site says it: its AI credits, the agents it includes, Growth's trial", () => {
+    show();
+    const lines = (key: string) =>
+      within(card(key))
+        .getAllByRole("listitem")
+        .map((li) => li.textContent);
+    expect(lines("growth")).toEqual([
+      "5 utilisateurs inclus",
+      "15 sources connectées",
+      // French thousands: a narrow no-break space.
+      "500 analyses standard équivalentes / mois (10\u202f000 crédits IA)",
+      "20 règles d'alerte(bientôt)",
+      "10 workflows récurrents enregistrés(bientôt)",
+      "8 agents spécialisés inclus",
+      "Partagez le contexte et les résultats en équipe",
+      "Essai gratuit de 14 jours, carte requise",
+    ]);
+    expect(card("starter")).toHaveTextContent("3 agents spécialisés inclus");
+    expect(within(card("starter")).queryByTestId("plan-trial")).not.toBeInTheDocument();
+    expect(card("enterprise")).toHaveTextContent("Tous les agents spécialisés inclus");
+    // Free runs none: no line for them.
+    expect(card("free")).not.toHaveTextContent("agents spécialisés");
+    expect(screen.queryByTestId("plans-launch-used")).not.toBeInTheDocument();
   });
 
   it("marks the workspace's plan; a first plan through Checkout, Enterprise a contact", async () => {
@@ -190,7 +237,7 @@ describe("the plans compared", () => {
   });
 
   it("subscribed: the exact plan chosen, confirmed in Stripe — Free its end (LEKA-490)", async () => {
-    state.subscription = { status: "active", launch_offer_available: false, available: true, interval: "month" };
+    state.subscription = { status: "active", launch_offer_available: false, trial_available: false, available: true, interval: "month" };
     const user = userEvent.setup();
     show();
     await user.click(within(card("business")).getByTestId("plan-choose"));
@@ -202,7 +249,7 @@ describe("the plans compared", () => {
   });
 
   it("subscribed monthly, its own plan bought yearly — never a button greyed out (2026-10-24)", async () => {
-    state.subscription = { status: "active", launch_offer_available: false, available: true, interval: "month" };
+    state.subscription = { status: "active", launch_offer_available: false, trial_available: false, available: true, interval: "month" };
     const user = userEvent.setup();
     show();
     expect(within(card("starter")).getByTestId("plan-current-action")).toBeDisabled();

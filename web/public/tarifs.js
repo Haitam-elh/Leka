@@ -5,6 +5,9 @@
    tel que le paiement le facturera. Cette page ne fait qu'afficher, et
    compter ce que le visiteur choisit (POST /api/v1/pricing/events : quoi,
    sur quelle formule, jamais qui).
+   Chaque carte dit ce que dit celle de la plateforme (Facturation >
+   Formules) : les memes lignes, dans le meme ordre, avec les memes mots
+   (e2e/pricing.spec.ts les compare).
    ========================================================================== */
 (() => {
   'use strict';
@@ -24,12 +27,24 @@
       free: 'Gratuit',
       quote: 'Sur devis',
       recommended: 'Recommandé',
-      credits: '{n} crédits IA / mois',
-      creditsContract: 'Capacité IA définie au contrat',
-      provisional: 'valeur de lancement',
+      quoteSub: 'Utilisateurs et capacité adaptés',
+      user: '{n} utilisateur',
+      users: '{n} utilisateurs inclus',
+      sources: '{n} sources connectées',
+      analyses: '{n} analyses standard équivalentes / mois',
+      credits: ' ({n} crédits IA)',
+      alertRules: '{n} règles d\'alerte',
+      alertRulesBasic: '{n} règles d\'alerte de base',
+      workflows: '{n} workflows récurrents enregistrés',
+      soon: 'bientôt',
+      agents: '{n} agents spécialisés inclus',
+      agentsEvery: 'Tous les agents spécialisés inclus',
       trial: 'Essai gratuit de {days} jours, carte requise',
-      managed: 'Modèle de langage géré par LEKA',
-      ownLlm: 'Connexion de votre propre modèle de langage',
+      addOns: 'Les agents fondamentaux de LEKA sont inclus dans chaque formule, et les formules payantes incluent des agents spécialisés : {included}. Les autres s\'achètent à l\'unité, de {low} à {high} par mois selon leur niveau (Standard, Spécialisé, Expert), ou en bundle{saving}, à partir de la formule {minimum}. Leur travail consomme les crédits IA de votre formule.',
+      addOnsPlan: '{n} avec {plan}',
+      addOnsEvery: 'tous avec {plan}',
+      addOnsSaving: ', jusqu\'à {percent} % moins cher',
+      and: ', ',
       start: 'Commencer',
       startFree: 'Commencer gratuitement',
       book: 'Réserver un rendez-vous avec notre équipe',
@@ -48,12 +63,24 @@
       free: 'Free',
       quote: 'Custom pricing',
       recommended: 'Recommended',
-      credits: '{n} AI credits / month',
-      creditsContract: 'AI capacity set by contract',
-      provisional: 'launch value',
+      quoteSub: 'Users and capacity tailored',
+      user: '{n} user',
+      users: '{n} users included',
+      sources: '{n} connected sources',
+      analyses: '{n} standard-equivalent analyses / month',
+      credits: ' ({n} AI credits)',
+      alertRules: '{n} alert rules',
+      alertRulesBasic: '{n} basic alert rules',
+      workflows: '{n} saved recurring workflows',
+      soon: 'soon',
+      agents: '{n} specialised agents included',
+      agentsEvery: 'Every specialised agent included',
       trial: '{days}-day free trial, card required',
-      managed: 'Language model managed by LEKA',
-      ownLlm: 'Connect your own language model',
+      addOns: 'LEKA\'s fundamental agents are included in every plan, and the paid plans include specialised agents: {included}. The others are bought on their own, from {low} to {high} a month by their level (Standard, Specialised, Expert), or in a bundle{saving}, from the {minimum} plan. Their work uses your plan\'s AI credits.',
+      addOnsPlan: '{n} with {plan}',
+      addOnsEvery: 'all of them with {plan}',
+      addOnsSaving: ', up to {percent}% cheaper',
+      and: ', ',
       start: 'Get started',
       startFree: 'Start for free',
       book: 'Book a meeting with our team',
@@ -109,6 +136,7 @@
     const box = el('div', { class: 'plan__price' });
     if (!plan.quotes.length) {
       box.appendChild(el('span', { class: 'plan__amount', text: t('quote') }));
+      box.appendChild(el('span', { class: 'plan__terms', text: t('quoteSub') }));
       return box;
     }
     const quote = plan.quotes.find((q) => q.interval === state.interval) || plan.quotes[0];
@@ -164,28 +192,67 @@
     return wrap;
   }
 
+  const count = (n) => new Intl.NumberFormat(lang() === 'fr' ? 'fr-FR' : 'en-GB').format(n);
+
+  /** What a plan holds, line by line, as the platform's card says it. */
+  function lines(plan) {
+    const q = plan.quotas;
+    const found = [];
+    const line = (text, extra = {}) => found.push({ text, ...extra });
+    if (q.users) line(q.users > 1 ? t('users', { n: count(q.users) }) : t('user', { n: q.users }), { strong: true });
+    if (q.sources) line(t('sources', { n: count(q.sources) }));
+    if (q.analyses) {
+      const credits = plan.ai_credits_per_month ? t('credits', { n: count(plan.ai_credits_per_month) }) : '';
+      line(t('analyses', { n: count(q.analyses) }) + credits);
+    }
+    // Not built yet: said, never announced as working.
+    if (q.alert_rules) line(t(plan.key === 'starter' ? 'alertRulesBasic' : 'alertRules', { n: count(q.alert_rules) }), { soon: true });
+    if (q.workflows) line(t('workflows', { n: count(q.workflows) }), { soon: true });
+    if (plan.agents_every) line(t('agentsEvery'));
+    else if (plan.agents_included) line(t('agents', { n: count(plan.agents_included) }));
+    plan.features.forEach((said) => line(words(said)));
+    if (plan.trial_days) line(t('trial', { days: plan.trial_days }), { trial: true });
+    return found;
+  }
+
   function card(plan) {
-    const credits = plan.ai_credits_contractual
-      ? t('creditsContract')
-      : t('credits', { n: new Intl.NumberFormat(lang() === 'fr' ? 'fr-FR' : 'en-GB').format(plan.ai_credits_per_month) });
-    const features = [
-      el('li', {}, [
-        el('span', { text: credits }),
-        plan.ai_credits_provisional ? el('span', { class: 'plan__note', text: ` (${t('provisional')})` }) : null,
-      ]),
-      plan.trial_days ? el('li', { class: 'plan__trial', text: t('trial', { days: plan.trial_days }) }) : null,
-      el('li', { text: plan.own_llm ? t('ownLlm') : t('managed') }),
-    ];
+    const features = lines(plan).map((f) => el('li', {
+      class: [f.strong && 'plan__strong', f.trial && 'plan__trial'].filter(Boolean).join(' ') || null,
+    }, [
+      el('span', { text: f.text }),
+      f.soon ? el('span', { class: 'plan__note', text: ` (${t('soon')})` }) : null,
+    ]));
     const head = [el('h2', { class: 'plan__name', text: plan.name })];
     if (plan.recommended) head.push(el('span', { class: 'plan__badge', text: t('recommended') }));
     return el('article', { class: `plan${plan.recommended ? ' plan--recommended' : ''}`, 'data-plan': plan.key }, [
       el('div', { class: 'plan__head' }, head),
-      el('p', { class: 'plan__audience', text: words(plan.audience) }),
+      el('p', { class: 'plan__tagline', text: words(plan.tagline) }),
       priceBlock(plan),
       cta(plan),
-      el('p', { class: 'plan__value', text: words(plan.value) }),
       el('ul', { class: 'plan__features' }, features),
+      el('p', { class: 'plan__audience', text: words(plan.audience) }),
     ]);
+  }
+
+  /** The agents sold apart, summed up from the catalogue: what the platform's marketplace says. */
+  function addOns(pricing) {
+    const sold = pricing.add_ons;
+    const box = $('addOnsText');
+    if (!sold || sold.lowest_price === null) return;
+    const included = pricing.plans
+      .filter((plan) => plan.agents_included)
+      .map((plan) => (plan.agents_every
+        ? t('addOnsEvery', { plan: plan.name })
+        : t('addOnsPlan', { n: count(plan.agents_included), plan: plan.name })))
+      .join(t('and'));
+    const minimum = (pricing.plans.find((plan) => plan.key === sold.minimum_plan) || { name: sold.minimum_plan }).name;
+    box.textContent = t('addOns', {
+      included,
+      low: money(sold.lowest_price),
+      high: money(sold.highest_price),
+      saving: sold.best_saving_percent ? t('addOnsSaving', { percent: sold.best_saving_percent }) : '',
+      minimum,
+    });
   }
 
   function render() {
@@ -195,6 +262,7 @@
     grid.replaceChildren(...pricing.plans.map(card));
     grid.setAttribute('aria-busy', 'false');
     $('annualSave').textContent = t('save', { percent: pricing.annual_discount_percent });
+    addOns(pricing);
     const launch = pricing.launch_offer;
     const note = $('launchNote');
     note.hidden = !launch.open || state.interval !== 'month';

@@ -13,6 +13,7 @@ from leka.billing.schemas import (
     BookingRead,
     LaunchOfferRead,
     PlanRead,
+    PricingAddOnsRead,
     PricingRead,
     QuotasRead,
     SiteEventCount,
@@ -26,6 +27,9 @@ def pricing(
 ) -> PricingRead:
     """Every plan with its prices on each interval it is sold on — computed
     from the catalogue, as checkout will charge them."""
+    sold = offer.add_ons
+    prices = sold.prices.values()
+    savings = [b.savings_percent for b in sold.bundles if b.sellable and b.savings_percent]
     plans = []
     for plan in offer.plans:
         quotes = (
@@ -40,13 +44,16 @@ def pricing(
         allowance = plan.ai_credits_per_month
         # Metering's, never a second figure of the page's own (LEKA-430).
         monthly = None if allowance.contractual else plan_credits(plan.key)
+        included = sold.included_in(plan.key)
         plans.append(
             PlanRead(
                 key=plan.key,
                 name=plan.name,
                 self_service=plan.self_service,
                 recommended=plan.recommended,
+                tagline=plan.tagline,
                 audience=plan.audience,
+                features=list(plan.features),
                 value=plan.value,
                 quotes=quotes,
                 ai_credits_per_month=monthly,
@@ -56,6 +63,8 @@ def pricing(
                 own_llm=plan.own_llm,
                 trial_days=plan.trial_days,
                 quotas=QuotasRead.model_validate(plan.quotas, from_attributes=True),
+                agents_included=len(included),
+                agents_every=bool(sold.agents) and included >= set(sold.agents),
             )
         )
     launch = offer.launch_offer
@@ -70,7 +79,13 @@ def pricing(
             ends_on=launch.ends_on.isoformat() if launch.ends_on else None,
         ),
         plans=plans,
-        add_ons_available=offer.add_ons.available,
+        add_ons_available=sold.available,
+        add_ons=PricingAddOnsRead(
+            minimum_plan=sold.minimum_plan,
+            lowest_price=min(prices, default=None),
+            highest_price=max(prices, default=None),
+            best_saving_percent=max(savings, default=None),
+        ),
         booking=BookingRead(url=booking_url, contact_url=contact_url),
     )
 
