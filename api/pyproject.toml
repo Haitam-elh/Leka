@@ -75,8 +75,11 @@ dev = [
     "pytest>=8.3.3",
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=5.0.0",
-    "ruff>=0.13.0",
-    "mypy>=1.11.2",
+    # Exact versions: a new release adds rules, and left open it turned every
+    # pull request red at once (ruff 0.17, 2026-11-05). Raise them in a pull
+    # request of their own, fixing what the new version reports.
+    "ruff==0.17.4",
+    "mypy==2.4.1",
     "types-pyyaml>=6.0.12",
 ]
 

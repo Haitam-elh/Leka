@@ -160,9 +160,8 @@ def handles(key: str) -> set[str]:
             return found
         local = email.split("@")[0].split("+")[0]
         found.add(local)
-    elif (account := account_of(key)) is not None:
-        if not opaque(account[1]):
-            found.add(account[1].lower())
+    elif (account := account_of(key)) is not None and not opaque(account[1]):
+        found.add(account[1].lower())
     return {
         squeezed
         for handle in found
