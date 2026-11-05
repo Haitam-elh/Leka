@@ -61,20 +61,64 @@ class AdminRepository:
         ).first()
         return (row[0], row[1]) if row else None
 
-    async def revoke(self, session_id: uuid.UUID, now: datetime) -> None:
-        await self._session.execute(
+    async def revoke(self, session_id: uuid.UUID, now: datetime, reason: str) -> bool:
+        """End a session now. False: it had ended already."""
+        ended = await self._session.scalar(
             update(AdminSession)
             .where(AdminSession.id == session_id, AdminSession.revoked_at.is_(None))
-            .values(revoked_at=now)
+            .values(revoked_at=now, ended_reason=reason)
+            .returning(AdminSession.id)
         )
+        return ended is not None
 
-    async def revoke_all(self, admin_id: uuid.UUID, now: datetime) -> int:
+    async def revoke_all(self, admin_id: uuid.UUID, now: datetime, reason: str) -> int:
         result = await self._session.execute(
             update(AdminSession)
             .where(AdminSession.admin_id == admin_id, AdminSession.revoked_at.is_(None))
-            .values(revoked_at=now)
+            .values(revoked_at=now, ended_reason=reason)
         )
         return int(getattr(result, "rowcount", 0) or 0)
+
+    # ── Renewal and a device's sessions (LEKA-546) ──────────────────────────
+
+    async def session_by_token(self, token_hash: str) -> tuple[AdminSession, AdminAccount] | None:
+        """The session a token was given for, whatever became of it."""
+        row = (
+            await self._session.execute(
+                select(AdminSession, AdminAccount)
+                .join(AdminAccount, AdminAccount.id == AdminSession.admin_id)
+                .where(AdminSession.token_hash == token_hash)
+            )
+        ).first()
+        return (row[0], row[1]) if row else None
+
+    async def revoke_family(self, family_id: uuid.UUID, now: datetime, reason: str) -> int:
+        result = await self._session.execute(
+            update(AdminSession)
+            .where(AdminSession.family_id == family_id, AdminSession.revoked_at.is_(None))
+            .values(revoked_at=now, ended_reason=reason)
+        )
+        return int(getattr(result, "rowcount", 0) or 0)
+
+    async def open_sessions(
+        self, admin_id: uuid.UUID, now: datetime, used_since: datetime
+    ) -> list[AdminSession]:
+        """An admin's sessions that still open LEKA ADMIN: not ended, not
+        past their end, used since `used_since`. The last used first."""
+        return list(
+            (
+                await self._session.scalars(
+                    select(AdminSession)
+                    .where(
+                        AdminSession.admin_id == admin_id,
+                        AdminSession.revoked_at.is_(None),
+                        AdminSession.expires_at > now,
+                        AdminSession.last_seen_at > used_since,
+                    )
+                    .order_by(AdminSession.last_seen_at.desc())
+                )
+            ).all()
+        )
 
     async def claim_key(self, admin_id: uuid.UUID, key: str, route: str, fingerprint: str) -> bool:
         """Take an idempotency key for this request. False: it was taken.
@@ -139,7 +183,9 @@ class AdminRepository:
             or 0
         )
 
-    async def revoke_others(self, admin_id: uuid.UUID, keep: uuid.UUID, now: datetime) -> int:
+    async def revoke_others(
+        self, admin_id: uuid.UUID, keep: uuid.UUID, now: datetime, reason: str
+    ) -> int:
         result = await self._session.execute(
             update(AdminSession)
             .where(
@@ -147,7 +193,7 @@ class AdminRepository:
                 AdminSession.revoked_at.is_(None),
                 AdminSession.id != keep,
             )
-            .values(revoked_at=now)
+            .values(revoked_at=now, ended_reason=reason)
         )
         return int(getattr(result, "rowcount", 0) or 0)
 

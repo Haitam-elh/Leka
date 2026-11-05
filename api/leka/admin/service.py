@@ -13,6 +13,13 @@ a lock, because an admin account opens every customer:
 - a new session at each sign-in, its token hashed at rest, ending after a
   working day or two idle hours.
 
+RENEWING (LEKA-546) gives the device a new token and ends the old one; the
+session keeps its end, so renewing never makes it last longer than the
+working day it was opened for. The old token still works for thirty seconds,
+for the calls that left with it. Shown again after that, it is someone
+else's copy, or a device that lost the new one: every session of that
+device ends, and the trail says so (`admin.session_reused`).
+
 ONCE: a sensitive operation (suspending an organisation, adding credits)
 carries an `Idempotency-Key`. Its answer is kept under that key: the same
 request sent again — a retry on a bad network — gets the same answer and
@@ -32,7 +39,7 @@ from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.admin import audit, codes
-from leka.admin.access import AdminRole, granted
+from leka.admin.access import AdminPermission, AdminRole, granted
 from leka.admin.models import AdminAccount, AdminCode, AdminSession
 from leka.admin.repository import AdminRepository
 from leka.admin.schemas import AdminPrincipal
@@ -78,6 +85,15 @@ class PasswordRefusedError(Exception):
 
 class IdempotencyConflictError(Exception):
     """The key was used for another request, or that request is still running."""
+
+
+class RenewalError(Exception):
+    """This session was renewed already: the new token is the one to use."""
+
+
+# How long a renewed token still opens LEKA ADMIN: the calls that left with
+# it come back, and only after that is it a copy.
+RENEWAL_GRACE = timedelta(seconds=30)
 
 
 @dataclass(frozen=True)
@@ -143,10 +159,13 @@ class AdminAuth:
         account.last_sign_in_at = moment
 
         token = generate_token()
+        first = uuid.uuid4()
         row = AdminSession(
-            id=uuid.uuid4(),
+            id=first,
             admin_id=account.id,
             token_hash=hash_token(token),
+            family_id=first,
+            signed_in_at=moment,
             last_seen_at=moment,
             expires_at=moment + _lifetime(),
             user_agent=(user_agent or "")[:400] or None,
@@ -156,24 +175,14 @@ class AdminAuth:
         await self._accounts.flush()
         return SignedIn(account=account, session=row, token=token)
 
-    async def resolve(
-        self, token: str, *, ip_prefix: str | None = None, now: datetime | None = None
-    ) -> AdminPrincipal | None:
-        """Who a bearer token is, or None: unknown, revoked, expired, idle too
-        long, or its admin disabled."""
-        moment = now or datetime.now(UTC)
-        found = await self._accounts.live_session(hash_token(token), moment)
-        if found is None:
-            return None
-        row, account = found
-        if row.last_seen_at + _idle() <= moment:
-            return None
-        # Written at most once a minute: a screen polling would otherwise
-        # write a row on every call.
-        if moment - row.last_seen_at > timedelta(minutes=1):
-            await self._session.execute(
-                update(AdminSession).where(AdminSession.id == row.id).values(last_seen_at=moment)
-            )
+    async def _principal(
+        self,
+        row: AdminSession,
+        account: AdminAccount,
+        ip_prefix: str | None,
+        *,
+        renewable: bool = True,
+    ) -> AdminPrincipal:
         return AdminPrincipal(
             admin_id=account.id,
             email=account.email,
@@ -184,10 +193,130 @@ class AdminAuth:
             permissions=granted(account.role, await self._accounts.role_permissions(account.role)),
             session_id=row.id,
             ip_prefix=ip_prefix,
+            renewable=renewable,
         )
 
+    async def _renewed_token(
+        self, token_hash: str, ip_prefix: str | None, moment: datetime
+    ) -> AdminPrincipal | None:
+        """A token that is no longer live: within its grace after a renewal,
+        still its session; a renewed token after that, a copy, and its
+        device's sessions end."""
+        found = await self._accounts.session_by_token(token_hash)
+        if found is None:
+            return None
+        row, account = found
+        if row.ended_reason != "renewed" or row.revoked_at is None:
+            return None
+        if moment - row.revoked_at <= RENEWAL_GRACE:
+            if (
+                account.status != "active"
+                or row.expires_at <= moment
+                or row.last_seen_at + _idle() <= moment
+            ):
+                return None
+            return await self._principal(row, account, ip_prefix, renewable=False)
+        ended = await _end_family(row.family_id, moment)
+        await audit.apart(
+            "admin.session_reused",
+            admin_id=account.id,
+            admin_email=account.email,
+            target_type="admin_session",
+            target_id=str(row.id),
+            ip_prefix=ip_prefix,
+            session_id=row.id,
+            detail={"family": str(row.family_id), "sessions_ended": ended},
+        )
+        return None
+
+    async def resolve(
+        self, token: str, *, ip_prefix: str | None = None, now: datetime | None = None
+    ) -> AdminPrincipal | None:
+        """Who a bearer token is, or None: unknown, revoked, expired, idle too
+        long, or its admin disabled."""
+        moment = now or datetime.now(UTC)
+        found = await self._accounts.live_session(hash_token(token), moment)
+        if found is None:
+            return await self._renewed_token(hash_token(token), ip_prefix, moment)
+        row, account = found
+        if row.last_seen_at + _idle() <= moment:
+            return None
+        # Written at most once a minute: a screen polling would otherwise
+        # write a row on every call.
+        if moment - row.last_seen_at > timedelta(minutes=1):
+            await self._session.execute(
+                update(AdminSession).where(AdminSession.id == row.id).values(last_seen_at=moment)
+            )
+        return await self._principal(row, account, ip_prefix)
+
     async def sign_out(self, principal: AdminPrincipal, *, now: datetime | None = None) -> None:
-        await self._accounts.revoke(principal.session_id, now or datetime.now(UTC))
+        await self._accounts.revoke(principal.session_id, now or datetime.now(UTC), "signed_out")
+
+    async def renew(
+        self,
+        principal: AdminPrincipal,
+        *,
+        user_agent: str | None = None,
+        now: datetime | None = None,
+    ) -> SignedIn:
+        """A new token for this device's session, the old one ended; the
+        same end. Once per token: a second renewal of it is refused."""
+        moment = now or datetime.now(UTC)
+        if not principal.renewable:
+            raise RenewalError
+        if not await self._accounts.revoke(principal.session_id, moment, "renewed"):
+            raise RenewalError
+        current = await self._session.get(AdminSession, principal.session_id)
+        account = await self._accounts.account(principal.admin_id)
+        if current is None or account is None:
+            raise RenewalError
+        token = generate_token()
+        row = AdminSession(
+            id=uuid.uuid4(),
+            admin_id=account.id,
+            token_hash=hash_token(token),
+            family_id=current.family_id,
+            signed_in_at=current.signed_in_at,
+            last_seen_at=moment,
+            expires_at=current.expires_at,
+            user_agent=(user_agent or "")[:400] or current.user_agent,
+            ip_prefix=principal.ip_prefix,
+        )
+        self._accounts.add(row)
+        await self._accounts.flush()
+        return SignedIn(account=account, session=row, token=token)
+
+    async def sessions(
+        self, principal: AdminPrincipal, *, now: datetime | None = None
+    ) -> list[AdminSession]:
+        """The admin's devices signed in now, the last used first."""
+        moment = now or datetime.now(UTC)
+        return await self._accounts.open_sessions(principal.admin_id, moment, moment - _idle())
+
+    async def end_session(
+        self, principal: AdminPrincipal, session_id: uuid.UUID, *, now: datetime | None = None
+    ) -> bool:
+        """Close one of the admin's own sessions — another device, or this
+        one. False: no open session of theirs has this id."""
+        row = await self._session.get(AdminSession, session_id)
+        if row is None or row.admin_id != principal.admin_id:
+            return False
+        reason = "signed_out" if session_id == principal.session_id else "ended_by_self"
+        return await self._accounts.revoke(session_id, now or datetime.now(UTC), reason)
+
+
+async def _end_family(family_id: uuid.UUID, now: datetime) -> int:
+    """A device's sessions, ended apart from the request: it is refused and
+    rolled back, and they must end all the same."""
+    async with session_factory() as session:
+        ended = await AdminRepository(session).revoke_family(family_id, now, "reused")
+        await session.commit()
+        return ended
+
+
+async def permissions_now(session: AsyncSession, role: str) -> frozenset[AdminPermission]:
+    """What a role grants now, as the Super Admin left it (LEKA-545)."""
+    return granted(role, await AdminRepository(session).role_permissions(role))
 
 
 async def create_account(
@@ -355,7 +484,7 @@ async def redeem_code(
     account.status = "active"
     account.failed_sign_ins = 0
     account.locked_until = None
-    await accounts.revoke_all(account.id, moment)
+    await accounts.revoke_all(account.id, moment, "password")
     await accounts.flush()
     return account
 
@@ -380,4 +509,4 @@ async def change_password(
         raise AdminAuthError("wrong_password")
     await _acceptable(password)
     account.password_hash = hash_password(password)
-    return await accounts.revoke_others(account.id, principal.session_id, moment)
+    return await accounts.revoke_others(account.id, principal.session_id, moment, "password")

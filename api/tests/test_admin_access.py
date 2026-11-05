@@ -253,6 +253,7 @@ async def test_every_admin_route_but_the_public_three_wants_an_admin_token(
             .replace("{user_id}", str(uuid.uuid4()))
             .replace("{intention_id}", str(uuid.uuid4()))
             .replace("{admin_id}", str(uuid.uuid4()))
+            .replace("{session_id}", str(uuid.uuid4()))
             .replace("{role}", "support")
         )
         assert "{" not in concrete, f"a path parameter this test does not fill: {path}"

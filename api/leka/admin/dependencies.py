@@ -9,7 +9,8 @@ admin of LEKA's team — never from a customer's cookie, which this ignores.
 docs/adr/016-leka-admin.md says why; tests/test_admin_access.py keeps it.
 
   get_admin         401 without a valid bearer token; the handler runs in
-                    `system_scope()`
+                    `system_scope()`, and the trail rows it writes name the
+                    session (LEKA-546)
   require_admin(p)  403 unless the admin's role grants `p`; the refusal is
                     kept in the admin trail, apart from the rolled-back request
 """
@@ -63,7 +64,8 @@ async def get_admin(
             status.HTTP_401_UNAUTHORIZED,
             detail="This LEKA ADMIN session has ended. Sign in again.",
         )
-    with system_scope():
+    # Each row of the admin trail this request writes names its session.
+    with system_scope(), audit.acting_in(principal.session_id):
         yield principal
 
 

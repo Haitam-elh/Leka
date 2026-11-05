@@ -22,6 +22,7 @@ from leka.admin import (
     ActionReason,
     ActivityEvent,
     ActivityRow,
+    AdminAccount,
     AdminAuditEvent,
     AdminAuditRow,
     AdminAuth,
@@ -44,7 +45,9 @@ from leka.admin import (
     AdminRolePermissionsUpdate,
     AdminRoleRead,
     AdminRolesRead,
+    AdminSessionRead,
     AdminSessionsEnded,
+    AdminSessionsRead,
     AdminSignedIn,
     AdminSignIn,
     AgentStat,
@@ -60,6 +63,7 @@ from leka.admin import (
     OrganisationRow,
     PasswordRefusedError,
     Period,
+    RenewalError,
     SourceRow,
     StripeEventRow,
     SubscriptionRow,
@@ -86,7 +90,7 @@ from leka.admin import (
     organisation_rows,
     organisations_query,
     overview,
-    permissions_of,
+    permissions_now,
     redeem_code,
     require_admin,
     route_of,
@@ -186,18 +190,27 @@ async def sign_in(payload: AdminSignIn, request: Request, session: SessionDep) -
         target_id=signed.session.id,
         route=route_of(request),
         ip_prefix=ip,
+        session_id=signed.session.id,
     )
-    role = AdminRole(signed.account.role)
+    return await _signed(session, signed.token, signed.session.expires_at, signed.account)
+
+
+async def _signed(
+    session: AsyncSession, token: str, expires_at: datetime, account: AdminAccount
+) -> AdminSignedIn:
+    # What the role grants now, as the Super Admin left it (LEKA-545): the
+    # same list /me answers, not the role's defaults.
+    permissions = await permissions_now(session, account.role)
     return AdminSignedIn(
-        token=signed.token,
-        expires_at=signed.session.expires_at,
+        token=token,
+        expires_at=expires_at,
         idle_minutes=settings.admin_session_idle_minutes,
         admin=AdminMe(
-            id=signed.account.id,
-            email=signed.account.email,
-            name=signed.account.name,
-            role=role,
-            permissions=sorted(permissions_of(role)),
+            id=account.id,
+            email=account.email,
+            name=account.name,
+            role=AdminRole(account.role),
+            permissions=sorted(permissions),
         ),
     )
 
@@ -223,6 +236,88 @@ async def me(principal: AdminPrincipalDep) -> AdminMe:
     a screen shows what is in `permissions`, and the server refuses the rest
     anyway."""
     return principal.me()
+
+
+# ── Sessions: renewed, listed, closed (LEKA-546) ─────────────────────────────
+
+
+@router.post(
+    "/auth/renew",
+    response_model=AdminSignedIn,
+    summary="Renew this session: a new token, the same end",
+    responses={409: {"description": "This token was renewed already."}},
+)
+async def renew_session(
+    request: Request, principal: AdminPrincipalDep, session: SessionDep
+) -> AdminSignedIn:
+    """A new token for this device; the one sent ends. The session keeps the
+    end it had: renewing never makes it last longer than the working day it
+    was opened for. The old token still works thirty seconds, for the calls
+    that left with it; shown after that, every session of the device ends."""
+    try:
+        renewed = await AdminAuth(session).renew(
+            principal, user_agent=request.headers.get("user-agent")
+        )
+    except RenewalError as error:
+        raise ApiError(
+            status.HTTP_409_CONFLICT,
+            ErrorCode.CONFLICT,
+            "This session was renewed already: use the new token.",
+        ) from error
+    audit_record(
+        session,
+        "admin.session_renewed",
+        admin_id=principal.admin_id,
+        target_type="admin_session",
+        target_id=renewed.session.id,
+        route=route_of(request),
+        ip_prefix=principal.ip_prefix,
+        detail={"family": str(renewed.session.family_id)},
+    )
+    return await _signed(session, renewed.token, renewed.session.expires_at, renewed.account)
+
+
+@router.get("/auth/sessions", response_model=AdminSessionsRead, summary="My devices signed in now")
+async def list_my_sessions(principal: AdminPrincipalDep, session: SessionDep) -> AdminSessionsRead:
+    rows = await AdminAuth(session).sessions(principal)
+    return AdminSessionsRead(
+        sessions=[
+            AdminSessionRead(
+                id=row.id,
+                signed_in_at=row.signed_in_at,
+                last_seen_at=row.last_seen_at,
+                expires_at=row.expires_at,
+                device=row.user_agent,
+                ip_prefix=row.ip_prefix,
+                current=row.id == principal.session_id,
+            )
+            for row in rows
+        ]
+    )
+
+
+@router.delete(
+    "/auth/sessions/{session_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Close one of my sessions",
+    responses={404: {"description": "No open session of yours has this id."}},
+)
+async def end_my_session(
+    session_id: uuid.UUID, request: Request, principal: AdminPrincipalDep, session: SessionDep
+) -> Response:
+    """Another of my devices signed out from this one, or this one itself."""
+    if not await AdminAuth(session).end_session(principal, session_id):
+        raise _not_found("open session of yours")
+    audit_record(
+        session,
+        "admin.signed_out" if session_id == principal.session_id else "admin.session_ended",
+        admin_id=principal.admin_id,
+        target_type="admin_session",
+        target_id=session_id,
+        route=route_of(request),
+        ip_prefix=principal.ip_prefix,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ── Reading the modules ──────────────────────────────────────────────────────
@@ -724,8 +819,9 @@ async def list_activity(
     "/audit", response_model=PageEnvelope[AdminAuditRow], summary="What LEKA's team did and read"
 )
 async def list_admin_audit(
+    request: Request,
     session: SessionDep,
-    _: Annotated[AdminPrincipal, Depends(require_admin(P.AUDIT_READ))],
+    principal: Annotated[AdminPrincipal, Depends(require_admin(P.AUDIT_READ))],
     page: PageParams,
     admin_id: uuid.UUID | None = None,
     action: Annotated[str | None, Query(description="An action; * matches anything.")] = None,
@@ -748,6 +844,27 @@ async def list_admin_audit(
         catalogue=AUDIT_SORTS,
         id_column=AdminAuditEvent.id,
     )
+    # Who read the trail is in the trail (LEKA-546), with what they looked for.
+    filters = {
+        "admin_id": admin_id,
+        "action": action,
+        "organisation_id": organisation_id,
+        "outcome": outcome,
+        "from": at_from,
+        "to": at_to,
+    }
+    audit_record(
+        session,
+        "admin.viewed_trail",
+        admin_id=principal.admin_id,
+        target_type="admin_audit_events",
+        route=route_of(request),
+        ip_prefix=principal.ip_prefix,
+        detail={
+            "filters": {k: str(v) for k, v in filters.items() if v is not None},
+            "rows": len(found.items),
+        },
+    )
     return PageEnvelope(
         data=[
             AdminAuditRow(
@@ -762,6 +879,8 @@ async def list_admin_audit(
                 organisation_id=e.for_workspace_id,
                 route=e.route,
                 request_id=e.request_id,
+                session_id=e.session_id,
+                ip_prefix=e.ip_prefix,
                 detail=dict(e.detail),
             )
             for e in found.items

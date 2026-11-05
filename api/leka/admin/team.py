@@ -194,7 +194,7 @@ async def change(
     account.status = new_status
     ended = 0
     if new_status == "disabled" and before["status"] != "disabled":
-        ended = await accounts.revoke_all(account.id, moment)
+        ended = await accounts.revoke_all(account.id, moment, "disabled")
     if new_status == "active" and before["status"] == "disabled":
         account.failed_sign_ins = 0
         account.locked_until = None
@@ -225,7 +225,9 @@ async def sign_out_everywhere(
     now: datetime | None = None,
 ) -> int:
     account = await _one(session, admin_id)
-    ended = await AdminRepository(session).revoke_all(account.id, now or datetime.now(UTC))
+    ended = await AdminRepository(session).revoke_all(
+        account.id, now or datetime.now(UTC), "ended_by_admin"
+    )
     audit.record(
         session,
         "admin.signed_out_everywhere",

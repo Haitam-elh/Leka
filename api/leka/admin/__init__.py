@@ -12,7 +12,13 @@ the API imports it. docs/admin/api.md is the contract.
 """
 
 from leka.admin import team
-from leka.admin.access import ROLE_PERMISSIONS, AdminPermission, AdminRole, allows, permissions_of
+from leka.admin.access import (
+    ROLE_PERMISSIONS,
+    AdminPermission,
+    AdminRole,
+    allows,
+    permissions_of,
+)
 from leka.admin.actions import ActionError, add_credits, set_suspended
 from leka.admin.activity import run_sweep as run_activity_sweep
 from leka.admin.activity import sweep as sweep_activity
@@ -52,6 +58,8 @@ from leka.admin.reads import (
     user_rows,
     users_query,
 )
+from leka.admin.retention import run_sweep as run_retention_sweep
+from leka.admin.retention import sweep as sweep_retention
 from leka.admin.schemas import (
     ActionReason,
     ActivityRow,
@@ -70,7 +78,9 @@ from leka.admin.schemas import (
     AdminRolePermissionsUpdate,
     AdminRoleRead,
     AdminRolesRead,
+    AdminSessionRead,
     AdminSessionsEnded,
+    AdminSessionsRead,
     AdminSignedIn,
     AdminSignIn,
     AgentStat,
@@ -95,10 +105,12 @@ from leka.admin.service import (
     CodeError,
     IdempotencyConflictError,
     PasswordRefusedError,
+    RenewalError,
     change_password,
     create_account,
     forgot_password,
     once,
+    permissions_now,
     redeem_code,
 )
 
@@ -135,7 +147,9 @@ __all__ = [
     "AdminRoleRead",
     "AdminRolesRead",
     "AdminSession",
+    "AdminSessionRead",
     "AdminSessionsEnded",
+    "AdminSessionsRead",
     "AdminSignIn",
     "AdminSignedIn",
     "AgentStat",
@@ -151,6 +165,7 @@ __all__ = [
     "OrganisationRow",
     "PasswordRefusedError",
     "Period",
+    "RenewalError",
     "SourceRow",
     "StripeEventRow",
     "SubscriptionRow",
@@ -180,11 +195,13 @@ __all__ = [
     "organisation_rows",
     "organisations_query",
     "overview",
+    "permissions_now",
     "permissions_of",
     "redeem_code",
     "require_admin",
     "route_of",
     "run_activity_sweep",
+    "run_retention_sweep",
     "set_suspended",
     "source_rows",
     "sources_query",
@@ -193,6 +210,7 @@ __all__ = [
     "subscription_rows",
     "subscriptions_query",
     "sweep_activity",
+    "sweep_retention",
     "team",
     "user_detail",
     "user_rows",

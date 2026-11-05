@@ -68,6 +68,9 @@ class AdminPrincipal(BaseModel):
     permissions: frozenset[AdminPermission]
     session_id: uuid.UUID
     ip_prefix: str | None = None
+    # False for a token renewed a moment ago, still let through for the
+    # calls that left with it: it opens LEKA ADMIN, it is not renewed again.
+    renewable: bool = True
 
     def me(self) -> AdminMe:
         return AdminMe(
@@ -360,6 +363,8 @@ class AdminAuditRow(BaseModel):
     organisation_id: uuid.UUID | None
     route: str | None
     request_id: str | None
+    session_id: uuid.UUID | None = Field(description="The admin's session it was done in.")
+    ip_prefix: str | None = Field(description="The network it came from, never a whole address.")
     detail: dict[str, object]
 
 
@@ -454,6 +459,22 @@ class AdminChange(BaseModel):
 
 class AdminSessionsEnded(BaseModel):
     sessions_ended: int
+
+
+class AdminSessionRead(BaseModel):
+    """One of the admin's devices signed in now (LEKA-546)."""
+
+    id: uuid.UUID
+    signed_in_at: datetime = Field(description="When this device signed in; renewals keep it.")
+    last_seen_at: datetime
+    expires_at: datetime = Field(description="When it ends, whatever happens.")
+    device: str | None = Field(description="What the device said it was (its user agent).")
+    ip_prefix: str | None
+    current: bool = Field(description="True for the session of the token asking.")
+
+
+class AdminSessionsRead(BaseModel):
+    sessions: list[AdminSessionRead]
 
 
 class AdminPermissionRead(BaseModel):

@@ -68,6 +68,7 @@ Production once started with a bucket named `""` because that was not true.
 | `LEKA_ADMIN_SESSION_IDLE_MINUTES` | `120` | …and after this unused, 5–480 |
 | `LEKA_ADMIN_SIGN_IN_ATTEMPTS` | `5` | Wrong passwords in a row before an admin account is locked, 3–20 |
 | `LEKA_ADMIN_LOCKOUT_MINUTES` | `15` | How long it stays locked, 1–1440 |
+| `LEKA_ADMIN_AUDIT_RETENTION_DAYS` | `365` | How long LEKA ADMIN's trail is kept before the nightly sweep deletes it, 180–2555. The database refuses to delete a row younger than 180 days, whatever this says |
 | `LEKA_VERIFICATION_TOKEN_LIFETIME_HOURS` | `24` | Account verification link, 1–168 |
 | `LEKA_RESET_TOKEN_LIFETIME_HOURS` | `1` | Password reset link, 1–24. Short on purpose: it waits in an inbox, and whoever reads that inbox owns the account for as long as it lives (OWASP Forgot Password Cheat Sheet). Raise it only for a documented reason |
 | `LEKA_SESSION_COOKIE_NAME` | `leka_session` | |
