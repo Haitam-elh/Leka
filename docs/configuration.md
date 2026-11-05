@@ -64,6 +64,10 @@ Production once started with a bucket named `""` because that was not true.
 | `LEKA_SECRETS_ROTATED_ON` | `{}` | JSON object: when each secret was last rotated **in this environment**, e.g. `{"secret_key": "2026-09-22"}`. An unknown name or a future date stops startup |
 | `LEKA_SESSION_ABSOLUTE_LIFETIME_DAYS` | `30` | A session dies after this whatever happens, 1–365 |
 | `LEKA_SESSION_IDLE_LIFETIME_DAYS` | `7` | …and after this unused, 1–90 |
+| `LEKA_ADMIN_SESSION_LIFETIME_HOURS` | `12` | A LEKA ADMIN session ends after this, whatever happens, 1–24 |
+| `LEKA_ADMIN_SESSION_IDLE_MINUTES` | `120` | …and after this unused, 5–480 |
+| `LEKA_ADMIN_SIGN_IN_ATTEMPTS` | `5` | Wrong passwords in a row before an admin account is locked, 3–20 |
+| `LEKA_ADMIN_LOCKOUT_MINUTES` | `15` | How long it stays locked, 1–1440 |
 | `LEKA_VERIFICATION_TOKEN_LIFETIME_HOURS` | `24` | Account verification link, 1–168 |
 | `LEKA_RESET_TOKEN_LIFETIME_HOURS` | `1` | Password reset link, 1–24. Short on purpose: it waits in an inbox, and whoever reads that inbox owns the account for as long as it lives (OWASP Forgot Password Cheat Sheet). Raise it only for a documented reason |
 | `LEKA_SESSION_COOKIE_NAME` | `leka_session` | |

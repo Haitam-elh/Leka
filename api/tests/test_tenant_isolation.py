@@ -80,6 +80,16 @@ pytestmark = pytest.mark.integration
 #                  the interface translated into a language by LEKA's model
 #                  (2026-10-30): the product's words, the same for everyone
 #                  who chooses that language.
+#   admin_accounts, admin_sessions, admin_audit_events, admin_idempotency_keys
+#                  LEKA ADMIN (LEKA-544): LEKA's team, apart from every
+#                  customer — its accounts, their devices, the trail of what
+#                  they did and read, their sensitive operations' answers.
+#                  An audit row says which organisation it is about in
+#                  `for_workspace_id`; no customer route exposes any of them.
+#   activity_events, activity_watermarks
+#                  the activity journal across every customer (LEKA-544),
+#                  derived from the tables that already say what happened;
+#                  `for_workspace_id` again, read by the Admin API only.
 TENANT_FREE_TABLES = frozenset(
     {
         "workspaces",
@@ -94,6 +104,12 @@ TENANT_FREE_TABLES = frozenset(
         "stripe_events",
         "model_rates",
         "interface_words",
+        "admin_accounts",
+        "admin_sessions",
+        "admin_audit_events",
+        "admin_idempotency_keys",
+        "activity_events",
+        "activity_watermarks",
     }
 )
 
