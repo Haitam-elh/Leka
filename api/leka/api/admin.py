@@ -13,7 +13,7 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Header, Query, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Request, Response, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,17 +26,29 @@ from leka.admin import (
     AdminAuditRow,
     AdminAuth,
     AdminAuthError,
+    AdminChange,
+    AdminChangePassword,
+    AdminForgotPassword,
     AdminIntentionDetail,
     AdminIntentionRow,
+    AdminInvite,
     AdminMe,
     AdminOverview,
+    AdminPasswordChanged,
     AdminPermission,
     AdminPrincipal,
     AdminPrincipalDep,
+    AdminRead,
+    AdminResetPassword,
     AdminRole,
+    AdminRolePermissionsUpdate,
+    AdminRoleRead,
+    AdminRolesRead,
+    AdminSessionsEnded,
     AdminSignedIn,
     AdminSignIn,
     AgentStat,
+    CodeError,
     CreditGrant,
     CreditsBreakdown,
     IdempotencyConflictError,
@@ -46,6 +58,7 @@ from leka.admin import (
     OrganisationMembers,
     OrganisationRef,
     OrganisationRow,
+    PasswordRefusedError,
     Period,
     SourceRow,
     StripeEventRow,
@@ -59,9 +72,11 @@ from leka.admin import (
     agent_stats,
     audit_apart,
     audit_record,
+    change_password,
     client_ip,
     credits_breakdown,
     credits_of,
+    forgot_password,
     intention_detail,
     intention_rows,
     intentions_query,
@@ -72,6 +87,7 @@ from leka.admin import (
     organisations_query,
     overview,
     permissions_of,
+    redeem_code,
     require_admin,
     route_of,
     set_suspended,
@@ -81,6 +97,7 @@ from leka.admin import (
     stripe_events_query,
     subscription_rows,
     subscriptions_query,
+    team,
     user_detail,
     user_rows,
     users_query,
@@ -94,7 +111,7 @@ from leka.core import ratelimit
 from leka.core.config import settings
 from leka.core.errors import ErrorCode
 from leka.db import DatabaseSession, SortableField
-from leka.identity import User
+from leka.identity import DeferredEmailSender, EmailSender, User, build_email_sender
 from leka.intentions import Intention
 from leka.platform import Workspace
 
@@ -888,3 +905,272 @@ async def add_organisation_credits(
             route=route_of(request),
         ),
     )
+
+
+# ── Passwords (LEKA-545) ─────────────────────────────────────────────────────
+#
+# A code by email rather than a link: the app is on a phone. Forgetting a
+# password answers the same whether the address is an admin's or not.
+
+FORGOT_PER_ACCOUNT = ratelimit.Limit(attempts=3, window_seconds=900)
+CODE_PER_IP = ratelimit.Limit(attempts=20, window_seconds=60)
+
+
+def get_admin_mailer(background: BackgroundTasks) -> EmailSender:
+    """Emails leave after the response, so after the commit: a code is only
+    sent once the database keeps it."""
+    return DeferredEmailSender(build_email_sender(), background.add_task)
+
+
+Mailer = Annotated[EmailSender, Depends(get_admin_mailer)]
+
+
+async def _limit(*limits: tuple[str, str, ratelimit.Limit]) -> None:
+    for scope, identifier, limit in limits:
+        verdict = await ratelimit.consume(scope, identifier, limit)
+        if not verdict.allowed:
+            raise ApiError(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                ErrorCode.RATE_LIMITED,
+                "Too many attempts. Wait a little and try again.",
+                headers={"Retry-After": str(verdict.retry_after_seconds)},
+            )
+
+
+@router.post(
+    "/auth/forgot-password",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Send a code to choose a new password",
+)
+async def ask_password_reset(
+    payload: AdminForgotPassword, request: Request, session: SessionDep, mailer: Mailer
+) -> Response:
+    """A code by email, valid 15 minutes, if the address is an active admin's.
+    202 either way: nothing here says whether it is."""
+    ip = client_ip(request)
+    await _limit(
+        ("admin-code:ip", ip or "unknown", CODE_PER_IP),
+        ("admin-forgot:email", payload.email, FORGOT_PER_ACCOUNT),
+    )
+    sent = await forgot_password(session, payload.email, mailer)
+    audit_record(
+        session,
+        "admin.password_reset_asked",
+        admin_id=None,
+        admin_email=payload.email,
+        outcome="succeeded" if sent else "refused",
+        route=route_of(request),
+        ip_prefix=ip,
+    )
+    return Response(status_code=status.HTTP_202_ACCEPTED)
+
+
+@router.post(
+    "/auth/reset-password",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Choose a password with the code sent by email",
+)
+async def reset_password(
+    payload: AdminResetPassword, request: Request, session: SessionDep
+) -> Response:
+    """For an invited admin's first password and for a forgotten one. Every
+    session of the account ends; then sign in."""
+    ip = client_ip(request)
+    await _limit(("admin-code:ip", ip or "unknown", CODE_PER_IP))
+    try:
+        account = await redeem_code(session, payload.email, payload.code, payload.password)
+    except CodeError as error:
+        await audit_apart(
+            "admin.code_refused",
+            admin_id=None,
+            admin_email=payload.email,
+            route=route_of(request),
+            ip_prefix=ip,
+        )
+        raise ApiError(
+            status.HTTP_400_BAD_REQUEST,
+            ErrorCode.TOKEN_INVALID,
+            "This code is not valid, or no longer. Ask for a new one.",
+        ) from error
+    except PasswordRefusedError as error:
+        raise ApiError(
+            status.HTTP_400_BAD_REQUEST, ErrorCode.VALIDATION_FAILED, error.reason
+        ) from error
+    audit_record(
+        session,
+        "admin.password_set",
+        admin_id=account.id,
+        admin_email=account.email,
+        target_type="admin",
+        target_id=account.id,
+        route=route_of(request),
+        ip_prefix=ip,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/auth/change-password", response_model=AdminPasswordChanged, summary="Change my password"
+)
+async def change_my_password(
+    payload: AdminChangePassword,
+    request: Request,
+    session: SessionDep,
+    principal: AdminPrincipalDep,
+) -> AdminPasswordChanged:
+    """The current password, then the new one; the admin's other sessions end."""
+    try:
+        ended = await change_password(
+            session, principal, payload.current_password, payload.password
+        )
+    except AdminAuthError as error:
+        await audit_apart(
+            "admin.password_change_refused",
+            admin_id=principal.admin_id,
+            admin_email=principal.email,
+            route=route_of(request),
+            ip_prefix=principal.ip_prefix,
+        )
+        raise ApiError(
+            status.HTTP_403_FORBIDDEN,
+            ErrorCode.INVALID_CREDENTIALS,
+            "Your current password is not correct.",
+        ) from error
+    except PasswordRefusedError as error:
+        raise ApiError(
+            status.HTTP_400_BAD_REQUEST, ErrorCode.VALIDATION_FAILED, error.reason
+        ) from error
+    audit_record(
+        session,
+        "admin.password_changed",
+        admin_id=principal.admin_id,
+        target_type="admin",
+        target_id=principal.admin_id,
+        route=route_of(request),
+        ip_prefix=principal.ip_prefix,
+        detail={"sessions_ended": ended},
+    )
+    return AdminPasswordChanged(sessions_ended=ended)
+
+
+# ── The team and its roles (LEKA-545) ────────────────────────────────────────
+
+Manager = Annotated[AdminPrincipal, Depends(require_admin(P.ADMINS_MANAGE))]
+
+
+def _team_error(error: team.TeamError) -> ApiError:
+    code = ErrorCode.NOT_FOUND if error.status_code == 404 else ErrorCode.CONFLICT
+    return ApiError(error.status_code, code, error.message)
+
+
+@router.get("/admins", response_model=PageEnvelope[AdminRead], summary="LEKA's team")
+async def list_admins(session: SessionDep, _: Manager) -> PageEnvelope[AdminRead]:
+    """Every admin, invited, active or disabled, with their sessions open now."""
+    return PageEnvelope(data=await team.members(session))
+
+
+@router.post(
+    "/admins",
+    response_model=AdminRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Invite an admin",
+)
+async def invite_admin(
+    payload: AdminInvite, request: Request, session: SessionDep, principal: Manager, mailer: Mailer
+) -> AdminRead:
+    """An account with a role, invited: an email carries the code to choose
+    the password (72 hours)."""
+    try:
+        return await team.invite(
+            session,
+            principal,
+            email=payload.email,
+            name=payload.name,
+            role=payload.role,
+            sender=mailer,
+            route=route_of(request),
+        )
+    except team.TeamError as error:
+        raise _team_error(error) from error
+
+
+@router.patch("/admins/{admin_id}", response_model=AdminRead, summary="Change an admin")
+async def change_admin(
+    admin_id: uuid.UUID,
+    payload: AdminChange,
+    request: Request,
+    session: SessionDep,
+    principal: Manager,
+) -> AdminRead:
+    """Name, role, active or disabled. Disabling ends every session at once.
+    Never one's own role or access, never the last active Super Admin."""
+    try:
+        return await team.change(
+            session,
+            principal,
+            admin_id,
+            name=payload.name,
+            role=payload.role,
+            status=payload.status,
+            route=route_of(request),
+        )
+    except team.TeamError as error:
+        raise _team_error(error) from error
+
+
+@router.post(
+    "/admins/{admin_id}/invitation", response_model=AdminRead, summary="Send the invitation again"
+)
+async def resend_invitation(
+    admin_id: uuid.UUID, request: Request, session: SessionDep, principal: Manager, mailer: Mailer
+) -> AdminRead:
+    try:
+        return await team.resend(
+            session, principal, admin_id, sender=mailer, route=route_of(request)
+        )
+    except team.TeamError as error:
+        raise _team_error(error) from error
+
+
+@router.post(
+    "/admins/{admin_id}/sign-out",
+    response_model=AdminSessionsEnded,
+    summary="End an admin's sessions",
+)
+async def sign_admin_out(
+    admin_id: uuid.UUID, request: Request, session: SessionDep, principal: Manager
+) -> AdminSessionsEnded:
+    try:
+        ended = await team.sign_out_everywhere(
+            session, principal, admin_id, route=route_of(request)
+        )
+    except team.TeamError as error:
+        raise _team_error(error) from error
+    return AdminSessionsEnded(sessions_ended=ended)
+
+
+@router.get("/roles", response_model=AdminRolesRead, summary="What each role may do")
+async def list_roles(session: SessionDep, _: AdminPrincipalDep) -> AdminRolesRead:
+    """The four roles, what each grants now, and every permission with its
+    module and kind of action (read, write, sensitive)."""
+    return await team.roles(session)
+
+
+@router.put(
+    "/roles/{role}/permissions", response_model=AdminRoleRead, summary="Set what a role may do"
+)
+async def set_role_permissions(
+    role: AdminRole,
+    payload: AdminRolePermissionsUpdate,
+    request: Request,
+    session: SessionDep,
+    principal: Manager,
+) -> AdminRoleRead:
+    """The whole list, replaced. Never the Super Admin's role; never what only
+    a Super Admin may do. Takes effect at each admin's next request."""
+    try:
+        return await team.set_permissions(
+            session, principal, role, payload.permissions, route=route_of(request)
+        )
+    except team.TeamError as error:
+        raise _team_error(error) from error

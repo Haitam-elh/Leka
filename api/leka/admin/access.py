@@ -5,6 +5,12 @@ for a permission, never a role: the day a role changes, no route does.
 Refused unless granted: a permission missing from a role's set is refused,
 and so is a role nobody knows.
 
+What each role grants is kept in the database (`admin_role_permissions`),
+the Super Admin's to change (LEKA-545); ROLE_PERMISSIONS below is where it
+starts. Two limits nobody can lift: a Super Admin may do everything, and
+only a Super Admin manages the admins or reads their trail — a role able to
+grant itself `admins:manage` would be a Super Admin by another name.
+
 The permissions are per module and per action — read, write, and the
 sensitive reads (what a customer wrote, what an agent delivered for them),
 which are kept apart so a role can see that an intention exists without
@@ -55,6 +61,32 @@ class AdminPermission(enum.StrEnum):
 
 P = AdminPermission
 
+Level = str  # "read", "write" or "sensitive"
+
+# Each permission's module and what kind of action it is (LEKA-545): reading,
+# writing, or a sensitive operation (what a customer wrote, money, an
+# organisation's access, the admins themselves).
+PERMISSION_INFO: dict[AdminPermission, tuple[str, Level]] = {
+    P.DASHBOARD_READ: ("dashboard", "read"),
+    P.ORGANISATIONS_READ: ("organisations", "read"),
+    P.ORGANISATIONS_WRITE: ("organisations", "sensitive"),
+    P.USERS_READ: ("users", "read"),
+    P.INTENTIONS_READ: ("intentions", "read"),
+    P.INTENTIONS_CONTENT: ("intentions", "sensitive"),
+    P.AGENTS_READ: ("agents", "read"),
+    P.CREDITS_READ: ("credits", "read"),
+    P.CREDITS_WRITE: ("credits", "sensitive"),
+    P.BILLING_READ: ("billing", "read"),
+    P.ENVIRONMENTS_READ: ("environments", "read"),
+    P.ACTIVITY_READ: ("activity", "read"),
+    P.AUDIT_READ: ("audit", "sensitive"),
+    P.ADMINS_MANAGE: ("admins", "sensitive"),
+}
+
+# A Super Admin's alone, whatever the roles say.
+SUPER_ADMIN_ONLY = frozenset({P.ADMINS_MANAGE, P.AUDIT_READ})
+GRANTABLE = frozenset(AdminPermission) - SUPER_ADMIN_ONLY
+
 _COMMON = frozenset({P.DASHBOARD_READ, P.ORGANISATIONS_READ, P.USERS_READ, P.ACTIVITY_READ})
 
 ROLE_PERMISSIONS: dict[AdminRole, frozenset[AdminPermission]] = {
@@ -80,7 +112,8 @@ ROLE_PERMISSIONS: dict[AdminRole, frozenset[AdminPermission]] = {
 
 
 def permissions_of(role: str) -> frozenset[AdminPermission]:
-    """What a role grants. A role this file does not know grants nothing."""
+    """What a role grants to start with. A role this file does not know
+    grants nothing."""
     try:
         return ROLE_PERMISSIONS[AdminRole(role)]
     except ValueError:
@@ -89,3 +122,15 @@ def permissions_of(role: str) -> frozenset[AdminPermission]:
 
 def allows(role: str, permission: AdminPermission) -> bool:
     return permission in permissions_of(role)
+
+
+def granted(role: str, stored: frozenset[str]) -> frozenset[AdminPermission]:
+    """What a role grants now: everything for a Super Admin; for any other,
+    what the Super Admin left it (`stored`), never a Super Admin's own."""
+    try:
+        known = AdminRole(role)
+    except ValueError:
+        return frozenset()
+    if known is AdminRole.SUPER_ADMIN:
+        return frozenset(AdminPermission)
+    return frozenset(p for p in AdminPermission if p.value in stored) & GRANTABLE

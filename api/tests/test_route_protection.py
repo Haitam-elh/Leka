@@ -70,6 +70,16 @@ PUBLIC_ROUTES: dict[tuple[str, str], str] = {
     ("POST", "/api/v1/auth/login"): (
         "Exchanging a password for a session. The credential IS the request."
     ),
+    ("POST", "/api/v1/admin/auth/forgot-password"): (
+        "An admin who forgot their password asks for a code by email "
+        "(LEKA-545). Nobody is signed in by definition; the answer is the same "
+        "for any address, and it is rate-limited."
+    ),
+    ("POST", "/api/v1/admin/auth/reset-password"): (
+        "Choosing a password with the code sent by email: an invited admin's "
+        "first, or a forgotten one (LEKA-545). The code IS the credential; "
+        "hashed, short-lived, five tries."
+    ),
     ("POST", "/api/v1/admin/auth/sign-in"): (
         "An admin of LEKA's team exchanging a password for a session token "
         "(LEKA-544). The credential IS the request; one answer for every "

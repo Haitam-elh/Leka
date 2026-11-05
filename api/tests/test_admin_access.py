@@ -221,6 +221,13 @@ async def test_the_token_is_kept_hashed(client: AsyncClient, admin_email: str) -
 # ── No customer opens LEKA ADMIN ─────────────────────────────────────────────
 
 
+# The only admin routes open without an admin's token, each a credential in
+# itself: a password, or a code sent by email (LEKA-545). Nothing else.
+PUBLIC = frozenset(
+    {f"{API}/auth/sign-in", f"{API}/auth/forgot-password", f"{API}/auth/reset-password"}
+)
+
+
 def _admin_routes() -> list[tuple[str, str]]:
     paths = app.openapi()["paths"]
     return [
@@ -232,18 +239,23 @@ def _admin_routes() -> list[tuple[str, str]]:
     ]
 
 
-async def test_every_admin_route_but_sign_in_wants_an_admin_token(client: AsyncClient) -> None:
+async def test_every_admin_route_but_the_public_three_wants_an_admin_token(
+    client: AsyncClient,
+) -> None:
     routes = _admin_routes()
-    assert ("post", f"{API}/auth/sign-in") in routes
+    assert {("post", path) for path in PUBLIC} <= set(routes)
     let_through = []
     for method, path in routes:
-        if path == f"{API}/auth/sign-in":
+        if path in PUBLIC:
             continue
         concrete = (
             path.replace("{organisation_id}", str(uuid.uuid4()))
             .replace("{user_id}", str(uuid.uuid4()))
             .replace("{intention_id}", str(uuid.uuid4()))
+            .replace("{admin_id}", str(uuid.uuid4()))
+            .replace("{role}", "support")
         )
+        assert "{" not in concrete, f"a path parameter this test does not fill: {path}"
         for headers in ({}, bearer("not-a-token"), {"Authorization": "Basic YWRtaW46YWRtaW4="}):
             response = await client.request(method.upper(), concrete, headers=headers, json={})
             if response.status_code != 401:
@@ -261,7 +273,7 @@ async def test_a_customer_owner_session_opens_no_admin_route(
     identity.sign_in(uuid.uuid4(), uuid.uuid4())
     opened = []
     for method, path in _admin_routes():
-        if path == f"{API}/auth/sign-in" or "{" in path:
+        if path in PUBLIC or "{" in path:
             continue
         response = await client.request(method.upper(), path, json={})
         if response.status_code != 401:
@@ -355,3 +367,12 @@ async def test_the_tables_are_leka_s_own() -> None:
             )
         ).all()
     assert columns == []
+
+
+def test_no_two_contracts_share_a_name() -> None:
+    """Two schemas with one name are published as `leka__module__schemas__X`
+    by FastAPI, and web/lib/api-types.ts loses the name the screens use
+    (an admin `RoleRead` once renamed governance's). Each contract is named
+    once (LEKA-545)."""
+    names = app.openapi()["components"]["schemas"]
+    assert [name for name in names if "__" in name] == []

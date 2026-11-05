@@ -9,6 +9,14 @@ say it (tests/test_tenant_isolation.py lists them).
 from the customers' `users`, so being a customer, even an owner, never opens
 LEKA ADMIN. Their role says what they may do (leka/admin/access.py).
 
+`admin_codes` (LEKA-545): a single-use code sent by email: to an invited
+admin, to choose their password; to an admin who forgot theirs, to choose a
+new one. Hashed, short-lived, five tries.
+
+`admin_role_permissions` (LEKA-545): what each role may do, as the Super
+Admin set it (the defaults of leka/admin/access.py to start with). A Super
+Admin's own role is never stored here: it may do everything.
+
 `admin_sessions`: one signed-in device of an admin. The token is hashed; it
 is carried as a bearer by the Android app, never as a cookie, so no customer
 session can ever stand in for it.
@@ -56,7 +64,8 @@ from leka.admin.access import AdminRole
 from leka.db import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 ROLES = tuple(role.value for role in AdminRole)
-ACCOUNT_STATUSES = ("active", "disabled")
+ACCOUNT_STATUSES = ("invited", "active", "disabled")
+CODE_PURPOSES = ("invite", "reset")
 OUTCOMES = ("succeeded", "refused", "failed")
 
 
@@ -75,7 +84,8 @@ class AdminAccount(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # Lower-cased, always.
     email: Mapped[str] = mapped_column(String(320), nullable=False)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    # None while invited: the person chooses it with the code they were sent.
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     status: Mapped[str] = mapped_column(String(10), nullable=False, default="active")
     failed_sign_ins: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -179,3 +189,32 @@ class ActivityWatermark(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     source: Mapped[str] = mapped_column(String(40), nullable=False)
     read_to: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class AdminCode(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    __tablename__ = "admin_codes"
+    __table_args__ = (CheckConstraint(_among("purpose", CODE_PURPOSES), name="purpose"),)
+
+    admin_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("admin_accounts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    purpose: Mapped[str] = mapped_column(String(10), nullable=False)
+    code_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class AdminRolePermission(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    __tablename__ = "admin_role_permissions"
+    __table_args__ = (
+        UniqueConstraint("role", "permission", name="uq_admin_role_permissions_role_permission"),
+        CheckConstraint(_among("role", ROLES), name="role"),
+    )
+
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
+    permission: Mapped[str] = mapped_column(String(40), nullable=False)
+    granted_by: Mapped[str] = mapped_column(String(320), nullable=False)
