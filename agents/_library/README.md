@@ -33,7 +33,7 @@ names a guide, its path or where a method comes from: it speaks as LEKA.
 | --- | --- | --- |
 | `design/` | LEKA's design guides, written in French for LEKA's runtime: the principles of a review, animations, the motion audit, where to animate, building an animation, its performance, the worst case, the phone, fluid interfaces, React Native, libraries, notifications, design directions, the vocabulary of motion, Swift — and its index, `README.md` | `design-review` (every guide), `motion-review`, `ui-quality-review`, `code-change` (an interface's change) |
 
-Provenance and licences: [`THIRD_PARTY_LICENSES.md`](../../THIRD_PARTY_LICENSES.md).
+Provenance and licences: [`third_party/NOTICES.md`](../../third_party/NOTICES.md).
 
 To change a guide: edit it, keep its `titre` and `description` front matter
 (the index reads them), bump the version of every agent that reads it, and

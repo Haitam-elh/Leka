@@ -2,7 +2,7 @@
  * The mark of each system LEKA connects to, as the mockups show them.
  *
  * From Simple Icons 13.21.0 (https://simpleicons.org), CC0 1.0 — see
- * THIRD_PARTY_LICENSES.md. One path each, in the brand's own colour from
+ * third_party/NOTICES.md. One path each, in the brand's own colour from
  * the same project. The marks belong to their owners; they are shown to
  * name the system a source reads, which is what they are for.
  */

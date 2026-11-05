@@ -141,7 +141,7 @@ same rules as `vendor/`.
 2. Keep the upstream `LICENSE` and every copyright header.
 3. Set `origin: vendor:<owner>/<repo>`.
 4. Add the row to
-   [`THIRD_PARTY_LICENSES.md`](../THIRD_PARTY_LICENSES.md) — source, licence,
+   [`third_party/NOTICES.md`](../third_party/NOTICES.md) — source, licence,
    what was taken, **what was changed**, date. Apache 2.0 requires stating
    modifications; MIT requires keeping the notice. Neither can be satisfied
    retroactively.

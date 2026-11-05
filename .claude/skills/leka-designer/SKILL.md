@@ -113,4 +113,4 @@ Puis, en une ligne chacun : ce que tu n'as pas pu vérifier (une largeur, un
 
 <sub>Adapté pour LEKA à partir de [emilkowalski/skills](https://github.com/emilkowalski/skills)
 @ `2d22863` (MIT, © 2026 Emil Kowalski) — `emil-design-eng`, `break-ui`,
-`apple-design`, `review-animations`. Voir `THIRD_PARTY_LICENSES.md`.</sub>
+`apple-design`, `review-animations`. Voir `third_party/NOTICES.md`.</sub>

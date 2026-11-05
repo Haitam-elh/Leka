@@ -28,6 +28,7 @@ from leka.capabilities.skills import agent_skill_tools
 from leka.capabilities.tools import NAMES
 from leka.core.config import settings
 from leka.knowledge import EntityType
+from tests import notices
 
 VERSIONS = {
     "architecture-analysis": "1.4.0",
@@ -53,25 +54,21 @@ CODE_READ = {
     "security-review": {"list_files", "read_file"},
     "test-analysis": {"list_pull_requests", "read_pull_request"},
 }
-NOTICES = (settings.agents_dir.parent / "THIRD_PARTY_LICENSES.md").read_text(encoding="utf-8")
 
 
-def credited(key: str, *sources: str) -> bool:
-    """Credited as their licence asks: a row of the licence notices names
-    the source and the agent's file — and the agent is never told it, so
-    its deliverable cannot name it (it speaks as LEKA, 2026-10-18)."""
+def credited(key: str) -> bool:
+    """Credited as their licence asks: a row of the notices
+    (third_party/NOTICES.md) names the agent's file — and the agent is
+    never told its sources, so its deliverable cannot name them (it speaks
+    as LEKA, 2026-10-18)."""
     [path] = [
         p
         for p in settings.agents_dir.rglob("SKILL.md")
         if p.parent.name == key and "_library" not in p.parts
     ]
     file = path.relative_to(settings.agents_dir.parent).as_posix()
-    rows = [line for line in NOTICES.splitlines() if f"`{file}`" in line]
     said = {d.key: d for d in catalogue()}[key].instructions or ""
-    return all(
-        any(source in row for row in rows) and source not in said and "<sub>" not in said
-        for source in sources
-    )
+    return notices.credited(file) and not notices.names_a_source(said)
 
 
 LIBRARY = {
@@ -357,7 +354,7 @@ def test_a_question_never_goes_to_an_agent_that_acts() -> None:
 
 
 def test_the_code_review_reviews_by_a_method_it_can_prove() -> None:
-    # LEKA-447: ECC's code-reviewer and gstack's review, rewritten for what
+    # LEKA-447: two references' code review methods, rewritten for what
     # LEKA sees — the scope said against the scope touched, a gate before
     # each finding, a severity that needs its proof, zero findings allowed.
     said = {d.key: d for d in catalogue()}["code-review"].instructions or ""
@@ -387,7 +384,7 @@ def test_the_code_review_reviews_by_a_method_it_can_prove() -> None:
     assert "ne s'écrit jamais en clair" in said and "révoquer" in said
     assert "instructions système" in said and "clé publiable" in said
     assert "se suit jusqu'à ce qui l'attrape" in said
-    assert credited("code-review", "affaan-m/ECC", "garrytan/gstack", "msitarzewski/agency-agents")
+    assert credited("code-review")
 
 
 def test_the_code_review_reads_the_diff_and_anchors_its_comments() -> None:
@@ -402,7 +399,7 @@ def test_the_code_review_reads_the_diff_and_anchors_its_comments() -> None:
 
 
 def test_the_security_review_separates_what_it_proves_from_what_it_suspects() -> None:
-    # LEKA-447: gstack's cso and ECC's security-reviewer, rewritten for the
+    # LEKA-447: two references' security review methods, rewritten for the
     # company model — the model first, three judgements kept apart, a
     # supported finding against a hypothesis, the unknown kept unknown.
     said = {d.key: d for d in catalogue()}["security-review"].instructions or ""
@@ -439,13 +436,11 @@ def test_the_security_review_separates_what_it_proves_from_what_it_suspects() ->
         assert f"**{threat}**" in said, threat
     assert "Un secret exposé est déjà compromis" in said
     assert "**Exigences**" in said
-    assert credited(
-        "security-review", "garrytan/gstack", "affaan-m/ECC", "msitarzewski/agency-agents"
-    )
+    assert credited("security-review")
 
 
 def test_the_build_fixer_proposes_the_smallest_fix() -> None:
-    # LEKA-447: ECC's build-error-resolver, rewritten for what LEKA sees —
+    # LEKA-447: a reference's build fixing method, rewritten for what LEKA sees —
     # the last green against the first red, suspects ranked, the smallest
     # fix and nothing more, what that fix risks.
     said = {d.key: d for d in catalogue()}["build-fixer"].instructions or ""
@@ -465,12 +460,12 @@ def test_the_build_fixer_proposes_the_smallest_fix() -> None:
     # as a suspect, « LEKA-390 » in the deliverable.
     assert "**Les contrôles des pull requests sont des builds.**" in said
     assert "LEKA-390" not in said
-    assert credited("build-fixer", "affaan-m/ECC", "msitarzewski/agency-agents")
+    assert credited("build-fixer")
 
 
 def test_the_architecture_analysis_reads_the_real_links() -> None:
-    # LEKA-447: ECC's architect, code-architect, code-explorer and
-    # change-impact, rewritten for the company model — from the entry points,
+    # LEKA-447: a reference's architecture and change impact methods,
+    # rewritten for the company model — from the entry points,
     # by layer, each weak point proven by its links, the unverified said.
     said = {d.key: d for d in catalogue()}["architecture-analysis"].instructions or ""
     assert "## Sa méthode" in said
@@ -496,11 +491,11 @@ def test_the_architecture_analysis_reads_the_real_links() -> None:
     assert "pas seulement ceux reliés au premier\n   trouvé" in said
     assert "Jamais une action sur la façon dont LEKA range ses données" in said
     assert "« à désigner par l'équipe »" in said
-    assert credited("architecture-analysis", "affaan-m/ECC", "msitarzewski/agency-agents")
+    assert credited("architecture-analysis")
 
 
 def test_the_documentation_assistant_maps_what_a_reader_finds() -> None:
-    # LEKA-447: gstack's document-generate and document-release, ECC's ADRs
+    # LEKA-447: two references' documentation methods and their ADRs
     # and living docs, rewritten for what LEKA sees — a coverage map by the
     # reader's need, the document against the model, one source per fact.
     said = {d.key: d for d in catalogue()}["documentation-assistant"].instructions or ""
@@ -528,14 +523,12 @@ def test_the_documentation_assistant_maps_what_a_reader_finds() -> None:
     doc = {d.key: d for d in catalogue()}["documentation-assistant"]
     assert {"list_files", "read_file"} <= set(doc.tools)
     assert "**Pages proposées**" in said and "test des cinq\n   secondes" in said
-    assert credited(
-        "documentation-assistant", "garrytan/gstack", "affaan-m/ECC", "msitarzewski/agency-agents"
-    )
+    assert credited("documentation-assistant")
 
 
 def test_the_test_analysis_plans_by_behaviour() -> None:
-    # LEKA-447: ECC's pr-test-analyzer and test-collaboration, gstack's
-    # test-audit, rewritten for what LEKA sees — the behaviour, not the file;
+    # LEKA-447: two references' test analysis and test audit methods,
+    # rewritten for what LEKA sees — the behaviour, not the file;
     # the right level; incidents as tests; what a green does not prove.
     said = {d.key: d for d in catalogue()}["test-analysis"].instructions or ""
     assert "## Sa méthode" in said
@@ -554,13 +547,11 @@ def test_the_test_analysis_plans_by_behaviour() -> None:
     # diff « not provided » —, a plan made from its title, a commit taken
     # for a risk zone by its words.
     assert "**La pull request nommée se lit**" in said and "jamais sur un titre" in said
-    assert credited(
-        "test-analysis", "affaan-m/ECC", "garrytan/gstack", "msitarzewski/agency-agents"
-    )
+    assert credited("test-analysis")
 
 
 def test_the_debug_assistant_finds_the_root_cause_before_a_remedy() -> None:
-    # LEKA-447: gstack's investigate, rewritten for what LEKA sees — no
+    # LEKA-447: a reference's investigation method, rewritten for what LEKA sees — no
     # remedy without a root cause, what changed, known patterns, what keeps
     # coming back, three unsupported hypotheses and it stops.
     said = {d.key: d for d in catalogue()}["debug-assistant"].instructions or ""
@@ -577,11 +568,11 @@ def test_the_debug_assistant_finds_the_root_cause_before_a_remedy() -> None:
     assert "Après trois hypothèses" in said
     # 2026-10-18: the harm stopped first, a measure before a remedy.
     assert "arrêter les dégâts" in said and "Mesurer avant de corriger" in said
-    assert credited("debug-assistant", "garrytan/gstack", "msitarzewski/agency-agents")
+    assert credited("debug-assistant")
 
 
 def test_the_release_analysis_caps_its_verdict() -> None:
-    # LEKA-447: ECC's deployment-patterns and production-audit, rewritten
+    # LEKA-447: a reference's deployment and production audit methods, rewritten
     # for what LEKA sees — what really ships, the risk angles, the way back,
     # what came after, a verdict capped by what is missing.
     said = {d.key: d for d in catalogue()}["release-analysis"].instructions or ""
@@ -609,11 +600,11 @@ def test_the_release_analysis_caps_its_verdict() -> None:
     # said « not deployed yet » from a source read before, « 0 % of 249 ».
     assert "**Toute la période, pas la dernière release.**" in said
     assert "**Ce que LEKA a vu, et quand.**" in said
-    assert credited("release-analysis", "affaan-m/ECC", "msitarzewski/agency-agents")
+    assert credited("release-analysis")
 
 
 def test_the_infrastructure_analysis_finds_what_falls_together() -> None:
-    # LEKA-447: ECC's kubernetes-patterns reliability and security lists,
+    # LEKA-447: a reference's reliability and security lists,
     # rewritten at the level of the resources LEKA sees — environments kept
     # apart, redundancy, least sharing, labelling, the unknown kept unknown.
     said = {d.key: d for d in catalogue()}["infrastructure-analysis"].instructions or ""
@@ -637,11 +628,11 @@ def test_the_infrastructure_analysis_finds_what_falls_together() -> None:
     assert "porte une adresse publique" in said
     assert "jamais l'identifiant à la place du nom" in said
     assert "« à désigner »" in said
-    assert credited("infrastructure-analysis", "affaan-m/ECC", "msitarzewski/agency-agents")
+    assert credited("infrastructure-analysis")
 
 
 def test_the_data_analysis_knows_who_writes_and_how_to_change() -> None:
-    # LEKA-447: ECC's database-reviewer and database-migrations, rewritten
+    # LEKA-447: a reference's database review and migration methods, rewritten
     # for the structure and lineage LEKA sees — writers and readers, the
     # known structure, access, a change in three steps, the unseen said.
     said = {d.key: d for d in catalogue()}["data-analysis"].instructions or ""
@@ -659,7 +650,7 @@ def test_the_data_analysis_knows_who_writes_and_how_to_change() -> None:
     assert "La reprise" in said and "(RPO)" in said and "Les flux" in said
     # 2026-10-24, tested on leka-core: `multi_az: false` in the deliverable.
     assert "Jamais le nom d'un champ" in said
-    assert credited("data-analysis", "affaan-m/ECC", "msitarzewski/agency-agents")
+    assert credited("data-analysis")
 
 
 def test_the_incident_investigation_stops_the_harm_first_and_blames_no_one() -> None:
@@ -688,7 +679,7 @@ def test_the_incident_investigation_stops_the_harm_first_and_blames_no_one() -> 
     ):
         assert part in said, part
     assert "Jamais d'échéance inventée" in said and "LEKA, jamais" in said
-    assert credited("incident-investigation", "msitarzewski/agency-agents")
+    assert credited("incident-investigation")
 
 
 def test_the_incident_investigation_finds_the_incident_or_says_it_briefly() -> None:
@@ -714,7 +705,7 @@ def test_the_incident_investigation_finds_the_incident_or_says_it_briefly() -> N
         "Plan d'action",
     ]
     assert "ne se dit jamais absente" in said and "Jamais le nom d'un outil" in said
-    assert credited("incident-investigation", "msitarzewski/agency-agents")
+    assert credited("incident-investigation")
 
 
 def test_the_debugging_agent_checks_the_failure_before_ranking_causes() -> None:
@@ -794,7 +785,7 @@ def test_the_code_change_proposes_the_smallest_change_and_says_the_rest() -> Non
     ):
         assert step in said, step
     assert "**Ce qui n'est pas fait ici**" in said
-    assert credited("code-change", "msitarzewski/agency-agents")
+    assert credited("code-change")
 
 
 def test_the_code_change_applies_a_mock_up_whole_never_by_halves() -> None:
@@ -859,7 +850,7 @@ def test_the_acceptance_holds_a_change_to_its_criteria_with_proof() -> None:
         "Un problème se suit jusqu'où la\n   personne le verrait",
     ):
         assert rule.lower() in said.lower(), rule
-    assert credited("qa-acceptance", "msitarzewski/agency-agents")
+    assert credited("qa-acceptance")
 
 
 def test_the_api_review_judges_a_contract_by_its_own_conventions() -> None:
@@ -913,9 +904,7 @@ def test_the_api_review_judges_a_contract_by_its_own_conventions() -> None:
         "coupée en silence",
     ):
         assert rule.lower() in " ".join(said.split()).lower(), rule
-    assert credited(
-        "api-design-review", "msitarzewski/agency-agents", "garrytan/gstack", "affaan-m/ECC"
-    )
+    assert credited("api-design-review")
 
 
 def test_the_reliability_analysis_measures_and_hunts_hidden_failures() -> None:
@@ -977,9 +966,7 @@ def test_the_reliability_analysis_measures_and_hunts_hidden_failures() -> None:
     assert "n'est **pas**\n   avalée" in said and "ne recommande jamais de\n   la resserrer" in said
     assert "« non\n   lu » et « le code ne gère pas » ne vont jamais ensemble" in said
     assert "Jamais le nom d'un outil ou d'une compétence" in said
-    assert credited(
-        "reliability-analysis", "msitarzewski/agency-agents", "garrytan/gstack", "affaan-m/ECC"
-    )
+    assert credited("reliability-analysis")
 
 
 def test_the_dependency_analysis_reads_lock_files_and_never_recalls_a_vulnerability() -> None:
@@ -1027,9 +1014,7 @@ def test_the_dependency_analysis_reads_lock_files_and_never_recalls_a_vulnerabil
         "« à désigner »",
     ):
         assert rule.lower() in said.lower(), rule
-    assert credited(
-        "dependency-analysis", "garrytan/gstack", "msitarzewski/agency-agents", "affaan-m/ECC"
-    )
+    assert credited("dependency-analysis")
 
 
 def test_the_database_review_starts_from_the_catalogue_and_runs_nothing() -> None:
@@ -1077,9 +1062,7 @@ def test_the_database_review_starts_from_the_catalogue_and_runs_nothing() -> Non
         "un hachage n'est pas un chiffrement",
     ):
         assert rule.lower() in said.lower(), rule
-    assert credited(
-        "database-review", "affaan-m/ECC", "msitarzewski/agency-agents", "garrytan/gstack"
-    )
+    assert credited("database-review")
     # Its last member built, Security & Reliability is sold, its saving from
     # each agent's price sold alone today (LEKA-531).
     bundle = commercial().add_ons.bundle("security-reliability")
@@ -1141,13 +1124,7 @@ def test_the_performance_analysis_follows_the_slow_path_and_measures_nothing_it_
     assert "l'absence de mesure n'arrête\n   jamais la lecture" in said
     assert "est le symptôme : il suffit\npour suivre le chemin" in said
     assert "Jamais le nom d'un outil ou d'une compétence" in said
-    assert credited(
-        "performance-analysis",
-        "garrytan/gstack",
-        "affaan-m/ECC",
-        "msitarzewski/agency-agents",
-        "emilkowalski/skills",
-    )
+    assert credited("performance-analysis")
     # Its last member built, Incident Response is sold, its saving from each
     # agent's price sold alone today (LEKA-531).
     bundle = commercial().add_ons.bundle("incident-response")
@@ -1197,9 +1174,7 @@ def test_the_migration_plan_moves_in_reversible_steps_and_retires_last() -> None
         "ni migration",
     ):
         assert rule.lower() in said.lower(), rule
-    assert credited(
-        "migration-planning", "garrytan/gstack", "affaan-m/ECC", "msitarzewski/agency-agents"
-    )
+    assert credited("migration-planning")
     # Its last member built, Ship Safe is sold — every bundle now is.
     sold = commercial().add_ons
     assert all(b.sellable and not b.missing for b in sold.bundles)

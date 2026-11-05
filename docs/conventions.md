@@ -155,7 +155,7 @@ it does not contain them.
 database has already run it.
 
 **11. Every third-party import is recorded in
-[THIRD_PARTY_LICENSES.md](../THIRD_PARTY_LICENSES.md).** See below.
+[third_party/NOTICES.md](../third_party/NOTICES.md).** See below.
 
 **12. Never a secret in Git.** A customer's credentials are encrypted with
 Fernet before they reach the database; the keys live in `LEKA_ENCRYPTION_KEYS`,
@@ -170,7 +170,7 @@ commercial use. Both require keeping copyright notices. **Apache 2.0 also
 requires stating that the file was modified.**
 
 **Any pull request that imports third-party code or a skill adds its row to
-[THIRD_PARTY_LICENSES.md](../THIRD_PARTY_LICENSES.md). No exceptions.**
+[third_party/NOTICES.md](../third_party/NOTICES.md). No exceptions.**
 
 Not paperwork: a licence obligation we cannot meet retroactively once nobody
 remembers where a file came from. A reviewer who sees imported code without a
