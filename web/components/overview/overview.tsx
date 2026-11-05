@@ -14,7 +14,6 @@ import {
   EnvironmentCard,
   HistoryLink,
   HomeBundles,
-  LatestAnalyses,
 } from "@/components/overview/home-sections";
 import { PageContainer } from "@/components/shell/page-container";
 import { useSourceLock } from "@/components/sources/source-lock";
@@ -44,8 +43,8 @@ import { type Source, sourceTone, sources as sourcesApi } from "@/lib/sources";
  * Unified around the intention composer and action: the greeting and
  * environment status sit at the top as a discrete chapeau, the operational
  * ribbon brings vital alerts and work under way directly under the composer,
- * followed by agents, bundles and recent analyses. Redundant bottom
- * monitoring cards are removed.
+ * followed by agents and bundles. The analyses asked are on the Intentions
+ * page, the link under the composer (LEKA-560).
  */
 
 type Load =
@@ -305,9 +304,11 @@ export function Overview() {
 
   return (
     <PageContainer>
-      <div className="grid items-start gap-6 pt-4 xl:grid-cols-[16rem_minmax(0,1fr)_16rem] xl:gap-8">
+      <div className="grid items-start gap-6 pt-4 xl:grid-cols-[16rem_minmax(0,1fr)_16rem] xl:gap-8 xl:pb-5">
         <div className="min-w-0 xl:col-start-2 xl:row-start-1" data-testid="home-focus">
-          <div className="mb-3 flex justify-center">
+          {/* On a wide screen the question starts below « Mon environnement »'s
+              top, as the mockup places it (LEKA-560). */}
+          <div className="mb-3 flex items-start justify-center xl:mb-0 xl:min-h-49">
             <GreetingChapeau load={load} />
           </div>
           <CompactIntentionComposer />
@@ -324,7 +325,6 @@ export function Overview() {
       <DedicatedAgentsSection />
       <AgentsSection />
       <HomeBundles />
-      <LatestAnalyses />
     </PageContainer>
   );
 }

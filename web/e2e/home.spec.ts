@@ -100,6 +100,12 @@ test.describe("The home on a wide screen", () => {
     const env = await box(page, "home-environment");
     expect(env.x).toBeGreaterThan(main.x + main.width);
     expect(Math.abs(env.y - main.y)).toBeLessThan(40);
+    // The greeting level with its top, the question well below it (LEKA-560).
+    const greeting = await box(page, "greeting-chapeau");
+    expect(Math.abs(greeting.y - env.y)).toBeLessThan(12);
+    const title = await page.locator("#compact-composer-title").boundingBox();
+    if (!title) throw new Error("no title");
+    expect(title.y).toBeGreaterThan(env.y + 180);
 
     const card = page.getByTestId("home-environment");
     await expect(card).not.toContainText(/sources? connectées?/i);
@@ -116,7 +122,7 @@ test.describe("The home on a wide screen", () => {
     }
   });
 
-  test("no example, no bundle banner, one link to the agents and bundles; one row of agents, the bundles, the latest", async ({ page }) => {
+  test("no example, no bundle banner, one link to the agents and bundles; one row of agents, the bundles last", async ({ page }) => {
     await home(page);
     for (const example of ["Analyser un incident récent", "Comprendre un changement", "Préparer un plan de migration"]) {
       await expect(page.getByRole("button", { name: example })).toHaveCount(0);
@@ -144,14 +150,13 @@ test.describe("The home on a wide screen", () => {
     expect(tops.length).toBeLessThanOrEqual(6);
     expect(tops.filter((top) => top === tops[0])).toHaveLength(tops.length);
     await expect(page.getByTestId("home-bundles-cards").getByTestId("bundle").first()).toBeVisible();
-    // The bundles right after the agents, the latest analyses after them.
+    // The bundles right after the agents, and nothing after them (LEKA-560).
     const agents = await box(page, "home-agents");
     const bundles = await box(page, "home-bundles-cards");
     expect(bundles.y).toBeGreaterThan(agents.y + agents.height - 1);
-    if (await page.getByTestId("home-latest").count()) {
-      const latest = await box(page, "home-latest");
-      expect(latest.y).toBeGreaterThan(bundles.y + bundles.height - 1);
-    }
+    await expect(page.getByTestId("home-latest")).toHaveCount(0);
+    await expect(page.getByText("Dernières analyses")).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Voir tout l'historique" })).toHaveCount(0);
   });
 
   test("an agent's card is one target: clicked anywhere, or by the keyboard, it opens its page (LEKA-528)", async ({ page }) => {

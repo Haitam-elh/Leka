@@ -317,6 +317,19 @@ beforeEach(() => {
 });
 
 describe("the overview", () => {
+  it("does not list the analyses asked: the Intentions page holds them, one link away (LEKA-560)", async () => {
+    underWay.mockResolvedValue({
+      data: [{ id: "i1", title: "Une analyse demandée", status: "done", updated_at: minutesAgo(5), summary: null }],
+      next_cursor: null,
+    });
+    mount();
+
+    expect(await screen.findByRole("link", { name: "Historique des analyses" })).toHaveAttribute("href", "/intentions");
+    expect(screen.queryByText("Dernières analyses")).toBeNull();
+    expect(screen.queryByText("Une analyse demandée")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Voir tout l'historique" })).toBeNull();
+  });
+
   it("greets the person and says what needs them", async () => {
     mount();
 

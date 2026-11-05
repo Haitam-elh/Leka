@@ -4,8 +4,7 @@
  * default — reduced to its state and its last read, the real moment; the
  * way to the analyses asked; the agents on sale, dense, each its state in
  * words, a price only where one is to pay, the whole card one way to its
- * page (LEKA-528); the bundles' cards, no banner; the latest analyses, each
- * to its page.
+ * page (LEKA-528); the bundles' cards, no banner.
  */
 
 import { render, screen, within } from "@testing-library/react";
@@ -17,7 +16,6 @@ import { LocaleProvider } from "@/lib/i18n/locale-provider";
 
 const env = vi.hoisted(() => ({ data: undefined as unknown }));
 const offers = vi.hoisted(() => ({ data: undefined as unknown }));
-const list = vi.hoisted(() => ({ value: { isPending: false, data: undefined as unknown } }));
 vi.mock("@/lib/environment-queries", () => ({ useEnvironment: () => env }));
 const listed = vi.hoisted(() => ({ data: undefined as unknown }));
 vi.mock("@/lib/sources-queries", () => ({ useSources: () => listed }));
@@ -27,13 +25,9 @@ vi.mock("@/lib/billing-queries", () => ({ useAddOns: () => offers, useBuy: () =>
 const catalogue = vi.hoisted(() => ({ data: undefined as unknown }));
 vi.mock("@/lib/capabilities-queries", () => ({ useCapabilities: () => catalogue }));
 vi.mock("@/components/shell/shell-provider", () => ({ usePermissions: () => permissions.value }));
-vi.mock("@/lib/intentions/queries", () => ({ useIntentions: () => list.value }));
-vi.mock("@/components/intentions/intentions-list", () => ({
-  StatusPill: ({ status }: { status: string }) => <span>{status}</span>,
-}));
 
 const home = await import("@/components/overview/home-sections");
-const { AgentsSection, EnvironmentCard, HistoryLink, HomeBundles, LatestAnalyses } = home;
+const { AgentsSection, EnvironmentCard, HistoryLink, HomeBundles } = home;
 
 const show = (node: React.ReactNode) =>
   render(
@@ -307,17 +301,5 @@ describe("what is on sale", () => {
     show(<HomeBundles />);
     expect(screen.getByTestId("home-bundles-cards")).toHaveTextContent("Engineering");
     expect(screen.queryByText("Découvrir les bundles")).toBeNull();
-  });
-});
-
-describe("Dernières analyses", () => {
-  it("lists the four latest, each to its page", () => {
-    const row = (id: string) => ({ id, title: `T ${id}`, status: "done", updated_at: new Date().toISOString(), summary: null });
-    list.value = { isPending: false, data: { pages: [{ data: ["1", "2", "3", "4", "5"].map(row) }] } };
-    show(<LatestAnalyses />);
-    const items = screen.getAllByTestId("home-latest-item");
-    expect(items).toHaveLength(4);
-    expect(items[0]).toHaveAttribute("href", "/intentions/1");
-    expect(within(items[0]).getByText("T 1")).toBeVisible();
   });
 });
