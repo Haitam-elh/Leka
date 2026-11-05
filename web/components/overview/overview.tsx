@@ -306,9 +306,9 @@ export function Overview() {
     <PageContainer>
       <div className="grid items-start gap-6 pt-4 xl:grid-cols-[16rem_minmax(0,1fr)_16rem] xl:gap-8 xl:pb-5">
         <div className="min-w-0 xl:col-start-2 xl:row-start-1" data-testid="home-focus">
-          {/* On a wide screen the question starts below « Mon environnement »'s
-              top, as the mockup places it (LEKA-560). */}
-          <div className="mb-3 flex items-start justify-center xl:mb-0 xl:min-h-49">
+          {/* The greeting level with « Mon environnement »'s top, the question
+              right under it: no empty band in the hero (LEKA-560). */}
+          <div className="mb-6 flex justify-center xl:mb-8">
             <GreetingChapeau load={load} />
           </div>
           <CompactIntentionComposer />
