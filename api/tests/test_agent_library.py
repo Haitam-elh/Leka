@@ -30,7 +30,7 @@ from leka.knowledge import EntityType
 from tests.leka_voice import carries_a_credit
 
 VERSIONS = {
-    "architecture-analysis": "1.5.0",
+    "architecture-analysis": "1.5.1",
     "build-fixer": "1.3.0",
     "code-review": "1.4.0",
     "data-analysis": "1.4.0",
@@ -492,6 +492,7 @@ def test_the_architecture_analysis_reads_the_real_links() -> None:
     assert {"list_files", "read_file"} <= set(agent.tools)
     assert agent.rounds == 30
     assert "**La question d'abord.**" in said
+    assert "ni le résumé ni une piste ne lui sont" in said
     assert "**Une absence se cherche avant de s'écrire.**" in said
     assert "jamais « aucun »" in said
     assert "ce qui a été lu du code" in said
