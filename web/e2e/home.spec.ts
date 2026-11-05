@@ -100,12 +100,15 @@ test.describe("The home on a wide screen", () => {
     const env = await box(page, "home-environment");
     expect(env.x).toBeGreaterThan(main.x + main.width);
     expect(Math.abs(env.y - main.y)).toBeLessThan(40);
-    // The greeting level with its top, the question well below it (LEKA-560).
+    // The greeting level with its top, the question right under it: no
+    // empty band between them (LEKA-560).
     const greeting = await box(page, "greeting-chapeau");
     expect(Math.abs(greeting.y - env.y)).toBeLessThan(12);
     const title = await page.locator("#compact-composer-title").boundingBox();
     if (!title) throw new Error("no title");
-    expect(title.y).toBeGreaterThan(env.y + 180);
+    const gap = title.y - (greeting.y + greeting.height);
+    expect(gap).toBeGreaterThan(12);
+    expect(gap).toBeLessThan(48);
 
     const card = page.getByTestId("home-environment");
     await expect(card).not.toContainText(/sources? connectées?/i);
