@@ -21,6 +21,7 @@ fails until it is.
 
 from __future__ import annotations
 
+import leka.admin
 import leka.background
 import leka.billing
 import leka.capabilities

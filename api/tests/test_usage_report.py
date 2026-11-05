@@ -235,8 +235,14 @@ def test_no_route_of_the_api_serves_tokens_or_a_provider_s_cost() -> None:
             todo |= refs(schemas[name])
         return seen
 
+    # LEKA ADMIN (LEKA-544) is the LEKA team's own, behind an admin's token
+    # no customer holds (tests/test_admin_access.py): what models cost is
+    # what it reads. Every other route is a customer's, and stays clean.
+    admin = f"{settings.api_v1_prefix}/admin/"
     leaking = []
     for path, operations in spec["paths"].items():
+        if path.startswith(admin):
+            continue
         for method, operation in operations.items():
             for name in reached(refs(operation.get("responses", {}))):
                 said = set(schemas[name].get("properties") or {}) & forbidden

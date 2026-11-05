@@ -51,6 +51,14 @@ class SecuritySettings:
     session_absolute_lifetime_days: int = Field(default=30, ge=1, le=365)
     session_idle_lifetime_days: int = Field(default=7, ge=1, le=90)
 
+    # LEKA ADMIN (LEKA-544): an admin's session opens every customer, so it
+    # is a working day at most and ends after two idle hours. Five wrong
+    # passwords in a row lock the account for fifteen minutes.
+    admin_session_lifetime_hours: int = Field(default=12, ge=1, le=24)
+    admin_session_idle_minutes: int = Field(default=120, ge=5, le=480)
+    admin_sign_in_attempts: int = Field(default=5, ge=3, le=20)
+    admin_lockout_minutes: int = Field(default=15, ge=1, le=1440)
+
     verification_token_lifetime_hours: int = Field(default=24, ge=1, le=168)
     # Deliberately short. A reset link sits in an inbox, which is the least
     # trustworthy place a credential can wait.

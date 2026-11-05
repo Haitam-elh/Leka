@@ -60,6 +60,9 @@ LAYERS: dict[str, int] = {
     "demo": 11,
     # The notification centre (LEKA-476): reads what every module kept.
     "notifications": 12,
+    # LEKA ADMIN (LEKA-544): LEKA's team reads every module, across every
+    # customer, behind its own identity. Nothing imports it but the API.
+    "admin": 12,
     "api": 13,
 }
 

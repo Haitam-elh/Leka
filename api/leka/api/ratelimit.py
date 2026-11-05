@@ -77,6 +77,10 @@ def caller_key(request: Request) -> str:
     token = request.cookies.get(settings.session_cookie_name)
     if token:
         return "s:" + hashlib.sha256(token.encode()).hexdigest()[:32]
+    # An admin of LEKA ADMIN (LEKA-544) carries a bearer token, not a cookie.
+    authorization = request.headers.get("authorization", "")
+    if authorization[:7].lower() == "bearer " and authorization[7:].strip():
+        return "b:" + hashlib.sha256(authorization[7:].strip().encode()).hexdigest()[:32]
 
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:

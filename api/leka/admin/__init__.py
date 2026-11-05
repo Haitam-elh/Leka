@@ -1,0 +1,167 @@
+"""LEKA ADMIN's server side (LEKA-544): the Admin API's rules and data.
+
+LEKA's team, apart from the customers: its own accounts and sessions
+(bearer tokens, for the Android app), four roles and their permissions
+checked on every route, a trail of everything done and every sensitive
+read, idempotent sensitive operations, the reads every LEKA ADMIN module
+needs across every customer, and an activity journal derived from the
+tables that already say what happened.
+
+Sits above every module it reads (tests/test_module_boundaries.py); only
+the API imports it. docs/admin/api.md is the contract.
+"""
+
+from leka.admin.access import ROLE_PERMISSIONS, AdminPermission, AdminRole, allows, permissions_of
+from leka.admin.actions import ActionError, add_credits, set_suspended
+from leka.admin.activity import run_sweep as run_activity_sweep
+from leka.admin.activity import sweep as sweep_activity
+from leka.admin.audit import apart as audit_apart
+from leka.admin.audit import record as audit_record
+from leka.admin.dependencies import AdminPrincipalDep, client_ip, get_admin, require_admin, route_of
+from leka.admin.models import (
+    ActivityEvent,
+    ActivityWatermark,
+    AdminAccount,
+    AdminAuditEvent,
+    AdminIdempotencyKey,
+    AdminSession,
+)
+from leka.admin.overview import AdminOverview, Period, overview, window_of
+from leka.admin.reads import (
+    activity_query,
+    activity_row,
+    admin_audit_query,
+    agent_stats,
+    credits_breakdown,
+    credits_of,
+    intention_detail,
+    intention_rows,
+    intentions_query,
+    organisation_detail,
+    organisation_members,
+    organisation_rows,
+    organisations_query,
+    source_rows,
+    sources_query,
+    stripe_event_rows,
+    stripe_events_query,
+    subscription_rows,
+    subscriptions_query,
+    user_detail,
+    user_rows,
+    users_query,
+)
+from leka.admin.schemas import (
+    ActionReason,
+    ActivityRow,
+    AdminAuditRow,
+    AdminIntentionDetail,
+    AdminIntentionRow,
+    AdminMe,
+    AdminPrincipal,
+    AdminSignedIn,
+    AdminSignIn,
+    AgentStat,
+    CreditGrant,
+    CreditsBreakdown,
+    OrganisationAction,
+    OrganisationCredits,
+    OrganisationDetail,
+    OrganisationMembers,
+    OrganisationRef,
+    OrganisationRow,
+    SourceRow,
+    StripeEventRow,
+    SubscriptionRow,
+    UserDetail,
+    UserRow,
+)
+from leka.admin.service import (
+    AdminAccountError,
+    AdminAuth,
+    AdminAuthError,
+    IdempotencyConflictError,
+    create_account,
+    once,
+)
+
+__all__ = [
+    "ROLE_PERMISSIONS",
+    "ActionError",
+    "ActionReason",
+    "ActivityEvent",
+    "ActivityRow",
+    "ActivityWatermark",
+    "AdminAccount",
+    "AdminAccountError",
+    "AdminAuditEvent",
+    "AdminAuditRow",
+    "AdminAuth",
+    "AdminAuthError",
+    "AdminIdempotencyKey",
+    "AdminIntentionDetail",
+    "AdminIntentionRow",
+    "AdminMe",
+    "AdminOverview",
+    "AdminPermission",
+    "AdminPrincipal",
+    "AdminPrincipalDep",
+    "AdminRole",
+    "AdminSession",
+    "AdminSignIn",
+    "AdminSignedIn",
+    "AgentStat",
+    "CreditGrant",
+    "CreditsBreakdown",
+    "IdempotencyConflictError",
+    "OrganisationAction",
+    "OrganisationCredits",
+    "OrganisationDetail",
+    "OrganisationMembers",
+    "OrganisationRef",
+    "OrganisationRow",
+    "Period",
+    "SourceRow",
+    "StripeEventRow",
+    "SubscriptionRow",
+    "UserDetail",
+    "UserRow",
+    "activity_query",
+    "activity_row",
+    "add_credits",
+    "admin_audit_query",
+    "agent_stats",
+    "allows",
+    "audit_apart",
+    "audit_record",
+    "client_ip",
+    "create_account",
+    "credits_breakdown",
+    "credits_of",
+    "get_admin",
+    "intention_detail",
+    "intention_rows",
+    "intentions_query",
+    "once",
+    "organisation_detail",
+    "organisation_members",
+    "organisation_rows",
+    "organisations_query",
+    "overview",
+    "permissions_of",
+    "require_admin",
+    "route_of",
+    "run_activity_sweep",
+    "set_suspended",
+    "source_rows",
+    "sources_query",
+    "stripe_event_rows",
+    "stripe_events_query",
+    "subscription_rows",
+    "subscriptions_query",
+    "sweep_activity",
+    "user_detail",
+    "user_rows",
+    "users_query",
+    "window_of",
+]

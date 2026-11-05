@@ -35,6 +35,7 @@ from typing import Any
 import pytest
 from fastapi.routing import APIRoute
 
+from leka.admin import get_admin
 from leka.api.identity import require_session
 from leka.core.config import settings
 from leka.governance.dependencies import (
@@ -68,6 +69,11 @@ PUBLIC_ROUTES: dict[tuple[str, str], str] = {
     ),
     ("POST", "/api/v1/auth/login"): (
         "Exchanging a password for a session. The credential IS the request."
+    ),
+    ("POST", "/api/v1/admin/auth/sign-in"): (
+        "An admin of LEKA's team exchanging a password for a session token "
+        "(LEKA-544). The credential IS the request; one answer for every "
+        "failure, a lock after five, a rate limit, each attempt kept."
     ),
     ("POST", "/api/v1/auth/logout"): (
         "Deliberately tolerant of an absent session: signing out twice, or "
@@ -129,8 +135,10 @@ PUBLIC_ROUTES: dict[tuple[str, str], str] = {
 # require_role and require_permission wrap the principal; their closures are
 # anonymous, so they are recognised by what they depend on rather than by
 # identity — see _is_protected.
+# get_admin (LEKA-544) is LEKA ADMIN's: an admin of LEKA's team, from a
+# bearer token, never a customer's session.
 AUTHENTICATION_DEPENDENCIES = frozenset(
-    {get_current_user_id, get_current_principal, require_session}
+    {get_current_user_id, get_current_principal, require_session, get_admin}
 )
 
 # Named so the test below can prove they are still wired to the principal.

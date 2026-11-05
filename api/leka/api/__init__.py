@@ -14,6 +14,7 @@ from leka.api import (
     access,
     actions,
     add_ons,
+    admin,
     agent_runs,
     ai_governance,
     audit,
@@ -110,5 +111,8 @@ api_router.include_router(add_ons.router)
 api_router.include_router(notifications.router)
 # The interface in every language, translated by LEKA (2026-10-30), public.
 api_router.include_router(interface.router)
+# LEKA ADMIN (LEKA-544): LEKA's team, apart from every customer, behind its
+# own identity (leka/admin/dependencies.py).
+api_router.include_router(admin.router)
 
 __all__ = ["api_router"]

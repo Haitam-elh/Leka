@@ -195,6 +195,10 @@ SCHEDULE: tuple[Scheduled, ...] = (
     # The notification centre (LEKA-476): what the systems kept, read into
     # notifications — also on each look at the bell.
     Scheduled("notifications-sweep", "leka.notifications.projector.run_sweep", cron="*/5 * * * *"),
+    # LEKA ADMIN's activity journal (LEKA-544): what happened across LEKA,
+    # read from the tables that say it, each fact once; a minute after the
+    # notifications' sweep, so they do not start together.
+    Scheduled("admin-activity", "leka.admin.activity.run_sweep", cron="1-59/5 * * * *"),
 )
 
 
