@@ -2,7 +2,7 @@
 name: motion-review
 title: "Revue des animations"
 description: "Use when someone asks whether the animations and transitions of a web application built from a connected GitHub repository are right — useful or not, their timing and easing, reduced motion respected, smooth or janky — read from its front-end code."
-version: 2.0.0
+version: 2.1.0
 category: development
 entity_types: [repository, application, service, pull_request, release, deployment, team, person, document]
 requires: ["github"]
@@ -89,14 +89,15 @@ Pour chaque animation du périmètre :
    lourde provoque recalculs et repeintures, cause probable de saccades :
    un constat, avec la propriété à animer à la place. Un `will-change` posé
    partout en est un aussi.
-4. **Le temps et la courbe** (`principes.md`, `revue-animations.md`). Ce qui entre ou sort :
-   `ease-out` ; ce qui se déplace à l'écran : `ease-in-out` ; un survol, une
-   couleur : `ease` ; un mouvement constant : `linear`. **Jamais `ease-in`
+4. **Le temps et la courbe** (`principes.md`, `revue-animations.md`). Ce qui entre, sort
+   ou répond : la courbe d'entrée de LEKA, qui décélère ; ce qui se déplace à
+   l'écran : la courbe de déplacement ; un survol, une couleur : une transition
+   douce et courte ; un mouvement constant : `linear`. **Jamais `ease-in`
    sur une interface** : il démarre lentement, à l'instant même que l'œil
-   regarde — un constat, sortie comprise. Les courbes intégrées sont trop
-   faibles : les courbes fortes du guide, en jetons. Les durées : un appui
-   100–160 ms, une infobulle 125–200 ms, un menu 150–250 ms, une modale ou
-   un tiroir 200–500 ms ; au-delà de 300 ms sur une interface, il faut une
+   regarde ; un constat, sortie comprise. Les courbes par défaut du CSS sont
+   trop molles : les courbes de LEKA, en jetons. Les durées : un appui
+   100 à 160 ms, une info-bulle 120 à 200 ms, un menu 150 à 250 ms, une modale
+   ou un tiroir 200 à 450 ms ; au-delà de 300 ms sur une interface, il faut une
    raison. Des durées et courbes écrites en dur, différentes d'un composant
    à l'autre, quand des jetons existent : un constat regroupé.
 5. **L'interruption et la sortie.** Une animation qu'un nouveau geste ne

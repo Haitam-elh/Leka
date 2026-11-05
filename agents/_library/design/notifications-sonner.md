@@ -1,44 +1,64 @@
 ---
-titre: Les notifications avec Sonner
-description: Mettre en place, appeler, styliser et dépanner des notifications Sonner dans une application React — un seul Toaster, le bon appel selon le besoin, mise à jour et persistance, l'échelle de personnalisation jusqu'au mode sans style, le thème, et un tableau des pannes fréquentes avec leur cause.
+titre: "Les notifications avec Sonner"
+description: "Juger, corriger et dépanner des notifications Sonner dans une application React : la mise en place (un seul Toaster, des appels côté client), l'appel qui convient à chaque besoin, mettre à jour et garder une notification, la styliser du plus léger au plus complet, les pannes fréquentes et les réglages utiles."
 ---
 
 # Les notifications avec Sonner
 
-Sonner est une bibliothèque de notifications pour React. Ce guide sert à
-juger ou corriger son usage dans un dépôt.
+Sonner affiche des notifications dans une application React. Ce guide sert à
+relire son usage dans un dépôt et à corriger ce qui cloche. On commence par les
+pannes, parce que c'est presque toujours par là qu'on arrive.
+
+## Les pannes fréquentes
+
+| On voit | La cause | On corrige |
+| --- | --- | --- |
+| rien n'apparaît | aucun Toaster monté, ou démonté (rendu conditionnel, monté par page), ou `toast()` appelé côté serveur | un seul Toaster, à la racine ; l'appel côté client |
+| tout apparaît deux fois | deux Toaster (dans le layout et dans une page), ou un effet rejoué en mode strict | un seul Toaster ; appeler depuis l'événement, ou donner un `id` stable |
+| les classes Tailwind n'ont aucun effet | les styles de Sonner l'emportent | `!important`, `unstyled`, ou le mode sans style |
+| des notifications sans aucun style | la feuille de styles injectée s'est perdue (certains frameworks, transitions de vue) | l'importer explicitement |
+| sans style dans un Shadow DOM | les styles partent dans `document.head` | les copier dans la racine fantôme |
+| derrière une modale, ou coupée | un ancêtre crée un contexte d'empilement (`transform`, `filter`, `overflow`) | monter le Toaster à la racine du document |
+| le mode sombre ignoré | le thème vaut `light` par défaut et ne suit pas le système | `theme="system"`, ou le thème résolu du fournisseur de thème |
+| succès et erreurs en gris | c'est le réglage par défaut | `richColors` |
+| une notification qui ne part jamais | `duration: Infinity`, `dismissible: false`, ou une promesse jamais réglée | le bon réglage, une promesse qui se résout ou échoue |
+| `toast.promise` bloqué sur le chargement | il ne reçoit pas une promesse, ou une fonction qui en renvoie une | lui en passer une qui se règle |
+| le balayage dans le mauvais sens | il découle de `position` | `swipeDirections` |
+| trop près du bord sur téléphone | le décalage par défaut | `offset` sur bureau, `mobileOffset` sous 600 px |
 
 ## La mise en place
 
 Deux pièces, pas une de plus :
 
 1. **Un seul `<Toaster />`**, monté le plus haut possible (dans Next.js, le
-   `layout` racine — il fonctionne dans un composant serveur). Jamais par
-   page ni conditionnel : un second Toaster double chaque notification.
-2. **`toast()` appelé côté client** — dans un gestionnaire d'événement, un
-   effet, un rappel. C'est une simple fonction, sans hook ni fournisseur ;
-   côté serveur elle ne fait rien : une action serveur renvoie son résultat,
-   et le client appelle `toast()`.
+   layout racine, où il fonctionne même dans un composant serveur). Jamais par
+   page, jamais conditionnel : un second Toaster double chaque notification.
+2. **`toast()` appelé côté client** : dans un gestionnaire d'événement, un
+   effet, un rappel. C'est une simple fonction, sans hook ni fournisseur. Côté
+   serveur elle ne fait rien : une action serveur renvoie son résultat, et c'est
+   le client qui appelle `toast()`.
 
-## Le bon appel
+## L'appel qui convient
 
 | Besoin | Appel |
 | --- | --- |
 | un message | `toast("Titre")`, avec `{ description }` pour une seconde ligne |
-| un succès, une erreur, une info, un avertissement | `toast.success(…)`, `toast.error(…)`… |
-| un chargement dont on gère soi-même l'état | `toast.loading(…)`, puis mise à jour par son id |
+| succès, erreur, information, avertissement | `toast.success(…)`, `toast.error(…)`, `toast.info(…)`, `toast.warning(…)` |
+| un chargement dont on gère l'état | `toast.loading(…)`, puis mise à jour par son `id` |
 | chargement puis succès ou erreur d'une promesse | `toast.promise(promesse, { loading, success, error })` |
 | un bouton d'action | `{ action: { label, onClick } }` (ferme la notification, sauf `event.preventDefault()`) ; `cancel` pour l'action secondaire |
-| un contenu JSX dans le cadre par défaut | `toast(<jsx />)` |
-| un contenu JSX sans aucun style | `toast.custom((t) => <jsx />)` |
+| du JSX dans le cadre par défaut | `toast(<jsx />)` |
+| du JSX sans aucun style | `toast.custom((t) => <jsx />)` |
 
-- **Mettre à jour** : rappeler `toast()` avec le même `id`, ou changer de type
-  (`toast.success("Envoyé", { id })`).
-- **Garder** : `{ duration: Infinity }`. **Fermer** : `toast.dismiss(id)`, ou
-  tout. **Lister** : `useSonner()`, ou `toast.getActiveToasts()`.
-- **Plusieurs Toaster** : un `id` chacun, et `toasterId` dans l'appel ; sans
-  cela, chaque Toaster affiche tout.
-- **À la fermeture** : `onDismiss` (bouton, balayage) et `onAutoClose`
+Et autour :
+
+- **mettre à jour** : rappeler `toast()` avec le même `id`, ou changer de type
+  (`toast.success("Envoyé", { id })`) ;
+- **garder** : `{ duration: Infinity }` ; **fermer** : `toast.dismiss(id)`, ou
+  toutes sans argument ; **lister** : `useSonner()` ou `toast.getActiveToasts()` ;
+- **plusieurs Toaster** : un `id` chacun et `toasterId` dans l'appel, sinon
+  chaque Toaster affiche tout ;
+- **à la fermeture** : `onDismiss` (bouton, balayage) et `onAutoClose`
   (minuteur) sont distincts.
 
 ## Styliser, du plus léger au plus complet
@@ -48,39 +68,23 @@ Deux pièces, pas une de plus :
 2. Des retouches en ligne : `toastOptions={{ style }}` pour toutes, `style`
    pour une.
 3. Des classes par partie : `toastOptions={{ classNames: { toast, title,
-   description, actionButton, cancelButton, closeButton } }}` — les styles de
-   Sonner l'emportent : il faut `!important` (`!text-red-900` en Tailwind).
-   Si l'on en marque beaucoup, on passe à l'étape suivante.
+   description, actionButton, cancelButton, closeButton } }}`. Les styles de
+   Sonner gagnent : il faut `!important` (`!text-red-900` avec Tailwind). Au-delà
+   de quelques-unes, on passe à l'étape suivante.
 4. **Sans style** : `toast.custom()` avec son propre JSX, en gardant le
    placement, l'empilement et le balayage. C'est la bonne fin pour une
-   notification de système de design, derrière sa propre fonction `toast()`.
+   notification de système de design, derrière une fonction `toast()` du dépôt.
 
-Les icônes : `icons` sur le Toaster, `icon` sur un appel, `null` pour retirer.
-Le **thème** vaut `light` par défaut et ne suit pas le système : `theme="system"`,
-ou le thème résolu du fournisseur de thème.
+Les icônes : `icons` sur le Toaster, `icon` sur un appel, `null` pour les
+retirer.
 
-## Les pannes fréquentes
+## Les réglages utiles
 
-| Symptôme | Cause et correction |
-| --- | --- |
-| rien n'apparaît | aucun Toaster monté, ou démonté (rendu conditionnel, par page) — un seul, à la racine ; ou `toast()` appelé côté serveur |
-| tout apparaît deux fois | deux Toaster (layout et page) ; ou un effet rejoué en mode strict — appeler depuis l'événement, ou donner un `id` stable |
-| les classes Tailwind n'ont aucun effet | les styles par défaut gagnent — `!important`, `unstyled`, ou le mode sans style |
-| des notifications sans aucun style | la feuille de styles injectée a été perdue (certains frameworks, transitions de vue) — l'importer explicitement |
-| sans style dans un Shadow DOM | les styles vont dans `document.head` — les copier dans la racine fantôme |
-| derrière une modale, ou coupée | un ancêtre crée un contexte d'empilement (`transform`, `filter`, `overflow`) — monter le Toaster à la racine du document |
-| le mode sombre ignoré | `theme` vaut `light` — `theme="system"` ou le thème résolu |
-| succès et erreurs en gris | c'est le défaut — `richColors` |
-| une notification qui ne part jamais | `duration: Infinity`, `dismissible: false`, ou une promesse qui ne se règle jamais |
-| `toast.promise` bloqué sur le chargement | il lui faut une promesse (ou une fonction qui en renvoie une) qui se résout ou échoue |
-| le balayage dans le mauvais sens | il découle de `position` — `swipeDirections` |
-| trop près du bord sur téléphone | `offset` (bureau) et `mobileOffset` (moins de 600 px) |
-
-## Les réglages utiles du Toaster
-
-`theme`, `richColors`, `expand`, `visibleToasts` (3 par défaut), `id`,
-`position` (`bottom-right` par défaut), `closeButton`, `offset`,
+Sur le Toaster : `theme`, `richColors`, `expand`, `visibleToasts` (3 par
+défaut), `id`, `position` (`bottom-right` par défaut), `closeButton`, `offset`,
 `mobileOffset`, `swipeDirections`, `dir`, `hotkey`, `invert`, `toastOptions`,
-`gap`, `icons`. Et pour un appel : `description`, `duration` (4 000 ms par
-défaut), `dismissible`, `icon`, `action`, `cancel`, `id`, `toasterId`,
-`unstyled`, `classNames`, `onDismiss`, `onAutoClose`.
+`gap`, `icons`.
+
+Sur un appel : `description`, `duration` (4 000 ms par défaut), `dismissible`,
+`icon`, `action`, `cancel`, `id`, `toasterId`, `unstyled`, `classNames`,
+`onDismiss`, `onAutoClose`.

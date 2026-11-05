@@ -13,10 +13,10 @@ saving the one its members' prices show. And what people ask about an
 interface reaches them, while a pull request's review still goes to the code
 review.
 
-The designer (design-review 2.0.0) works by a design engineering method
-(MIT, provenance in third_party/NOTICES.md): its core in its
-instructions, word for word; every guide of the library named, read with
-read_method before it judges; how they apply here said — no file written,
+The designer (design-review 3.4.0) works by LEKA's own design method:
+its core, the principles of its library, in its instructions, word for
+word; every guide of the library named, read with read_method before it
+judges; how they apply here said — no file written,
 no command, nothing claimed seen; its deliverable the method's: the findings
 before, after and why, the worst case, the phone, what should move, the
 plans, and on a pull request its comments on the diff's lines. The motion
@@ -34,7 +34,7 @@ from leka.capabilities import Availability, Kind, Lifecycle, RouteQuery, route
 from leka.capabilities.registry import catalogue
 from leka.capabilities.skills import agent_skill_tools
 from leka.core.config import settings
-from tests import notices
+from tests.leka_voice import carries_a_credit
 
 FRONTEND = {
     "ui-quality-review": "standard",
@@ -48,8 +48,8 @@ LIBRARY = "_library/design"
 VERSIONS = {
     "ui-quality-review": "2.0.0",
     "accessibility-audit": "1.1.0",
-    "design-review": "3.3.0",
-    "motion-review": "2.0.0",
+    "design-review": "3.4.0",
+    "motion-review": "2.1.0",
 }
 
 
@@ -86,7 +86,7 @@ def test_each_is_registered_read_only_reading_the_code_it_cites() -> None:
         assert "Zéro constat" in said, key
         # It speaks as LEKA: it names no source of its method, and its
         # deliverable never will (2026-10-18).
-        assert not notices.names_a_source(said), key
+        assert not carries_a_credit(said), key
 
 
 def test_the_accessibility_audit_cites_its_criteria_and_never_declares_conformity() -> None:
