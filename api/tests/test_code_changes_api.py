@@ -1514,12 +1514,13 @@ def test_checks_say_one_word_from_each_check_s_latest_run() -> None:
         {"id": 3, "name": "main", "status": "completed", "conclusion": "skipped"},
     ]
     said = checks_of(failed, [])
-    assert (said["state"], said["failed"], said["failed_url"], said["passed"]) == (
-        "failure",
-        ["api"],
-        "u",
-        2,
-    )
+    assert (
+        said["state"],
+        said["failed"],
+        said["failed_url"],
+        said["passed"],
+        said["skipped"],
+    ) == ("failure", ["api"], "u", 1, 1)
     # Run again, green: the latest run is the one.
     again = [*failed, {"id": 4, "name": "api", "status": "completed", "conclusion": "success"}]
     assert checks_of(again, [])["state"] == "success"

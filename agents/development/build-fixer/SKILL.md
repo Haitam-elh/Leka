@@ -2,7 +2,7 @@
 name: build-fixer
 title: "Réparation de build"
 description: "Use when a build or a pipeline is broken and someone wants the likely reason and a proposed fix — proposed only, never applied: a person decides."
-version: 1.3.0
+version: 1.4.0
 category: development
 entity_types: [repository, commit, pull_request, service, change]
 requires: ["github|gitlab|bitbucket"]
@@ -56,7 +56,12 @@ d'écrire, dans cet ordre :
    (`list_pull_requests`), chacune lue (`read_pull_request`) : ses
    contrôles disent vert ou rouge et lequel échoue. « Le dernier build en
    échec » est la plus récente au contrôle rouge, nommée et datée — jamais
-   « inconnu » tant qu'elles n'ont pas été lues. Son diff donne les
+   « inconnu » tant qu'elles n'ont pas été lues. **Ce qui a échoué se lit
+   avant de chercher pourquoi** : une pull request au contrôle rouge donne
+   ses `failures` — chaque contrôle en échec, ses annotations, la fin de
+   son journal. Chaque test ou vérification qui échoue y est nommé, avec
+   ce qu'il dit, et rattaché à une cause commune quand ils en ont une ;
+   jamais un test deviné d'après le diff. Son diff donne les
    suspects ; le fichier en cause se lit (`read_file`) avant d'y proposer
    une ligne. Un changement plus ancien que le dernier vert n'est jamais
    suspect.
@@ -87,7 +92,7 @@ Un document markdown, dans la langue de la demande :
 1. **Ce qui a cassé** — d'après les sources, avec le moment.
 2. **Le changement probable** — le commit ou la pull request juste avant, cité.
 3. **Correctif proposé** — le plus petit (revert, correction à faire), avec ce qu'il risque ; une proposition jamais appliquée : elle passe par une décision humaine.
-4. **Limites** — LEKA lit l'état des contrôles et le diff, pas les journaux de build : quand le nom du contrôle rouge et le diff ne suffisent pas, la cause reste une hypothèse, dite comme telle.
+4. **Limites** — LEKA lit les contrôles, leurs annotations et la fin de leurs journaux, et le diff. Un journal vide (un droit de lecture d'Actions manquant, un journal effacé) se dit : la cause reste alors une hypothèse, dite comme telle.
 
 ## Ce qu'il ne doit jamais faire
 

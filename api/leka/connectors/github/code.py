@@ -181,8 +181,14 @@ def checks_of(runs: Sequence[dict[str, Any]], statuses: Sequence[dict[str, Any]]
     for name, run in latest.items():
         if run.get("status") != "completed":
             state = "pending"
+        elif run.get("conclusion") in FAILED:
+            state = "failure"
+        # A job its workflow did not run is no pass (2026-11-06: « 3 passed
+        # of 4 » said of one passed and two skipped).
+        elif run.get("conclusion") in ("skipped", "neutral"):
+            state = "skipped"
         else:
-            state = "failure" if run.get("conclusion") in FAILED else "success"
+            state = "success"
         seen.append((name, state, str(run.get("html_url") or "")))
     for status in statuses:
         said = str(status.get("state") or "pending")
@@ -196,6 +202,7 @@ def checks_of(runs: Sequence[dict[str, Any]], statuses: Sequence[dict[str, Any]]
         "total": len(seen),
         "passed": sum(1 for _, state, _ in seen if state == "success"),
         "pending": pending,
+        "skipped": sum(1 for _, state, _ in seen if state == "skipped"),
         "failed": failed[:10],
         "failed_url": next((url for name, state, url in seen if state == "failure" and url), None),
     }
@@ -512,10 +519,15 @@ class GitHubCode:
                     "truncated": len(kept) < len(patch),
                 }
             )
+        # Its CI in red, what failed as GitHub says it: each failed check, its
+        # annotations, the end of its log (2026-11-06: the build fixer read
+        # only « api failed » and guessed which test, 7 of 8 unseen).
+        failures = await self.failures(repository, sha) if checks and checks.get("failed") else None
         return {
             # Its CI first: what a reader cut short still has (2026-11-01: a
             # 31-file pull request, cut at its diffs, read with no CI).
             "checks": checks,
+            **({"failures": failures} if failures else {}),
             **_pull_brief(meta),
             # Every file named before any diff: what a reader cut short still has.
             "paths": [file["path"] for file in files],
