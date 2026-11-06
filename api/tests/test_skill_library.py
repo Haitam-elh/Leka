@@ -67,6 +67,7 @@ from leka.intelligence.library import (
     judge_radius,
     judge_repository,
     judge_scope,
+    known_names,
     recovery_tier,
     severity_of,
 )
@@ -687,6 +688,21 @@ def test_a_change_reviewed() -> None:
         }
     )
     assert judge_change(quiet) == []
+
+
+def test_a_person_known_only_by_an_id_is_not_named() -> None:
+    # 2026-11-06, the onboarding tour in prod: two maintainers shown as
+    # « [a9caec70-…] » — commit authors the graph never matched to a name.
+    said = known_names(
+        [
+            "Mohamed Bilal EL HALIMI",
+            "a9caec70-8036-5f26-ae0b-961a7ff77997",
+            "entity:dca894b3-fe54-4897-8d30-aa48cc3c02de",
+            " ",
+            "Payments",
+        ]
+    )
+    assert said == ["Mohamed Bilal EL HALIMI", "Payments"]
 
 
 def test_a_repository_profiled() -> None:
