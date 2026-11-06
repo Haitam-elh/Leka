@@ -11,6 +11,7 @@ from leka.platform.branding import MAX_LOGO_BYTES, LogoRefusedError, drop_logo, 
 from leka.platform.extraction import DOCX, MOST_ALL, PPTX, XLSX, Extracted, ocr_ready, text_of
 from leka.platform.health import check_backing_services
 from leka.platform.models import (
+    ORGANISATION_SIZES,
     Invitation,
     InvitationStatus,
     Membership,
@@ -82,6 +83,7 @@ __all__ = [
     "INVITATION_LIFETIME",
     "MAX_LOGO_BYTES",
     "MOST_ALL",
+    "ORGANISATION_SIZES",
     "PPTX",
     "XLSX",
     "AccountClosure",

@@ -41,8 +41,12 @@ class AdminRole(enum.StrEnum):
 class AdminPermission(enum.StrEnum):
     DASHBOARD_READ = "dashboard:read"
     ORGANISATIONS_READ = "organisations:read"
-    # Suspend and reactivate an organisation.
+    # Suspend and reactivate an organisation; change its name, country and
+    # size, as LEKA's team keeps them (LEKA-549).
     ORGANISATIONS_WRITE = "organisations:write"
+    # Write an internal note about an organisation (LEKA-549): LEKA's team's
+    # alone, never shown to the customer.
+    ORGANISATIONS_NOTES = "organisations:notes"
     USERS_READ = "users:read"
     INTENTIONS_READ = "intentions:read"
     # What a customer asked, in their words, and what agents delivered.
@@ -70,6 +74,7 @@ PERMISSION_INFO: dict[AdminPermission, tuple[str, Level]] = {
     P.DASHBOARD_READ: ("dashboard", "read"),
     P.ORGANISATIONS_READ: ("organisations", "read"),
     P.ORGANISATIONS_WRITE: ("organisations", "sensitive"),
+    P.ORGANISATIONS_NOTES: ("organisations", "write"),
     P.USERS_READ: ("users", "read"),
     P.INTENTIONS_READ: ("intentions", "read"),
     P.INTENTIONS_CONTENT: ("intentions", "sensitive"),
@@ -87,7 +92,15 @@ PERMISSION_INFO: dict[AdminPermission, tuple[str, Level]] = {
 SUPER_ADMIN_ONLY = frozenset({P.ADMINS_MANAGE, P.AUDIT_READ})
 GRANTABLE = frozenset(AdminPermission) - SUPER_ADMIN_ONLY
 
-_COMMON = frozenset({P.DASHBOARD_READ, P.ORGANISATIONS_READ, P.USERS_READ, P.ACTIVITY_READ})
+_COMMON = frozenset(
+    {
+        P.DASHBOARD_READ,
+        P.ORGANISATIONS_READ,
+        P.ORGANISATIONS_NOTES,
+        P.USERS_READ,
+        P.ACTIVITY_READ,
+    }
+)
 
 ROLE_PERMISSIONS: dict[AdminRole, frozenset[AdminPermission]] = {
     AdminRole.SUPER_ADMIN: frozenset(AdminPermission),

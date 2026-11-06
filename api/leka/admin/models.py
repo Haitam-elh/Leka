@@ -46,6 +46,10 @@ never what anyone wrote.
 `activity_watermarks`: how far each source of the activity journal has been
 read.
 
+`admin_notes` (LEKA-549): what LEKA's team writes down about an
+organisation, for each other, never shown to the customer: who, when, what.
+Kept as written, never changed; deleted with the organisation.
+
 `admin_daily_figures` (LEKA-548): what LEKA brings in each month, as it
 stood each day (the MRR, its subscriptions, those whose price is not known),
 written by the activity sweep, so that its evolution can be drawn: a price
@@ -67,6 +71,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -225,6 +230,25 @@ class ActivityWatermark(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     source: Mapped[str] = mapped_column(String(40), nullable=False)
     read_to: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class AdminNote(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    __tablename__ = "admin_notes"
+    __table_args__ = (
+        Index("ix_admin_notes_workspace_created", "for_workspace_id", "created_at"),
+        CheckConstraint("char_length(body) BETWEEN 1 AND 4000", name="body"),
+    )
+
+    for_workspace_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    # Who wrote it: kept as an address too, so a note still says who once
+    # that admin's account is gone.
+    admin_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("admin_accounts.id", ondelete="SET NULL"), nullable=True
+    )
+    admin_email: Mapped[str] = mapped_column(String(320), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
 
 
 class AdminDailyFigure(Base, UUIDPrimaryKeyMixin, TimestampMixin):

@@ -117,8 +117,11 @@ class WorkspaceService:
         name: str | None = None,
         settings: dict[str, object] | None = None,
         default_language: str | None = None,
+        country: str | None = None,
+        size: str | None = None,
     ) -> Workspace:
-        """Update a workspace's name or settings.
+        """Update a workspace's name or settings; its country and size, as
+        LEKA's team keeps them (LEKA-549).
 
         The slug is NOT regenerated when the name changes: it may already be
         in links, bookmarks and other people's documentation.
@@ -129,6 +132,10 @@ class WorkspaceService:
             workspace.settings = {**workspace.settings, **settings}
         if default_language is not None:
             workspace.default_language = default_language
+        if country is not None:
+            workspace.country = country
+        if size is not None:
+            workspace.size = size
         return workspace
 
     async def suspend(self, workspace: Workspace) -> Workspace:

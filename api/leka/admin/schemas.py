@@ -13,7 +13,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from leka.admin.access import AdminPermission, AdminRole
 
@@ -114,6 +114,15 @@ class OrganisationRow(BaseModel):
     plan: str = Field(description="Its plan now: the last one it was put on, Free if none.")
     created_at: datetime
     owner: PersonRef | None = Field(description="Its first owner: the address LEKA writes to.")
+    country: str | None = Field(
+        description="ISO 3166-1 alpha-2, as LEKA's team keeps it (LEKA-549). Null: not known."
+    )
+    size: str | None = Field(
+        description="How many people work there, as LEKA's team keeps it. Null: not known."
+    )
+    size_declared: str | None = Field(
+        description="The size its first owner gave when signing up: theirs, apart from `size`."
+    )
     members: int
     intentions: int
     last_activity_at: datetime | None = Field(
@@ -153,6 +162,9 @@ class OrganisationCounts(BaseModel):
     sources: int
     sources_in_error: int
     active_users_30d: int
+    analyses_completed: int = Field(description="Ended with a result, whole or in part.")
+    analyses_failed: int
+    alerts_open: int = Field(description="Alerts on its environment still open (monitoring).")
 
 
 class OrganisationDetail(OrganisationRow):
@@ -379,6 +391,69 @@ class CreditGrant(ActionReason):
     credits: int = Field(gt=0, le=1_000_000, description="Credits added to this month.")
 
 
+class OrganisationUpdate(ActionReason):
+    """What LEKA's team may change about an organisation (LEKA-549): what is
+    left out stays as it is."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    country: str | None = Field(
+        default=None, pattern=r"^[A-Z]{2}$", description="ISO 3166-1 alpha-2."
+    )
+    size: Literal["1-10", "11-50", "51-200", "201-1000", "1000+"] | None = None
+
+    @model_validator(mode="after")
+    def _something(self) -> OrganisationUpdate:
+        if self.name is None and self.country is None and self.size is None:
+            raise ValueError("say what changes: its name, country or size")
+        return self
+
+
+class NoteCreate(BaseModel):
+    body: str = Field(min_length=1, max_length=4000)
+
+    @field_validator("body")
+    @classmethod
+    def _said(cls, body: str) -> str:
+        if not body.strip():
+            raise ValueError("a note says something")
+        return body.strip()
+
+
+class NoteRow(BaseModel):
+    id: uuid.UUID
+    at: datetime
+    admin_email: str = Field(description="Who wrote it, kept even once their account is gone.")
+    admin_name: str | None
+    body: str
+
+
+class OrganisationHistoryRow(BaseModel):
+    """What LEKA's team did to an organisation (LEKA-549): its changes, never
+    what it read."""
+
+    id: uuid.UUID
+    at: datetime
+    action: str
+    admin_email: str | None
+    detail: dict[str, object] = Field(description="Its reason, credits, what changed.")
+
+
+class AlertRow(BaseModel):
+    """An alert on an organisation's environment (LEKA-442), as monitoring keeps it."""
+
+    id: uuid.UUID
+    subject_type: str
+    subject_name: str
+    kind: str
+    severity: str
+    certainty: str
+    status: str
+    opened_at: datetime
+    last_seen_at: datetime
+    resolved_at: datetime | None
+    acknowledged_at: datetime | None
+
+
 class OrganisationAction(BaseModel):
     organisation_id: uuid.UUID
     action: str
@@ -388,6 +463,9 @@ class OrganisationAction(BaseModel):
         description="True: this Idempotency-Key was already answered; nothing was done again."
     )
     credits: CreditsState | None = None
+    changed: dict[str, list[object]] | None = Field(
+        default=None, description="What an update changed, as [before, after]."
+    )
 
 
 class ActivityRow(BaseModel):
