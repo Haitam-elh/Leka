@@ -20,10 +20,13 @@ from typing import Annotated
 
 import structlog
 from fastapi import Depends, FastAPI, HTTPException, Request, status
+from sqlalchemy import text, update
+from sqlalchemy.exc import DBAPIError
+from sqlalchemy.orm.attributes import set_committed_value
 
 from leka.core.config import settings
 from leka.core.security import hash_token
-from leka.db import DatabaseSession
+from leka.db import DatabaseSession, session_factory
 from leka.identity.models import Session
 from leka.identity.repository import SessionRepository
 from leka.platform import (
@@ -36,6 +39,30 @@ from leka.platform import (
 logger = structlog.get_logger(__name__)
 
 SessionDep = DatabaseSession
+
+# The idle clock, refreshed once a minute at most and in a transaction of its
+# own, committed at once. Written in the request's own transaction, the row
+# stayed locked until the request ended: on 2026-11-06 one slow search held
+# it for minutes, every other request of the same person queued behind it,
+# and the API ran out of connections (503 everywhere).
+TOUCH_EVERY = timedelta(minutes=1)
+
+
+async def touch(session: Session, now: datetime) -> None:
+    """`last_seen_at` moved to now, never waiting on a lock: a row someone
+    else holds is left for the next request."""
+    try:
+        async with session_factory() as own:
+            await own.execute(text("SET LOCAL lock_timeout = '1s'"))
+            await own.execute(
+                update(Session).where(Session.id == session.id).values(last_seen_at=now)
+            )
+            await own.commit()
+    except DBAPIError:
+        logger.warning("session_touch_skipped", session_id=str(session.id))
+        return
+    # Known as written, so the request's transaction never writes it again.
+    set_committed_value(session, "last_seen_at", now)
 
 
 def read_session_token(request: Request) -> str | None:
@@ -74,7 +101,8 @@ async def load_session(request: Request, db: SessionDep) -> Session | None:
         await sessions.revoke(session)
         return None
 
-    session.last_seen_at = now
+    if now - session.last_seen_at >= TOUCH_EVERY:
+        await touch(session, now)
     return session
 
 

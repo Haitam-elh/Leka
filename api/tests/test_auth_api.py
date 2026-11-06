@@ -965,3 +965,72 @@ async def test_the_last_owner_of_a_shared_workspace_cannot_close_the_account(
                 text("SELECT status FROM workspaces WHERE name = :name"), {"name": name}
             )
     assert status.scalar_one() == "active"
+
+
+# ── The idle clock never locks a request behind another (2026-11-06) ─────────
+
+
+async def _last_seen(email: str) -> datetime:
+    with system_scope():
+        async with session_factory() as db:
+            seen = await db.scalar(
+                text(
+                    "SELECT s.last_seen_at FROM sessions s JOIN users u ON u.id = s.user_id"
+                    " WHERE u.email = :email ORDER BY s.created_at DESC LIMIT 1"
+                ),
+                {"email": email},
+            )
+    assert isinstance(seen, datetime)
+    return seen
+
+
+async def _seen_ago(email: str, ago: timedelta) -> None:
+    with system_scope():
+        async with session_factory() as db:
+            await db.execute(
+                text(
+                    "UPDATE sessions SET last_seen_at = :at"
+                    " WHERE user_id = (SELECT id FROM users WHERE email = :email)"
+                ),
+                {"at": datetime.now(UTC) - ago, "email": email},
+            )
+            await db.commit()
+
+
+async def test_the_idle_clock_moves_once_a_minute_at_most(
+    client: AsyncClient, mailbox: CapturingEmailSender
+) -> None:
+    await _register_and_verify(client, mailbox, "nora@acme.example")
+    await _sign_in(client, "nora@acme.example")
+
+    await _seen_ago("nora@acme.example", timedelta(seconds=20))
+    before = await _last_seen("nora@acme.example")
+    assert (await client.get(f"{API}/me")).status_code == 200
+    assert await _last_seen("nora@acme.example") == before
+
+    await _seen_ago("nora@acme.example", timedelta(minutes=5))
+    assert (await client.get(f"{API}/me")).status_code == 200
+    assert await _last_seen("nora@acme.example") > before
+
+
+async def test_a_locked_session_row_never_holds_a_request(
+    client: AsyncClient, mailbox: CapturingEmailSender
+) -> None:
+    """One slow request held the row; every other one of the same person
+    queued behind it until the API had no connection left."""
+    await _register_and_verify(client, mailbox, "nora@acme.example")
+    await _sign_in(client, "nora@acme.example")
+    await _seen_ago("nora@acme.example", timedelta(minutes=5))
+
+    with system_scope():
+        async with session_factory() as holder:
+            await holder.execute(
+                text(
+                    "SELECT 1 FROM sessions WHERE user_id ="
+                    " (SELECT id FROM users WHERE email = 'nora@acme.example') FOR UPDATE"
+                )
+            )
+            response = await asyncio.wait_for(client.get(f"{API}/me"), timeout=10)
+            await holder.rollback()
+
+    assert response.status_code == 200
