@@ -51,7 +51,7 @@ def form(data: Mapping[str, Any], prefix: str = "") -> Form:
         elif isinstance(value, list | tuple):
             for index, item in enumerate(value):
                 if isinstance(item, Mapping):
-                    said.extend(form(item, f"{name}[{index}]"))
+                    said.extend(form(item, f"{name}[]"))
                 else:
                     said.append((f"{name}[{index}]", _word(item)))
         else:
