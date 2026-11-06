@@ -991,4 +991,5 @@ def test_a_question_about_the_code_is_not_answered_without_reading_it() -> None:
     the agent that reads it."""
     said = " ".join(RULES.split())
     assert "Where or how something is done in the code" in said
-    assert "needs the agent that reads the code" in said
+    assert "needs codebase-explorer" in said
+    assert "never code-change" in said
