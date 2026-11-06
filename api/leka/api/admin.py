@@ -32,6 +32,7 @@ from leka.admin import (
     AdminForgotPassword,
     AdminIntentionDetail,
     AdminIntentionRow,
+    AdminInvitationRow,
     AdminInvite,
     AdminMe,
     AdminNote,
@@ -75,6 +76,7 @@ from leka.admin import (
     SubscriptionRow,
     UserDetail,
     UserRow,
+    UserStatus,
     activity_query,
     activity_row,
     add_credits,
@@ -96,6 +98,8 @@ from leka.admin import (
     intention_detail,
     intention_rows,
     intentions_query,
+    invitation_rows,
+    invitations_query,
     note_rows,
     notes_query,
     once,
@@ -133,7 +137,7 @@ from leka.db import DatabaseSession, SortableField
 from leka.identity import DeferredEmailSender, EmailSender, User, build_email_sender
 from leka.intentions import Intention
 from leka.monitoring import MonitoringAlert
-from leka.platform import Workspace
+from leka.platform import Invitation, Workspace
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -383,6 +387,9 @@ SOURCE_SORTS = _sorts(
 )
 AUDIT_SORTS = _sorts(("at", AdminAuditEvent.at, "ix_admin_audit_events_at"), default="at")
 ACTIVITY_SORTS = _sorts(("at", ActivityEvent.at, "ix_activity_events_kind_at"), default="at")
+INVITATION_SORTS = _sorts(
+    ("created_at", Invitation.created_at, "a few per organisation"), default="created_at"
+)
 NOTE_SORTS = _sorts(
     ("created_at", AdminNote.created_at, "ix_admin_notes_workspace_created"), default="created_at"
 )
@@ -580,7 +587,7 @@ async def list_organisation_notes(
         raise _not_found("organisation")
     found = await serve_page(
         session,
-        notes_query(organisation_id),
+        notes_query(organisation_id=organisation_id),
         request=page,
         catalogue=NOTE_SORTS,
         id_column=AdminNote.id,
@@ -645,18 +652,42 @@ async def list_users(
     page: PageParams,
     q: Annotated[str | None, Query(max_length=200, description="Email, name or id.")] = None,
     organisation_id: uuid.UUID | None = None,
+    organisation: Annotated[
+        str | None, Query(max_length=200, description="An organisation's name or slug.")
+    ] = None,
+    role: Annotated[
+        Literal["owner", "admin", "member"] | None,
+        Query(description="Their role in an organisation (the one asked, if any)."),
+    ] = None,
     verified: bool | None = None,
     created_from: datetime | None = None,
     created_to: datetime | None = None,
+    user_status: Annotated[UserStatus | None, Query(alias="status")] = None,
+    active_from: Annotated[
+        datetime | None, Query(description="Their last intention, run or source from then on.")
+    ] = None,
+    active_to: Annotated[datetime | None, Query(description="…before then.")] = None,
+    never_active: Annotated[
+        bool, Query(description="No intention, run nor source connected, ever.")
+    ] = False,
 ) -> PageEnvelope[UserRow]:
+    """Every person (LEKA-550): their organisations and roles, intentions,
+    status and level of activity (docs/admin/api.md § 5). Someone invited
+    with no account yet is in GET /admin/invitations."""
     found = await serve_page(
         session,
         users_query(
             q=q,
             organisation_id=organisation_id,
+            organisation=organisation,
+            role=role,
             verified=verified,
             created_from=created_from,
             created_to=created_to,
+            status=user_status,
+            active_from=active_from,
+            active_to=active_to,
+            never_active=never_active,
         ),
         request=page,
         catalogue=USER_SORTS,
@@ -677,6 +708,78 @@ async def get_user(
         raise _not_found("person")
     _viewed(session, request, principal, "user", user_id)
     return found
+
+
+@router.get(
+    "/invitations",
+    response_model=PageEnvelope[AdminInvitationRow],
+    summary="Those invited, not yet in",
+)
+async def list_invitations(
+    session: SessionDep,
+    _: Annotated[AdminPrincipal, Depends(require_admin(P.USERS_READ))],
+    page: PageParams,
+    q: Annotated[str | None, Query(max_length=200, description="Their email.")] = None,
+    organisation_id: uuid.UUID | None = None,
+    include_expired: bool = False,
+) -> PageEnvelope[AdminInvitationRow]:
+    """The invitations neither accepted nor revoked (LEKA-550): those
+    « invités », the latest first; expired ones only when asked."""
+    found = await serve_page(
+        session,
+        invitations_query(q=q, organisation_id=organisation_id, include_expired=include_expired),
+        request=page,
+        catalogue=INVITATION_SORTS,
+        id_column=Invitation.id,
+    )
+    return PageEnvelope(
+        data=await invitation_rows(session, found.items), next_cursor=found.next_cursor
+    )
+
+
+@router.get(
+    "/users/{user_id}/notes",
+    response_model=PageEnvelope[NoteRow],
+    summary="LEKA's internal notes about a person",
+)
+async def list_user_notes(
+    user_id: uuid.UUID,
+    session: SessionDep,
+    _: Annotated[AdminPrincipal, Depends(require_admin(P.USERS_READ))],
+    page: PageParams,
+) -> PageEnvelope[NoteRow]:
+    """What LEKA's team wrote down about them, the latest first (LEKA-550)."""
+    if await session.get(User, user_id) is None:
+        raise _not_found("person")
+    found = await serve_page(
+        session,
+        notes_query(user_id=user_id),
+        request=page,
+        catalogue=NOTE_SORTS,
+        id_column=AdminNote.id,
+    )
+    return PageEnvelope(data=await note_rows(session, found.items), next_cursor=found.next_cursor)
+
+
+@router.post(
+    "/users/{user_id}/notes",
+    response_model=NoteRow,
+    status_code=status.HTTP_201_CREATED,
+    summary="Write an internal note about a person",
+)
+async def add_user_note(
+    user_id: uuid.UUID,
+    payload: NoteCreate,
+    request: Request,
+    session: SessionDep,
+    principal: Annotated[AdminPrincipal, Depends(require_admin(P.USERS_NOTES))],
+) -> NoteRow:
+    """For LEKA's team, never shown to them (LEKA-550). The admin trail says
+    one was written, never what it says."""
+    try:
+        return await add_note(session, principal, payload, user_id=user_id, route=route_of(request))
+    except ActionError as error:
+        raise _not_found("person") from error
 
 
 @router.get(
@@ -759,6 +862,9 @@ async def list_agents(
     since: datetime | None = None,
     until: datetime | None = None,
     organisation_id: uuid.UUID | None = None,
+    user_id: Annotated[
+        uuid.UUID | None, Query(description="The runs a person asked (LEKA-550).")
+    ] = None,
     agent: str | None = None,
     model: str | None = None,
 ) -> PageEnvelope[AgentStat]:
@@ -769,6 +875,7 @@ async def list_agents(
             since=since,
             until=until,
             organisation_id=organisation_id,
+            user_id=user_id,
             agent=agent,
             model=model,
         )
@@ -1184,7 +1291,9 @@ async def add_organisation_note(
     """For LEKA's team, never shown to the customer (LEKA-549). The admin
     trail says one was written, never what it says."""
     try:
-        return await add_note(session, principal, organisation_id, payload, route=route_of(request))
+        return await add_note(
+            session, principal, payload, organisation_id=organisation_id, route=route_of(request)
+        )
     except ActionError as error:
         raise _not_found("organisation") from error
 

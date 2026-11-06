@@ -48,6 +48,8 @@ class AdminPermission(enum.StrEnum):
     # alone, never shown to the customer.
     ORGANISATIONS_NOTES = "organisations:notes"
     USERS_READ = "users:read"
+    # Write an internal note about a person (LEKA-550), as about an organisation.
+    USERS_NOTES = "users:notes"
     INTENTIONS_READ = "intentions:read"
     # What a customer asked, in their words, and what agents delivered.
     INTENTIONS_CONTENT = "intentions:content"
@@ -76,6 +78,7 @@ PERMISSION_INFO: dict[AdminPermission, tuple[str, Level]] = {
     P.ORGANISATIONS_WRITE: ("organisations", "sensitive"),
     P.ORGANISATIONS_NOTES: ("organisations", "write"),
     P.USERS_READ: ("users", "read"),
+    P.USERS_NOTES: ("users", "write"),
     P.INTENTIONS_READ: ("intentions", "read"),
     P.INTENTIONS_CONTENT: ("intentions", "sensitive"),
     P.AGENTS_READ: ("agents", "read"),
@@ -98,6 +101,7 @@ _COMMON = frozenset(
         P.ORGANISATIONS_READ,
         P.ORGANISATIONS_NOTES,
         P.USERS_READ,
+        P.USERS_NOTES,
         P.ACTIVITY_READ,
     }
 )

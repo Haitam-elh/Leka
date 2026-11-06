@@ -90,8 +90,13 @@ AdminIntentionStatus = Literal["pending", "running", "completed", "failed", "can
 
 # A person, as LEKA ADMIN classifies them (LEKA-550), from what they did —
 # never from a sign-in alone: `active` is an intention, a run or a source in
-# the last 30 days.
-UserStatus = Literal["unverified", "new", "active", "inactive"]
+# the last 30 days; `suspended`, every organisation of theirs suspended. The
+# rules, in their order: docs/admin/api.md § 5. Someone invited who has no
+# account yet is an invitation (AdminInvitationRow), not a person.
+UserStatus = Literal["suspended", "unverified", "new", "active", "inactive"]
+# How much they use LEKA (LEKA-550): from the days they were seen in the
+# product and what they did in the last 30 days, both said beside it.
+ActivityLevel = Literal["none", "low", "medium", "high"]
 
 
 class OrganisationRef(BaseModel):
@@ -200,6 +205,7 @@ class OrganisationMembers(BaseModel):
 
 class AdminMembership(BaseModel):
     organisation: OrganisationRef
+    organisation_status: str = Field(description="active, suspended or pending_deletion.")
     role: str
     since: datetime
 
@@ -214,6 +220,23 @@ class UserRow(BaseModel):
     organisations: list[AdminMembership]
     intentions: int
     status: UserStatus
+    last_active_at: datetime | None = Field(
+        description="Their last intention, run or source connected. Null: none."
+    )
+    active_days_30d: int = Field(description="Days they were seen in the product, in 30.")
+    actions_30d: int = Field(description="Intentions asked, runs, sources connected, in 30 days.")
+    activity_level: ActivityLevel
+
+
+class UserAccess(BaseModel):
+    """What a person may do in one organisation (LEKA-550), as LEKA decides
+    it on each request (governance's subject): their seat's role, a role of
+    the organisation's own on it, and the permissions that leaves them."""
+
+    organisation: OrganisationRef
+    role: str
+    custom_role: str | None
+    permissions: list[str]
 
 
 class UserDetail(UserRow):
@@ -224,8 +247,12 @@ class UserDetail(UserRow):
     region: str | None
     agent_runs: int
     credits_used_30d: float | None = Field(description="Null: no cost LEKA could measure.")
-    last_active_at: datetime | None
     sign_ins: list[datetime] = Field(description="The latest sign-ins, the latest first.")
+    access: list[UserAccess] = Field(
+        description="In each organisation: their role, a role of its own, what they may do."
+    )
+    analyses_completed: int = Field(description="Analyses they asked that ended with a result.")
+    agents_used: list[str] = Field(description="Every agent they ran, by key.")
 
 
 class AdminIntentionRow(BaseModel):
@@ -575,3 +602,16 @@ class AdminRolesRead(BaseModel):
 
 class AdminRolePermissionsUpdate(BaseModel):
     permissions: list[AdminPermission]
+
+
+class AdminInvitationRow(BaseModel):
+    """Someone invited to an organisation (LEKA-550): « invité » until they accept."""
+
+    id: uuid.UUID
+    email: str
+    organisation: OrganisationRef
+    role: str
+    invited_at: datetime
+    expires_at: datetime
+    expired: bool
+    has_account: bool = Field(description="True: the address already has a LEKA account.")

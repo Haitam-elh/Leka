@@ -29,11 +29,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.admin.models import ActivityEvent, AdminAccount, AdminAuditEvent, AdminNote
 from leka.admin.schemas import (
+    ActivityLevel,
     ActivityRow,
     AdminIntentionContent,
     AdminIntentionDetail,
     AdminIntentionRow,
     AdminIntentionStatus,
+    AdminInvitationRow,
     AdminRunRow,
     AdminTimelineEntry,
     AgentCost,
@@ -56,6 +58,7 @@ from leka.admin.schemas import (
     SourceRow,
     StripeEventRow,
     SubscriptionRow,
+    UserAccess,
     UserDetail,
     UserRow,
     UserStatus,
@@ -68,12 +71,19 @@ from leka.capabilities import AgentRun, ModelCall
 from leka.connectors import HealthStatus, Source, SourceStatus
 from leka.core.config import settings
 from leka.db import workspace_scope
-from leka.governance import WorkspacePlan, plan_of
+from leka.governance import WorkspacePlan, plan_of, subject_of
 from leka.identity import User
 from leka.intentions import Intention, IntentionAnalysis, IntentionDecision, IntentionEvent
 from leka.metering import CreditsRead, UsageRecord, credits_now
 from leka.monitoring import MonitoringAlert
-from leka.platform import Invitation, InvitationStatus, Membership, Role, Workspace
+from leka.platform import (
+    Invitation,
+    InvitationStatus,
+    Membership,
+    Role,
+    Workspace,
+    WorkspaceStatus,
+)
 
 FREE = "free"
 
@@ -97,6 +107,8 @@ FINAL = {"completed", "failed", "rejected", "cancelled"}
 # signing in.
 MEANINGFUL = ("intention.created", "agent_run.succeeded", "agent_run.failed", "source.connected")
 ACTIVE_WINDOW = timedelta(days=30)
+# An analysis that ended with a result, whole or in part (LEKA-548's rule).
+ANALYSED = ("complete", "partial", "inconclusive")
 NEW_WINDOW = timedelta(days=7)
 DELIVERABLE_CHARACTERS = 4000
 
@@ -417,7 +429,7 @@ async def organisation_detail(
                 session,
                 IntentionAnalysis.workspace_id,
                 ids,
-                IntentionAnalysis.status.in_(("complete", "partial", "inconclusive")),
+                IntentionAnalysis.status.in_(ANALYSED),
             )
         ).get(workspace_id, 0),
         analyses_failed=(
@@ -503,14 +515,66 @@ async def organisation_members(
 # ── People ───────────────────────────────────────────────────────────────────
 
 
+def _last_meaningful_at() -> Any:
+    """Their last intention, run or source connected (the activity journal)."""
+    return (
+        select(func.max(ActivityEvent.at))
+        .where(ActivityEvent.user_id == User.id, ActivityEvent.kind.in_(MEANINGFUL))
+        .correlate(User)
+        .scalar_subquery()
+    )
+
+
+def _suspended() -> Any:
+    """In at least one organisation, and none of theirs still active."""
+    seats = select(Membership.user_id).where(Membership.user_id == User.id).correlate(User)
+    working = (
+        select(Membership.user_id)
+        .join(Workspace, Workspace.id == Membership.workspace_id)
+        .where(Membership.user_id == User.id, Workspace.status == WorkspaceStatus.ACTIVE)
+        .correlate(User)
+    )
+    return seats.exists() & ~working.exists()
+
+
+def _status_is(status: UserStatus, now: datetime) -> Any:
+    """status_of, as SQL: the same rules in the same order."""
+    suspended = _suspended()
+    if status == "suspended":
+        return suspended
+    unverified = User.email_verified_at.is_(None)
+    if status == "unverified":
+        return ~suspended & unverified
+    new = User.created_at >= now - NEW_WINDOW
+    if status == "new":
+        return ~suspended & ~unverified & new
+    last = _last_meaningful_at()
+    active = last >= now - ACTIVE_WINDOW
+    if status == "active":
+        return ~suspended & ~unverified & ~new & active
+    return ~suspended & ~unverified & ~new & (last.is_(None) | (last < now - ACTIVE_WINDOW))
+
+
 def users_query(
     *,
     q: str | None = None,
     organisation_id: uuid.UUID | None = None,
+    organisation: str | None = None,
+    role: str | None = None,
     verified: bool | None = None,
     created_from: datetime | None = None,
     created_to: datetime | None = None,
+    status: UserStatus | None = None,
+    active_from: datetime | None = None,
+    active_to: datetime | None = None,
+    never_active: bool = False,
+    now: datetime | None = None,
 ) -> Select[tuple[User]]:
+    """Every person, or those that match: their email, name or id; an
+    organisation (by id, or by name or slug) and their role in it; their
+    sign-up; their status (status_of's rules); their last intention, run or
+    source connected, between two dates or never."""
+    moment = now or datetime.now(UTC)
     statement = select(User)
     if q and q.strip():
         as_id = _uuid(q)
@@ -525,12 +589,19 @@ def users_query(
                     User.last_name.ilike(pattern),
                 )
             )
-    if organisation_id:
-        statement = statement.where(
-            User.id.in_(
-                select(Membership.user_id).where(Membership.workspace_id == organisation_id)
+    if organisation_id or (organisation and organisation.strip()) or role:
+        # One seat that says all of it: in that organisation, with that role.
+        seats = select(Membership.user_id)
+        if organisation_id:
+            seats = seats.where(Membership.workspace_id == organisation_id)
+        if organisation and organisation.strip():
+            pattern = _like(organisation)
+            seats = seats.join(Workspace, Workspace.id == Membership.workspace_id).where(
+                or_(Workspace.name.ilike(pattern), Workspace.slug.ilike(pattern))
             )
-        )
+        if role:
+            seats = seats.where(Membership.role == role)
+        statement = statement.where(User.id.in_(seats))
     if verified is not None:
         statement = statement.where(
             User.email_verified_at.is_not(None) if verified else User.email_verified_at.is_(None)
@@ -539,10 +610,24 @@ def users_query(
         statement = statement.where(User.created_at >= created_from)
     if created_to:
         statement = statement.where(User.created_at < created_to)
+    if status:
+        statement = statement.where(_status_is(status, moment))
+    if active_from or active_to or never_active:
+        last = _last_meaningful_at()
+        if never_active:
+            statement = statement.where(last.is_(None))
+        if active_from:
+            statement = statement.where(last >= active_from)
+        if active_to:
+            statement = statement.where(last < active_to)
     return statement
 
 
-def status_of(user: User, last_meaningful: datetime | None, now: datetime) -> UserStatus:
+def status_of(
+    user: User, last_meaningful: datetime | None, now: datetime, *, suspended: bool = False
+) -> UserStatus:
+    if suspended:
+        return "suspended"
     if user.email_verified_at is None:
         return "unverified"
     if user.created_at >= now - NEW_WINDOW:
@@ -550,6 +635,20 @@ def status_of(user: User, last_meaningful: datetime | None, now: datetime) -> Us
     if last_meaningful is not None and last_meaningful >= now - ACTIVE_WINDOW:
         return "active"
     return "inactive"
+
+
+def level_of(active_days: int, actions: int) -> ActivityLevel:
+    """How much they use LEKA, from the last 30 days: the days they were
+    seen in the product (the journal's user.active, one a day) and what they
+    did (intentions asked, runs, sources connected). A sign-in alone is
+    never a day seen, nor an action."""
+    if actions >= 20 or active_days >= 12:
+        return "high"
+    if actions >= 5 or active_days >= 4:
+        return "medium"
+    if actions >= 1 or active_days >= 1:
+        return "low"
+    return "none"
 
 
 async def _memberships(
@@ -560,16 +659,22 @@ async def _memberships(
         return found
     rows = await session.execute(
         select(
-            Membership.user_id, Membership.role, Membership.created_at, Workspace.id, Workspace.name
+            Membership.user_id,
+            Membership.role,
+            Membership.created_at,
+            Workspace.id,
+            Workspace.name,
+            Workspace.status,
         )
         .join(Workspace, Workspace.id == Membership.workspace_id)
         .where(Membership.user_id.in_(user_ids))
         .order_by(Membership.created_at)
     )
-    for user_id, role, since, workspace_id, name in rows.all():
+    for user_id, role, since, workspace_id, name, status in rows.all():
         found[user_id].append(
             MembershipRead(
                 organisation=OrganisationRef(id=workspace_id, name=name),
+                organisation_status=str(status),
                 role=str(role),
                 since=since,
             )
@@ -590,6 +695,36 @@ async def _last_meaningful(
     return {key: at for key, at in rows.all() if key is not None}
 
 
+async def _activity(
+    session: AsyncSession, user_ids: Sequence[uuid.UUID], since: datetime
+) -> tuple[dict[uuid.UUID, int], dict[uuid.UUID, int]]:
+    """Per person, since then: the days seen in the product, the actions."""
+    if not user_ids:
+        return {}, {}
+    days = await session.execute(
+        select(ActivityEvent.user_id, func.count(distinct(func.date(ActivityEvent.at))))
+        .where(
+            ActivityEvent.user_id.in_(user_ids),
+            ActivityEvent.kind == "user.active",
+            ActivityEvent.at >= since,
+        )
+        .group_by(ActivityEvent.user_id)
+    )
+    actions = await session.execute(
+        select(ActivityEvent.user_id, func.count())
+        .where(
+            ActivityEvent.user_id.in_(user_ids),
+            ActivityEvent.kind.in_(MEANINGFUL),
+            ActivityEvent.at >= since,
+        )
+        .group_by(ActivityEvent.user_id)
+    )
+    return (
+        {key: int(n) for key, n in days.tuples().all() if key is not None},
+        {key: int(n) for key, n in actions.tuples().all() if key is not None},
+    )
+
+
 async def user_rows(
     session: AsyncSession, users: Sequence[User], now: datetime | None = None
 ) -> list[UserRow]:
@@ -598,20 +733,31 @@ async def user_rows(
     seats = await _memberships(session, ids)
     intentions = await _counts(session, Intention.created_by, ids)
     last = await _last_meaningful(session, ids)
-    return [
-        UserRow(
-            id=u.id,
-            email=u.email,
-            name=_name(u),
-            created_at=u.created_at,
-            verified=u.email_verified_at is not None,
-            last_login_at=u.last_login_at,
-            organisations=seats.get(u.id, []),
-            intentions=intentions.get(u.id, 0),
-            status=status_of(u, last.get(u.id), moment),
+    days, actions = await _activity(session, ids, moment - ACTIVE_WINDOW)
+    rows: list[UserRow] = []
+    for u in users:
+        held = seats.get(u.id, [])
+        suspended = bool(held) and all(
+            seat.organisation_status != WorkspaceStatus.ACTIVE for seat in held
         )
-        for u in users
-    ]
+        rows.append(
+            UserRow(
+                id=u.id,
+                email=u.email,
+                name=_name(u),
+                created_at=u.created_at,
+                verified=u.email_verified_at is not None,
+                last_login_at=u.last_login_at,
+                organisations=held,
+                intentions=intentions.get(u.id, 0),
+                status=status_of(u, last.get(u.id), moment, suspended=suspended),
+                last_active_at=last.get(u.id),
+                active_days_30d=days.get(u.id, 0),
+                actions_30d=actions.get(u.id, 0),
+                activity_level=level_of(days.get(u.id, 0), actions.get(u.id, 0)),
+            )
+        )
+    return rows
 
 
 async def user_detail(session: AsyncSession, user_id: uuid.UUID) -> UserDetail | None:
@@ -626,7 +772,6 @@ async def user_detail(session: AsyncSession, user_id: uuid.UUID) -> UserDetail |
             UsageRecord.user_id == user_id, UsageRecord.started_at >= since
         )
     )
-    last_active = (await _last_meaningful(session, [user_id])).get(user_id)
     sign_ins = (
         await session.scalars(
             select(ActivityEvent.at)
@@ -644,9 +789,92 @@ async def user_detail(session: AsyncSession, user_id: uuid.UUID) -> UserDetail |
         region=user.region,
         agent_runs=int(runs or 0),
         credits_used_30d=_credits(float(cost) if cost is not None else None),
-        last_active_at=last_active,
         sign_ins=list(sign_ins),
+        access=[await _access(session, user_id, seat) for seat in row.organisations],
+        analyses_completed=int(
+            await session.scalar(
+                select(func.count()).where(
+                    IntentionAnalysis.requested_by == user_id,
+                    IntentionAnalysis.status.in_(ANALYSED),
+                )
+            )
+            or 0
+        ),
+        agents_used=list(
+            (
+                await session.scalars(
+                    select(distinct(AgentRun.key))
+                    .where(AgentRun.requested_by == user_id)
+                    .order_by(AgentRun.key)
+                )
+            ).all()
+        ),
     )
+
+
+async def _access(session: AsyncSession, user_id: uuid.UUID, seat: MembershipRead) -> UserAccess:
+    """What they may do there, as LEKA decides it on each of their requests."""
+    with workspace_scope(seat.organisation.id):
+        subject = await subject_of(session, seat.organisation.id, user_id)
+    return UserAccess(
+        organisation=seat.organisation,
+        role=seat.role,
+        custom_role=subject.custom_role if subject else None,
+        permissions=sorted(p.value for p in subject.permissions) if subject else [],
+    )
+
+
+# ── Invitations (LEKA-550) ───────────────────────────────────────────────────
+
+
+def invitations_query(
+    *,
+    q: str | None = None,
+    organisation_id: uuid.UUID | None = None,
+    include_expired: bool = False,
+    now: datetime | None = None,
+) -> Select[tuple[Invitation]]:
+    """The invitations not yet accepted nor revoked: those invited, « invité »."""
+    statement = select(Invitation).where(Invitation.status == InvitationStatus.PENDING)
+    if not include_expired:
+        statement = statement.where(Invitation.expires_at > (now or datetime.now(UTC)))
+    if q and q.strip():
+        statement = statement.where(Invitation.email.ilike(_like(q)))
+    if organisation_id:
+        statement = statement.where(Invitation.workspace_id == organisation_id)
+    return statement
+
+
+async def invitation_rows(
+    session: AsyncSession, invitations: Sequence[Invitation], now: datetime | None = None
+) -> list[AdminInvitationRow]:
+    moment = now or datetime.now(UTC)
+    names = await _organisation_names(session, [i.workspace_id for i in invitations])
+    emails = {i.email.lower() for i in invitations}
+    known = (
+        set(
+            (
+                await session.scalars(
+                    select(func.lower(User.email)).where(func.lower(User.email).in_(emails))
+                )
+            ).all()
+        )
+        if emails
+        else set()
+    )
+    return [
+        AdminInvitationRow(
+            id=i.id,
+            email=i.email,
+            organisation=OrganisationRef(id=i.workspace_id, name=names.get(i.workspace_id, "")),
+            role=str(i.role),
+            invited_at=i.created_at,
+            expires_at=i.expires_at,
+            expired=i.expires_at <= moment,
+            has_account=i.email.lower() in known,
+        )
+        for i in invitations
+    ]
 
 
 # ── Intentions ───────────────────────────────────────────────────────────────
@@ -833,10 +1061,13 @@ async def agent_stats(
     since: datetime | None = None,
     until: datetime | None = None,
     organisation_id: uuid.UUID | None = None,
+    user_id: uuid.UUID | None = None,
     agent: str | None = None,
     model: str | None = None,
 ) -> list[AgentStat]:
     where: list[Any] = []
+    if user_id:
+        where.append(AgentRun.requested_by == user_id)
     if since:
         where.append(AgentRun.queued_at >= since)
     if until:
@@ -872,6 +1103,8 @@ async def agent_stats(
         cost_where.append(UsageRecord.started_at < until)
     if organisation_id:
         cost_where.append(UsageRecord.workspace_id == organisation_id)
+    if user_id:
+        cost_where.append(UsageRecord.user_id == user_id)
     costs = {
         key: float(total)
         for key, total in (
@@ -1202,8 +1435,13 @@ HISTORY_ACTIONS = (
 )
 
 
-def notes_query(organisation_id: uuid.UUID) -> Select[tuple[AdminNote]]:
-    return select(AdminNote).where(AdminNote.for_workspace_id == organisation_id)
+def notes_query(
+    *, organisation_id: uuid.UUID | None = None, user_id: uuid.UUID | None = None
+) -> Select[tuple[AdminNote]]:
+    """The notes about an organisation, or about a person (LEKA-550)."""
+    if organisation_id is not None:
+        return select(AdminNote).where(AdminNote.for_workspace_id == organisation_id)
+    return select(AdminNote).where(AdminNote.for_user_id == user_id)
 
 
 async def note_rows(session: AsyncSession, notes: Sequence[AdminNote]) -> list[NoteRow]:
