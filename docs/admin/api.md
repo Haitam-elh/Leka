@@ -1,4 +1,4 @@
-# L'Admin API de LEKA ADMIN (LEKA-544, LEKA-545, LEKA-546, LEKA-551)
+# L'Admin API de LEKA ADMIN (LEKA-544, LEKA-545, LEKA-546, LEKA-551, LEKA-552)
 
 Le contrat entre LEKA CORE et LEKA ADMIN : ce que l'application Android envoie et reçoit aujourd'hui, et ce que la version web recevra demain, à l'identique. Les routes sont sous `/api/v1/admin`. Le schéma OpenAPI de LEKA CORE (`/api/v1/openapi.json`, étiquette `admin`) en est la source exacte ; ce document dit le sens.
 
@@ -113,7 +113,8 @@ Chaque permission a un **module** et un **niveau d'action** (`GET /admin/roles`)
 | `GET /admin/invitations` | `users:read` | `q` (e-mail), `organisation_id`, `include_expired` | les personnes invitées pas encore entrées : organisation, rôle, envoi, expiration, si l'adresse a déjà un compte LEKA |
 | `GET /admin/intentions` | `intentions:read` | `q` (son identifiant, ou des mots de son titre), `organisation_id` ou `organisation` (nom ou slug), `user_id` ou `user` (l'adresse ou le nom de qui l'a demandée), `status` (les 5 de LEKA ADMIN ou les 12 de LEKA), `kind`, `agent` (la clé d'un agent), `created_from`, `created_to` ; tri `created_at` | une ligne par intention : organisation, auteur, titre, type, statuts, agents, durée, crédits. `description` (son résumé, sinon le début de la demande, coupé à 200 caractères) seulement avec `intentions:content`, sinon `null` : **chaque page qui en rend est journalisée** en `admin.viewed_content`, avec les intentions lues |
 | `GET /admin/intentions/{id}` | `intentions:read` | | la fiche d'une intention, étape par étape (§ 5) : sa chronologie, ses analyses, le choix de ses agents, ses exécutions et leurs étapes, ses décisions, plans et vérifications, ses erreurs, sa consommation. `content` (§ 5) seulement avec `intentions:content`, sinon `null`. **Lecture journalisée**, en `admin.viewed_content` quand le contenu est rendu. **Lecture seule** : aucune route du module n'agit sur l'environnement d'un client |
-| `GET /admin/agents` | `agents:read` | `since`, `until`, `organisation_id`, `user_id` (les exécutions qu'une personne a demandées), `agent`, `model` | une ligne par agent : exécutions, organisations, réussites, échecs, taux de réussite, durée moyenne, coût et crédits |
+| `GET /admin/agents` | `agents:read` | `period` (`today`, `7d`, `30d`, `90d`, `12m`, ou `custom` avec `from` et `to` : chaque agent à côté de la période d'avant, aussi longue), ou `since` et `until` ; `organisation_id` ou `organisation` (nom ou slug), `user_id` (les exécutions qu'une personne a demandées), `agent`, `model`, `status` (d'une exécution), `lifecycle` (son état dans le registre), `unused` (les agents du registre qui n'ont pas tourné aussi) ; classement `sort` (`runs`, `organisations`, `success_rate`, `cost`, `duration`, `revenue`, `last_run`) et `order`, un chiffre inconnu toujours en dernier | une ligne par agent (§ 5) : nom, catégorie, version et état dans le registre, exécutions, organisations, réussites, échecs, taux de réussite, durée moyenne, appels, jetons, coût aux tarifs des fournisseurs et son état (`measured`, `partial`, `unavailable`), crédits, revenu quand il est vendu seul, achats seuls et en bundle, dernière exécution, `previous` |
+| `GET /admin/agents/{key}` | `agents:read` | `period` (30 jours par défaut, `from`, `to`), `organisation_id` ou `organisation`, `model`, `status` | un agent sur une période : ses chiffres et ceux de la période d'avant, par jour (par mois au-delà de 92 jours), par modèle, par version, ses 20 organisations les plus utilisatrices, ses 20 échecs les plus fréquents, sa description, son mode, son risque, comment il est vendu (palier, prix seul, bundles, formule qui l'inclut) ; `404` pour une clé que LEKA ne connaît pas |
 | `GET /admin/credits` | `credits:read` | `q`, `plan` ; tri `created_at`, `name` | les crédits du mois de chaque organisation |
 | `GET /admin/subscriptions` | `billing:read` | `plan`, `status`, `interval` ; tri `updated_at`, `created_at` | les abonnements Stripe tels que LEKA les connaît |
 | `GET /admin/billing/events` | `billing:read` | `type` (`*` joker), `outcome` (`applied`, `ignored`, `failed`), `organisation_id`, `received_from`, `received_to` ; tri `received_at` | chaque webhook Stripe reçu et ce qui en a été fait : les erreurs de synchronisation se voient ici |
@@ -163,6 +164,25 @@ La durée d'une intention va de sa création à son dernier changement de statut
 Un moment de la chronologie dit sa catégorie (`intention`, `analysis`, `routing`, `run`, `decision`, `action`, `outcome`), son type, l'exécution à laquelle il appartient (`ref` : `run:<id>`, `analysis:<id>`, `routing:<id>`, `decision:<id>`, `plan:<id>`), l'agent concerné, le statut d'avant et d'après, qui (une personne ou LEKA) et l'erreur.
 
 **Le module ne fait rien** : ni relancer, ni annuler, ni approuver. Aucune action dans l'environnement d'un client ne part de LEKA ADMIN ; `tests/test_admin_intentions.py` vérifie que le module n'a que des lectures.
+
+**Les agents** (LEKA-552, `api/leka/admin/agents.py`). Chaque agent est identifié par sa clé, et lu là où LEKA le garde :
+
+- **la liste des agents** : le registre (`agents/registry.yaml` et le `SKILL.md` de chacun). Avec `unused`, un agent qui n'a jamais tourné est listé avec 0 exécution. Un agent retiré du registre reste listé tant qu'il a des exécutions, sans nom ni état ;
+- **ce qu'ils ont fait** : `agent_runs`, une ligne par exécution. Le taux de réussite se calcule sur les exécutions terminées (réussies et échouées) ; `null` quand aucune n'est terminée ;
+- **ce que leurs exécutions ont consommé et coûté** : le registre de consommation (`usage_records`), une ligne par exécution, au tarif des fournisseurs en vigueur (`model_rates`). Le coût dit son état :
+
+| `cost_status` | Ce que ça veut dire | `cost_usd` |
+| --- | --- | --- |
+| `measured` | chaque exécution est chiffrée (ou n'a appelé aucun modèle) | leur somme, 0 si aucun appel |
+| `partial` | certaines exécutions ne sont pas chiffrées (`unpriced_runs`) : un appel sans tarif connu, ou une exécution pas encore comptée | la somme de celles qui le sont |
+| `unavailable` | aucune n'est chiffrée | `null`, jamais 0 |
+| `none` | aucune exécution | `null` |
+
+- **les crédits** : ce que ses exécutions ont pris aux crédits IA des clients, au coût de LEKA (les appels payés par le modèle propre d'un client n'en prennent pas) ;
+- **le revenu** (`revenue_eur`) : seulement quand il est traçable, c'est-à-dire pour un agent acheté seul (`agent_entitlements`, achat actif). C'est le revenu mensuel récurrent de ces achats, tel que Stripe l'a dit (LEKA-548), coupons déduits, hors TVA. Il vaut `null` si l'agent n'est pas acheté seul, ou si l'un de ses achats n'a pas de prix connu en euros. Le revenu d'un bundle n'est jamais réparti entre ses agents : `bundle_purchases` compte seulement les bundles achetés qui le contiennent. Le revenu se lit à l'instant présent ; seul le filtre d'organisation s'y applique ;
+- **la comparaison** : avec une période (`period`), chaque agent porte les mêmes chiffres sur la période d'avant, aussi longue (`previous`).
+
+Les agents de la liste indicative du ticket qui n'existent pas dans LEKA (Lead, Growth, Product, Research, Finance) ne sont pas inventés : le module montre les agents réels.
 
 **Statut d'une personne**, fondé sur ce qu'elle a fait, pas sur une simple connexion :
 

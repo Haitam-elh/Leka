@@ -35,7 +35,6 @@ from leka.admin.schemas import (
     AdminIntentionStatus,
     AdminInvitationRow,
     AgentCost,
-    AgentStat,
     AlertRow,
     BillingState,
     CreditsBreakdown,
@@ -1010,92 +1009,6 @@ async def intention_rows(
     ]
 
 
-# ── Agents ───────────────────────────────────────────────────────────────────
-
-
-async def agent_stats(
-    session: AsyncSession,
-    *,
-    since: datetime | None = None,
-    until: datetime | None = None,
-    organisation_id: uuid.UUID | None = None,
-    user_id: uuid.UUID | None = None,
-    agent: str | None = None,
-    model: str | None = None,
-) -> list[AgentStat]:
-    where: list[Any] = []
-    if user_id:
-        where.append(AgentRun.requested_by == user_id)
-    if since:
-        where.append(AgentRun.queued_at >= since)
-    if until:
-        where.append(AgentRun.queued_at < until)
-    if organisation_id:
-        where.append(AgentRun.workspace_id == organisation_id)
-    if agent:
-        where.append(AgentRun.key == agent)
-    if model:
-        where.append(AgentRun.model == model)
-    ended = AgentRun.finished_at.is_not(None) & AgentRun.started_at.is_not(None)
-    duration = func.extract("epoch", AgentRun.finished_at - AgentRun.started_at) * 1000
-    rows = (
-        await session.execute(
-            select(
-                AgentRun.key,
-                func.count(),
-                func.count(distinct(AgentRun.workspace_id)),
-                func.count().filter(AgentRun.status == "succeeded"),
-                func.count().filter(AgentRun.status == "failed"),
-                func.count().filter(AgentRun.status == "cancelled"),
-                func.avg(duration).filter(ended),
-                func.max(AgentRun.queued_at),
-            )
-            .where(*where)
-            .group_by(AgentRun.key)
-        )
-    ).all()
-    cost_where: list[Any] = [UsageRecord.kind == "agent_run"]
-    if since:
-        cost_where.append(UsageRecord.started_at >= since)
-    if until:
-        cost_where.append(UsageRecord.started_at < until)
-    if organisation_id:
-        cost_where.append(UsageRecord.workspace_id == organisation_id)
-    if user_id:
-        cost_where.append(UsageRecord.user_id == user_id)
-    costs = {
-        key: float(total)
-        for key, total in (
-            await session.execute(
-                select(UsageRecord.subject, func.sum(UsageRecord.leka_cost_usd))
-                .where(*cost_where, UsageRecord.leka_cost_usd.is_not(None))
-                .group_by(UsageRecord.subject)
-            )
-        ).all()
-        if total is not None
-    }
-    stats = []
-    for key, runs, organisations, succeeded, failed, cancelled, average, last in rows:
-        finished = succeeded + failed
-        cost = costs.get(key) if not model else None
-        stats.append(
-            AgentStat(
-                key=key,
-                runs=runs,
-                organisations=organisations,
-                succeeded=succeeded,
-                failed=failed,
-                cancelled=cancelled,
-                success_rate=round(succeeded / finished, 4) if finished else None,
-                average_duration_ms=int(average) if average is not None else None,
-                cost_usd=round(cost, 6) if cost is not None else None,
-                credits=_credits(cost),
-                last_run_at=last,
-            )
-        )
-    return sorted(stats, key=lambda s: (-s.runs, s.key))
-
-
 # ── Credits ──────────────────────────────────────────────────────────────────
 
 
@@ -1358,7 +1271,6 @@ __all__ = [
     "activity_row",
     "admin_audit_query",
     "admin_emails",
-    "agent_stats",
     "credits_breakdown",
     "credits_of",
     "intention_rows",

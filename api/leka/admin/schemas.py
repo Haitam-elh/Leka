@@ -537,8 +537,28 @@ class AdminIntentionDetail(AdminIntentionRow):
     content: AdminIntentionContent | None = Field(description="Null: this role may not read it.")
 
 
+# How far an agent's cost is known (LEKA-552): every run priced at its
+# providers' rates, some of them, none — or no run to price.
+CostStatus = Literal["measured", "partial", "unavailable", "none"]
+
+
+class AgentPrevious(BaseModel):
+    """The same figures over the period just before, as long as it."""
+
+    runs: int
+    organisations: int
+    success_rate: float | None
+    cost_usd: float | None
+
+
 class AgentStat(BaseModel):
     key: str
+    title: str | None = Field(description="Its name in the registry; null: no longer there.")
+    category: str | None
+    version: str | None = Field(description="The registry's version today.")
+    lifecycle: str | None = Field(
+        description="draft, review, active, deprecated, retired; null: no longer in the registry."
+    )
     runs: int
     organisations: int
     succeeded: int
@@ -548,9 +568,97 @@ class AgentStat(BaseModel):
         description="Succeeded out of the runs that ended; null: none ended."
     )
     average_duration_ms: int | None
-    cost_usd: float | None = Field(description="At the providers' rates; null: no rate known.")
-    credits: float | None
+    calls: int | None = Field(description="Calls to a model, as metered; null: none metered.")
+    tokens_in: int | None
+    tokens_out: int | None
+    cost_usd: float | None = Field(
+        description="What its runs' calls cost at the providers' rates; null: no rate known."
+    )
+    cost_status: CostStatus
+    unpriced_runs: int = Field(description="Runs whose cost is not known: left out of cost_usd.")
+    credits: float | None = Field(description="What it took of the customers' AI credits.")
+    revenue_eur: float | None = Field(
+        description="Monthly recurring revenue of it bought alone, coupons applied, excluding "
+        "VAT; null: not bought alone, or no price known. A bundle's revenue is never split."
+    )
+    purchases: int = Field(description="Organisations that bought it alone, now.")
+    bundle_purchases: int = Field(description="Bundles bought now that include it.")
     last_run_at: datetime | None
+    previous: AgentPrevious | None = Field(
+        default=None, description="Over the period just before; null: no period asked."
+    )
+
+
+class AgentPoint(BaseModel):
+    at: datetime
+    runs: int
+    succeeded: int
+    failed: int
+
+
+class AgentModelUse(BaseModel):
+    model: str | None
+    runs: int
+    succeeded: int
+    failed: int
+    success_rate: float | None
+    average_duration_ms: int | None
+    cost_usd: float | None
+
+
+class AgentVersionUse(BaseModel):
+    version: str
+    runs: int
+    success_rate: float | None
+    first_run_at: datetime
+    last_run_at: datetime
+
+
+class AgentOrganisationUse(BaseModel):
+    organisation: OrganisationRef
+    runs: int
+    succeeded: int
+    failed: int
+    last_run_at: datetime
+
+
+class AgentFailure(BaseModel):
+    error: str = Field(description="The code a run failed with.")
+    runs: int
+    last_at: datetime
+
+
+class AgentBundle(BaseModel):
+    key: str
+    fr: str
+    en: str
+
+
+class AgentOffer(BaseModel):
+    """How it is sold (LEKA-454): alone at its tier's price, in bundles, in plans."""
+
+    tier: str | None
+    monthly_price_eur: float | None = Field(description="Alone; null: not sold alone.")
+    bundles: list[AgentBundle]
+    included_from: str | None = Field(description="The least plan that includes it.")
+
+
+class AgentRecord(BaseModel):
+    """One agent over a period (LEKA-552): its figures, their days (or
+    months), by model, version and organisation, its failures, its offer."""
+
+    stat: AgentStat
+    summary: str | None = Field(description="When to use it, as the registry says.")
+    mode: str | None
+    risk: str | None
+    dedicated: bool
+    offer: AgentOffer
+    bucket: Literal["day", "month"]
+    series: list[AgentPoint]
+    models: list[AgentModelUse]
+    versions: list[AgentVersionUse]
+    organisations: list[AgentOrganisationUse] = Field(description="The 20 that ran it most.")
+    failures: list[AgentFailure] = Field(description="The 20 most frequent.")
 
 
 class OrganisationCredits(BaseModel):
