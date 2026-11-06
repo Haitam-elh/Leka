@@ -34,7 +34,7 @@ agents:
 
   - path: architecture/migration-planning/SKILL.md
     name: migration-planning
-    version: 1.0.0
+    version: 1.1.0
     status: active
 
   - path: codebase/codebase-explorer/SKILL.md
