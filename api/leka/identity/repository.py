@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 from sqlalchemy import CursorResult, Result, Select, delete, select, update
@@ -117,6 +117,30 @@ class SessionRepository:
             select(Session).where(Session.id == session_id).where(Session.user_id == user_id)
         )
         return result.scalar_one_or_none()
+
+    async def touch(self, session_id: uuid.UUID, now: datetime, *, every: timedelta) -> bool:
+        """Move a session's idle clock to `now`, if it is older than `every`
+        — and never wait for it: a row another request holds (moving it
+        too, or inside a long transaction) is left as it is. True: moved.
+
+        A page polling live sends several requests every few seconds, all
+        with the same session. Each used to write this row in its own
+        transaction, and so waited for the one before to end: one slow
+        request held every other, each holding a connection, until the
+        pool was empty and LEKA answered 503 (2026-11-06)."""
+        held = (
+            select(Session.id)
+            .where(Session.id == session_id, Session.last_seen_at < now - every)
+            .with_for_update(skip_locked=True)
+            .scalar_subquery()
+        )
+        result = await self._session.execute(
+            update(Session)
+            .where(Session.id == held)
+            .values(last_seen_at=now)
+            .execution_options(synchronize_session=False)
+        )
+        return bool(cast(CursorResult[Any], result).rowcount)
 
     async def revoke(self, session: Session) -> None:
         session.revoked_at = datetime.now(UTC)

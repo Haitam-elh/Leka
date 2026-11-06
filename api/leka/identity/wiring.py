@@ -36,6 +36,8 @@ from leka.platform import (
 logger = structlog.get_logger(__name__)
 
 SessionDep = DatabaseSession
+# How often a session's idle clock is moved on.
+TOUCH_EVERY = timedelta(minutes=1)
 
 
 def read_session_token(request: Request) -> str | None:
@@ -52,7 +54,8 @@ async def load_session(request: Request, db: SessionDep) -> Session | None:
     "Live" means all four conditions — present, not revoked, inside the
     absolute expiry, and inside the idle window. A session that fails any of
     them is treated as absent, and the idle clock is refreshed on the way
-    through so that active use keeps a session alive.
+    through (at most once a minute) so that active use keeps a session
+    alive.
     """
     token = read_session_token(request)
     if token is None:
@@ -74,7 +77,10 @@ async def load_session(request: Request, db: SessionDep) -> Session | None:
         await sessions.revoke(session)
         return None
 
-    session.last_seen_at = now
+    # Refreshed at most once a minute, never waited for (SessionRepository.touch):
+    # the idle window is counted in days.
+    if now - session.last_seen_at >= TOUCH_EVERY:
+        await sessions.touch(session.id, now, every=TOUCH_EVERY)
     return session
 
 
