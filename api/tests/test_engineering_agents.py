@@ -31,7 +31,7 @@ ENGINEERING = {
 }
 # A new version each for its method (2026-10-18).
 VERSIONS = {
-    "codebase-explorer": "1.2.0",
+    "codebase-explorer": "1.3.0",
     "test-generation": "1.1.0",
     "change-impact-analysis": "1.3.0",
     "regression-analysis": "1.3.0",
@@ -173,6 +173,10 @@ def test_the_codebase_explorer_explains_in_three_levels_and_names_the_traps() ->
         "le document commence par **La réponse à la question**",
         "**Une ligne n'est citée que lue**",
         "jamais sur un commentaire qui la nomme",
+        # 1.3.0 (2026-11-06): read_file gives no numbers; counted by hand,
+        # 554 became 538. `find` gives each line with its number.
+        "le numéro vient de `read_file` avec `find`",
+        "jamais compté à la main dans le contenu",
     ):
         assert rule in " ".join(said.split()), rule
     assert not carries_a_credit(said)
