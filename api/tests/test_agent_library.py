@@ -1150,7 +1150,7 @@ def test_the_migration_plan_moves_in_reversible_steps_and_retires_last() -> None
     assert (d.kind, d.lifecycle, d.version, d.mode) == (
         Kind.AGENT,
         Lifecycle.ACTIVE,
-        "1.0.0",
+        "1.1.0",
         "read_only",
     )
     assert {"audit_dependencies", "dependencies", "read_file"} <= set(d.tools)
@@ -1177,6 +1177,9 @@ def test_the_migration_plan_moves_in_reversible_steps_and_retires_last() -> None
         "Le retrait",
         "Dis où tu as cherché",
         "ni migration",
+        "Ce que fait ce qu'on remplace, fonction par fonction",
+        "arrête le nouveau avant de relancer l'ancien",
+        "les statistiques recalculées",
     ):
         assert rule.lower() in said.lower(), rule
     assert own_words("migration-planning")

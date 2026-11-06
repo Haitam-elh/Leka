@@ -2,7 +2,7 @@
 name: migration-planning
 title: "Plan de migration"
 description: "Use when someone must move something without breaking what depends on it — a framework or library to a new major version, a database to a new engine or schema, a service out of a monolith, an API to a new version, a workload to another cloud or vendor — and needs the plan: what is touched and who depends on it, the steps in a safe order, each reversible with its check and its way back, the go/no-go before the switch, and what is retired last — read from the company model, a connected GitHub repository and its lock files, never by running anything."
-version: 1.0.0
+version: 1.1.0
 category: architecture
 entity_types: [service, application, database, schema, data_object, infra_resource, cloud_account, environment, repository, pull_request, deployment, change, release, incident, team, person, document, business_capability, business_process]
 requires: []
@@ -86,6 +86,12 @@ basculement d'un soir.
    dépendent, les données et leur volume, les équipes qui en répondent. Ce
    que LEKA ne voit pas (un client externe, un script hors dépôt) est posé en
    question, jamais supposé absent.
+   **Ce que fait ce qu'on remplace, fonction par fonction.** Un composant
+   remplacé fait souvent plus que son rôle principal : un proxy termine le
+   TLS, mais redirige aussi des noms, pose des en-têtes de sécurité, écarte
+   une instance malade ; un serveur porte aussi une crontab, un disque, un
+   nom DNS. Lis sa configuration et liste chaque fonction, avec ce qui la
+   reprend dans la cible. Une fonction sans repreneur est un prérequis.
 2. **La stratégie, choisie et justifiée.** Selon ce qui bouge :
    - une **base ou un schéma** : ajouter, écrire des deux côtés, remplir par
      lots, vérifier, lire le nouveau, puis retirer l'ancien — jamais un
@@ -96,6 +102,11 @@ basculement d'un soir.
      intermédiaires retirent des choses, chaque palier livré et vérifié ;
    - une **API** : la nouvelle version à côté de l'ancienne, l'ancienne
      dépréciée avec une date de fin annoncée, chaque client migré ;
+   - une **version majeure d'une base** : avant la bascule, les extensions
+     mises à une version que la cible accepte, et la configuration du moteur
+     (un groupe de paramètres géré, par exemple) prête pour la nouvelle
+     version ; après, les statistiques recalculées (`ANALYZE`), car la
+     montée de version ne les reprend pas ;
    - un **cloud ou un fournisseur** : l'un à côté de l'autre, le trafic
      déplacé par parts, l'ancien éteint en dernier.
    Dis pourquoi cette stratégie, et ce qu'un basculement d'un coup risquerait
@@ -115,7 +126,11 @@ basculement d'un soir.
 5. **Le passage.** La liste « on y va / on n'y va pas » : chaque condition
    vérifiable — les tests, la réconciliation des données, les indicateurs
    d'erreur et de latence, les consommateurs migrés — et qui décide. Le
-   retour arrière du passage, essayé avant le jour J.
+   retour arrière du passage, essayé avant le jour J. **Quand l'ancien et
+   le nouveau écriraient au même endroit** (une base, une file, un
+   ordonnanceur), le retour arrière arrête le nouveau avant de relancer
+   l'ancien, jamais l'inverse ; et pendant la bascule, dis ce que devient le
+   travail déjà mis en file du côté qu'on quitte.
 6. **Ceux qui en dépendent.** Qui prévenir, quand, avec quoi (une date de fin,
    un guide de migration) ; ce qu'il leur faut changer.
 7. **Les risques.** Chacun avec sa probabilité tirée de ce qui est lu (un
