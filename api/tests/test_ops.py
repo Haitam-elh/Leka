@@ -15,18 +15,23 @@ What these protect:
   the health report says which component is down.
 - A backup restores: dumped from one snapshot, restored aside, every table
   counted against its manifest — a changed count or a changed byte, refused.
+  And it never waits forever: a statement or a tool that never ends fails
+  the night's backup instead of holding it.
 """
 
 # ruff: noqa: F811 — the gateway's fixtures are imported to be requested by name.
 from __future__ import annotations
 
 import re
+import shlex
 import shutil
+import sys
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+import asyncpg
 import httpx
 import pytest
 from httpx import AsyncClient
@@ -448,3 +453,30 @@ def test_the_database_url_is_read_as_the_postgresql_tools_read_it() -> None:
         "postgresql://u:p@db:5432/leka?sslmode=require"
     )
     assert backup.libpq_url("postgresql+asyncpg://u:p@db/leka") == "postgresql://u:p@db/leka"
+
+
+async def test_a_statement_that_never_ends_fails_the_backup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 2026-11-01: the night's dump waited four days for an answer to one of
+    # its statements. Here the first statement never answers.
+    async def stuck(conn: asyncpg.Connection) -> dict[str, int]:
+        await conn.fetchval("SELECT pg_sleep(30)")
+        return {}
+
+    monkeypatch.setattr(backup, "STATEMENT_SECONDS", 0.5)
+    monkeypatch.setattr(backup, "_counts", stuck)
+    with pytest.raises(TimeoutError):
+        await backup.dump(tmp_path / "leka.dump")
+    assert not (tmp_path / "leka.dump").exists()
+
+
+def test_a_postgresql_tool_that_never_ends_fails_the_backup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # LEKA_PG_TOOLS wraps the tools: here, one that never ends.
+    never = f"{shlex.quote(sys.executable)} -c 'import time; time.sleep(30)'"
+    monkeypatch.setattr(backup, "settings", settings.model_copy(update={"pg_tools": never}))
+    monkeypatch.setattr(backup, "TOOL_SECONDS", 1.0)
+    with pytest.raises(RuntimeError, match="pg_dump did not finish within 1 s"):
+        backup._run([*backup._tools("pg_dump"), "-Fc"], write=tmp_path / "leka.dump")
