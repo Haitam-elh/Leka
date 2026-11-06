@@ -7609,6 +7609,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/credits/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * AI credits across LEKA
+         * @description This month's capacity and balance across organisations; over the
+         *     period, what was consumed by organisation, agent and model, day by day,
+         *     and what it cost at the providers' rates (LEKA-553). Capacity, credits
+         *     and the providers' cost are said apart.
+         */
+        get: operations["get_credits_overview_api_v1_admin_credits_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/credits/movements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every line of every credits ledger
+         * @description The ledger (LEKA-553): each movement with its organisation, kind,
+         *     credits, month, date, origin, operation reference and, written by
+         *     LEKA's team, its author and reason. The latest first by default.
+         */
+        get: operations["list_credit_movements_api_v1_admin_credits_movements_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/organisations/{organisation_id}/credits/reconciliation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * An organisation's credits, month by month, reconciled
+         * @description Each month of its ledger (LEKA-553): given by the plan and the packs,
+         *     given back and adjusted, consumed, expired, its balance — beside what
+         *     LEKA's models cost it at the gateway: what is pending, what differs,
+         *     what could not be priced.
+         */
+        get: operations["get_credit_reconciliation_api_v1_admin_organisations__organisation_id__credits_reconciliation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/credits": {
         parameters: {
             query?: never;
@@ -7746,6 +7814,30 @@ export interface paths {
         put?: never;
         /** Reactivate an organisation */
         post: operations["reactivate_organisation_api_v1_admin_organisations__organisation_id__reactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/organisations/{organisation_id}/credits/adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Give back or adjust an organisation's credits
+         * @description A line of its ledger (LEKA-553), written by LEKA's team: credits given
+         *     back (`refund`, of a consumption it names) or adjusted (`adjustment`,
+         *     added or taken), with the reason; counted in this month's allowance at
+         *     once, written once for this Idempotency-Key, kept in its trail and in
+         *     the admin trail.
+         */
+        post: operations["adjust_organisation_credits_api_v1_admin_organisations__organisation_id__credits_adjustments_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -15586,6 +15678,75 @@ export interface components {
                 [key: string]: string;
             };
         };
+        /**
+         * CreditAdjustment
+         * @description Credits given back or adjusted by LEKA's team in this month (LEKA-553):
+         *     a line of the organisation's ledger, counted in its allowance at once.
+         */
+        CreditAdjustment: {
+            /**
+             * Reason
+             * @description Why, said to the trail.
+             */
+            reason: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "adjustment" | "refund";
+            /**
+             * Credits
+             * @description Added (more than 0) or taken (less than 0); a refund gives back.
+             */
+            credits: number;
+            /**
+             * Refund Of
+             * @description A refund's: the consumption it gives back, in this ledger.
+             */
+            refund_of?: string | null;
+        };
+        /**
+         * CreditCapacity
+         * @description This month, across every organisation.
+         */
+        CreditCapacity: {
+            /** Period */
+            period: string;
+            /** Organisations */
+            organisations: number;
+            /**
+             * Capacity
+             * @description Credits given: plans, packs, adjustments.
+             */
+            capacity: number;
+            /** Plans */
+            plans: number;
+            /** Packs */
+            packs: number;
+            /** Adjustments */
+            adjustments: number;
+            /** Used */
+            used: number;
+            /** Remaining */
+            remaining: number;
+            /** Utilisation */
+            utilisation: number | null;
+            /**
+             * Exhausted
+             * @description Organisations with nothing left.
+             */
+            exhausted: number;
+        };
+        /** CreditDay */
+        CreditDay: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Credits */
+            credits: number;
+        };
         /** CreditGrant */
         CreditGrant: {
             /**
@@ -15598,6 +15759,140 @@ export interface components {
              * @description Credits added to this month.
              */
             credits: number;
+        };
+        /**
+         * CreditMonth
+         * @description One month of an organisation's credits, read from its ledger, beside
+         *     the source: what LEKA's models cost it, as the gateway counts it.
+         */
+        CreditMonth: {
+            /** Period */
+            period: string;
+            /**
+             * Granted
+             * @description By the plan.
+             */
+            granted: number;
+            /** Packs */
+            packs: number;
+            /** Refunds */
+            refunds: number;
+            /** Adjustments */
+            adjustments: number;
+            /** Consumed */
+            consumed: number;
+            /** Expired */
+            expired: number;
+            /**
+             * Balance
+             * @description The sum of the month's lines.
+             */
+            balance: number;
+            /**
+             * Source
+             * @description Consumed at the gateway: LEKA's models, in credits.
+             */
+            source: number;
+            /**
+             * Pending
+             * @description Consumed at the gateway, not yet in the ledger.
+             */
+            pending: number;
+            /**
+             * Unpriced
+             * @description Executions LEKA could not price: no line, no guess.
+             */
+            unpriced: number;
+            /**
+             * Allowance Now
+             * @description This month's allowance at the gateway.
+             */
+            allowance_now: number | null;
+            /**
+             * Allowance Gap
+             * @description The gateway's allowance, less the ledger's; null: a month past.
+             */
+            allowance_gap: number | null;
+            /** Closed */
+            closed: boolean;
+            /**
+             * Reconciled
+             * @description Nothing pending, and this month's allowance the same in both.
+             */
+            reconciled: boolean;
+            /** Lines */
+            lines: number;
+            /** By Subject */
+            by_subject: components["schemas"]["CreditSubject"][];
+        };
+        /**
+         * CreditMovement
+         * @description One line of an organisation's credits ledger (LEKA-553).
+         */
+        CreditMovement: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            organisation: components["schemas"]["OrganisationRef"];
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "grant" | "consumption" | "refund" | "adjustment" | "expiration";
+            /**
+             * Credits
+             * @description Added (more than 0) or taken (less than 0).
+             */
+            credits: number;
+            /**
+             * Period
+             * @description The month it counts in, YYYY-MM.
+             */
+            period: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * Origin
+             * @description plan, pack, metering, admin, close.
+             */
+            origin: string;
+            /**
+             * Reference
+             * @description The operation it records, unique in the organisation.
+             */
+            reference: string;
+            /**
+             * Execution
+             * @description A consumption's: what was metered.
+             */
+            execution: string | null;
+            /**
+             * Subject
+             * @description A consumption's: the agent, or LEKA's call.
+             */
+            subject: string | null;
+            /**
+             * By
+             * @description A manual movement's author.
+             */
+            by: string | null;
+            /** Reason */
+            reason: string | null;
+            /**
+             * Cost Usd
+             * @description A consumption's cost at the providers' rates, as metered.
+             */
+            cost_usd: number | null;
+            /**
+             * Cost Status
+             * @description estimated, partial: as the metering said it.
+             */
+            cost_status: string | null;
         };
         /**
          * CreditPlanRead
@@ -15741,6 +16036,34 @@ export interface components {
              */
             asked: boolean;
         };
+        /** CreditReconciliation */
+        CreditReconciliation: {
+            organisation: components["schemas"]["OrganisationRef"];
+            credits: components["schemas"]["CreditsState"];
+            /**
+             * Months
+             * @description The latest first.
+             */
+            months: components["schemas"]["CreditMonth"][];
+        };
+        /** CreditSubject */
+        CreditSubject: {
+            /** Subject */
+            subject: string;
+            /** Credits */
+            credits: number;
+        };
+        /** CreditUse */
+        CreditUse: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string | null;
+            /** Credits */
+            credits: number;
+            /** Cost Usd */
+            cost_usd: number | null;
+        };
         /**
          * CreditWarningRead
          * @description A share of this month's credits passed: when, and how much was used
@@ -15800,6 +16123,39 @@ export interface components {
             period_end: string;
         };
         /**
+         * CreditsOverview
+         * @description AI credits across LEKA (LEKA-553): this month's capacity and balance;
+         *     over the period, what was consumed by organisation, agent and model, day
+         *     by day, and what it cost at the providers' rates.
+         */
+        CreditsOverview: {
+            month: components["schemas"]["CreditCapacity"];
+            /**
+             * Since
+             * Format: date-time
+             */
+            since: string;
+            /**
+             * Until
+             * Format: date-time
+             */
+            until: string;
+            /** Consumed */
+            consumed: number;
+            /**
+             * By Organisation
+             * @description The 20 that consumed most.
+             */
+            by_organisation: components["schemas"]["CreditUse"][];
+            /** By Agent */
+            by_agent: components["schemas"]["CreditUse"][];
+            /** By Model */
+            by_model: components["schemas"]["CreditUse"][];
+            /** Series */
+            series: components["schemas"]["CreditDay"][];
+            provider_cost: components["schemas"]["ProviderCost"];
+        };
+        /**
          * CreditsRead
          * @description A workspace's AI credits this month (LEKA-430): its plan's and its
          *     packs', what its work on LEKA's models used, what is left — and whether
@@ -15826,6 +16182,12 @@ export interface components {
              * @description Credits added to this month.
              */
             packs: number;
+            /**
+             * Adjustments
+             * @description Given back or adjusted by LEKA this month (LEKA-553): in the allowance.
+             * @default 0
+             */
+            adjustments: number;
             /** Allowance */
             allowance: number;
             /** Used */
@@ -15892,6 +16254,12 @@ export interface components {
              * @description Credits added to the month.
              */
             packs: number;
+            /**
+             * Adjustments
+             * @description Given back or adjusted by LEKA's team this month (LEKA-553).
+             * @default 0
+             */
+            adjustments: number;
             /** Allowance */
             allowance: number;
             /** Used */
@@ -23093,6 +23461,19 @@ export interface components {
              */
             next_cursor?: string | null;
         };
+        /** PageEnvelope[CreditMovement] */
+        PageEnvelope_CreditMovement_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["CreditMovement"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
         /** PageEnvelope[DataObjectRead] */
         PageEnvelope_DataObjectRead_: {
             /**
@@ -24422,6 +24803,34 @@ export interface components {
         ProtectionPolicyUpdate: {
             /** Found Payload Days */
             found_payload_days: number;
+        };
+        /**
+         * ProviderCost
+         * @description What the models cost at the providers' rates (`model_rates`): an
+         *     estimate from the tokens each call used, never an invoice.
+         */
+        ProviderCost: {
+            /**
+             * Leka Usd
+             * @description LEKA's models: what the credits stand for.
+             */
+            leka_usd: number;
+            /**
+             * Workspace Usd
+             * @description An organisation's own models: its own account.
+             */
+            workspace_usd: number;
+            /**
+             * Unpriced Calls
+             * @description Calls with no rate known: left out, never guessed.
+             */
+            unpriced_calls: number;
+            /**
+             * Basis
+             * @default rates
+             * @constant
+             */
+            basis: "rates";
         };
         /**
          * PublicationCreate
@@ -68523,6 +68932,309 @@ export interface operations {
             };
         };
     };
+    get_credits_overview_api_v1_admin_credits_overview_get: {
+        parameters: {
+            query?: {
+                period?: "today" | "7d" | "30d" | "90d" | "12m" | "custom";
+                from?: string | null;
+                to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditsOverview"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_credit_movements_api_v1_admin_credits_movements_get: {
+        parameters: {
+            query?: {
+                organisation_id?: string | null;
+                /** @description An organisation's name or slug. */
+                organisation?: string | null;
+                kind?: ("grant" | "consumption" | "refund" | "adjustment" | "expiration") | null;
+                origin?: ("plan" | "pack" | "metering" | "admin" | "close") | null;
+                /** @description A month, YYYY-MM. */
+                period?: string | null;
+                execution?: string | null;
+                since?: string | null;
+                until?: string | null;
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_CreditMovement_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_credit_reconciliation_api_v1_admin_organisations__organisation_id__credits_reconciliation_get: {
+        parameters: {
+            query?: {
+                months?: number;
+            };
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditReconciliation"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     list_credits_api_v1_admin_credits_get: {
         parameters: {
             query?: {
@@ -69275,6 +69987,107 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ActionReason"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganisationAction"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    adjust_organisation_credits_api_v1_admin_organisations__organisation_id__credits_adjustments_post: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique per operation; send it again to retry safely. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreditAdjustment"];
             };
         };
         responses: {

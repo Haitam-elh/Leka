@@ -1,4 +1,4 @@
-# L'Admin API de LEKA ADMIN (LEKA-544, LEKA-545, LEKA-546, LEKA-551, LEKA-552)
+# L'Admin API de LEKA ADMIN (LEKA-544, LEKA-545, LEKA-546, LEKA-551, LEKA-552, LEKA-553)
 
 Le contrat entre LEKA CORE et LEKA ADMIN : ce que l'application Android envoie et reçoit aujourd'hui, et ce que la version web recevra demain, à l'identique. Les routes sont sous `/api/v1/admin`. Le schéma OpenAPI de LEKA CORE (`/api/v1/openapi.json`, étiquette `admin`) en est la source exacte ; ce document dit le sens.
 
@@ -102,6 +102,8 @@ Chaque permission a un **module** et un **niveau d'action** (`GET /admin/roles`)
 | `POST /admin/organisations/{id}/suspend` | `organisations:write` | corps `{reason}`, en-tête `Idempotency-Key` | l'opération faite (§ 6) |
 | `POST /admin/organisations/{id}/reactivate` | `organisations:write` | idem | idem |
 | `POST /admin/organisations/{id}/credits` | `credits:write` | corps `{credits, reason}`, en-tête `Idempotency-Key` | l'opération et les crédits du mois après |
+| `POST /admin/organisations/{id}/credits/adjustments` | `credits:write` | corps `{kind, credits, reason, refund_of}`, en-tête `Idempotency-Key` | LEKA-553 : une ligne du registre écrite par l'équipe LEKA (§ 5), comptée tout de suite dans l'allocation du mois ; l'opération et les crédits du mois après |
+| `GET /admin/organisations/{id}/credits/reconciliation` | `credits:read` | `months` (6 par défaut, 24 au plus) | LEKA-553 : chaque mois de son registre, du plus récent, rapproché de la passerelle (§ 5) |
 | `PATCH /admin/organisations/{id}` | `organisations:write` | corps `{name?, country?, size?, reason}` (un champ au moins), en-tête `Idempotency-Key` | l'opération et ce qui a changé, avant et après (LEKA-549) |
 | `GET /admin/organisations/{id}/notes` | `organisations:read` | | ses notes internes, la plus récente d'abord : qui, quand, quoi |
 | `POST /admin/organisations/{id}/notes` | `organisations:notes` | corps `{body}` (4 000 caractères au plus) | la note écrite. Jamais montrée au client ; le journal admin en garde la longueur, jamais le texte |
@@ -116,6 +118,8 @@ Chaque permission a un **module** et un **niveau d'action** (`GET /admin/roles`)
 | `GET /admin/agents` | `agents:read` | `period` (`today`, `7d`, `30d`, `90d`, `12m`, ou `custom` avec `from` et `to` : chaque agent à côté de la période d'avant, aussi longue), ou `since` et `until` ; `organisation_id` ou `organisation` (nom ou slug), `user_id` (les exécutions qu'une personne a demandées), `agent`, `model`, `status` (d'une exécution), `lifecycle` (son état dans le registre), `unused` (les agents du registre qui n'ont pas tourné aussi) ; classement `sort` (`runs`, `organisations`, `success_rate`, `cost`, `duration`, `revenue`, `last_run`) et `order`, un chiffre inconnu toujours en dernier | une ligne par agent (§ 5) : nom, catégorie, version et état dans le registre, exécutions, organisations, réussites, échecs, taux de réussite, durée moyenne, appels, jetons, coût aux tarifs des fournisseurs et son état (`measured`, `partial`, `unavailable`), crédits, revenu quand il est vendu seul, achats seuls et en bundle, dernière exécution, `previous` |
 | `GET /admin/agents/{key}` | `agents:read` | `period` (30 jours par défaut, `from`, `to`), `organisation_id` ou `organisation`, `model`, `status` | un agent sur une période : ses chiffres et ceux de la période d'avant, par jour (par mois au-delà de 92 jours), par modèle, par version, ses 20 organisations les plus utilisatrices, ses 20 échecs les plus fréquents, sa description, son mode, son risque, comment il est vendu (palier, prix seul, bundles, formule qui l'inclut) ; `404` pour une clé que LEKA ne connaît pas |
 | `GET /admin/credits` | `credits:read` | `q`, `plan` ; tri `created_at`, `name` | les crédits du mois de chaque organisation |
+| `GET /admin/credits/overview` | `credits:read` | `period` (30 jours par défaut, `from`, `to`) | LEKA-553 : la capacité et le solde du mois sur toutes les organisations (hors démonstrations) ; sur la période, la consommation par organisation (les 20 premières), par agent, par modèle, jour par jour, et le coût aux tarifs des fournisseurs, les modèles de LEKA et ceux des organisations à part |
+| `GET /admin/credits/movements` | `credits:read` | `organisation_id` ou `organisation`, `kind`, `origin`, `period` (`AAAA-MM`), `execution`, `since`, `until` ; tri `at`, le plus récent d'abord | LEKA-553 : le registre, ligne par ligne (§ 5) |
 | `GET /admin/subscriptions` | `billing:read` | `plan`, `status`, `interval` ; tri `updated_at`, `created_at` | les abonnements Stripe tels que LEKA les connaît |
 | `GET /admin/billing/events` | `billing:read` | `type` (`*` joker), `outcome` (`applied`, `ignored`, `failed`), `organisation_id`, `received_from`, `received_to` ; tri `received_at` | chaque webhook Stripe reçu et ce qui en a été fait : les erreurs de synchronisation se voient ici |
 | `GET /admin/sources` | `environments:read` | `organisation_id`, `kind`, `status`, `health`, `in_error` ; tri `created_at`, `name` | les intégrations : statut, santé, dernière erreur, dernière synchronisation. Jamais un secret |
@@ -164,6 +168,29 @@ La durée d'une intention va de sa création à son dernier changement de statut
 Un moment de la chronologie dit sa catégorie (`intention`, `analysis`, `routing`, `run`, `decision`, `action`, `outcome`), son type, l'exécution à laquelle il appartient (`ref` : `run:<id>`, `analysis:<id>`, `routing:<id>`, `decision:<id>`, `plan:<id>`), l'agent concerné, le statut d'avant et d'après, qui (une personne ou LEKA) et l'erreur.
 
 **Le module ne fait rien** : ni relancer, ni annuler, ni approuver. Aucune action dans l'environnement d'un client ne part de LEKA ADMIN ; `tests/test_admin_intentions.py` vérifie que le module n'a que des lectures.
+
+**Le registre des crédits IA** (LEKA-553, `credit_transactions`, `api/leka/metering/ledger.py`). Chaque mouvement des crédits d'une organisation en est une ligne : son identifiant, son organisation, son type, sa quantité (positive : donnée, négative : prise), son mois, sa date, son origine, la référence de l'opération qu'il enregistre et, pour une ligne de l'équipe LEKA, son auteur et son motif.
+
+| Type | Origine | Ce qu'il enregistre | Référence |
+| --- | --- | --- | --- |
+| `grant` | `plan` | les crédits du mois donnés par la formule en vigueur (la dernière du mois, comme l'allocation la compte) ; une formule changée dans le mois, la différence | `plan:AAAA-MM:n` |
+| `grant` | `pack` | un pack ajouté au mois | `pack:<id>` |
+| `consumption` | `metering` | ce qu'une exécution a coûté sur les modèles de LEKA, en crédits, selon le registre de consommation ; mesurée à nouveau, la différence | `use:<exécution>:n` |
+| `refund` | `admin` | des crédits rendus par l'équipe LEKA, en nommant la consommation rendue, jamais plus qu'elle | `admin:<Idempotency-Key>` |
+| `adjustment` | `admin` | des crédits ajoutés ou retirés par l'équipe LEKA | `admin:<Idempotency-Key>` |
+| `expiration` | `close` | ce qui restait du mois à sa clôture, deux jours après sa fin : les crédits ne se reportent pas | `expire:AAAA-MM` |
+
+- **Écrit une fois** : la référence est unique dans l'organisation. Un balayage relancé, deux en même temps, une requête renvoyée n'écrivent rien deux fois.
+- **Jamais modifié** : un déclencheur refuse toute mise à jour. Une correction est une ligne à part.
+- **Le solde d'un mois** est la somme de ses lignes ; celui d'un mois clos vaut 0 (ou reste négatif s'il a été dépassé).
+- **Qui l'écrit** : le balayage horaire (`credit-ledger`, trois minutes après celui du registre de consommation) écrit les attributions, les packs, les exécutions mesurées depuis six heures et les mois clos. Pour une organisation qui n'a encore aucune ligne, il écrit tout son historique. L'équipe LEKA écrit les remboursements et les ajustements.
+- **Ce qui compte pour le client** : les remboursements et les ajustements entrent tout de suite dans l'allocation du mois, la même pour la passerelle (refus des modèles de LEKA une fois les crédits épuisés), pour la page Facturation et pour la faisabilité d'une intention.
+- **Jamais un coût inventé** : une exécution que LEKA n'a pas su chiffrer n'écrit pas de ligne, elle est comptée à part (`unpriced`).
+- **Le rapprochement** d'un mois met le registre à côté de ce que la passerelle a compté (les appels aux modèles de LEKA, en crédits). L'écart `pending` est la consommation pas encore mesurée, les dernières minutes. `allowance_gap` est l'écart entre l'allocation de la passerelle et celle du registre, pour le mois en cours. Un mois est rapproché quand les deux écarts sont nuls.
+- **Trois choses à part** :
+  - la **capacité commerciale**, c'est-à-dire les crédits qu'un mois donne : formule, packs, ajustements ;
+  - les **crédits applicatifs** : ce que le travail coûte sur les modèles de LEKA, à `credit_usd` le crédit ;
+  - le **coût fournisseur** : chaque appel au tarif public du fournisseur (`model_rates`), estimé à partir des jetons, jamais une facture. Les modèles de LEKA et ceux d'une organisation sont comptés à part, et un appel sans tarif connu est compté, jamais deviné.
 
 **Les agents** (LEKA-552, `api/leka/admin/agents.py`). Chaque agent est identifié par sa clé, et lu là où LEKA le garde :
 
@@ -274,7 +301,7 @@ Suspendre, réactiver, ajouter des crédits : chacune appelle la règle du modul
 | Connexion et sessions | `admin.signed_in`, `admin.sign_in_failed` (avec sa raison), `admin.signed_out`, `admin.session_renewed`, `admin.session_ended`, `admin.session_reused`, `admin.signed_out_everywhere` |
 | Mots de passe et codes | `admin.password_reset_asked`, `admin.code_refused`, `admin.password_set`, `admin.password_changed`, `admin.password_change_refused` |
 | Lectures | `admin.refused` (un rôle qui n'accorde pas), `admin.viewed` (une organisation, une personne, une intention), `admin.viewed_content` (ce que le client a écrit, les livrables ; pour une page d'intentions avec leur description, les intentions lues), `admin.viewed_trail` (ce journal) |
-| Clients, crédits | `admin.organisation_suspended`, `admin.organisation_reactivated`, `admin.credits_added`, `admin.organisation_updated` (LEKA-549 : avec ce qui a changé, avant et après), chacune avec son motif ; `admin.note_added` (une note interne : sa longueur, jamais son texte) |
+| Clients, crédits | `admin.organisation_suspended`, `admin.organisation_reactivated`, `admin.credits_added`, `admin.credits_adjusted` (LEKA-553 : un remboursement ou un ajustement du registre, avec son motif), `admin.organisation_updated` (LEKA-549 : avec ce qui a changé, avant et après), chacune avec son motif ; `admin.note_added` (une note interne : sa longueur, jamais son texte) |
 | L'équipe, les rôles, les permissions | `admin.account_created`, `admin.invited`, `admin.invitation_sent`, `admin.account_changed` (nom, rôle, accès : avant et après), `admin.role_changed` (les permissions d'un rôle : avant et après) |
 | Le journal lui-même | `admin.trail_expired` (ce que la tâche de nuit a supprimé), `admin.trail_unprotected` (sa protection trouvée absente) |
 

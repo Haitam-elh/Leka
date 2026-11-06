@@ -32,6 +32,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -352,3 +353,57 @@ class CreditPack(Base, WorkspaceScopedMixin):
     reason: Mapped[str] = mapped_column(String(300), nullable=False)
     granted_by: Mapped[str] = mapped_column(String(100), nullable=False)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+# What moves a workspace's AI credits (LEKA-553), each a line of its ledger:
+# a month's credits given by the plan, or added (a pack); what its work
+# consumed; given back, or adjusted by LEKA's team; what was left of a month
+# when it closed.
+CREDIT_KINDS = ("grant", "consumption", "refund", "adjustment", "expiration")
+# Written by a person of LEKA's team, never derived: who and why are said.
+MANUAL_KINDS = ("refund", "adjustment")
+
+
+class CreditTransaction(Base, WorkspaceScopedMixin):
+    """One movement of a workspace's AI credits (LEKA-553). Never changed:
+    a correction is a movement of its own. Each says the operation it
+    records (`reference`), once per workspace, so writing it twice — a sweep
+    run twice, a request sent again — writes it once. A month's balance is
+    the sum of its movements."""
+
+    __tablename__ = "credit_transactions"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "reference", name="uq_credit_transactions_reference"),
+        CheckConstraint(
+            "kind IN ('grant', 'consumption', 'refund', 'adjustment', 'expiration')", name="kind"
+        ),
+        CheckConstraint(
+            "kind NOT IN ('refund', 'adjustment') OR (by_whom IS NOT NULL AND reason IS NOT NULL)",
+            name="manual_said",
+        ),
+        CheckConstraint("kind <> 'refund' OR credits > 0", name="refund_gives"),
+        Index("ix_credit_transactions_workspace_period", "workspace_id", "period"),
+        Index("ix_credit_transactions_workspace_at", "workspace_id", "at"),
+        Index("ix_credit_transactions_execution", "workspace_id", "execution"),
+    )
+
+    kind: Mapped[str] = mapped_column(String(12), nullable=False)
+    # Credits added (positive) or taken (negative).
+    credits: Mapped[float] = mapped_column(Numeric(14, 4, asdecimal=False), nullable=False)
+    # The month it counts in: its first day.
+    period: Mapped[date] = mapped_column(Date, nullable=False)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Where it comes from: plan, pack, metering, admin, close.
+    origin: Mapped[str] = mapped_column(String(10), nullable=False)
+    # The operation it records, unique in the workspace: plan:2026-11:1,
+    # pack:<id>, use:<execution>:1, admin:<key>, expire:2026-10.
+    reference: Mapped[str] = mapped_column(String(200), nullable=False)
+    # A consumption's: what was metered (agent_run:<id>, llm_run:<id>…) and
+    # what it was — an agent, what LEKA asked a model for.
+    execution: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    subject: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # A manual movement's: who at LEKA, and why.
+    by_whom: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    reason: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    # What it was computed from: a cost, its status, the plan, the pack.
+    detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")

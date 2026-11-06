@@ -352,6 +352,7 @@ def _credits_state(read: CreditsRead) -> CreditsState:
         plan=read.plan,
         monthly=read.monthly,
         packs=read.packs,
+        adjustments=read.adjustments,
         allowance=read.allowance,
         used=read.used,
         remaining=read.remaining,

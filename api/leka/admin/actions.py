@@ -24,6 +24,7 @@ it would cancel their request, and suspending it means nothing.
 
 from __future__ import annotations
 
+import math
 import uuid
 from datetime import UTC, datetime
 
@@ -34,13 +35,14 @@ from leka.admin.models import AdminNote
 from leka.admin.reads import credits_of, note_rows
 from leka.admin.schemas import (
     AdminPrincipal,
+    CreditAdjustment,
     NoteCreate,
     NoteRow,
     OrganisationAction,
     OrganisationUpdate,
 )
 from leka.db import workspace_scope
-from leka.governance import Target, add_pack
+from leka.governance import CreditTransaction, PlanError, Target, add_pack, adjust
 from leka.governance import audit as workspace_audit
 from leka.identity import User
 from leka.platform import Workspace, WorkspaceRepository, WorkspaceService, WorkspaceStatus
@@ -143,6 +145,76 @@ async def add_credits(
         status=str(workspace.status),
         done_at=datetime.now(UTC),
         replayed=False,
+        credits=await credits_of(session, workspace_id),
+    )
+
+
+async def adjust_credits(
+    session: AsyncSession,
+    principal: AdminPrincipal,
+    workspace_id: uuid.UUID,
+    change: CreditAdjustment,
+    *,
+    key: str,
+    route: str,
+) -> OrganisationAction:
+    """Credits given back or adjusted by LEKA's team (LEKA-553): a line of the
+    organisation's ledger, written once for this Idempotency-Key, counted in
+    this month's allowance at once; kept in its trail and in the admin trail,
+    with the reason. A refund names the consumption it gives back, of this
+    ledger, and never more than it took."""
+    workspace = await _workspace(session, workspace_id)
+    detail: dict[str, object] = {}
+    if change.refund_of is not None:
+        consumed = await session.get(CreditTransaction, change.refund_of)
+        if (
+            consumed is None
+            or consumed.workspace_id != workspace_id
+            or consumed.kind != "consumption"
+        ):
+            raise ActionError(404, "No consumption with this id in this organisation's ledger.")
+        if change.credits > math.ceil(-float(consumed.credits)):
+            raise ActionError(422, "A refund gives back at most what was consumed.")
+        detail = {"refund_of": str(consumed.id), "reference": consumed.reference}
+    with workspace_scope(workspace_id):
+        try:
+            line, written = await adjust(
+                session,
+                workspace_id,
+                change.kind,
+                change.credits,
+                by=f"LEKA ADMIN {principal.email}",
+                reason=change.reason,
+                reference=f"admin:{key}",
+                detail=detail,
+            )
+        except PlanError as error:
+            raise ActionError(422, str(error)) from error
+    if written:
+        audit.record(
+            session,
+            "admin.credits_adjusted",
+            admin_id=principal.admin_id,
+            target_type="organisation",
+            target_id=workspace_id,
+            workspace_id=workspace_id,
+            route=route,
+            ip_prefix=principal.ip_prefix,
+            detail={
+                "kind": change.kind,
+                "credits": change.credits,
+                "reason": change.reason,
+                "movement": str(line.id),
+                **detail,
+            },
+        )
+    await session.flush()
+    return OrganisationAction(
+        organisation_id=workspace_id,
+        action="credits_adjusted",
+        status=str(workspace.status),
+        done_at=datetime.now(UTC),
+        replayed=not written,
         credits=await credits_of(session, workspace_id),
     )
 
