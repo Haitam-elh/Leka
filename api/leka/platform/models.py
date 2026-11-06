@@ -16,7 +16,16 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -66,6 +75,12 @@ class WorkspaceStatus(enum.StrEnum):
     PENDING_DELETION = "pending_deletion"
 
 
+# How many people work in an organisation (LEKA-549): the brackets of the
+# site's forms, the same as identity's CompanySize, which platform does not
+# import (tests/test_admin_organisations.py holds them equal).
+ORGANISATION_SIZES = ("1-10", "11-50", "51-200", "201-1000", "1000+")
+
+
 class InvitationStatus(enum.StrEnum):
     PENDING = "pending"
     ACCEPTED = "accepted"
@@ -82,6 +97,12 @@ class Workspace(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """
 
     __tablename__ = "workspaces"
+    __table_args__ = (
+        CheckConstraint("country ~ '^[A-Z]{2}$'", name="country"),
+        CheckConstraint(
+            "size IN (" + ", ".join(f"'{size}'" for size in ORGANISATION_SIZES) + ")", name="size"
+        ),
+    )
 
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
@@ -125,6 +146,12 @@ class Workspace(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         default=lambda: languages.catalogue().default,
         server_default="en",
     )
+
+    # Who it is, as LEKA's team keeps it (LEKA-549): its country (ISO 3166-1
+    # alpha-2) and how many people work there. Null: not known, never guessed
+    # from a person's region or language.
+    country: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    size: Mapped[str | None] = mapped_column(String(10), nullable=True)
 
 
 class Membership(Base, WorkspaceScopedMixin):

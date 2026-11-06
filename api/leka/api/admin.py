@@ -11,7 +11,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Request, Response, status
 from pydantic import BaseModel
@@ -34,6 +34,7 @@ from leka.admin import (
     AdminIntentionRow,
     AdminInvite,
     AdminMe,
+    AdminNote,
     AdminOverview,
     AdminPasswordChanged,
     AdminPermission,
@@ -51,16 +52,21 @@ from leka.admin import (
     AdminSignedIn,
     AdminSignIn,
     AgentStat,
+    AlertRow,
     CodeError,
     CreditGrant,
     CreditsBreakdown,
     IdempotencyConflictError,
+    NoteCreate,
+    NoteRow,
     OrganisationAction,
     OrganisationCredits,
     OrganisationDetail,
+    OrganisationHistoryRow,
     OrganisationMembers,
     OrganisationRef,
     OrganisationRow,
+    OrganisationUpdate,
     PasswordRefusedError,
     Period,
     RenewalError,
@@ -72,9 +78,12 @@ from leka.admin import (
     activity_query,
     activity_row,
     add_credits,
+    add_note,
     admin_audit_query,
     admin_emails,
     agent_stats,
+    alert_row,
+    alerts_query,
     audit_apart,
     audit_record,
     change_password,
@@ -82,9 +91,13 @@ from leka.admin import (
     credits_breakdown,
     credits_of,
     forgot_password,
+    history_query,
+    history_rows,
     intention_detail,
     intention_rows,
     intentions_query,
+    note_rows,
+    notes_query,
     once,
     organisation_detail,
     organisation_members,
@@ -103,6 +116,7 @@ from leka.admin import (
     subscription_rows,
     subscriptions_query,
     team,
+    update_organisation,
     user_detail,
     user_rows,
     users_query,
@@ -118,6 +132,7 @@ from leka.core.errors import ErrorCode
 from leka.db import DatabaseSession, SortableField
 from leka.identity import DeferredEmailSender, EmailSender, User, build_email_sender
 from leka.intentions import Intention
+from leka.monitoring import MonitoringAlert
 from leka.platform import Workspace
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -368,6 +383,13 @@ SOURCE_SORTS = _sorts(
 )
 AUDIT_SORTS = _sorts(("at", AdminAuditEvent.at, "ix_admin_audit_events_at"), default="at")
 ACTIVITY_SORTS = _sorts(("at", ActivityEvent.at, "ix_activity_events_kind_at"), default="at")
+NOTE_SORTS = _sorts(
+    ("created_at", AdminNote.created_at, "ix_admin_notes_workspace_created"), default="created_at"
+)
+ALERT_SORTS = _sorts(
+    ("opened_at", MonitoringAlert.opened_at, "ix_monitoring_alerts_workspace_status"),
+    default="opened_at",
+)
 
 Admin = Annotated[AdminPrincipal, Depends(require_admin(P.ORGANISATIONS_READ))]
 
@@ -433,6 +455,17 @@ async def list_organisations(
     created_from: datetime | None = None,
     created_to: datetime | None = None,
     include_demo: bool = False,
+    country: Annotated[
+        str | None, Query(pattern=r"^[A-Za-z]{2}$", description="ISO 3166-1 alpha-2.")
+    ] = None,
+    size: Annotated[
+        str | None,
+        Query(description="1-10, 11-50, 51-200, 201-1000, 1000+: kept by LEKA, else declared."),
+    ] = None,
+    activity: Annotated[
+        Literal["active", "inactive", "never"] | None,
+        Query(description="Something done in the last 30 days, before only, or never."),
+    ] = None,
 ) -> PageEnvelope[OrganisationRow]:
     found = await serve_page(
         session,
@@ -443,6 +476,9 @@ async def list_organisations(
             created_from=created_from,
             created_to=created_to,
             include_demo=include_demo,
+            country=country,
+            size=size,
+            activity=activity,
         ),
         request=page,
         catalogue=ORGANISATION_SORTS,
@@ -529,6 +565,77 @@ async def get_organisation_activity(
         id_column=ActivityEvent.id,
     )
     return PageEnvelope(data=[activity_row(e) for e in found.items], next_cursor=found.next_cursor)
+
+
+@router.get(
+    "/organisations/{organisation_id}/notes",
+    response_model=PageEnvelope[NoteRow],
+    summary="LEKA's internal notes about an organisation",
+)
+async def list_organisation_notes(
+    organisation_id: uuid.UUID, session: SessionDep, _: Admin, page: PageParams
+) -> PageEnvelope[NoteRow]:
+    """What LEKA's team wrote down about it, the latest first (LEKA-549)."""
+    if await session.get(Workspace, organisation_id) is None:
+        raise _not_found("organisation")
+    found = await serve_page(
+        session,
+        notes_query(organisation_id),
+        request=page,
+        catalogue=NOTE_SORTS,
+        id_column=AdminNote.id,
+    )
+    return PageEnvelope(data=await note_rows(session, found.items), next_cursor=found.next_cursor)
+
+
+@router.get(
+    "/organisations/{organisation_id}/history",
+    response_model=PageEnvelope[OrganisationHistoryRow],
+    summary="What LEKA's team did to an organisation",
+)
+async def list_organisation_history(
+    organisation_id: uuid.UUID, session: SessionDep, _: Admin, page: PageParams
+) -> PageEnvelope[OrganisationHistoryRow]:
+    """Suspended, reactivated, changed, credits added, a note written: by
+    whom, when, why; never what was read (LEKA-549)."""
+    if await session.get(Workspace, organisation_id) is None:
+        raise _not_found("organisation")
+    found = await serve_page(
+        session,
+        history_query(organisation_id),
+        request=page,
+        catalogue=AUDIT_SORTS,
+        id_column=AdminAuditEvent.id,
+    )
+    return PageEnvelope(
+        data=await history_rows(session, found.items), next_cursor=found.next_cursor
+    )
+
+
+@router.get(
+    "/organisations/{organisation_id}/incidents",
+    response_model=PageEnvelope[AlertRow],
+    summary="The alerts on an organisation's environment",
+)
+async def list_organisation_incidents(
+    organisation_id: uuid.UUID,
+    session: SessionDep,
+    _: Annotated[AdminPrincipal, Depends(require_admin(P.ENVIRONMENTS_READ))],
+    page: PageParams,
+    alert_status: Annotated[
+        Literal["open", "resolved", "closed"] | None, Query(alias="status")
+    ] = None,
+) -> PageEnvelope[AlertRow]:
+    """What monitoring saw go wrong in its environment, the latest first (LEKA-549)."""
+    if await session.get(Workspace, organisation_id) is None:
+        raise _not_found("organisation")
+    statement = alerts_query(organisation_id)
+    if alert_status:
+        statement = statement.where(MonitoringAlert.status == alert_status)
+    found = await serve_page(
+        session, statement, request=page, catalogue=ALERT_SORTS, id_column=MonitoringAlert.id
+    )
+    return PageEnvelope(data=[alert_row(a) for a in found.items], next_cursor=found.next_cursor)
 
 
 @router.get("/users", response_model=PageEnvelope[UserRow], summary="Every person")
@@ -1031,6 +1138,55 @@ async def add_organisation_credits(
             route=route_of(request),
         ),
     )
+
+
+@router.patch(
+    "/organisations/{organisation_id}",
+    response_model=OrganisationAction,
+    summary="Change what LEKA keeps about an organisation",
+)
+async def update_organisation_info(
+    organisation_id: uuid.UUID,
+    payload: OrganisationUpdate,
+    request: Request,
+    session: SessionDep,
+    key: IdempotencyKey,
+    principal: Annotated[AdminPrincipal, Depends(require_admin(P.ORGANISATIONS_WRITE))],
+) -> OrganisationAction:
+    """Its name, country or size (LEKA-549), with a reason: what changed is
+    said in its own audit trail as done by LEKA, the reason and the values
+    before and after in the admin trail."""
+    return await _once(
+        request,
+        session,
+        principal,
+        key,
+        payload,
+        lambda: update_organisation(
+            session, principal, organisation_id, payload, route=route_of(request)
+        ),
+    )
+
+
+@router.post(
+    "/organisations/{organisation_id}/notes",
+    response_model=NoteRow,
+    status_code=status.HTTP_201_CREATED,
+    summary="Write an internal note about an organisation",
+)
+async def add_organisation_note(
+    organisation_id: uuid.UUID,
+    payload: NoteCreate,
+    request: Request,
+    session: SessionDep,
+    principal: Annotated[AdminPrincipal, Depends(require_admin(P.ORGANISATIONS_NOTES))],
+) -> NoteRow:
+    """For LEKA's team, never shown to the customer (LEKA-549). The admin
+    trail says one was written, never what it says."""
+    try:
+        return await add_note(session, principal, organisation_id, payload, route=route_of(request))
+    except ActionError as error:
+        raise _not_found("organisation") from error
 
 
 # ── Passwords (LEKA-545) ─────────────────────────────────────────────────────

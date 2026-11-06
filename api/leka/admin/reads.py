@@ -22,12 +22,12 @@ import uuid
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 
-from sqlalchemy import Select, distinct, func, or_, select
+from sqlalchemy import Select, String, cast, distinct, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from leka.admin.models import ActivityEvent, AdminAccount, AdminAuditEvent
+from leka.admin.models import ActivityEvent, AdminAccount, AdminAuditEvent, AdminNote
 from leka.admin.schemas import (
     ActivityRow,
     AdminIntentionContent,
@@ -38,14 +38,17 @@ from leka.admin.schemas import (
     AdminTimelineEntry,
     AgentCost,
     AgentStat,
+    AlertRow,
     BillingState,
     CreditsBreakdown,
     CreditsState,
     InvitationRow,
     MemberRow,
     ModelCost,
+    NoteRow,
     OrganisationCounts,
     OrganisationDetail,
+    OrganisationHistoryRow,
     OrganisationMembers,
     OrganisationRef,
     OrganisationRow,
@@ -69,6 +72,7 @@ from leka.governance import WorkspacePlan, plan_of
 from leka.identity import User
 from leka.intentions import Intention, IntentionAnalysis, IntentionDecision, IntentionEvent
 from leka.metering import CreditsRead, UsageRecord, credits_now
+from leka.monitoring import MonitoringAlert
 from leka.platform import Invitation, InvitationStatus, Membership, Role, Workspace
 
 FREE = "free"
@@ -171,6 +175,31 @@ def _latest_plan() -> Any:
 # ── Organisations ────────────────────────────────────────────────────────────
 
 
+def _declared_size() -> Any:
+    """The size its first owner gave when signing up."""
+    return (
+        select(cast(User.company_size, String))
+        .join(Membership, Membership.user_id == User.id)
+        .where(Membership.workspace_id == Workspace.id, Membership.role == Role.OWNER)
+        .order_by(Membership.created_at)
+        .limit(1)
+        .correlate(Workspace)
+        .scalar_subquery()
+    )
+
+
+def _last_at() -> Any:
+    return (
+        select(func.max(ActivityEvent.at))
+        .where(ActivityEvent.for_workspace_id == Workspace.id)
+        .correlate(Workspace)
+        .scalar_subquery()
+    )
+
+
+Activity = Literal["active", "inactive", "never"]
+
+
 def organisations_query(
     *,
     q: str | None = None,
@@ -179,7 +208,15 @@ def organisations_query(
     created_from: datetime | None = None,
     created_to: datetime | None = None,
     include_demo: bool = False,
+    country: str | None = None,
+    size: str | None = None,
+    activity: Activity | None = None,
+    now: datetime | None = None,
 ) -> Select[tuple[Workspace]]:
+    """Every organisation, or those that match: its name, slug, id or an
+    owner's email; its plan, status, creation; its country and size (the
+    size LEKA keeps, else the one its owner declared); its activity in the
+    last 30 days (active), before (inactive), or none at all (never)."""
     statement = select(Workspace)
     if not include_demo:
         statement = statement.where(Workspace.demo.is_(False))
@@ -209,6 +246,20 @@ def organisations_query(
         statement = statement.where(Workspace.created_at >= created_from)
     if created_to:
         statement = statement.where(Workspace.created_at < created_to)
+    if country:
+        statement = statement.where(Workspace.country == country.upper())
+    if size:
+        statement = statement.where(func.coalesce(Workspace.size, _declared_size()) == size)
+    if activity:
+        last = _last_at()
+        recent = (now or datetime.now(UTC)) - ACTIVE_WINDOW
+        statement = statement.where(
+            last >= recent
+            if activity == "active"
+            else (last < recent)
+            if activity == "inactive"
+            else last.is_(None)
+        )
     return statement
 
 
@@ -272,12 +323,20 @@ async def organisation_rows(
             plan=plans.get(w.id, FREE),
             created_at=w.created_at,
             owner=_person(owners.get(w.id)),
+            country=w.country,
+            size=w.size,
+            size_declared=_size(owners.get(w.id)),
             members=members.get(w.id, 0),
             intentions=intentions.get(w.id, 0),
             last_activity_at=last.get(w.id),
         )
         for w in workspaces
     ]
+
+
+def _size(owner: User | None) -> str | None:
+    said = owner.company_size if owner is not None else None
+    return str(said) if said is not None else None
 
 
 def _credits_state(read: CreditsRead) -> CreditsState:
@@ -353,6 +412,24 @@ async def organisation_detail(
             )
         ).get(workspace_id, 0),
         active_users_30d=int(active or 0),
+        analyses_completed=(
+            await _counts(
+                session,
+                IntentionAnalysis.workspace_id,
+                ids,
+                IntentionAnalysis.status.in_(("complete", "partial", "inconclusive")),
+            )
+        ).get(workspace_id, 0),
+        analyses_failed=(
+            await _counts(
+                session, IntentionAnalysis.workspace_id, ids, IntentionAnalysis.status == "failed"
+            )
+        ).get(workspace_id, 0),
+        alerts_open=(
+            await _counts(
+                session, MonitoringAlert.workspace_id, ids, MonitoringAlert.status == "open"
+            )
+        ).get(workspace_id, 0),
     )
     agents = (
         await session.scalars(
@@ -1111,3 +1188,90 @@ __all__ = [
     "user_rows",
     "users_query",
 ]
+
+
+# ── An organisation's notes, history and alerts (LEKA-549) ───────────────────
+
+# What LEKA's team did to an organisation: its changes, never what it read.
+HISTORY_ACTIONS = (
+    "admin.organisation_suspended",
+    "admin.organisation_reactivated",
+    "admin.organisation_updated",
+    "admin.credits_added",
+    "admin.note_added",
+)
+
+
+def notes_query(organisation_id: uuid.UUID) -> Select[tuple[AdminNote]]:
+    return select(AdminNote).where(AdminNote.for_workspace_id == organisation_id)
+
+
+async def note_rows(session: AsyncSession, notes: Sequence[AdminNote]) -> list[NoteRow]:
+    ids = {n.admin_id for n in notes if n.admin_id is not None}
+    names = (
+        dict(
+            (
+                await session.execute(
+                    select(AdminAccount.id, AdminAccount.name).where(AdminAccount.id.in_(ids))
+                )
+            )
+            .tuples()
+            .all()
+        )
+        if ids
+        else {}
+    )
+    return [
+        NoteRow(
+            id=n.id,
+            at=n.created_at,
+            admin_email=n.admin_email,
+            admin_name=names.get(n.admin_id) if n.admin_id else None,
+            body=n.body,
+        )
+        for n in notes
+    ]
+
+
+def history_query(organisation_id: uuid.UUID) -> Select[tuple[AdminAuditEvent]]:
+    return select(AdminAuditEvent).where(
+        AdminAuditEvent.for_workspace_id == organisation_id,
+        AdminAuditEvent.action.in_(HISTORY_ACTIONS),
+        AdminAuditEvent.outcome == "succeeded",
+    )
+
+
+async def history_rows(
+    session: AsyncSession, events: Sequence[AdminAuditEvent]
+) -> list[OrganisationHistoryRow]:
+    emails = await admin_emails(session, {e.admin_id for e in events if e.admin_id is not None})
+    return [
+        OrganisationHistoryRow(
+            id=e.id,
+            at=e.at,
+            action=e.action,
+            admin_email=e.admin_email or (emails.get(e.admin_id) if e.admin_id else None),
+            detail=e.detail,
+        )
+        for e in events
+    ]
+
+
+def alerts_query(organisation_id: uuid.UUID) -> Select[tuple[MonitoringAlert]]:
+    return select(MonitoringAlert).where(MonitoringAlert.workspace_id == organisation_id)
+
+
+def alert_row(alert: MonitoringAlert) -> AlertRow:
+    return AlertRow(
+        id=alert.id,
+        subject_type=alert.subject_type,
+        subject_name=alert.subject_name,
+        kind=alert.kind,
+        severity=alert.severity,
+        certainty=alert.certainty,
+        status=alert.status,
+        opened_at=alert.opened_at,
+        last_seen_at=alert.last_seen_at,
+        resolved_at=alert.resolved_at,
+        acknowledged_at=alert.acknowledged_at,
+    )

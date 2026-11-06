@@ -54,7 +54,8 @@ Une route demande une **permission**, jamais un rôle. Ce que le rôle n'accorde
 | --- | :-: | :-: | :-: | :-: |
 | `dashboard:read` tableau de bord | ✓ | ✓ | ✓ | ✓ |
 | `organisations:read` organisations | ✓ | ✓ | ✓ | ✓ |
-| `organisations:write` suspendre, réactiver | ✓ | ✓ | | |
+| `organisations:write` suspendre, réactiver ; changer son nom, son pays, sa taille (LEKA-549) | ✓ | ✓ | | |
+| `organisations:notes` écrire une note interne (LEKA-549) | ✓ | ✓ | ✓ | ✓ |
 | `users:read` personnes | ✓ | ✓ | ✓ | ✓ |
 | `intentions:read` intentions (métadonnées, titre) | ✓ | ✓ | ✓ | |
 | `intentions:content` ce que le client a écrit, les livrables | ✓ | | ✓ | |
@@ -92,14 +93,19 @@ Chaque permission a un **module** et un **niveau d'action** (`GET /admin/roles`)
 | Méthode et chemin | Permission | Filtres et tri | Rend |
 | --- | --- | --- | --- |
 | `GET /admin/overview` | `dashboard:read` (les montants : `billing:read`) | `period` = `today`, `7d`, `30d` (défaut), `90d`, `12m`, `custom` avec `from` et `to` (2 ans au plus) | les chiffres du § 5 et leurs séries ([indicateurs.md](indicateurs.md)) |
-| `GET /admin/organisations` | `organisations:read` | `q` (nom, slug, id, e-mail d'un propriétaire), `plan`, `status`, `created_from`, `created_to`, `include_demo` ; tri `created_at`, `name` | une ligne par organisation : formule, propriétaire, membres, intentions, dernière activité |
-| `GET /admin/organisations/{id}` | `organisations:read` | | la fiche 360° : informations, formule et depuis quand, abonnement Stripe, crédits du mois, compteurs, agents utilisés. **Lecture journalisée** |
+| `GET /admin/organisations` | `organisations:read` | `q` (nom, slug, id, e-mail d'un propriétaire), `plan`, `status`, `created_from`, `created_to`, `country` (code ISO à deux lettres), `size` (celle que garde LEKA, sinon celle déclarée), `activity` (`active` : quelque chose dans les 30 derniers jours, `inactive` : avant seulement, `never` : jamais), `include_demo` ; tri `created_at`, `name` | une ligne par organisation : formule, propriétaire, pays, taille et taille déclarée, membres, intentions, dernière activité |
+| `GET /admin/organisations/{id}` | `organisations:read` | | la fiche 360° : informations, formule et depuis quand, abonnement Stripe, crédits du mois, compteurs (dont analyses terminées et échouées, alertes ouvertes), agents utilisés. **Lecture journalisée** |
 | `GET /admin/organisations/{id}/members` | `organisations:read` | | ses membres (rôle, depuis, dernière connexion) et ses invitations en attente |
 | `GET /admin/organisations/{id}/credits` | `credits:read` | `since` (début du mois par défaut) | crédits du mois, consommation par agent et par modèle |
 | `GET /admin/organisations/{id}/activity` | `activity:read` | `kind` | son journal d'activité |
 | `POST /admin/organisations/{id}/suspend` | `organisations:write` | corps `{reason}`, en-tête `Idempotency-Key` | l'opération faite (§ 6) |
 | `POST /admin/organisations/{id}/reactivate` | `organisations:write` | idem | idem |
 | `POST /admin/organisations/{id}/credits` | `credits:write` | corps `{credits, reason}`, en-tête `Idempotency-Key` | l'opération et les crédits du mois après |
+| `PATCH /admin/organisations/{id}` | `organisations:write` | corps `{name?, country?, size?, reason}` (un champ au moins), en-tête `Idempotency-Key` | l'opération et ce qui a changé, avant et après (LEKA-549) |
+| `GET /admin/organisations/{id}/notes` | `organisations:read` | | ses notes internes, la plus récente d'abord : qui, quand, quoi |
+| `POST /admin/organisations/{id}/notes` | `organisations:notes` | corps `{body}` (4 000 caractères au plus) | la note écrite. Jamais montrée au client ; le journal admin en garde la longueur, jamais le texte |
+| `GET /admin/organisations/{id}/history` | `organisations:read` | | ce que l'équipe LEKA lui a fait : suspendue, réactivée, modifiée, crédits ajoutés, note écrite ; jamais ce qu'elle a lu |
+| `GET /admin/organisations/{id}/incidents` | `environments:read` | `status` (`open`, `resolved`, `closed`) | les alertes sur son environnement (LEKA-442), la plus récente d'abord |
 | `GET /admin/users` | `users:read` | `q` (e-mail, nom, id), `organisation_id`, `verified`, `created_from`, `created_to` ; tri `created_at`, `email` | une ligne par personne : organisations et rôles, intentions, statut (§ 5) |
 | `GET /admin/users/{id}` | `users:read` | | la fiche : profil déclaré, organisations, exécutions, crédits consommés sur 30 jours, dernières connexions. **Lecture journalisée** |
 | `GET /admin/intentions` | `intentions:read` | `organisation_id`, `user_id`, `status` (les 5 de LEKA ADMIN ou les 12 de LEKA), `kind`, `agent`, `created_from`, `created_to` ; tri `created_at` | une ligne par intention : organisation, auteur, titre, statuts, agents, durée, crédits |
@@ -119,7 +125,9 @@ Chaque permission a un **module** et un **niveau d'action** (`GET /admin/roles`)
 | `PUT /admin/roles/{role}/permissions` | `admins:manage` | corps `{permissions}` (la liste entière) | le rôle changé ; refusé pour `super_admin` et pour ce qui n'appartient qu'au Super Admin |
 | `GET /admin/audit` | `audit:read` | `admin_id`, `action` (`*` joker), `organisation_id`, `outcome`, `from`, `to` ; tri `at` | le journal admin (§ 8). **Lecture journalisée**, avec les filtres |
 
-**Pas encore de données** (le ticket qui les apporte) : le pays d'une organisation (pas collecté), les notes internes (LEKA-549), le registre des crédits (LEKA-553), les factures, paiements et MRR (LEKA-554), les incidents de la plateforme (LEKA-556).
+**Pas encore de données** (le ticket qui les apporte) : le registre des crédits (LEKA-553), l'historique des factures et des abonnements (LEKA-554), l'historique des incidents de la plateforme (LEKA-556).
+
+**Le pays et la taille d'une organisation** (LEKA-549) : ce que l'équipe LEKA en garde (`country`, `size`), vide tant que personne ne les a donnés, jamais déduits de la région ou de la langue d'une personne. La taille que son premier propriétaire a déclarée à l'inscription est rendue à part (`size_declared`) : c'est la sienne, pas une donnée de l'organisation. Le filtre `size` lit la taille gardée, sinon la déclarée.
 
 ## 5. Les définitions
 
@@ -215,7 +223,7 @@ Suspendre, réactiver, ajouter des crédits : chacune appelle la règle du modul
 | Connexion et sessions | `admin.signed_in`, `admin.sign_in_failed` (avec sa raison), `admin.signed_out`, `admin.session_renewed`, `admin.session_ended`, `admin.session_reused`, `admin.signed_out_everywhere` |
 | Mots de passe et codes | `admin.password_reset_asked`, `admin.code_refused`, `admin.password_set`, `admin.password_changed`, `admin.password_change_refused` |
 | Lectures | `admin.refused` (un rôle qui n'accorde pas), `admin.viewed` (une organisation, une personne, une intention), `admin.viewed_content` (ce que le client a écrit, les livrables), `admin.viewed_trail` (ce journal) |
-| Clients, crédits | `admin.organisation_suspended`, `admin.organisation_reactivated`, `admin.credits_added`, chacune avec son motif |
+| Clients, crédits | `admin.organisation_suspended`, `admin.organisation_reactivated`, `admin.credits_added`, `admin.organisation_updated` (LEKA-549 : avec ce qui a changé, avant et après), chacune avec son motif ; `admin.note_added` (une note interne : sa longueur, jamais son texte) |
 | L'équipe, les rôles, les permissions | `admin.account_created`, `admin.invited`, `admin.invitation_sent`, `admin.account_changed` (nom, rôle, accès : avant et après), `admin.role_changed` (les permissions d'un rôle : avant et après) |
 | Le journal lui-même | `admin.trail_expired` (ce que la tâche de nuit a supprimé), `admin.trail_unprotected` (sa protection trouvée absente) |
 
