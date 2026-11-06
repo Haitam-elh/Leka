@@ -7522,7 +7522,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Every intention */
+        /**
+         * Every intention
+         * @description Every intention of every customer (LEKA-551): its organisation, who
+         *     asked it, its title, its five statuses, agents, duration and credits. Its
+         *     short description is content: only for intentions:content, and each
+         *     page of it read is kept in the admin trail.
+         */
         get: operations["list_intentions_api_v1_admin_intentions_get"];
         put?: never;
         post?: never;
@@ -7541,9 +7547,12 @@ export interface paths {
         };
         /**
          * An intention, step by step
-         * @description Its timeline, its runs and their errors, what it cost. What the
-         *     customer wrote and what agents delivered (`content`) only for a role with
-         *     intentions:content, each reading kept in the admin trail.
+         * @description Its whole story, oldest first; how LEKA understood it and which agents
+         *     it chose; each run and its steps; its decisions, plans and checks; the
+         *     errors met; what its work used (LEKA-551). What the customer wrote and
+         *     what LEKA read or produced from it (`content`, the description, a reason)
+         *     only for a role with intentions:content, each reading kept in the admin
+         *     trail. Read only: nothing here acts on a customer's environment.
          */
         get: operations["get_intention_api_v1_admin_intentions__intention_id__get"];
         put?: never;
@@ -8689,6 +8698,84 @@ export interface components {
             /** Analyses Failed */
             analyses_failed: number;
         };
+        /** AdminAnalysisResult */
+        AdminAnalysisResult: {
+            /** Number */
+            number: number;
+            /** Answer */
+            answer: string | null;
+            /** Summary */
+            summary: string[];
+            /** Findings */
+            findings: string[];
+            /** Causes */
+            causes: string[];
+            /** Recommendations */
+            recommendations: string[];
+            /** Uncertainties */
+            uncertainties: string[];
+            /** Missing */
+            missing: string[];
+        };
+        /** AdminAnalysisRow */
+        AdminAnalysisRow: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /** Trigger */
+            trigger: string;
+            /** Status */
+            status: string;
+            /** Readiness */
+            readiness: string | null;
+            requested_by: components["schemas"]["PersonRef"] | null;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Finished At */
+            finished_at: string | null;
+            /** Duration Ms */
+            duration_ms: number | null;
+            /** Error */
+            error: string | null;
+            /**
+             * Risk
+             * @description The risk its result said; null: no result.
+             */
+            risk: string | null;
+            /** Confidence */
+            confidence: number | null;
+            /** Findings */
+            findings: number;
+            /** Recommendations */
+            recommendations: number;
+            /** Selection */
+            selection: components["schemas"]["AdminCapabilityChoice"][];
+            /** Steps */
+            steps: components["schemas"]["AdminAnalysisStep"][];
+        };
+        /** AdminAnalysisStep */
+        AdminAnalysisStep: {
+            /** Name */
+            name: string;
+            /**
+             * Status
+             * @description succeeded, failed, timed_out, skipped.
+             */
+            status: string;
+            /** Duration Ms */
+            duration_ms: number | null;
+            /** Error */
+            error: string | null;
+            /** Reason */
+            reason: string | null;
+        };
         /** AdminAuditRow */
         AdminAuditRow: {
             /**
@@ -8814,6 +8901,18 @@ export interface components {
              */
             paying_organisations: number;
         };
+        /** AdminCapabilityChoice */
+        AdminCapabilityChoice: {
+            /** Name */
+            name: string;
+            /** Chosen */
+            chosen: boolean;
+            /**
+             * Reason
+             * @description always, goal, kind, acting, no_model, disabled, not_called.
+             */
+            reason: string;
+        };
         /** AdminChange */
         AdminChange: {
             /** Name */
@@ -8848,6 +8947,36 @@ export interface components {
              */
             retained: (number | null)[];
         };
+        /**
+         * AdminConsumption
+         * @description What its work used, from LEKA's metering: null where nothing was
+         *     measured, never 0.
+         */
+        AdminConsumption: {
+            /** Duration Ms */
+            duration_ms: number | null;
+            /** Calls */
+            calls: number;
+            /** Failed Calls */
+            failed_calls: number;
+            /** Retries */
+            retries: number;
+            /** Tokens In */
+            tokens_in: number | null;
+            /** Tokens Out */
+            tokens_out: number | null;
+            /**
+             * Cost Usd
+             * @description At LEKA's rates.
+             */
+            cost_usd: number | null;
+            /** Credits */
+            credits: number | null;
+            /** Models */
+            models: string[];
+            /** By Work */
+            by_work: components["schemas"]["AdminWorkUsage"][];
+        };
         /** AdminCosts */
         AdminCosts: {
             /** Amounts Granted */
@@ -8867,6 +8996,33 @@ export interface components {
              * @description Not measured by LEKA (usage_records.infra_cost).
              */
             infrastructure_usd?: number | null;
+        };
+        /** AdminDecisionRow */
+        AdminDecisionRow: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /** Status */
+            status: string;
+            /** Risk */
+            risk: string;
+            /** Required Approvals */
+            required_approvals: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Decided At */
+            decided_at: string | null;
+            /** Proposals */
+            proposals: components["schemas"]["AdminProposalRow"][];
+            /** Votes */
+            votes: components["schemas"]["AdminVote"][];
         };
         /** AdminForgotPassword */
         AdminForgotPassword: {
@@ -8928,8 +9084,9 @@ export interface components {
         };
         /**
          * AdminIntentionContent
-         * @description What the customer wrote and what LEKA understood: shown only to a role
-         *     with `intentions:content`, each reading kept in the admin trail.
+         * @description What the customer wrote and what LEKA understood and produced: shown
+         *     only to a role with `intentions:content`, each reading kept in the admin
+         *     trail.
          */
         AdminIntentionContent: {
             /** Text */
@@ -8942,6 +9099,15 @@ export interface components {
             understanding: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * Attachments
+             * @description The files it was asked with, by name.
+             */
+            attachments: string[];
+            /** Results */
+            results: components["schemas"]["AdminAnalysisResult"][];
+            /** Proposals */
+            proposals: components["schemas"]["AdminProposalContent"][];
             /**
              * Deliverables
              * @description Each run's deliverable, by run id, cut at 4,000 characters.
@@ -8961,6 +9127,11 @@ export interface components {
             created_by: components["schemas"]["PersonRef"] | null;
             /** Title */
             title: string | null;
+            /**
+             * Description
+             * @description Its summary, else the start of what was asked, cut at 200 characters; null for a role without intentions:content.
+             */
+            description: string | null;
             /** Kind */
             kind: string | null;
             /**
@@ -8992,16 +9163,62 @@ export interface components {
              * @description What its work cost, in credits; null: not measured.
              */
             credits: number | null;
-            /** Timeline */
+            /**
+             * Timeline
+             * @description Oldest first: the latest 1,000.
+             */
             timeline: components["schemas"]["AdminTimelineEntry"][];
+            /** Analyses */
+            analyses: components["schemas"]["AdminAnalysisRow"][];
+            /** Routings */
+            routings: components["schemas"]["AdminRouting"][];
             /** Runs */
             runs: components["schemas"]["AdminRunRow"][];
-            /** Analyses */
-            analyses: number;
             /** Decisions */
-            decisions: number;
+            decisions: components["schemas"]["AdminDecisionRow"][];
+            /** Plans */
+            plans: components["schemas"]["AdminPlanRow"][];
+            /** Verifications */
+            verifications: components["schemas"]["AdminVerificationRow"][];
+            /**
+             * Errors
+             * @description The latest first.
+             */
+            errors: components["schemas"]["AdminIntentionError"][];
+            consumption: components["schemas"]["AdminConsumption"];
             /** @description Null: this role may not read it. */
             content: components["schemas"]["AdminIntentionContent"] | null;
+        };
+        /**
+         * AdminIntentionError
+         * @description A technical error met on its way, where it was met.
+         */
+        AdminIntentionError: {
+            /**
+             * At
+             * Format: date-time
+             * @description The latest time it was met.
+             */
+            at: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "analysis" | "analysis_step" | "run" | "run_step" | "plan" | "plan_step" | "model_call";
+            /**
+             * Subject
+             * @description The agent, capability, action or model.
+             */
+            subject: string | null;
+            /** Ref */
+            ref: string | null;
+            /** Error */
+            error: string;
+            /**
+             * Count
+             * @description How many times: a model's refusals are grouped.
+             */
+            count: number;
         };
         /** AdminIntentionRow */
         AdminIntentionRow: {
@@ -9014,6 +9231,11 @@ export interface components {
             created_by: components["schemas"]["PersonRef"] | null;
             /** Title */
             title: string | null;
+            /**
+             * Description
+             * @description Its summary, else the start of what was asked, cut at 200 characters; null for a role without intentions:content.
+             */
+            description: string | null;
             /** Kind */
             kind: string | null;
             /**
@@ -9170,6 +9392,47 @@ export interface components {
              */
             grantable: boolean;
         };
+        /** AdminPlanRow */
+        AdminPlanRow: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /** Status */
+            status: string;
+            /** Scheduled For */
+            scheduled_for: string | null;
+            /** Started At */
+            started_at: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Error */
+            error: string | null;
+            /** Steps */
+            steps: components["schemas"]["AdminPlanStepRow"][];
+        };
+        /** AdminPlanStepRow */
+        AdminPlanStepRow: {
+            /** Position */
+            position: number;
+            /** Action */
+            action: string;
+            /** Executor */
+            executor: string;
+            /** Status */
+            status: string;
+            /** Started At */
+            started_at: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Duration Ms */
+            duration_ms: number | null;
+            /** Error */
+            error: string | null;
+        };
         /** AdminPoint */
         AdminPoint: {
             /**
@@ -9208,6 +9471,36 @@ export interface components {
              * @description Null: no cost LEKA could measure.
              */
             credits_consumed: number | null;
+        };
+        /** AdminProposalContent */
+        AdminProposalContent: {
+            /**
+             * Decision
+             * @description The number of its decision.
+             */
+            decision: number;
+            /** Id */
+            id: string;
+            /** Action */
+            action: string;
+            /** Environment */
+            environment: string | null;
+            /** Targets */
+            targets: string[];
+        };
+        /** AdminProposalRow */
+        AdminProposalRow: {
+            /** Id */
+            id: string;
+            /** Action */
+            action: string;
+            /** Reversible */
+            reversible: boolean | null;
+            /**
+             * Targets
+             * @description How many; their names are content.
+             */
+            targets: number;
         };
         /**
          * AdminRead
@@ -9311,6 +9604,51 @@ export interface components {
             /** Permissions */
             permissions: components["schemas"]["AdminPermissionRead"][];
         };
+        /**
+         * AdminRouting
+         * @description Which agents LEKA's router chose for it, and among which.
+         */
+        AdminRouting: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Version */
+            version: number;
+            /**
+             * Outcome
+             * @description routed, fallback, clarify.
+             */
+            outcome: string;
+            /** Selected */
+            selected: string[];
+            /**
+             * Why
+             * @description A fallback's: excluded, no_match.
+             */
+            why: string | null;
+            /** Candidates */
+            candidates: components["schemas"]["AdminRoutingCandidate"][];
+            /** Excluded */
+            excluded: string[];
+        };
+        /** AdminRoutingCandidate */
+        AdminRoutingCandidate: {
+            /** Key */
+            key: string;
+            /** Score */
+            score: number | null;
+            /** Eligible */
+            eligible: boolean;
+            /** Selected */
+            selected: boolean;
+        };
         /** AdminRunRow */
         AdminRunRow: {
             /**
@@ -9326,6 +9664,7 @@ export interface components {
             status: string;
             /** Model */
             model: string | null;
+            requested_by: components["schemas"]["PersonRef"] | null;
             /** Queued At */
             queued_at: string | null;
             /** Started At */
@@ -9336,6 +9675,57 @@ export interface components {
             duration_ms: number | null;
             /** Error */
             error: string | null;
+            /**
+             * Calls
+             * @description Calls to a model; null: not measured yet.
+             */
+            calls: number | null;
+            /** Failed Calls */
+            failed_calls: number | null;
+            /** Tokens In */
+            tokens_in: number | null;
+            /** Tokens Out */
+            tokens_out: number | null;
+            /** Credits */
+            credits: number | null;
+            /**
+             * Steps
+             * @description At most the first 200.
+             */
+            steps: components["schemas"]["AdminRunStep"][];
+        };
+        /**
+         * AdminRunStep
+         * @description One step of an agent's run, as LEKA kept it: what it did, never what
+         *     it read or wrote.
+         */
+        AdminRunStep: {
+            /** Seq */
+            seq: number;
+            /** Kind */
+            kind: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Tool */
+            tool: string | null;
+            /** Outcome */
+            outcome: string | null;
+            /** Ms */
+            ms: number | null;
+            /**
+             * Code
+             * @description A failure's code.
+             */
+            code: string | null;
+            /** Model */
+            model: string | null;
+            /** Tokens In */
+            tokens_in: number | null;
+            /** Tokens Out */
+            tokens_out: number | null;
         };
         /**
          * AdminSessionRead
@@ -9435,17 +9825,43 @@ export interface components {
              * Format: date-time
              */
             at: string;
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "intention" | "analysis" | "routing" | "run" | "decision" | "action" | "outcome";
             /** Kind */
             kind: string;
-            /** Name */
-            name: string | null;
+            /**
+             * Subject
+             * @description The agent or the capability it is about.
+             */
+            subject: string | null;
+            /**
+             * Ref
+             * @description The execution it belongs to: `run:<id>`, `analysis:<id>`, `routing:<id>`, `decision:<id>`, `plan:<id>`.
+             */
+            ref: string | null;
             /** From Status */
             from_status: string | null;
             /** To Status */
             to_status: string | null;
-            /** Actor */
+            /**
+             * Actor
+             * @description person or system.
+             */
             actor: string | null;
-            /** Reason */
+            /**
+             * By
+             * @description The person's name, else their address.
+             */
+            by: string | null;
+            /** Error */
+            error: string | null;
+            /**
+             * Reason
+             * @description Null for a role without intentions:content: a person may have written it.
+             */
             reason: string | null;
         };
         /** AdminTopAgent */
@@ -9458,6 +9874,45 @@ export interface components {
             succeeded: number;
             /** Failed */
             failed: number;
+        };
+        /** AdminVerificationRow */
+        AdminVerificationRow: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Status */
+            status: string;
+            /**
+             * Observe After
+             * Format: date-time
+             */
+            observe_after: string;
+            /**
+             * Deadline
+             * Format: date-time
+             */
+            deadline: string;
+            /** Observed At */
+            observed_at: string | null;
+            /** Concluded At */
+            concluded_at: string | null;
+            /** Expectations */
+            expectations: number;
+            /** Results */
+            results: number;
+        };
+        /** AdminVote */
+        AdminVote: {
+            /** Verdict */
+            verdict: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            by: components["schemas"]["PersonRef"] | null;
         };
         /** AdminWindow */
         AdminWindow: {
@@ -9481,6 +9936,29 @@ export interface components {
              * @enum {string}
              */
             bucket: "day" | "month";
+        };
+        /** AdminWorkUsage */
+        AdminWorkUsage: {
+            /**
+             * Kind
+             * @description agent_run, llm_run, intention, workflow_run.
+             */
+            kind: string;
+            /**
+             * Subject
+             * @description The agent, or what LEKA asked a model for.
+             */
+            subject: string;
+            /** Executions */
+            executions: number;
+            /** Calls */
+            calls: number;
+            /** Tokens In */
+            tokens_in: number | null;
+            /** Tokens Out */
+            tokens_out: number | null;
+            /** Credits */
+            credits: number | null;
         };
         /** AgentCost */
         AgentCost: {
@@ -67378,11 +67856,18 @@ export interface operations {
     list_intentions_api_v1_admin_intentions_get: {
         parameters: {
             query?: {
+                /** @description Its id, or words of its title. */
+                q?: string | null;
                 organisation_id?: string | null;
+                /** @description An organisation's name or slug. */
+                organisation?: string | null;
                 user_id?: string | null;
+                /** @description Who asked it: their address or name. */
+                user?: string | null;
                 /** @description pending, running, completed, failed, cancelled, or LEKA's own */
                 status?: string | null;
                 kind?: string | null;
+                /** @description An agent's key. */
                 agent?: string | null;
                 created_from?: string | null;
                 created_to?: string | null;

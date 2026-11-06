@@ -260,6 +260,10 @@ class AdminIntentionRow(BaseModel):
     organisation: OrganisationRef
     created_by: PersonRef | None
     title: str | None
+    description: str | None = Field(
+        description="Its summary, else the start of what was asked, cut at 200 characters; "
+        "null for a role without intentions:content."
+    )
     kind: str | None
     status: str = Field(description="LEKA's own status, one of twelve.")
     admin_status: AdminIntentionStatus
@@ -270,14 +274,45 @@ class AdminIntentionRow(BaseModel):
     credits: float | None = Field(description="What its work cost, in credits; null: not measured.")
 
 
+# Where a moment of an intention's story comes from (LEKA-551).
+TimelineCategory = Literal[
+    "intention", "analysis", "routing", "run", "decision", "action", "outcome"
+]
+
+
 class AdminTimelineEntry(BaseModel):
     at: datetime
+    category: TimelineCategory
     kind: str
-    name: str | None
+    subject: str | None = Field(description="The agent or the capability it is about.")
+    ref: str | None = Field(
+        description="The execution it belongs to: `run:<id>`, `analysis:<id>`, "
+        "`routing:<id>`, `decision:<id>`, `plan:<id>`."
+    )
     from_status: str | None
     to_status: str | None
-    actor: str | None
-    reason: str | None
+    actor: str | None = Field(description="person or system.")
+    by: str | None = Field(description="The person's name, else their address.")
+    error: str | None
+    reason: str | None = Field(
+        description="Null for a role without intentions:content: a person may have written it."
+    )
+
+
+class AdminRunStep(BaseModel):
+    """One step of an agent's run, as LEKA kept it: what it did, never what
+    it read or wrote."""
+
+    seq: int
+    kind: str
+    at: datetime
+    tool: str | None
+    outcome: str | None
+    ms: int | None
+    code: str | None = Field(description="A failure's code.")
+    model: str | None
+    tokens_in: int | None
+    tokens_out: int | None
 
 
 class AdminRunRow(BaseModel):
@@ -286,31 +321,219 @@ class AdminRunRow(BaseModel):
     version: str | None
     status: str
     model: str | None
+    requested_by: PersonRef | None
     queued_at: datetime | None
+    started_at: datetime | None
+    finished_at: datetime | None
+    duration_ms: int | None
+    error: str | None
+    calls: int | None = Field(description="Calls to a model; null: not measured yet.")
+    failed_calls: int | None
+    tokens_in: int | None
+    tokens_out: int | None
+    credits: float | None
+    steps: list[AdminRunStep] = Field(description="At most the first 200.")
+
+
+class AdminCapabilityChoice(BaseModel):
+    name: str
+    chosen: bool
+    reason: str = Field(description="always, goal, kind, acting, no_model, disabled, not_called.")
+
+
+class AdminAnalysisStep(BaseModel):
+    name: str
+    status: str = Field(description="succeeded, failed, timed_out, skipped.")
+    duration_ms: int | None
+    error: str | None
+    reason: str | None
+
+
+class AdminAnalysisRow(BaseModel):
+    id: uuid.UUID
+    number: int
+    trigger: str
+    status: str
+    readiness: str | None
+    requested_by: PersonRef | None
+    started_at: datetime
+    finished_at: datetime | None
+    duration_ms: int | None
+    error: str | None
+    risk: str | None = Field(description="The risk its result said; null: no result.")
+    confidence: float | None
+    findings: int
+    recommendations: int
+    selection: list[AdminCapabilityChoice]
+    steps: list[AdminAnalysisStep]
+
+
+class AdminRoutingCandidate(BaseModel):
+    key: str
+    score: float | None
+    eligible: bool
+    selected: bool
+
+
+class AdminRouting(BaseModel):
+    """Which agents LEKA's router chose for it, and among which."""
+
+    id: uuid.UUID
+    at: datetime
+    version: int
+    outcome: str = Field(description="routed, fallback, clarify.")
+    selected: list[str]
+    why: str | None = Field(description="A fallback's: excluded, no_match.")
+    candidates: list[AdminRoutingCandidate]
+    excluded: list[str]
+
+
+class AdminProposalRow(BaseModel):
+    id: str
+    action: str
+    reversible: bool | None
+    targets: int = Field(description="How many; their names are content.")
+
+
+class AdminVote(BaseModel):
+    verdict: str
+    at: datetime
+    by: PersonRef | None
+
+
+class AdminDecisionRow(BaseModel):
+    id: uuid.UUID
+    number: int
+    status: str
+    risk: str
+    required_approvals: int
+    created_at: datetime
+    decided_at: datetime | None
+    proposals: list[AdminProposalRow]
+    votes: list[AdminVote]
+
+
+class AdminPlanStepRow(BaseModel):
+    position: int
+    action: str
+    executor: str
+    status: str
     started_at: datetime | None
     finished_at: datetime | None
     duration_ms: int | None
     error: str | None
 
 
+class AdminPlanRow(BaseModel):
+    id: uuid.UUID
+    number: int
+    status: str
+    scheduled_for: datetime | None
+    started_at: datetime | None
+    finished_at: datetime | None
+    error: str | None
+    steps: list[AdminPlanStepRow]
+
+
+class AdminVerificationRow(BaseModel):
+    id: uuid.UUID
+    status: str
+    observe_after: datetime
+    deadline: datetime
+    observed_at: datetime | None
+    concluded_at: datetime | None
+    expectations: int
+    results: int
+
+
+ErrorSource = Literal[
+    "analysis", "analysis_step", "run", "run_step", "plan", "plan_step", "model_call"
+]
+
+
+class AdminIntentionError(BaseModel):
+    """A technical error met on its way, where it was met."""
+
+    at: datetime = Field(description="The latest time it was met.")
+    source: ErrorSource
+    subject: str | None = Field(description="The agent, capability, action or model.")
+    ref: str | None
+    error: str
+    count: int = Field(description="How many times: a model's refusals are grouped.")
+
+
+class AdminWorkUsage(BaseModel):
+    kind: str = Field(description="agent_run, llm_run, intention, workflow_run.")
+    subject: str = Field(description="The agent, or what LEKA asked a model for.")
+    executions: int
+    calls: int
+    tokens_in: int | None
+    tokens_out: int | None
+    credits: float | None
+
+
+class AdminConsumption(BaseModel):
+    """What its work used, from LEKA's metering: null where nothing was
+    measured, never 0."""
+
+    duration_ms: int | None
+    calls: int
+    failed_calls: int
+    retries: int
+    tokens_in: int | None
+    tokens_out: int | None
+    cost_usd: float | None = Field(description="At LEKA's rates.")
+    credits: float | None
+    models: list[str]
+    by_work: list[AdminWorkUsage]
+
+
+class AdminAnalysisResult(BaseModel):
+    number: int
+    answer: str | None
+    summary: list[str]
+    findings: list[str]
+    causes: list[str]
+    recommendations: list[str]
+    uncertainties: list[str]
+    missing: list[str]
+
+
+class AdminProposalContent(BaseModel):
+    decision: int = Field(description="The number of its decision.")
+    id: str
+    action: str
+    environment: str | None
+    targets: list[str]
+
+
 class AdminIntentionContent(BaseModel):
-    """What the customer wrote and what LEKA understood: shown only to a role
-    with `intentions:content`, each reading kept in the admin trail."""
+    """What the customer wrote and what LEKA understood and produced: shown
+    only to a role with `intentions:content`, each reading kept in the admin
+    trail."""
 
     text: str
     summary: str | None
     goal: str | None
     understanding: dict[str, object] | None
+    attachments: list[str] = Field(description="The files it was asked with, by name.")
+    results: list[AdminAnalysisResult]
+    proposals: list[AdminProposalContent]
     deliverables: dict[str, str] = Field(
         description="Each run's deliverable, by run id, cut at 4,000 characters."
     )
 
 
 class AdminIntentionDetail(AdminIntentionRow):
-    timeline: list[AdminTimelineEntry]
+    timeline: list[AdminTimelineEntry] = Field(description="Oldest first: the latest 1,000.")
+    analyses: list[AdminAnalysisRow]
+    routings: list[AdminRouting]
     runs: list[AdminRunRow]
-    analyses: int
-    decisions: int
+    decisions: list[AdminDecisionRow]
+    plans: list[AdminPlanRow]
+    verifications: list[AdminVerificationRow]
+    errors: list[AdminIntentionError] = Field(description="The latest first.")
+    consumption: AdminConsumption
     content: AdminIntentionContent | None = Field(description="Null: this role may not read it.")
 
 

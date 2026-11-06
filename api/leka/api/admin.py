@@ -786,11 +786,21 @@ async def add_user_note(
     "/intentions", response_model=PageEnvelope[AdminIntentionRow], summary="Every intention"
 )
 async def list_intentions(
+    request: Request,
     session: SessionDep,
-    _: Annotated[AdminPrincipal, Depends(require_admin(P.INTENTIONS_READ))],
+    principal: Annotated[AdminPrincipal, Depends(require_admin(P.INTENTIONS_READ))],
     page: PageParams,
+    q: Annotated[
+        str | None, Query(max_length=200, description="Its id, or words of its title.")
+    ] = None,
     organisation_id: uuid.UUID | None = None,
+    organisation: Annotated[
+        str | None, Query(max_length=200, description="An organisation's name or slug.")
+    ] = None,
     user_id: uuid.UUID | None = None,
+    user: Annotated[
+        str | None, Query(max_length=200, description="Who asked it: their address or name.")
+    ] = None,
     intention_status: Annotated[
         str | None,
         Query(
@@ -798,16 +808,23 @@ async def list_intentions(
             description="pending, running, completed, failed, cancelled, or LEKA's own",
         ),
     ] = None,
-    kind: str | None = None,
-    agent: str | None = None,
+    kind: Annotated[str | None, Query(max_length=30)] = None,
+    agent: Annotated[str | None, Query(max_length=100, description="An agent's key.")] = None,
     created_from: datetime | None = None,
     created_to: datetime | None = None,
 ) -> PageEnvelope[AdminIntentionRow]:
+    """Every intention of every customer (LEKA-551): its organisation, who
+    asked it, its title, its five statuses, agents, duration and credits. Its
+    short description is content: only for intentions:content, and each
+    page of it read is kept in the admin trail."""
     found = await serve_page(
         session,
         intentions_query(
+            q=q,
             organisation_id=organisation_id,
+            organisation=organisation,
             user_id=user_id,
+            user=user,
             status=intention_status,
             kind=kind,
             agent=agent,
@@ -818,9 +835,20 @@ async def list_intentions(
         catalogue=INTENTION_SORTS,
         id_column=Intention.id,
     )
-    return PageEnvelope(
-        data=await intention_rows(session, found.items), next_cursor=found.next_cursor
-    )
+    with_content = P.INTENTIONS_CONTENT in principal.permissions
+    rows = await intention_rows(session, found.items, with_content=with_content)
+    described = [str(r.id) for r in rows if r.description is not None]
+    if described:
+        audit_record(
+            session,
+            "admin.viewed_content",
+            admin_id=principal.admin_id,
+            target_type="intention",
+            route=route_of(request),
+            ip_prefix=principal.ip_prefix,
+            detail={"read": "descriptions", "intentions": described},
+        )
+    return PageEnvelope(data=rows, next_cursor=found.next_cursor)
 
 
 @router.get(
@@ -834,9 +862,12 @@ async def get_intention(
     session: SessionDep,
     principal: Annotated[AdminPrincipal, Depends(require_admin(P.INTENTIONS_READ))],
 ) -> AdminIntentionDetail:
-    """Its timeline, its runs and their errors, what it cost. What the
-    customer wrote and what agents delivered (`content`) only for a role with
-    intentions:content, each reading kept in the admin trail."""
+    """Its whole story, oldest first; how LEKA understood it and which agents
+    it chose; each run and its steps; its decisions, plans and checks; the
+    errors met; what its work used (LEKA-551). What the customer wrote and
+    what LEKA read or produced from it (`content`, the description, a reason)
+    only for a role with intentions:content, each reading kept in the admin
+    trail. Read only: nothing here acts on a customer's environment."""
     with_content = P.INTENTIONS_CONTENT in principal.permissions
     found = await intention_detail(session, intention_id, with_content=with_content)
     if found is None:

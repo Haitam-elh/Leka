@@ -59,6 +59,9 @@ from leka.intentions.models import (
     IntentionDecisionVote,
     IntentionEvent,
     IntentionLink,
+    IntentionPlan,
+    IntentionPlanStep,
+    IntentionVerification,
 )
 from leka.intentions.oversight import ExceptionAsk, OversightRefusedError, OversightService
 from leka.intentions.processing import queue_analysis
@@ -219,13 +222,16 @@ __all__ = [
     "IntentionLinkCreate",
     "IntentionLinkRead",
     "IntentionOfferRead",
+    "IntentionPlan",
     "IntentionPlanRead",
+    "IntentionPlanStep",
     "IntentionPreview",
     "IntentionRead",
     "IntentionRepository",
     "IntentionRequest",
     "IntentionService",
     "IntentionStatus",
+    "IntentionVerification",
     "IntentionVerificationRead",
     "JourneyRead",
     "JourneyState",
