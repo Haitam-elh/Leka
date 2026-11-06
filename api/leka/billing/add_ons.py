@@ -38,6 +38,7 @@ from leka.background import JobQueue, enqueue_job
 from leka.billing.catalogue import catalogue
 from leka.billing.entitlements import end, entitlements, grant, owned, plan_runs_agents
 from leka.billing.models import AddOnCheckout, AgentEntitlement
+from leka.billing.revenue import recurring_of
 from leka.billing.stripe import Stripe
 from leka.billing.subscriptions import (
     CheckoutRefusedError,
@@ -276,6 +277,8 @@ async def apply_add_on(
         for bought in await _bought(session, workspace_id, str(data.get("id") or "")):
             bought.cancel_at_period_end = bool(data.get("cancel_at_period_end"))
             bought.current_period_end = _period_end(dict(data)) or bought.current_period_end
+            # What it brings in (LEKA-548), the subscription's own price.
+            bought.recurring = recurring_of(data) or bought.recurring
         return "add_on_kept"
     return "ignored"
 

@@ -91,7 +91,7 @@ Chaque permission a un **module** et un **niveau d'action** (`GET /admin/roles`)
 
 | Méthode et chemin | Permission | Filtres et tri | Rend |
 | --- | --- | --- | --- |
-| `GET /admin/overview` | `dashboard:read` | `period` = `today`, `7d`, `30d` (défaut), `90d`, `12m`, `custom` avec `from` et `to` (2 ans au plus) | les chiffres du § 5 et leurs séries |
+| `GET /admin/overview` | `dashboard:read` (les montants : `billing:read`) | `period` = `today`, `7d`, `30d` (défaut), `90d`, `12m`, `custom` avec `from` et `to` (2 ans au plus) | les chiffres du § 5 et leurs séries ([indicateurs.md](indicateurs.md)) |
 | `GET /admin/organisations` | `organisations:read` | `q` (nom, slug, id, e-mail d'un propriétaire), `plan`, `status`, `created_from`, `created_to`, `include_demo` ; tri `created_at`, `name` | une ligne par organisation : formule, propriétaire, membres, intentions, dernière activité |
 | `GET /admin/organisations/{id}` | `organisations:read` | | la fiche 360° : informations, formule et depuis quand, abonnement Stripe, crédits du mois, compteurs, agents utilisés. **Lecture journalisée** |
 | `GET /admin/organisations/{id}/members` | `organisations:read` | | ses membres (rôle, depuis, dernière connexion) et ses invitations en attente |
@@ -146,26 +146,21 @@ La durée d'une intention va de sa création à son dernier changement de statut
 
 Une personne invitée sans compte apparaît dans les invitations de l'organisation. Un compte suspendu n'existe pas encore dans LEKA CORE.
 
-**Le tableau de bord** (`GET /admin/overview`), sur la période demandée, hors démonstration :
+**Le tableau de bord** (`GET /admin/overview`), sur la période demandée, hors démonstration : chaque indicateur, sa règle de calcul et ce qu'il dit quand il ne sait pas sont dans [indicateurs.md](indicateurs.md) (LEKA-548). En bref :
 
-| Bloc | Chiffre | Définition |
-| --- | --- | --- |
-| Acquisition | `organisations`, `organisations_new` | toutes ; créées dans la période |
-| | `users`, `users_new` | toutes les personnes ; inscrites dans la période |
-| | `by_plan` | les organisations par formule actuelle (la dernière attribuée, Free sinon) |
-| Activité | `dau`, `wau`, `mau` | personnes vues dans le produit aujourd'hui (UTC), sur 7 jours, sur 30 jours (`user.active`) |
-| | `intentions_created`, `_completed`, `_failed` | dans la période |
-| Produit | `agent_runs`, `agent_success_rate` | exécutions lancées dans la période ; réussies sur terminées (`null` si aucune) |
-| | `agents_used`, `organisations_running_agents` | agents distincts ; organisations qui en ont lancé un |
-| | `credits_consumed` | coût LEKA des modèles ÷ prix du crédit ; `null` si aucun coût mesuré |
-| Business | `subscriptions_started`, `subscriptions_canceled`, `payments_failed` | événements Stripe reçus dans la période |
-| | `paying_organisations` | abonnement Stripe qui garde sa formule maintenant : `active`, `trialing`, `past_due` |
-| | `mrr`, `arr` | `null` jusqu'à LEKA-554 : LEKA ne garde pas encore les montants facturés |
-| Technique | `sources_in_error` | maintenant : statut `error` ou santé `unhealthy` |
-| | `sync_failures`, `jobs_failed` | dans la période |
-| Séries | `users_new`, `users_active`, `intentions_created`, `credits_consumed` | par jour jusqu'à 92 jours de période, par mois au-delà |
+| Bloc | Ce qu'il dit |
+| --- | --- |
+| `acquisition` | organisations et personnes, toutes et nouvelles ; par formule, Free et payantes |
+| `activity` | DAU, WAU, MAU ; organisations actives ; intentions lancées, terminées, échouées, leur taux de réussite ; analyses terminées, échouées |
+| `product` | exécutions d'agents, leur taux de réussite, l'adoption, les cinq agents les plus lancés ; crédits consommés |
+| `business` | MRR et ARR maintenant (hors taxes), l'encaissé de la période (taxes comprises) et le remboursé, jamais confondus ; abonnements, churn, paiements échoués |
+| `costs` | ce que les modèles de LEKA ont coûté à LEKA dans la période |
+| `technical` | incidents qui sonnent maintenant ; intégrations en erreur ; synchronisations et tâches échouées |
+| `intelligence` | activation, Time to First Value, conversion Free vers payant des organisations créées dans la période ; rétention mensuelle par mois d'inscription |
+| `recent` | les derniers événements : inscriptions, organisations, abonnements, paiements échoués, intentions |
+| `series` | un point par jour (par mois au-delà de 92 jours) : organisations et personnes au total, inscriptions, actifs, intentions, crédits, MRR |
 
-Revenus récurrents, facturation et encaissements ne sont jamais confondus : aujourd'hui, aucun montant n'est montré.
+Les montants (`mrr`, `arr`, `collected`, `collected_tax`, `refunded`, `costs.ai_usd`, la série `mrr`) ne sont rendus qu'à un rôle qui lit la facturation (`billing:read`) ; sinon ils valent `null` et `amounts_granted` vaut `false`.
 
 ## 6. Les opérations sensibles
 

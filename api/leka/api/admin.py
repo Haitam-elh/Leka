@@ -401,19 +401,21 @@ def _not_found(what: str) -> ApiError:
 @router.get("/overview", response_model=AdminOverview, summary="The figures of LEKA ADMIN's home")
 async def get_overview(
     session: SessionDep,
-    _: Annotated[AdminPrincipal, Depends(require_admin(P.DASHBOARD_READ))],
+    principal: Annotated[AdminPrincipal, Depends(require_admin(P.DASHBOARD_READ))],
     period: Period = "30d",
     start: Annotated[datetime | None, Query(alias="from")] = None,
     end: Annotated[datetime | None, Query(alias="to")] = None,
 ) -> AdminOverview:
-    """AdminAcquisition, activity, product, business and technical figures over
-    `period` (today, 7d, 30d, 90d, 12m, or custom with `from` and `to`), and
-    their series per day (per month past 90 days)."""
+    """Acquisition, activity, product, business, costs, technical and customer
+    intelligence figures over `period` (today, 7d, 30d, 90d, 12m, or custom
+    with `from` and `to`), the latest activity, and their series per day (per
+    month past 90 days). Amounts (revenue, money collected, costs) only for a
+    role that reads billing (docs/admin/indicateurs.md)."""
     try:
         window = window_of(period, start=start, end=end)
     except ValueError as error:
         raise ApiError(status.HTTP_400_BAD_REQUEST, ErrorCode.INVALID_FILTER, str(error)) from error
-    return await overview(session, window)
+    return await overview(session, window, amounts=P.BILLING_READ in principal.permissions)
 
 
 @router.get(

@@ -40,7 +40,8 @@ duration, credits). Never what anyone wrote, no address, no browser.
   sync.failed            sync_runs          a pass that failed
 
 Kept 25 months, for a year compared with the one before; the sweep forgets
-what is older, and the admin idempotency keys past a week.
+what is older, and the admin idempotency keys past a week. Each sweep also
+keeps the day's MRR (admin_daily_figures, LEKA-548), as long.
 """
 
 from __future__ import annotations
@@ -58,7 +59,13 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
-from leka.admin.models import ActivityEvent, ActivityWatermark, AdminIdempotencyKey
+from leka.admin.models import (
+    ActivityEvent,
+    ActivityWatermark,
+    AdminDailyFigure,
+    AdminIdempotencyKey,
+)
+from leka.admin.overview import record_day
 from leka.billing import StripeEvent
 from leka.capabilities import AgentRun
 from leka.connectors import Source
@@ -440,8 +447,19 @@ async def sweep(*, now: datetime | None = None) -> dict[str, int]:
                     logger.exception("activity_source_failed", source=source.name)
                     written[source.name] = -1
         async with session_factory() as session:
+            try:
+                # Today's MRR, for its evolution (LEKA-548).
+                await record_day(session, moment)
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                logger.exception("activity_day_failed")
+        async with session_factory() as session:
             await session.execute(
                 delete(ActivityEvent).where(ActivityEvent.at < moment - RETENTION)
+            )
+            await session.execute(
+                delete(AdminDailyFigure).where(AdminDailyFigure.day < (moment - RETENTION).date())
             )
             await session.execute(
                 delete(AdminIdempotencyKey).where(

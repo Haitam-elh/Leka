@@ -30,6 +30,7 @@ from leka.admin.models import (
     ActivityWatermark,
     AdminAccount,
     AdminAuditEvent,
+    AdminDailyFigure,
     AdminIdempotencyKey,
     AdminSession,
 )
@@ -130,6 +131,7 @@ __all__ = [
     "AdminAuthError",
     "AdminChange",
     "AdminChangePassword",
+    "AdminDailyFigure",
     "AdminForgotPassword",
     "AdminIdempotencyKey",
     "AdminIntentionDetail",

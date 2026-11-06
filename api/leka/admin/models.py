@@ -45,19 +45,27 @@ never what anyone wrote.
 
 `activity_watermarks`: how far each source of the activity journal has been
 read.
+
+`admin_daily_figures` (LEKA-548): what LEKA brings in each month, as it
+stood each day (the MRR, its subscriptions, those whose price is not known),
+written by the activity sweep, so that its evolution can be drawn: a price
+is kept as it is now, never as it was.
 """
 
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     UniqueConstraint,
 )
@@ -217,6 +225,19 @@ class ActivityWatermark(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     source: Mapped[str] = mapped_column(String(40), nullable=False)
     read_to: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class AdminDailyFigure(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    __tablename__ = "admin_daily_figures"
+    __table_args__ = (UniqueConstraint("day", name="uq_admin_daily_figures_day"),)
+
+    day: Mapped[date] = mapped_column(Date, nullable=False)
+    # In euros, excluding VAT; null: no subscription's price is known.
+    mrr: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    # The paying subscriptions counted in it, and those whose price is not known.
+    subscriptions: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    unknown: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class AdminCode(Base, UUIDPrimaryKeyMixin, TimestampMixin):

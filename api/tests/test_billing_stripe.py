@@ -41,11 +41,12 @@ from pydantic import SecretStr
 from sqlalchemy import func, select
 
 from leka.api import subscriptions as subscriptions_api
-from leka.billing import Stripe, catalogue, sync
+from leka.billing import BillingAccount, Stripe, StripeEvent, catalogue, sync
 from leka.billing import subscriptions as billing
+from leka.billing.cli import fill_amounts
 from leka.billing.stripe import SignatureError, form, sign, verify
 from leka.core.config import settings
-from leka.db import session_factory, workspace_scope
+from leka.db import session_factory, system_scope, workspace_scope
 from leka.governance import CreditPack, WorkspacePlan, plan_of
 from tests.conftest import FakeIdentity
 from tests.test_sources_api import _as, acme, fake_connector  # noqa: F401
@@ -757,3 +758,101 @@ async def test_no_ai_capacity_is_sold_a_one_time_payment_credits_nothing(
     # Nothing in Stripe sells it either: the catalogue makes plans only.
     await _synced(stripe)
     assert not [p for p in stripe.posted("/v1/products") if "pack" in p["id"]]
+
+
+def _priced(sub: dict[str, Any], unit: int, *, percent_off: float | None = None) -> dict[str, Any]:
+    priced: dict[str, Any] = json.loads(json.dumps(sub))
+    priced["items"]["data"][0]["price"] |= {"unit_amount": unit, "currency": "eur"}
+    priced["items"]["data"][0]["quantity"] = 1
+    priced["discount"] = (
+        {"coupon": {"percent_off": percent_off}, "end": 1_950_000_000} if percent_off else None
+    )
+    return priced
+
+
+async def _account(workspace: uuid.UUID) -> BillingAccount:
+    with workspace_scope(workspace):
+        async with session_factory() as session:
+            found = await session.scalar(
+                select(BillingAccount).where(BillingAccount.workspace_id == workspace)
+            )
+            assert found is not None
+            return found
+
+
+@pytest.mark.integration
+async def test_what_a_subscription_brings_in_and_what_an_invoice_collected_are_kept(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    stripe: FakeStripe,
+) -> None:
+    workspace = acme["acme"]
+    await _synced(stripe)
+    _as(identity, acme, "admin")
+    await client.post(f"{API}/checkout", json={"plan": "growth", "interval": "month"})
+
+    # Subscribed before LEKA kept prices: its price is not known...
+    stripe.subscriptions["sub_1"] = subscription("growth", "active")
+    completed = _event(
+        "checkout.session.completed",
+        {
+            "id": "cs_1",
+            "mode": "subscription",
+            "subscription": "sub_1",
+            "customer": "cus_1",
+            "client_reference_id": str(workspace),
+        },
+        created=1_800_000_100,
+    )
+    assert (await _deliver(client, completed)).json() == {"received": "plan:growth"}
+    assert (await _account(workspace)).recurring is None
+    # ... until it is read once from Stripe, only where it is missing.
+    stripe.subscriptions["sub_1"] = _priced(subscription("growth", "active"), 17900)
+    assert await fill_amounts(stripe.client()) == {"filled": 1, "not_fixed": 0, "unreadable": 0}
+    assert (await _account(workspace)).recurring == {
+        "amount": 17900,
+        "currency": "eur",
+        "interval": "month",
+        "interval_count": 1,
+        "discount": None,
+    }
+    assert await fill_amounts(stripe.client()) == {"filled": 0, "not_fixed": 0, "unreadable": 0}
+
+    # Each event of the subscription says it again: the launch coupon on it.
+    updated = _event(
+        "customer.subscription.updated",
+        _priced(subscription("growth", "active"), 17900, percent_off=20),
+        created=1_800_000_200,
+    )
+    assert (await _deliver(client, updated)).json() == {"received": "plan:growth"}
+    recurring = (await _account(workspace)).recurring
+    assert recurring is not None and recurring["discount"] == {
+        "percent_off": 20.0,
+        "amount_off": None,
+        "ends": datetime.fromtimestamp(1_950_000_000, UTC).isoformat(),
+    }
+
+    # An invoice paid: what was collected, its VAT within, kept with the event.
+    paid = _event(
+        "invoice.paid",
+        {"customer": "cus_1", "id": "in_9", "amount_paid": 17184, "tax": 2864, "currency": "eur"},
+        created=1_800_000_210,
+        event="evt_paid_548",
+    )
+    assert (await _deliver(client, paid)).json() == {"received": "paid"}
+    with system_scope():
+        async with session_factory() as session:
+            kept = await session.scalar(
+                select(StripeEvent.detail).where(StripeEvent.event_id == "evt_paid_548")
+            )
+    assert kept == {"said": "paid", "amount": 17184, "currency": "eur", "tax": 2864}
+
+    # Cancelled: it brings in nothing any more.
+    deleted = _event(
+        "customer.subscription.deleted",
+        _priced(subscription("growth", "canceled"), 17900),
+        created=1_800_000_300,
+    )
+    assert (await _deliver(client, deleted)).json() == {"received": "plan:free"}
+    assert (await _account(workspace)).recurring is None
