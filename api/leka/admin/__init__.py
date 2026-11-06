@@ -31,6 +31,7 @@ from leka.admin.activity import sweep as sweep_activity
 from leka.admin.audit import apart as audit_apart
 from leka.admin.audit import record as audit_record
 from leka.admin.dependencies import AdminPrincipalDep, client_ip, get_admin, require_admin, route_of
+from leka.admin.intentions import intention_detail
 from leka.admin.models import (
     ActivityEvent,
     ActivityWatermark,
@@ -54,7 +55,6 @@ from leka.admin.reads import (
     credits_of,
     history_query,
     history_rows,
-    intention_detail,
     intention_rows,
     intentions_query,
     invitation_rows,

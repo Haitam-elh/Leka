@@ -31,13 +31,9 @@ from leka.admin.models import ActivityEvent, AdminAccount, AdminAuditEvent, Admi
 from leka.admin.schemas import (
     ActivityLevel,
     ActivityRow,
-    AdminIntentionContent,
-    AdminIntentionDetail,
     AdminIntentionRow,
     AdminIntentionStatus,
     AdminInvitationRow,
-    AdminRunRow,
-    AdminTimelineEntry,
     AgentCost,
     AgentStat,
     AlertRow,
@@ -73,7 +69,7 @@ from leka.core.config import settings
 from leka.db import workspace_scope
 from leka.governance import WorkspacePlan, plan_of, subject_of
 from leka.identity import User
-from leka.intentions import Intention, IntentionAnalysis, IntentionDecision, IntentionEvent
+from leka.intentions import Intention, IntentionAnalysis
 from leka.metering import CreditsRead, UsageRecord, credits_now
 from leka.monitoring import MonitoringAlert
 from leka.platform import (
@@ -110,7 +106,7 @@ ACTIVE_WINDOW = timedelta(days=30)
 # An analysis that ended with a result, whole or in part (LEKA-548's rule).
 ANALYSED = ("complete", "partial", "inconclusive")
 NEW_WINDOW = timedelta(days=7)
-DELIVERABLE_CHARACTERS = 4000
+DESCRIPTION_CHARACTERS = 200
 
 
 def _uuid(value: str) -> uuid.UUID | None:
@@ -882,19 +878,52 @@ async def invitation_rows(
 
 def intentions_query(
     *,
+    q: str | None = None,
     organisation_id: uuid.UUID | None = None,
+    organisation: str | None = None,
     user_id: uuid.UUID | None = None,
+    user: str | None = None,
     status: str | None = None,
     kind: str | None = None,
     agent: str | None = None,
     created_from: datetime | None = None,
     created_to: datetime | None = None,
 ) -> Select[tuple[Intention]]:
+    """Every intention, or those that match: its id or title; its
+    organisation (by id, or by name or slug); who asked it (by id, or by
+    address or name); its status, kind, agents, date (LEKA-551)."""
     statement = select(Intention)
+    if q and q.strip():
+        as_id = _uuid(q)
+        statement = statement.where(
+            Intention.id == as_id if as_id is not None else Intention.title.ilike(_like(q))
+        )
     if organisation_id:
         statement = statement.where(Intention.workspace_id == organisation_id)
+    if organisation and organisation.strip():
+        pattern = _like(organisation)
+        statement = statement.where(
+            Intention.workspace_id.in_(
+                select(Workspace.id).where(
+                    or_(Workspace.name.ilike(pattern), Workspace.slug.ilike(pattern))
+                )
+            )
+        )
     if user_id:
         statement = statement.where(Intention.created_by == user_id)
+    if user and user.strip():
+        pattern = _like(user)
+        statement = statement.where(
+            Intention.created_by.in_(
+                select(User.id).where(
+                    or_(
+                        User.email.ilike(pattern),
+                        User.first_name.ilike(pattern),
+                        User.last_name.ilike(pattern),
+                    )
+                )
+            )
+        )
     if status:
         mapped = [raw for raw, admin in ADMIN_STATUS.items() if admin == status]
         statement = statement.where(Intention.status.in_(mapped or [status]))
@@ -924,8 +953,19 @@ async def _intention_costs(
     return {key: float(total) for key, total in rows.all() if key is not None and total is not None}
 
 
+def short(text: str | None, characters: int = DESCRIPTION_CHARACTERS) -> str | None:
+    """A text on one line, cut at a word under `characters`."""
+    if not text or not text.strip():
+        return None
+    flat = " ".join(text.split())
+    if len(flat) <= characters:
+        return flat
+    cut = flat[: characters - 1].rsplit(" ", 1)[0] or flat[: characters - 1]
+    return cut.rstrip(" ,;:.") + "…"
+
+
 async def intention_rows(
-    session: AsyncSession, intentions: Sequence[Intention]
+    session: AsyncSession, intentions: Sequence[Intention], *, with_content: bool = False
 ) -> list[AdminIntentionRow]:
     ids = [i.id for i in intentions]
     names = await _organisation_names(session, (i.workspace_id for i in intentions))
@@ -956,6 +996,7 @@ async def intention_rows(
             organisation=OrganisationRef(id=i.workspace_id, name=names.get(i.workspace_id, "")),
             created_by=_person(people.get(i.created_by)) if i.created_by else None,
             title=i.title,
+            description=short(i.summary or i.text) if with_content else None,
             kind=str(i.kind) if i.kind else None,
             status=str(i.status),
             admin_status=ADMIN_STATUS.get(str(i.status), "pending"),
@@ -967,89 +1008,6 @@ async def intention_rows(
         )
         for i in intentions
     ]
-
-
-def _deliverable(output: object) -> str | None:
-    if output is None:
-        return None
-    text = output if isinstance(output, str) else str(output)
-    return text[:DELIVERABLE_CHARACTERS]
-
-
-async def intention_detail(
-    session: AsyncSession, intention_id: uuid.UUID, *, with_content: bool
-) -> AdminIntentionDetail | None:
-    intention = await session.get(Intention, intention_id)
-    if intention is None:
-        return None
-    (row,) = await intention_rows(session, [intention])
-    events = (
-        await session.scalars(
-            select(IntentionEvent)
-            .where(IntentionEvent.intention_id == intention_id)
-            .order_by(IntentionEvent.sequence)
-        )
-    ).all()
-    runs = (
-        await session.scalars(
-            select(AgentRun)
-            .where(AgentRun.intention_id == intention_id)
-            .order_by(AgentRun.queued_at)
-        )
-    ).all()
-    analyses = await session.scalar(
-        select(func.count()).where(IntentionAnalysis.intention_id == intention_id)
-    )
-    decisions = await session.scalar(
-        select(func.count()).where(IntentionDecision.intention_id == intention_id)
-    )
-    content = None
-    if with_content:
-        deliverables = {
-            str(r.id): text for r in runs if (text := _deliverable(r.output)) is not None
-        }
-        content = AdminIntentionContent(
-            text=intention.text,
-            summary=intention.summary,
-            goal=intention.goal,
-            understanding=intention.understanding
-            if isinstance(intention.understanding, dict)
-            else None,
-            deliverables=deliverables,
-        )
-    return AdminIntentionDetail(
-        **row.model_dump(),
-        timeline=[
-            AdminTimelineEntry(
-                at=e.at,
-                kind=str(e.kind),
-                name=e.name,
-                from_status=str(e.from_status) if e.from_status else None,
-                to_status=str(e.to_status) if e.to_status else None,
-                actor=str(e.actor) if e.actor else None,
-                reason=e.reason,
-            )
-            for e in events
-        ],
-        runs=[
-            AdminRunRow(
-                id=r.id,
-                key=r.key,
-                version=r.version,
-                status=r.status,
-                model=r.model,
-                queued_at=r.queued_at,
-                started_at=r.started_at,
-                finished_at=r.finished_at,
-                duration_ms=_ms(r.started_at, r.finished_at),
-                error=r.error,
-            )
-            for r in runs
-        ],
-        analyses=int(analyses or 0),
-        decisions=int(decisions or 0),
-        content=content,
-    )
 
 
 # ── Agents ───────────────────────────────────────────────────────────────────
@@ -1403,7 +1361,6 @@ __all__ = [
     "agent_stats",
     "credits_breakdown",
     "credits_of",
-    "intention_detail",
     "intention_rows",
     "intentions_query",
     "organisation_detail",

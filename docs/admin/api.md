@@ -1,4 +1,4 @@
-# L'Admin API de LEKA ADMIN (LEKA-544, LEKA-545, LEKA-546)
+# L'Admin API de LEKA ADMIN (LEKA-544, LEKA-545, LEKA-546, LEKA-551)
 
 Le contrat entre LEKA CORE et LEKA ADMIN : ce que l'application Android envoie et reçoit aujourd'hui, et ce que la version web recevra demain, à l'identique. Les routes sont sous `/api/v1/admin`. Le schéma OpenAPI de LEKA CORE (`/api/v1/openapi.json`, étiquette `admin`) en est la source exacte ; ce document dit le sens.
 
@@ -111,8 +111,8 @@ Chaque permission a un **module** et un **niveau d'action** (`GET /admin/roles`)
 | `GET /admin/users/{id}` | `users:read` | | la fiche : profil déclaré, organisations, dans chacune son rôle et ce qu'il lui permet (le calcul de LEKA à chaque requête, rôle propre compris), exécutions, analyses terminées, agents utilisés, crédits consommés sur 30 jours, dernières connexions. **Lecture journalisée** |
 | `GET /admin/users/{id}/notes`, `POST` | `users:read`, `users:notes` | corps `{body}` | ses notes internes (LEKA-550), jamais montrées à la personne |
 | `GET /admin/invitations` | `users:read` | `q` (e-mail), `organisation_id`, `include_expired` | les personnes invitées pas encore entrées : organisation, rôle, envoi, expiration, si l'adresse a déjà un compte LEKA |
-| `GET /admin/intentions` | `intentions:read` | `organisation_id`, `user_id`, `status` (les 5 de LEKA ADMIN ou les 12 de LEKA), `kind`, `agent`, `created_from`, `created_to` ; tri `created_at` | une ligne par intention : organisation, auteur, titre, statuts, agents, durée, crédits |
-| `GET /admin/intentions/{id}` | `intentions:read` | | sa chronologie, ses exécutions et leurs erreurs, analyses, décisions. `content` (texte, résumé, but, compréhension, livrables coupés à 4 000 caractères) seulement avec `intentions:content`, sinon `null`. **Lecture journalisée**, en `admin.viewed_content` quand le contenu est rendu |
+| `GET /admin/intentions` | `intentions:read` | `q` (son identifiant, ou des mots de son titre), `organisation_id` ou `organisation` (nom ou slug), `user_id` ou `user` (l'adresse ou le nom de qui l'a demandée), `status` (les 5 de LEKA ADMIN ou les 12 de LEKA), `kind`, `agent` (la clé d'un agent), `created_from`, `created_to` ; tri `created_at` | une ligne par intention : organisation, auteur, titre, type, statuts, agents, durée, crédits. `description` (son résumé, sinon le début de la demande, coupé à 200 caractères) seulement avec `intentions:content`, sinon `null` : **chaque page qui en rend est journalisée** en `admin.viewed_content`, avec les intentions lues |
+| `GET /admin/intentions/{id}` | `intentions:read` | | la fiche d'une intention, étape par étape (§ 5) : sa chronologie, ses analyses, le choix de ses agents, ses exécutions et leurs étapes, ses décisions, plans et vérifications, ses erreurs, sa consommation. `content` (§ 5) seulement avec `intentions:content`, sinon `null`. **Lecture journalisée**, en `admin.viewed_content` quand le contenu est rendu. **Lecture seule** : aucune route du module n'agit sur l'environnement d'un client |
 | `GET /admin/agents` | `agents:read` | `since`, `until`, `organisation_id`, `user_id` (les exécutions qu'une personne a demandées), `agent`, `model` | une ligne par agent : exécutions, organisations, réussites, échecs, taux de réussite, durée moyenne, coût et crédits |
 | `GET /admin/credits` | `credits:read` | `q`, `plan` ; tri `created_at`, `name` | les crédits du mois de chaque organisation |
 | `GET /admin/subscriptions` | `billing:read` | `plan`, `status`, `interval` ; tri `updated_at`, `created_at` | les abonnements Stripe tels que LEKA les connaît |
@@ -145,6 +145,24 @@ Chaque permission a un **module** et un **niveau d'action** (`GET /admin/roles`)
 | annulée (`cancelled`) | `cancelled`, `rejected` |
 
 La durée d'une intention va de sa création à son dernier changement de statut, quand ce statut est final ; `null` sinon.
+
+**La fiche d'une intention** (LEKA-551, `api/leka/admin/intentions.py`). Chaque partie est lue là où LEKA la garde, jamais recopiée. Deux niveaux :
+
+| Partie | Ce que tout rôle avec `intentions:read` voit | Ce que seul `intentions:content` voit (`content`) |
+| --- | --- | --- |
+| Demande initiale | le titre, le type, qui l'a demandée, quand | le texte, le résumé, le but, les fichiers joints (leurs noms) |
+| Analyse et compréhension | chaque analyse : déclencheur, statut, état du contexte, durée, erreur ; les capacités choisies ou non et pourquoi (un code) ; ce que chacune a fait ; le risque et la confiance du résultat, le nombre de constats et de recommandations | la compréhension, et de chaque analyse : la réponse, le résumé, les constats, les causes, les recommandations, les incertitudes, ce qui manquait |
+| Agents sollicités | chaque choix du routeur (`capability_routings`) : son issue, les agents retenus, les candidats et leur score, les exclus | |
+| Étapes d'exécution | chaque exécution d'agent : statut, modèle, qui l'a lancée, durées, erreur, appels, jetons, crédits ; ses 200 premières étapes : leur type, l'outil, son issue, sa durée, le code d'un échec, le modèle et les jetons | jamais les arguments d'un outil, ce qu'il a lu ou ce que l'agent a écrit |
+| Résultats et recommandations | | les livrables (coupés à 4 000 caractères), les résultats des analyses |
+| Actions proposées | chaque décision : statut, risque, approbations demandées, votes (qui, quand, quoi) ; chaque action proposée : son type, réversible ou non, le nombre de cibles ; chaque plan et ses étapes ; chaque vérification | les cibles nommées et l'environnement de chaque action |
+| Erreurs rencontrées | les erreurs techniques, la plus récente d'abord : d'une analyse et de ses capacités, d'une exécution et de ses étapes, d'un plan et de ses actions, et les refus des modèles, regroupés (le même refus cent fois est une ligne, avec son nombre) | |
+| Durée et consommation IA | la durée ; depuis le registre de consommation (`usage_records`) : appels, appels échoués, nouvelles tentatives, jetons, coût aux tarifs de LEKA, crédits, modèles, et le détail par travail (chaque agent, chaque appel de LEKA) ; `null` quand rien n'est mesuré, jamais 0 | |
+| Chronologie | du plus ancien au plus récent, les 1 000 derniers moments : ses changements de statut, ses analyses, le choix de ses agents, chaque mouvement de ses exécutions (mise en file, début, reprise, échec d'une étape, fin) avec l'identifiant de l'exécution, ses décisions et leurs votes, ses plans et leurs vérifications ; l'erreur technique de chaque moment | le motif qu'une personne a pu écrire (un vote, une annulation) |
+
+Un moment de la chronologie dit sa catégorie (`intention`, `analysis`, `routing`, `run`, `decision`, `action`, `outcome`), son type, l'exécution à laquelle il appartient (`ref` : `run:<id>`, `analysis:<id>`, `routing:<id>`, `decision:<id>`, `plan:<id>`), l'agent concerné, le statut d'avant et d'après, qui (une personne ou LEKA) et l'erreur.
+
+**Le module ne fait rien** : ni relancer, ni annuler, ni approuver. Aucune action dans l'environnement d'un client ne part de LEKA ADMIN ; `tests/test_admin_intentions.py` vérifie que le module n'a que des lectures.
 
 **Statut d'une personne**, fondé sur ce qu'elle a fait, pas sur une simple connexion :
 
@@ -235,7 +253,7 @@ Suspendre, réactiver, ajouter des crédits : chacune appelle la règle du modul
 | --- | --- |
 | Connexion et sessions | `admin.signed_in`, `admin.sign_in_failed` (avec sa raison), `admin.signed_out`, `admin.session_renewed`, `admin.session_ended`, `admin.session_reused`, `admin.signed_out_everywhere` |
 | Mots de passe et codes | `admin.password_reset_asked`, `admin.code_refused`, `admin.password_set`, `admin.password_changed`, `admin.password_change_refused` |
-| Lectures | `admin.refused` (un rôle qui n'accorde pas), `admin.viewed` (une organisation, une personne, une intention), `admin.viewed_content` (ce que le client a écrit, les livrables), `admin.viewed_trail` (ce journal) |
+| Lectures | `admin.refused` (un rôle qui n'accorde pas), `admin.viewed` (une organisation, une personne, une intention), `admin.viewed_content` (ce que le client a écrit, les livrables ; pour une page d'intentions avec leur description, les intentions lues), `admin.viewed_trail` (ce journal) |
 | Clients, crédits | `admin.organisation_suspended`, `admin.organisation_reactivated`, `admin.credits_added`, `admin.organisation_updated` (LEKA-549 : avec ce qui a changé, avant et après), chacune avec son motif ; `admin.note_added` (une note interne : sa longueur, jamais son texte) |
 | L'équipe, les rôles, les permissions | `admin.account_created`, `admin.invited`, `admin.invitation_sent`, `admin.account_changed` (nom, rôle, accès : avant et après), `admin.role_changed` (les permissions d'un rôle : avant et après) |
 | Le journal lui-même | `admin.trail_expired` (ce que la tâche de nuit a supprimé), `admin.trail_unprotected` (sa protection trouvée absente) |
