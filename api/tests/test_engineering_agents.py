@@ -31,7 +31,7 @@ ENGINEERING = {
 }
 # A new version each for its method (2026-10-18).
 VERSIONS = {
-    "codebase-explorer": "1.1.0",
+    "codebase-explorer": "1.2.0",
     "test-generation": "1.1.0",
     "change-impact-analysis": "1.3.0",
     "regression-analysis": "1.3.0",
@@ -166,6 +166,15 @@ def test_the_codebase_explorer_explains_in_three_levels_and_names_the_traps() ->
         "Une partie n'est pas le tout",
     ):
         assert step in said, step
+    # 1.2.0 (2026-11-06, the Stripe question in prod): a question is
+    # answered first, without the repo's tour; a line number only as read.
+    for rule in (
+        "**Une question précise d'abord.**",
+        "le document commence par **La réponse à la question**",
+        "**Une ligne n'est citée que lue**",
+        "jamais sur un commentaire qui la nomme",
+    ):
+        assert rule in " ".join(said.split()), rule
     assert not carries_a_credit(said)
 
 
