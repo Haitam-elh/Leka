@@ -49,7 +49,7 @@ from leka.db import session_factory, workspace_scope
 from leka.intentions import agents as agents_module
 from leka.intentions import feasibility as feasibility_module
 from leka.intentions.processing import analyse_pending
-from leka.intentions.proposal import asked_words, named, plainly_asked, plan_by_rules
+from leka.intentions.proposal import RULES, asked_words, named, plainly_asked, plan_by_rules
 from tests.conftest import FakeIdentity
 from tests.test_agent_runs_api import _ready
 from tests.test_context_engine import model
@@ -982,3 +982,13 @@ def test_every_agent_s_test_intention_names_it_first() -> None:
     assert wrong == []
     # Every agent in service, one intention each.
     assert {want for want, _ in EVERY_AGENT} == set(entries)
+
+
+def test_a_question_about_the_code_is_not_answered_without_reading_it() -> None:
+    """« Où est géré le paiement Stripe dans le code de LEKA » was answered
+    from the company model alone, no file named (2026-11-06): LEKA's own
+    analysis reads no code, so where something lives in the code goes to
+    the agent that reads it."""
+    said = " ".join(RULES.split())
+    assert "Where or how something is done in the code" in said
+    assert "needs the agent that reads the code" in said
