@@ -7572,9 +7572,35 @@ export interface paths {
         };
         /**
          * Every agent's use and performance
-         * @description One row per agent that ran, the most used first; one page.
+         * @description One row per agent, ranked by `sort` (an unknown figure last whichever
+         *     the order); one page. Its runs, organisations, successes, failures,
+         *     duration, what its runs used and cost at the providers' rates (partial
+         *     or unavailable, said so), its credits, its revenue when it is bought
+         *     alone (LEKA-552).
          */
         get: operations["list_agents_api_v1_admin_agents_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/agents/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One agent over a period
+         * @description Its figures over the period and the one before; per day (per month
+         *     beyond 92 days); by model, by version, by organisation (the 20 that ran
+         *     it most); its 20 most frequent failures; how it is sold (LEKA-552).
+         */
+        get: operations["get_agent_api_v1_admin_agents__key__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -9960,6 +9986,15 @@ export interface components {
             /** Credits */
             credits: number | null;
         };
+        /** AgentBundle */
+        AgentBundle: {
+            /** Key */
+            key: string;
+            /** Fr */
+            fr: string;
+            /** En */
+            en: string;
+        };
         /** AgentCost */
         AgentCost: {
             /** Key */
@@ -9970,6 +10005,21 @@ export interface components {
             credits: number | null;
             /** Cost Usd */
             cost_usd: number | null;
+        };
+        /** AgentFailure */
+        AgentFailure: {
+            /**
+             * Error
+             * @description The code a run failed with.
+             */
+            error: string;
+            /** Runs */
+            runs: number;
+            /**
+             * Last At
+             * Format: date-time
+             */
+            last_at: string;
         };
         /**
          * AgentFieldRead
@@ -10050,6 +10100,43 @@ export interface components {
              */
             sources?: string[];
         };
+        /** AgentModelUse */
+        AgentModelUse: {
+            /** Model */
+            model: string | null;
+            /** Runs */
+            runs: number;
+            /** Succeeded */
+            succeeded: number;
+            /** Failed */
+            failed: number;
+            /** Success Rate */
+            success_rate: number | null;
+            /** Average Duration Ms */
+            average_duration_ms: number | null;
+            /** Cost Usd */
+            cost_usd: number | null;
+        };
+        /**
+         * AgentOffer
+         * @description How it is sold (LEKA-454): alone at its tier's price, in bundles, in plans.
+         */
+        AgentOffer: {
+            /** Tier */
+            tier: string | null;
+            /**
+             * Monthly Price Eur
+             * @description Alone; null: not sold alone.
+             */
+            monthly_price_eur: number | null;
+            /** Bundles */
+            bundles: components["schemas"]["AgentBundle"][];
+            /**
+             * Included From
+             * @description The least plan that includes it.
+             */
+            included_from: string | null;
+        };
         /**
          * AgentOfferRead
          * @description An agent as it is sold: its tier and price, whether this workspace owns
@@ -10105,6 +10192,49 @@ export interface components {
              */
             included_from?: string | null;
         };
+        /** AgentOrganisationUse */
+        AgentOrganisationUse: {
+            organisation: components["schemas"]["OrganisationRef"];
+            /** Runs */
+            runs: number;
+            /** Succeeded */
+            succeeded: number;
+            /** Failed */
+            failed: number;
+            /**
+             * Last Run At
+             * Format: date-time
+             */
+            last_run_at: string;
+        };
+        /** AgentPoint */
+        AgentPoint: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Runs */
+            runs: number;
+            /** Succeeded */
+            succeeded: number;
+            /** Failed */
+            failed: number;
+        };
+        /**
+         * AgentPrevious
+         * @description The same figures over the period just before, as long as it.
+         */
+        AgentPrevious: {
+            /** Runs */
+            runs: number;
+            /** Organisations */
+            organisations: number;
+            /** Success Rate */
+            success_rate: number | null;
+            /** Cost Usd */
+            cost_usd: number | null;
+        };
         /**
          * AgentProposalRead
          * @description What LEKA proposes to get it done (2026-10-14): the agents its work
@@ -10130,6 +10260,47 @@ export interface components {
              * @description The model that chose the agents, when one did (2026-10-21).
              */
             model?: string | null;
+        };
+        /**
+         * AgentRecord
+         * @description One agent over a period (LEKA-552): its figures, their days (or
+         *     months), by model, version and organisation, its failures, its offer.
+         */
+        AgentRecord: {
+            stat: components["schemas"]["AgentStat"];
+            /**
+             * Summary
+             * @description When to use it, as the registry says.
+             */
+            summary: string | null;
+            /** Mode */
+            mode: string | null;
+            /** Risk */
+            risk: string | null;
+            /** Dedicated */
+            dedicated: boolean;
+            offer: components["schemas"]["AgentOffer"];
+            /**
+             * Bucket
+             * @enum {string}
+             */
+            bucket: "day" | "month";
+            /** Series */
+            series: components["schemas"]["AgentPoint"][];
+            /** Models */
+            models: components["schemas"]["AgentModelUse"][];
+            /** Versions */
+            versions: components["schemas"]["AgentVersionUse"][];
+            /**
+             * Organisations
+             * @description The 20 that ran it most.
+             */
+            organisations: components["schemas"]["AgentOrganisationUse"][];
+            /**
+             * Failures
+             * @description The 20 most frequent.
+             */
+            failures: components["schemas"]["AgentFailure"][];
         };
         /**
          * AgentRunCreate
@@ -10484,6 +10655,23 @@ export interface components {
         AgentStat: {
             /** Key */
             key: string;
+            /**
+             * Title
+             * @description Its name in the registry; null: no longer there.
+             */
+            title: string | null;
+            /** Category */
+            category: string | null;
+            /**
+             * Version
+             * @description The registry's version today.
+             */
+            version: string | null;
+            /**
+             * Lifecycle
+             * @description draft, review, active, deprecated, retired; null: no longer in the registry.
+             */
+            lifecycle: string | null;
             /** Runs */
             runs: number;
             /** Organisations */
@@ -10502,14 +10690,53 @@ export interface components {
             /** Average Duration Ms */
             average_duration_ms: number | null;
             /**
+             * Calls
+             * @description Calls to a model, as metered; null: none metered.
+             */
+            calls: number | null;
+            /** Tokens In */
+            tokens_in: number | null;
+            /** Tokens Out */
+            tokens_out: number | null;
+            /**
              * Cost Usd
-             * @description At the providers' rates; null: no rate known.
+             * @description What its runs' calls cost at the providers' rates; null: no rate known.
              */
             cost_usd: number | null;
-            /** Credits */
+            /**
+             * Cost Status
+             * @enum {string}
+             */
+            cost_status: "measured" | "partial" | "unavailable" | "none";
+            /**
+             * Unpriced Runs
+             * @description Runs whose cost is not known: left out of cost_usd.
+             */
+            unpriced_runs: number;
+            /**
+             * Credits
+             * @description What it took of the customers' AI credits.
+             */
             credits: number | null;
+            /**
+             * Revenue Eur
+             * @description Monthly recurring revenue of it bought alone, coupons applied, excluding VAT; null: not bought alone, or no price known. A bundle's revenue is never split.
+             */
+            revenue_eur: number | null;
+            /**
+             * Purchases
+             * @description Organisations that bought it alone, now.
+             */
+            purchases: number;
+            /**
+             * Bundle Purchases
+             * @description Bundles bought now that include it.
+             */
+            bundle_purchases: number;
             /** Last Run At */
             last_run_at: string | null;
+            /** @description Over the period just before; null: no period asked. */
+            previous?: components["schemas"]["AgentPrevious"] | null;
         };
         /**
          * AgentUsageRead
@@ -10529,6 +10756,25 @@ export interface components {
             failed: number;
             /** Last At */
             last_at?: string | null;
+        };
+        /** AgentVersionUse */
+        AgentVersionUse: {
+            /** Version */
+            version: string;
+            /** Runs */
+            runs: number;
+            /** Success Rate */
+            success_rate: number | null;
+            /**
+             * First Run At
+             * Format: date-time
+             */
+            first_run_at: string;
+            /**
+             * Last Run At
+             * Format: date-time
+             */
+            last_run_at: string;
         };
         /** AgentsLaunchRequest */
         AgentsLaunchRequest: {
@@ -68066,13 +68312,25 @@ export interface operations {
     list_agents_api_v1_admin_agents_get: {
         parameters: {
             query?: {
+                /** @description today, 7d, 30d, 90d, 12m, or custom with from and to: each agent beside the period just before, as long as it. */
+                period?: ("today" | "7d" | "30d" | "90d" | "12m" | "custom") | null;
+                from?: string | null;
+                to?: string | null;
                 since?: string | null;
                 until?: string | null;
                 organisation_id?: string | null;
+                /** @description An organisation's name or slug. */
+                organisation?: string | null;
                 /** @description The runs a person asked (LEKA-550). */
                 user_id?: string | null;
                 agent?: string | null;
                 model?: string | null;
+                status?: ("awaiting_approval" | "queued" | "running" | "succeeded" | "failed" | "cancelled") | null;
+                lifecycle?: ("draft" | "review" | "active" | "deprecated" | "retired") | null;
+                /** @description The registry's agents that did not run are listed too. */
+                unused?: boolean;
+                sort?: "runs" | "organisations" | "success_rate" | "cost" | "duration" | "revenue" | "last_run";
+                order?: "asc" | "desc";
             };
             header?: never;
             path?: never;
@@ -68087,6 +68345,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PageEnvelope_AgentStat_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_agent_api_v1_admin_agents__key__get: {
+        parameters: {
+            query?: {
+                period?: "today" | "7d" | "30d" | "90d" | "12m" | "custom";
+                from?: string | null;
+                to?: string | null;
+                organisation_id?: string | null;
+                organisation?: string | null;
+                model?: string | null;
+                status?: ("awaiting_approval" | "queued" | "running" | "succeeded" | "failed" | "cancelled") | null;
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRecord"];
                 };
             };
             /** @description The request could not be understood. */

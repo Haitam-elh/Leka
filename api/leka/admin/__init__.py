@@ -28,6 +28,7 @@ from leka.admin.actions import (
 )
 from leka.admin.activity import run_sweep as run_activity_sweep
 from leka.admin.activity import sweep as sweep_activity
+from leka.admin.agents import AgentFilters, AgentSort, agent_record, agent_stats
 from leka.admin.audit import apart as audit_apart
 from leka.admin.audit import record as audit_record
 from leka.admin.dependencies import AdminPrincipalDep, client_ip, get_admin, require_admin, route_of
@@ -42,13 +43,12 @@ from leka.admin.models import (
     AdminNote,
     AdminSession,
 )
-from leka.admin.overview import AdminOverview, Period, overview, window_of
+from leka.admin.overview import AdminOverview, AdminWindow, Period, overview, window_of
 from leka.admin.reads import (
     activity_query,
     activity_row,
     admin_audit_query,
     admin_emails,
-    agent_stats,
     alert_row,
     alerts_query,
     credits_breakdown,
@@ -101,6 +101,7 @@ from leka.admin.schemas import (
     AdminSessionsRead,
     AdminSignedIn,
     AdminSignIn,
+    AgentRecord,
     AgentStat,
     AlertRow,
     CreditGrant,
@@ -180,6 +181,10 @@ __all__ = [
     "AdminSessionsRead",
     "AdminSignIn",
     "AdminSignedIn",
+    "AdminWindow",
+    "AgentFilters",
+    "AgentRecord",
+    "AgentSort",
     "AgentStat",
     "AlertRow",
     "CodeError",
@@ -212,6 +217,7 @@ __all__ = [
     "add_note",
     "admin_audit_query",
     "admin_emails",
+    "agent_record",
     "agent_stats",
     "alert_row",
     "alerts_query",

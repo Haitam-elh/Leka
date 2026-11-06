@@ -13,7 +13,17 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Request, Response, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    Header,
+    Path,
+    Query,
+    Request,
+    Response,
+    status,
+)
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -52,6 +62,10 @@ from leka.admin import (
     AdminSessionsRead,
     AdminSignedIn,
     AdminSignIn,
+    AdminWindow,
+    AgentFilters,
+    AgentRecord,
+    AgentSort,
     AgentStat,
     AlertRow,
     CodeError,
@@ -83,6 +97,7 @@ from leka.admin import (
     add_note,
     admin_audit_query,
     admin_emails,
+    agent_record,
     agent_stats,
     alert_row,
     alerts_query,
@@ -884,33 +899,108 @@ async def get_intention(
     return found
 
 
+RunStatus = Literal["awaiting_approval", "queued", "running", "succeeded", "failed", "cancelled"]
+Lifecycle = Literal["draft", "review", "active", "deprecated", "retired"]
+
+
+def _window(period: Period, start: datetime | None, end: datetime | None) -> AdminWindow:
+    try:
+        return window_of(period, start=start, end=end)
+    except ValueError as error:
+        raise ApiError(status.HTTP_400_BAD_REQUEST, ErrorCode.INVALID_FILTER, str(error)) from error
+
+
 @router.get(
     "/agents", response_model=PageEnvelope[AgentStat], summary="Every agent's use and performance"
 )
 async def list_agents(
     session: SessionDep,
     _: Annotated[AdminPrincipal, Depends(require_admin(P.AGENTS_READ))],
+    period: Annotated[
+        Period | None,
+        Query(
+            description="today, 7d, 30d, 90d, 12m, or custom with from and to: each agent "
+            "beside the period just before, as long as it."
+        ),
+    ] = None,
+    start: Annotated[datetime | None, Query(alias="from")] = None,
+    end: Annotated[datetime | None, Query(alias="to")] = None,
     since: datetime | None = None,
     until: datetime | None = None,
     organisation_id: uuid.UUID | None = None,
+    organisation: Annotated[
+        str | None, Query(max_length=200, description="An organisation's name or slug.")
+    ] = None,
     user_id: Annotated[
         uuid.UUID | None, Query(description="The runs a person asked (LEKA-550).")
     ] = None,
-    agent: str | None = None,
-    model: str | None = None,
+    agent: Annotated[str | None, Query(max_length=100)] = None,
+    model: Annotated[str | None, Query(max_length=120)] = None,
+    run_status: Annotated[RunStatus | None, Query(alias="status")] = None,
+    lifecycle: Lifecycle | None = None,
+    unused: Annotated[
+        bool, Query(description="The registry's agents that did not run are listed too.")
+    ] = False,
+    sort: AgentSort = "runs",
+    order: Literal["asc", "desc"] = "desc",
 ) -> PageEnvelope[AgentStat]:
-    """One row per agent that ran, the most used first; one page."""
+    """One row per agent, ranked by `sort` (an unknown figure last whichever
+    the order); one page. Its runs, organisations, successes, failures,
+    duration, what its runs used and cost at the providers' rates (partial
+    or unavailable, said so), its credits, its revenue when it is bought
+    alone (LEKA-552)."""
+    window = _window(period, start, end) if period else None
     return PageEnvelope(
         data=await agent_stats(
             session,
-            since=since,
-            until=until,
+            since=window.start if window else since,
+            until=window.end if window else until,
             organisation_id=organisation_id,
+            organisation=organisation,
             user_id=user_id,
             agent=agent,
             model=model,
+            status=run_status,
+            lifecycle=lifecycle,
+            unused=unused,
+            compare=window is not None,
+            sort=sort,
+            order=order,
         )
     )
+
+
+@router.get("/agents/{key}", response_model=AgentRecord, summary="One agent over a period")
+async def get_agent(
+    key: Annotated[str, Path(max_length=100)],
+    session: SessionDep,
+    _: Annotated[AdminPrincipal, Depends(require_admin(P.AGENTS_READ))],
+    period: Period = "30d",
+    start: Annotated[datetime | None, Query(alias="from")] = None,
+    end: Annotated[datetime | None, Query(alias="to")] = None,
+    organisation_id: uuid.UUID | None = None,
+    organisation: Annotated[str | None, Query(max_length=200)] = None,
+    model: Annotated[str | None, Query(max_length=120)] = None,
+    run_status: Annotated[RunStatus | None, Query(alias="status")] = None,
+) -> AgentRecord:
+    """Its figures over the period and the one before; per day (per month
+    beyond 92 days); by model, by version, by organisation (the 20 that ran
+    it most); its 20 most frequent failures; how it is sold (LEKA-552)."""
+    window = _window(period, start, end)
+    found = await agent_record(
+        session,
+        key,
+        window,
+        AgentFilters(
+            organisation_id=organisation_id,
+            organisation=organisation,
+            model=model,
+            status=run_status,
+        ),
+    )
+    if found is None:
+        raise _not_found("agent")
+    return found
 
 
 @router.get(
