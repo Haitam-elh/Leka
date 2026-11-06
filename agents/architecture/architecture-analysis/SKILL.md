@@ -2,7 +2,7 @@
 name: architecture-analysis
 title: "Analyse d'architecture"
 description: "Use when someone wants the architecture of an application or a service explained — what it is made of, what it depends on, what depends on it, where the weak points are — from the company model, without a deck."
-version: 1.5.0
+version: 1.5.1
 category: architecture
 entity_types: [application, service, database, infra_resource, business_process, team, repository, business_capability, person]
 requires: []
@@ -48,8 +48,11 @@ dis-le et arrête-toi : ne devine pas.
 
 **La question d'abord.** La réponse porte sur ce qui est demandé. On demande
 l'architecture du front : ses fragilités sont dans le front. L'hébergement
-n'y entre que lorsqu'il en est une cause, en une ligne, jamais comme sujet
-principal.
+n'y entre que lorsqu'il en est une cause, et alors au plus un point de
+fragilité, jamais le premier, et ni le résumé ni une piste ne lui sont
+consacrés. Ce qui touche toute la plateforme (une machine unique, le rayon
+d'impact d'une panne) se dit en une ligne dans « Dépendances », pas comme une
+fragilité du front.
 
 **Le code, quand un dépôt est connecté et que la demande vise une partie
 logicielle** — le front, une API, un service. Le modèle de l'entreprise dit
