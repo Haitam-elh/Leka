@@ -291,12 +291,22 @@ async def watch(*, now: datetime | None = None, snap: Snapshot | None = None) ->
             if now_firing is not None and known is None:
                 started.append(now_firing)
                 await store.set(
-                    key, json.dumps({"since": moment.isoformat(), "told": moment.isoformat()})
+                    key,
+                    json.dumps(
+                        {
+                            "since": moment.isoformat(),
+                            "told": moment.isoformat(),
+                            "why": now_firing.why,
+                        }
+                    ),
                 )
             elif now_firing is not None and known is not None:
                 if moment - datetime.fromisoformat(known["told"]) >= REMIND_EVERY:
                     reminded.append(now_firing)
-                    await store.set(key, json.dumps({**known, "told": moment.isoformat()}))
+                    await store.set(
+                        key,
+                        json.dumps({**known, "told": moment.isoformat(), "why": now_firing.why}),
+                    )
             elif known is not None:
                 resolved.append((rule, known))
                 await store.delete(key)
@@ -309,6 +319,35 @@ async def watch(*, now: datetime | None = None, snap: Snapshot | None = None) ->
         tuple(f.rule.name for f in reminded),
         tuple(r.name for r, _ in resolved),
     )
+
+
+@dataclass(frozen=True)
+class Active:
+    """An alert firing now, as the last watch left it (LEKA-548)."""
+
+    rule: Rule
+    since: datetime
+    why: str | None
+
+
+async def firing_now() -> list[Active] | None:
+    """What the watch says is firing now, each since when, the worst first.
+    None: Redis, where it is kept, cannot be read; never an empty list then."""
+    client = _client()
+    try:
+        found: list[Active] = []
+        for rule in RULES:
+            raw = await client.get(f"{STATE}{rule.name}")
+            if not raw:
+                continue
+            known = json.loads(raw.decode() if isinstance(raw, bytes) else raw)
+            found.append(Active(rule, datetime.fromisoformat(known["since"]), known.get("why")))
+    except Exception:
+        logger.warning("ops_firing_unreadable", exc_info=True)
+        return None
+    finally:
+        await client.aclose()
+    return sorted(found, key=lambda a: (a.rule.severity != "critical", a.since))
 
 
 def _message(

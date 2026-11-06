@@ -9,14 +9,17 @@ figure must leave out. Four admins, one per role.
 
 from __future__ import annotations
 
+import json
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import pytest
+import redis.asyncio as redis
 from httpx import AsyncClient
 from sqlalchemy import delete, func, select, text
+from sqlalchemy.dialects.postgresql import insert
 
 from leka.admin import (
     ActivityEvent,
@@ -27,14 +30,17 @@ from leka.admin import (
     create_account,
     sweep_activity,
 )
-from leka.billing import BillingAccount, StripeEvent
+from leka.admin.models import AdminDailyFigure
+from leka.admin.overview import record_day, revenue
+from leka.billing import AgentEntitlement, BillingAccount, StripeEvent
 from leka.capabilities import AgentRun
 from leka.connectors import HealthStatus, Source, SourceKind
+from leka.core.config import settings
 from leka.core.security import hash_token
 from leka.db import session_factory, system_scope
 from leka.governance import AuditEvent, WorkspacePlan
 from leka.identity import Session, User
-from leka.intentions import Intention, IntentionEvent
+from leka.intentions import Intention, IntentionAnalysis, IntentionEvent
 from leka.platform import Membership, Role, Workspace, WorkspaceStatus
 from tests.conftest import error_code
 
@@ -531,14 +537,21 @@ async def test_the_dashboard_counts_real_customers_only(client: AsyncClient, wor
     assert body["activity"]["dau"] >= 1
     assert body["product"]["agent_runs"] >= 2
     assert body["business"]["payments_failed"] >= 1
-    assert body["business"]["mrr"] is None
+    # Finance reads billing: the amounts are its to read.
+    assert body["business"]["amounts_granted"] is True
     assert body["acquisition"]["by_plan"].get("growth", 0) >= 1
+    assert body["acquisition"]["organisations_paid"] >= 1
     assert set(body["series"]) == {
+        "organisations",
+        "users",
         "users_new",
         "users_active",
         "intentions_created",
         "credits_consumed",
+        "mrr",
     }
+    # Every day of the period, a point: none missing where nothing happened.
+    assert len(body["series"]["intentions_created"]) == 8
 
     bad = await client.get(
         f"{API}/overview",
@@ -550,6 +563,288 @@ async def test_the_dashboard_counts_real_customers_only(client: AsyncClient, wor
         headers=as_(world, SUPER),
     )
     assert bad.status_code == 400
+
+
+async def test_amounts_are_only_for_who_reads_billing(client: AsyncClient, world: World) -> None:
+    support = (await client.get(f"{API}/overview", headers=as_(world, AdminRole.SUPPORT))).json()
+    business = support["business"]
+    assert business["amounts_granted"] is False
+    assert [business[k] for k in ("mrr", "arr", "collected", "collected_tax", "refunded")] == [
+        None
+    ] * 5
+    assert (support["costs"]["amounts_granted"], support["costs"]["ai_usd"]) == (False, None)
+    assert "mrr" not in support["series"]
+    # What is counted, not an amount, stays: the subscriptions, the payments failed.
+    assert business["payments_failed"] >= 1
+
+    finance = (await client.get(f"{API}/overview", headers=as_(world, AdminRole.FINANCE))).json()
+    assert finance["business"]["amounts_granted"] is True
+    assert finance["costs"]["amounts_granted"] is True
+
+
+async def test_the_mrr_is_each_paying_subscription_once_coupon_off_trials_apart(
+    world: World,
+) -> None:
+    def monthly(amount: int, percent_off: float | None = None) -> dict[str, object]:
+        ends = (NOW + timedelta(days=200)).isoformat()
+        return {
+            "amount": amount,
+            "currency": "eur",
+            "interval": "month",
+            "interval_count": 1,
+            "discount": {"percent_off": percent_off, "amount_off": None, "ends": ends}
+            if percent_off
+            else None,
+        }
+
+    m = world.marker
+    paying, trial, unknown, demo = (
+        Workspace(id=uuid.uuid4(), name=f"{name} {m}", slug=f"mrr-{name}-{m}", demo=name == "demo")
+        for name in ("paying", "trial", "unknown", "demo")
+    )
+    with system_scope():
+        async with session_factory() as session:
+            before = await revenue(session, NOW)
+            session.add_all([paying, trial, unknown, demo])
+            await session.flush()
+
+            def account(ws: Workspace, status: str, recurring: object) -> BillingAccount:
+                return BillingAccount(
+                    workspace_id=ws.id,
+                    plan="growth",
+                    status=status,
+                    interval="month",
+                    stripe_subscription_id=f"sub_{ws.slug}",
+                    recurring=recurring,
+                )
+
+            def add_on(key: str) -> AgentEntitlement:
+                # Two agents bought together: one subscription, counted once.
+                return AgentEntitlement(
+                    workspace_id=paying.id,
+                    key=key,
+                    kind="agent",
+                    origin="purchase",
+                    stripe_subscription_id=f"sub_addons_{m}",
+                    by_whom="stripe",
+                    started_at=NOW,
+                    recurring=monthly(1500),
+                )
+
+            session.add_all(
+                [
+                    account(paying, "active", monthly(17900, percent_off=20)),
+                    account(trial, "trialing", monthly(17900)),
+                    account(unknown, "active", None),
+                    account(demo, "active", monthly(59900)),
+                    add_on("code-review"),
+                    add_on("architecture-analysis"),
+                ]
+            )
+            await session.flush()
+            after = await revenue(session, NOW)
+            assert round(after.cents - before.cents) == 14320 + 1500
+            assert (
+                after.counted - before.counted,
+                after.unknown - before.unknown,
+                after.trialing - before.trialing,
+            ) == (2, 1, 1)
+
+            # Kept once a day, the last sweep of the day saying it.
+            day = datetime(2031, 1, 2, 9, tzinfo=UTC)
+            await record_day(session, day)
+            await record_day(session, day + timedelta(hours=3))
+            kept = (
+                await session.scalars(
+                    select(AdminDailyFigure).where(AdminDailyFigure.day == day.date())
+                )
+            ).all()
+            assert len(kept) == 1
+            # In 2031 the coupon has ended: the whole price, as that day says it.
+            then = await revenue(session, day + timedelta(hours=3))
+            assert round(then.cents - before.cents) == 17900 + 1500
+            assert kept[0].mrr is not None and float(kept[0].mrr) == then.mrr
+            assert kept[0].at == day + timedelta(hours=3)
+            await session.rollback()
+
+
+async def test_a_period_of_its_own_says_each_figure_exactly(
+    client: AsyncClient, world: World
+) -> None:
+    """March 2031: only what this test made happened then."""
+    m = world.marker
+    start = datetime(2031, 3, 1, tzinfo=UTC)
+    born = start + timedelta(days=1, hours=10)
+    beta = Workspace(id=uuid.uuid4(), name=f"Beta {m}", slug=f"beta-{m}")
+    shown = Workspace(id=uuid.uuid4(), name=f"Shown {m}", slug=f"shown-{m}", demo=True)
+    person = User(id=uuid.uuid4(), email=f"beta-{m}@acme.test")
+    asked = Intention(
+        id=uuid.uuid4(),
+        workspace_id=beta.id,
+        text=f"Map our services {m}",
+        title="Map our services",
+        status="completed",
+        status_changed_at=born + timedelta(hours=6),
+    )
+    facts = [
+        ("workspace.created", born, beta.id, None, {}),
+        ("user.active", born, beta.id, person.id, {}),
+        ("intention.created", born, beta.id, person.id, {}),
+        ("intention.completed", born + timedelta(hours=6), beta.id, None, {}),
+        ("intention.failed", born + timedelta(hours=7), beta.id, None, {}),
+        ("subscription.started", born + timedelta(days=3), beta.id, None, {"outcome": "applied"}),
+        ("payment.failed", born + timedelta(days=4), beta.id, None, {"outcome": "applied"}),
+        # No organisation of LEKA's answers for it: never counted.
+        ("payment.failed", born + timedelta(days=4), None, None, {"outcome": "ignored"}),
+        ("intention.created", born, shown.id, None, {}),
+    ]
+    with system_scope():
+        async with session_factory() as session:
+            session.add_all([beta, shown, person])
+            await session.flush()
+            await session.execute(
+                text("UPDATE workspaces SET created_at = :at WHERE id IN (:beta, :shown)"),
+                {"at": born, "beta": beta.id, "shown": shown.id},
+            )
+            session.add(asked)
+            await session.flush()
+            session.add_all(
+                [
+                    IntentionEvent(
+                        workspace_id=beta.id,
+                        intention_id=asked.id,
+                        sequence=1,
+                        kind="moved",
+                        from_status="analysing",
+                        to_status="completed",
+                        actor="system",
+                        at=born + timedelta(hours=6),
+                    ),
+                    *(
+                        IntentionAnalysis(
+                            workspace_id=beta.id,
+                            intention_id=asked.id,
+                            number=number,
+                            trigger="created",
+                            status=status,
+                            started_at=born,
+                            finished_at=born + timedelta(hours=1),
+                        )
+                        for number, status in ((1, "failed"), (2, "complete"), (3, "blocked"))
+                    ),
+                    *(
+                        AgentRun(
+                            workspace_id=beta.id,
+                            key="architecture-analysis",
+                            version="1.0.0",
+                            status=status,
+                            inputs={},
+                            format="markdown",
+                            detail={},
+                            queued_at=born + timedelta(hours=2),
+                            started_at=born + timedelta(hours=2),
+                            finished_at=born + timedelta(hours=3),
+                        )
+                        for status in ("succeeded", "failed")
+                    ),
+                ]
+            )
+            await session.execute(
+                insert(ActivityEvent).values(
+                    [
+                        {
+                            "id": uuid.uuid4(),
+                            "kind": kind,
+                            "at": at,
+                            "for_workspace_id": workspace,
+                            "user_id": user,
+                            "properties": properties,
+                            "dedupe_key": f"test-548:{m}:{n}",
+                        }
+                        for n, (kind, at, workspace, user, properties) in enumerate(facts)
+                    ]
+                )
+            )
+            await session.commit()
+    try:
+        response = await client.get(
+            f"{API}/overview",
+            params={
+                "period": "custom",
+                "from": start.isoformat(),
+                "to": (start + timedelta(days=30)).isoformat(),
+            },
+            headers=as_(world, SUPER),
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["acquisition"]["organisations_new"] == 1
+        activity = body["activity"]
+        assert activity["organisations_active"] == 1
+        assert (activity["intentions_completed"], activity["intentions_failed"]) == (1, 1)
+        assert activity["intention_success_rate"] == 0.5
+        # The blocked one asked a question: neither ended nor failed.
+        assert (activity["analyses_completed"], activity["analyses_failed"]) == (1, 1)
+        product = body["product"]
+        assert (product["agent_runs"], product["agent_success_rate"]) == (2, 0.5)
+        assert product["agent_adoption_rate"] == 1.0
+        assert product["top_agents"] == [
+            {"key": "architecture-analysis", "runs": 2, "succeeded": 1, "failed": 1}
+        ]
+        business = body["business"]
+        assert (business["subscriptions_started"], business["payments_failed"]) == (1, 1)
+        intelligence = body["intelligence"]
+        assert (intelligence["organisations_created"], intelligence["activated"]) == (1, 1)
+        assert intelligence["activation_rate"] == 1.0
+        assert intelligence["time_to_first_value_hours"] == 6.0
+        assert (intelligence["converted"], intelligence["conversion_rate"]) == (1, 1.0)
+        # A point a day; the organisations in all, Beta among them from its day.
+        organisations = body["series"]["organisations"]
+        assert len(organisations) == 30
+        assert organisations[-1]["value"] - organisations[0]["value"] == 1
+        assert organisations[1]["value"] - organisations[0]["value"] == 1
+        # The latest activity, whatever the period: Beta's, the latest of all.
+        named = {(r["kind"], (r["organisation"] or {}).get("name")) for r in body["recent"]}
+        assert ("subscription.started", beta.name) in named
+        assert all(
+            r["organisation"] is None or r["organisation"]["id"] != str(shown.id)
+            for r in body["recent"]
+        )
+    finally:
+        with system_scope():
+            async with session_factory() as session:
+                await session.execute(
+                    delete(ActivityEvent).where(ActivityEvent.dedupe_key.like(f"test-548:{m}:%"))
+                )
+                await session.execute(
+                    delete(Workspace).where(Workspace.id.in_([beta.id, shown.id]))
+                )
+                await session.execute(delete(User).where(User.id == person.id))
+                await session.commit()
+
+
+async def test_the_incidents_firing_now_are_the_ops_watch_s(
+    client: AsyncClient, world: World
+) -> None:
+    store = redis.from_url(str(settings.redis_url))
+    key = "leka:ops:alert:backup_stale"
+    since = NOW - timedelta(hours=2)
+    await store.set(
+        key,
+        json.dumps({"since": since.isoformat(), "told": since.isoformat(), "why": "none in 30 h"}),
+    )
+    try:
+        body = (await client.get(f"{API}/overview", headers=as_(world, SUPER))).json()
+        [incident] = [i for i in body["technical"]["incidents"] if i["rule"] == "backup_stale"]
+        assert (incident["severity"], incident["title"], incident["why"]) == (
+            "critical",
+            "Backups are not being taken",
+            "none in 30 h",
+        )
+        assert datetime.fromisoformat(incident["since"]) == since
+    finally:
+        await store.delete(key)
+        await store.aclose()
 
 
 # ── Sensitive operations ─────────────────────────────────────────────────────

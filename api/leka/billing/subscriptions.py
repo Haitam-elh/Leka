@@ -54,6 +54,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.billing.catalogue import Catalogue, Interval, Plan, Quote, catalogue, quote
 from leka.billing.models import BillingAccount, StripeEvent
+from leka.billing.revenue import recurring_of
 from leka.billing.stripe import SignatureError, Stripe, StripeError, verify
 from leka.billing.sync import (
     coupon_id,
@@ -433,6 +434,9 @@ async def _apply_subscription(
     account.interval = interval if paying else None
     account.current_period_end = _period_end(subscription)
     account.cancel_at_period_end = bool(subscription.get("cancel_at_period_end"))
+    # What it brings in, from the same subscription (LEKA-548): nothing once
+    # it pays nothing.
+    account.recurring = recurring_of(subscription) if paying else None
     # Subscribed once: the launch offer is had.
     account.launch_offer_used = True
     account.applied_at = made
@@ -529,6 +533,24 @@ def _changes(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
     return {"changes": changed | ({"ends": after["ends"]} if after["ends"] else {})}
 
 
+def _amounts(kind: str, data: dict[str, Any]) -> dict[str, Any]:
+    """What an invoice or a refund moved, in cents, kept with its event
+    (LEKA-548): what was paid, its tax within it; what was due and not paid;
+    what was refunded. Money collected, never revenue: the dashboard keeps
+    them apart (docs/admin/indicateurs.md)."""
+    said = {
+        "invoice.paid": ("amount_paid", "amount"),
+        "invoice.payment_failed": ("amount_due", "amount"),
+        "charge.refunded": ("amount_refunded", "amount"),
+    }.get(kind)
+    if said is None or data.get(said[0]) is None or not data.get("currency"):
+        return {}
+    kept = {said[1]: int(data[said[0]]), "currency": str(data["currency"]).lower()}
+    if kind == "invoice.paid" and data.get("tax") is not None:
+        kept["tax"] = int(data["tax"])
+    return kept
+
+
 async def receive(
     payload: bytes, signature: str, *, now: datetime, client: Stripe | None = None
 ) -> str:
@@ -602,6 +624,7 @@ async def receive(
                         if kind.startswith("invoice.") and data.get("billing_reason")
                         else {}
                     )
+                    | _amounts(kind, data)
                 )
             await session.commit()
             if said.startswith("add_on:"):

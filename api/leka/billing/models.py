@@ -96,6 +96,9 @@ class BillingAccount(Base, WorkspaceScopedMixin):
     # When Stripe made the last subscription event applied: an older one,
     # delivered late, never undoes it.
     applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The subscription's recurring price, as Stripe last said it (LEKA-548,
+    # leka/billing/revenue.py); null while it pays nothing or is not known.
+    recurring: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
 
 
 class StripeEvent(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -146,6 +149,9 @@ class AgentEntitlement(Base, WorkspaceScopedMixin):
     reason: Mapped[str | None] = mapped_column(String(300), nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # A purchase's subscription's recurring price (LEKA-548): the same on
+    # every right one subscription bought, counted once.
+    recurring: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
 
 
 class AddOnCheckout(Base, WorkspaceScopedMixin):

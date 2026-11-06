@@ -7244,9 +7244,11 @@ export interface paths {
         };
         /**
          * The figures of LEKA ADMIN's home
-         * @description AdminAcquisition, activity, product, business and technical figures over
-         *     `period` (today, 7d, 30d, 90d, 12m, or custom with `from` and `to`), and
-         *     their series per day (per month past 90 days).
+         * @description Acquisition, activity, product, business, costs, technical and customer
+         *     intelligence figures over `period` (today, 7d, 30d, 90d, 12m, or custom
+         *     with `from` and `to`), the latest activity, and their series per day (per
+         *     month past 90 days). Amounts (revenue, money collected, costs) only for a
+         *     role that reads billing (docs/admin/indicateurs.md).
          */
         get: operations["get_overview_api_v1_admin_overview_get"];
         put?: never;
@@ -8512,6 +8514,16 @@ export interface components {
             by_plan: {
                 [key: string]: number;
             };
+            /**
+             * Organisations Free
+             * @description On the Free plan now.
+             */
+            organisations_free: number;
+            /**
+             * Organisations Paid
+             * @description On any other plan now, paid by Stripe or not.
+             */
+            organisations_paid: number;
         };
         /** AdminActivity */
         AdminActivity: {
@@ -8530,12 +8542,29 @@ export interface components {
              * @description …in the last 30 days.
              */
             mau: number;
+            /**
+             * Organisations Active
+             * @description Organisations someone was seen in, or asked an intention in, in the period.
+             */
+            organisations_active: number;
             /** Intentions Created */
             intentions_created: number;
             /** Intentions Completed */
             intentions_completed: number;
             /** Intentions Failed */
             intentions_failed: number;
+            /**
+             * Intention Success Rate
+             * @description Completed out of those that ended completed or failed; null: none.
+             */
+            intention_success_rate: number | null;
+            /**
+             * Analyses Completed
+             * @description Ended with a result, whole or in part.
+             */
+            analyses_completed: number;
+            /** Analyses Failed */
+            analyses_failed: number;
         };
         /** AdminAuditRow */
         AdminAuditRow: {
@@ -8584,10 +8613,76 @@ export interface components {
         };
         /** AdminBusiness */
         AdminBusiness: {
+            /**
+             * Amounts Granted
+             * @description False: the admin's role does not read billing; every amount is null.
+             */
+            amounts_granted: boolean;
+            /**
+             * Currency
+             * @default EUR
+             * @constant
+             */
+            currency: "EUR";
+            /**
+             * Mrr
+             * @description Monthly recurring revenue now: each paying subscription's price, coupons off, VAT out; trials and plans paid outside Stripe left out. Null: no price known.
+             */
+            mrr: number | null;
+            /**
+             * Arr
+             * @description The MRR times twelve.
+             */
+            arr: number | null;
+            /**
+             * Mrr Subscriptions
+             * @description Paying subscriptions counted in the MRR.
+             */
+            mrr_subscriptions: number;
+            /**
+             * Mrr Unknown
+             * @description Paying subscriptions whose price LEKA does not know.
+             */
+            mrr_unknown: number;
+            /**
+             * Trialing
+             * @description Subscriptions in their trial: not revenue yet.
+             */
+            trialing: number;
+            /**
+             * Paid Outside Stripe
+             * @description Organisations on a paid plan with no paying Stripe subscription (a contract, an account of LEKA's team): not in the MRR.
+             */
+            paid_outside_stripe: number;
+            /**
+             * Collected
+             * @description Money collected in the period: the invoices paid, VAT in. Null: not kept.
+             */
+            collected: number | null;
+            /**
+             * Collected Tax
+             * @description The VAT within it.
+             */
+            collected_tax: number | null;
+            /**
+             * Collected Unknown
+             * @description Invoices paid in the period whose amount LEKA did not keep (before LEKA-548).
+             */
+            collected_unknown: number;
+            /**
+             * Refunded
+             * @description Refunded in the period.
+             */
+            refunded: number | null;
             /** Subscriptions Started */
             subscriptions_started: number;
             /** Subscriptions Canceled */
             subscriptions_canceled: number;
+            /**
+             * Churn Rate
+             * @description Cancelled in the period out of those paying at its start; null: none.
+             */
+            churn_rate: number | null;
             /** Payments Failed */
             payments_failed: number;
             /**
@@ -8595,16 +8690,6 @@ export interface components {
              * @description A Stripe subscription that keeps its plan now: active, trialing or past_due.
              */
             paying_organisations: number;
-            /**
-             * Mrr
-             * @description Unavailable until LEKA keeps invoices (LEKA-554).
-             */
-            mrr?: number | null;
-            /**
-             * Arr
-             * @description Unavailable until LEKA keeps invoices (LEKA-554).
-             */
-            arr?: number | null;
         };
         /** AdminChange */
         AdminChange: {
@@ -8624,10 +8709,99 @@ export interface components {
              */
             password: string;
         };
+        /** AdminCohort */
+        AdminCohort: {
+            /**
+             * Month
+             * Format: date
+             * @description The month its people signed up.
+             */
+            month: string;
+            /** Size */
+            size: number;
+            /**
+             * Retained
+             * @description Month by month after it, the share of them seen in the product; null: that month has not come, or LEKA did not track activity yet.
+             */
+            retained: (number | null)[];
+        };
+        /** AdminCosts */
+        AdminCosts: {
+            /** Amounts Granted */
+            amounts_granted: boolean;
+            /**
+             * Ai Usd
+             * @description What LEKA's models cost LEKA in the period, in US dollars; null: not known.
+             */
+            ai_usd: number | null;
+            /**
+             * Ai Incomplete
+             * @description Executions of the period whose model cost is known in part or not at all.
+             */
+            ai_incomplete: number;
+            /**
+             * Infrastructure Usd
+             * @description Not measured by LEKA (usage_records.infra_cost).
+             */
+            infrastructure_usd?: number | null;
+        };
         /** AdminForgotPassword */
         AdminForgotPassword: {
             /** Email */
             email: string;
+        };
+        /** AdminIncident */
+        AdminIncident: {
+            /** Rule */
+            rule: string;
+            /**
+             * Severity
+             * @description critical: someone acts now; warning: today.
+             */
+            severity: string;
+            /** Title */
+            title: string;
+            /**
+             * Since
+             * Format: date-time
+             */
+            since: string;
+            /** Why */
+            why: string | null;
+        };
+        /** AdminIntelligence */
+        AdminIntelligence: {
+            /**
+             * Organisations Created
+             * @description Created in the period: who the rest is of.
+             */
+            organisations_created: number;
+            /**
+             * Activated
+             * @description Of them, those with an intention completed since.
+             */
+            activated: number;
+            /** Activation Rate */
+            activation_rate: number | null;
+            /**
+             * Time To First Value Hours
+             * @description Median, from an organisation's creation to its first intention completed.
+             */
+            time_to_first_value_hours: number | null;
+            /**
+             * Converted
+             * @description Of them, those that started a Stripe subscription since.
+             */
+            converted: number;
+            /** Conversion Rate */
+            conversion_rate: number | null;
+            /** Retention */
+            retention: components["schemas"]["AdminCohort"][];
+            /**
+             * Tracked Since
+             * @description The first activity LEKA recorded: retention before it is not known.
+             */
+            tracked_since: string | null;
         };
         /**
          * AdminIntentionContent
@@ -8796,7 +8970,11 @@ export interface components {
             activity: components["schemas"]["AdminActivity"];
             product: components["schemas"]["AdminProduct"];
             business: components["schemas"]["AdminBusiness"];
+            costs: components["schemas"]["AdminCosts"];
             technical: components["schemas"]["AdminTechnical"];
+            intelligence: components["schemas"]["AdminIntelligence"];
+            /** Recent */
+            recent: components["schemas"]["AdminRecent"][];
             /** Series */
             series: {
                 [key: string]: components["schemas"]["AdminPoint"][];
@@ -8855,6 +9033,16 @@ export interface components {
             /** Organisations Running Agents */
             organisations_running_agents: number;
             /**
+             * Agent Adoption Rate
+             * @description Of the active organisations, the share that ran an agent; null: none active.
+             */
+            agent_adoption_rate: number | null;
+            /**
+             * Top Agents
+             * @description The five most run, in the period.
+             */
+            top_agents: components["schemas"]["AdminTopAgent"][];
+            /**
              * Credits Consumed
              * @description Null: no cost LEKA could measure.
              */
@@ -8896,6 +9084,28 @@ export interface components {
              * @description Its sessions open now.
              */
             sessions: number;
+        };
+        /** AdminRecent */
+        AdminRecent: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            organisation: components["schemas"]["OrganisationRef"] | null;
+            /** User Id */
+            user_id: string | null;
+            /** Properties */
+            properties: {
+                [key: string]: unknown;
+            };
         };
         /** AdminResetPassword */
         AdminResetPassword: {
@@ -9045,6 +9255,11 @@ export interface components {
         };
         /** AdminTechnical */
         AdminTechnical: {
+            /**
+             * Incidents
+             * @description Firing now, as the ops watch judged it; null: it cannot be read.
+             */
+            incidents: components["schemas"]["AdminIncident"][] | null;
             /** Sources In Error */
             sources_in_error: number;
             /** Sync Failures */
@@ -9071,6 +9286,17 @@ export interface components {
             actor: string | null;
             /** Reason */
             reason: string | null;
+        };
+        /** AdminTopAgent */
+        AdminTopAgent: {
+            /** Key */
+            key: string;
+            /** Runs */
+            runs: number;
+            /** Succeeded */
+            succeeded: number;
+            /** Failed */
+            failed: number;
         };
         /** AdminWindow */
         AdminWindow: {
