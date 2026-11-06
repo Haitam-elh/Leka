@@ -155,6 +155,13 @@ def id_of(said: object) -> uuid.UUID | None:
         return None
 
 
+def known_names(names: Iterable[str]) -> list[str]:
+    """The names a person reads: a person or team the graph knows only by an
+    id (a commit author never matched to a name) is left out, never shown as
+    « [a9caec70-…] » (2026-11-06)."""
+    return [n for n in names if n.strip() and id_of(n) is None]
+
+
 def level_of(said: object) -> str | None:
     """A criticality as LEKA ranks it — critical, high, medium, low — or the
     source's own word, lower case; none when nothing is said."""
@@ -391,8 +398,8 @@ async def repository_profile(asked: RepositoryAsked, call: Call) -> RepositoryPr
         ),
         topics=[str(t) for t in topics][:10] if isinstance(topics, list) else [],
         archived=bool(attributes.get("archived")),
-        owners=[t.entity.name for t in held.owners],
-        maintainers=[t.entity.name for t in held.maintainers],
+        owners=known_names(t.entity.name for t in held.owners),
+        maintainers=known_names(t.entity.name for t in held.maintainers),
         builds=[citer.named(b) for b in builds[:MOST]],
         activity=Activity(
             merges=kinds["merge"],
