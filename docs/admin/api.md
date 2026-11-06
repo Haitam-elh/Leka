@@ -57,6 +57,7 @@ Une route demande une **permission**, jamais un rôle. Ce que le rôle n'accorde
 | `organisations:write` suspendre, réactiver ; changer son nom, son pays, sa taille (LEKA-549) | ✓ | ✓ | | |
 | `organisations:notes` écrire une note interne (LEKA-549) | ✓ | ✓ | ✓ | ✓ |
 | `users:read` personnes | ✓ | ✓ | ✓ | ✓ |
+| `users:notes` écrire une note interne sur une personne (LEKA-550) | ✓ | ✓ | ✓ | ✓ |
 | `intentions:read` intentions (métadonnées, titre) | ✓ | ✓ | ✓ | |
 | `intentions:content` ce que le client a écrit, les livrables | ✓ | | ✓ | |
 | `agents:read` agents et performance | ✓ | ✓ | ✓ | ✓ |
@@ -106,11 +107,13 @@ Chaque permission a un **module** et un **niveau d'action** (`GET /admin/roles`)
 | `POST /admin/organisations/{id}/notes` | `organisations:notes` | corps `{body}` (4 000 caractères au plus) | la note écrite. Jamais montrée au client ; le journal admin en garde la longueur, jamais le texte |
 | `GET /admin/organisations/{id}/history` | `organisations:read` | | ce que l'équipe LEKA lui a fait : suspendue, réactivée, modifiée, crédits ajoutés, note écrite ; jamais ce qu'elle a lu |
 | `GET /admin/organisations/{id}/incidents` | `environments:read` | `status` (`open`, `resolved`, `closed`) | les alertes sur son environnement (LEKA-442), la plus récente d'abord |
-| `GET /admin/users` | `users:read` | `q` (e-mail, nom, id), `organisation_id`, `verified`, `created_from`, `created_to` ; tri `created_at`, `email` | une ligne par personne : organisations et rôles, intentions, statut (§ 5) |
-| `GET /admin/users/{id}` | `users:read` | | la fiche : profil déclaré, organisations, exécutions, crédits consommés sur 30 jours, dernières connexions. **Lecture journalisée** |
+| `GET /admin/users` | `users:read` | `q` (e-mail, nom, id), `organisation_id` ou `organisation` (nom ou slug), `role` (`owner`, `admin`, `member` : dans cette organisation si elle est donnée), `verified`, `created_from`, `created_to`, `status` (§ 5), `active_from`, `active_to`, `never_active` (sa dernière intention, exécution ou source) ; tri `created_at`, `email` | une ligne par personne : organisations, leur état et ses rôles, intentions, statut, dernière activité, jours vus et actions sur 30 jours, niveau d'activité (§ 5) |
+| `GET /admin/users/{id}` | `users:read` | | la fiche : profil déclaré, organisations, dans chacune son rôle et ce qu'il lui permet (le calcul de LEKA à chaque requête, rôle propre compris), exécutions, analyses terminées, agents utilisés, crédits consommés sur 30 jours, dernières connexions. **Lecture journalisée** |
+| `GET /admin/users/{id}/notes`, `POST` | `users:read`, `users:notes` | corps `{body}` | ses notes internes (LEKA-550), jamais montrées à la personne |
+| `GET /admin/invitations` | `users:read` | `q` (e-mail), `organisation_id`, `include_expired` | les personnes invitées pas encore entrées : organisation, rôle, envoi, expiration, si l'adresse a déjà un compte LEKA |
 | `GET /admin/intentions` | `intentions:read` | `organisation_id`, `user_id`, `status` (les 5 de LEKA ADMIN ou les 12 de LEKA), `kind`, `agent`, `created_from`, `created_to` ; tri `created_at` | une ligne par intention : organisation, auteur, titre, statuts, agents, durée, crédits |
 | `GET /admin/intentions/{id}` | `intentions:read` | | sa chronologie, ses exécutions et leurs erreurs, analyses, décisions. `content` (texte, résumé, but, compréhension, livrables coupés à 4 000 caractères) seulement avec `intentions:content`, sinon `null`. **Lecture journalisée**, en `admin.viewed_content` quand le contenu est rendu |
-| `GET /admin/agents` | `agents:read` | `since`, `until`, `organisation_id`, `agent`, `model` | une ligne par agent : exécutions, organisations, réussites, échecs, taux de réussite, durée moyenne, coût et crédits |
+| `GET /admin/agents` | `agents:read` | `since`, `until`, `organisation_id`, `user_id` (les exécutions qu'une personne a demandées), `agent`, `model` | une ligne par agent : exécutions, organisations, réussites, échecs, taux de réussite, durée moyenne, coût et crédits |
 | `GET /admin/credits` | `credits:read` | `q`, `plan` ; tri `created_at`, `name` | les crédits du mois de chaque organisation |
 | `GET /admin/subscriptions` | `billing:read` | `plan`, `status`, `interval` ; tri `updated_at`, `created_at` | les abonnements Stripe tels que LEKA les connaît |
 | `GET /admin/billing/events` | `billing:read` | `type` (`*` joker), `outcome` (`applied`, `ignored`, `failed`), `organisation_id`, `received_from`, `received_to` ; tri `received_at` | chaque webhook Stripe reçu et ce qui en a été fait : les erreurs de synchronisation se voient ici |
@@ -147,12 +150,22 @@ La durée d'une intention va de sa création à son dernier changement de statut
 
 | Statut | Règle, dans l'ordre |
 | --- | --- |
+| `suspended` | membre d'au moins une organisation, et aucune des siennes n'est active (toutes suspendues ou en suppression) |
 | `unverified` | adresse jamais confirmée |
 | `new` | inscrite depuis moins de 7 jours |
 | `active` | une intention créée, une exécution d'agent ou une source connectée dans les 30 derniers jours |
 | `inactive` | sinon |
 
-Une personne invitée sans compte apparaît dans les invitations de l'organisation. Un compte suspendu n'existe pas encore dans LEKA CORE.
+**Invitée** : une personne invitée sans compte n'est pas encore une personne de LEKA ; elle est dans `GET /admin/invitations` tant qu'elle n'a pas accepté (une invitation expirée n'y est que sur demande). LEKA CORE n'a pas de suspension propre à un compte : une personne est suspendue par ses organisations.
+
+**Niveau d'activité** (LEKA-550), sur les 30 derniers jours, à partir de deux chiffres rendus à côté de lui : les **jours vus** (une session utilisée ce jour-là, `user.active`, une fois par jour) et les **actions** (intentions créées, exécutions d'agents, sources connectées). Une connexion seule n'est ni un jour vu ni une action.
+
+| Niveau | Règle |
+| --- | --- |
+| `high` | 20 actions ou plus, ou 12 jours vus ou plus |
+| `medium` | 5 actions ou plus, ou 4 jours vus ou plus |
+| `low` | au moins une action, ou au moins un jour vu |
+| `none` | rien |
 
 **Le tableau de bord** (`GET /admin/overview`), sur la période demandée, hors démonstration : chaque indicateur, sa règle de calcul et ce qu'il dit quand il ne sait pas sont dans [indicateurs.md](indicateurs.md) (LEKA-548). En bref :
 

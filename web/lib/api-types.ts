@@ -7437,7 +7437,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Every person */
+        /**
+         * Every person
+         * @description Every person (LEKA-550): their organisations and roles, intentions,
+         *     status and level of activity (docs/admin/api.md § 5). Someone invited
+         *     with no account yet is in GET /admin/invitations.
+         */
         get: operations["list_users_api_v1_admin_users_get"];
         put?: never;
         post?: never;
@@ -7458,6 +7463,52 @@ export interface paths {
         get: operations["get_user_api_v1_admin_users__user_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Those invited, not yet in
+         * @description The invitations neither accepted nor revoked (LEKA-550): those
+         *     « invités », the latest first; expired ones only when asked.
+         */
+        get: operations["list_invitations_api_v1_admin_invitations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * LEKA's internal notes about a person
+         * @description What LEKA's team wrote down about them, the latest first (LEKA-550).
+         */
+        get: operations["list_user_notes_api_v1_admin_users__user_id__notes_get"];
+        put?: never;
+        /**
+         * Write an internal note about a person
+         * @description For LEKA's team, never shown to them (LEKA-550). The admin trail says
+         *     one was written, never what it says.
+         */
+        post: operations["add_user_note_api_v1_admin_users__user_id__notes_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8995,6 +9046,39 @@ export interface components {
              */
             credits: number | null;
         };
+        /**
+         * AdminInvitationRow
+         * @description Someone invited to an organisation (LEKA-550): « invité » until they accept.
+         */
+        AdminInvitationRow: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Email */
+            email: string;
+            organisation: components["schemas"]["OrganisationRef"];
+            /** Role */
+            role: string;
+            /**
+             * Invited At
+             * Format: date-time
+             */
+            invited_at: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Expired */
+            expired: boolean;
+            /**
+             * Has Account
+             * @description True: the address already has a LEKA account.
+             */
+            has_account: boolean;
+        };
         /** AdminInvite */
         AdminInvite: {
             /** Email */
@@ -9027,6 +9111,11 @@ export interface components {
         /** AdminMembership */
         AdminMembership: {
             organisation: components["schemas"]["OrganisationRef"];
+            /**
+             * Organisation Status
+             * @description active, suspended or pending_deletion.
+             */
+            organisation_status: string;
             /** Role */
             role: string;
             /**
@@ -9064,7 +9153,7 @@ export interface components {
          * AdminPermission
          * @enum {string}
          */
-        AdminPermission: "dashboard:read" | "organisations:read" | "organisations:write" | "organisations:notes" | "users:read" | "intentions:read" | "intentions:content" | "agents:read" | "credits:read" | "credits:write" | "billing:read" | "environments:read" | "activity:read" | "audit:read" | "admins:manage";
+        AdminPermission: "dashboard:read" | "organisations:read" | "organisations:write" | "organisations:notes" | "users:read" | "users:notes" | "intentions:read" | "intentions:content" | "agents:read" | "credits:read" | "credits:write" | "billing:read" | "environments:read" | "activity:read" | "audit:read" | "admins:manage";
         /** AdminPermissionRead */
         AdminPermissionRead: {
             permission: components["schemas"]["AdminPermission"];
@@ -22124,6 +22213,19 @@ export interface components {
              */
             next_cursor?: string | null;
         };
+        /** PageEnvelope[AdminInvitationRow] */
+        PageEnvelope_AdminInvitationRow_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["AdminInvitationRow"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
         /** PageEnvelope[AdminRead] */
         PageEnvelope_AdminRead_: {
             /**
@@ -27376,6 +27478,21 @@ export interface components {
             /** Unread */
             unread: number;
         };
+        /**
+         * UserAccess
+         * @description What a person may do in one organisation (LEKA-550), as LEKA decides
+         *     it on each request (governance's subject): their seat's role, a role of
+         *     the organisation's own on it, and the permissions that leaves them.
+         */
+        UserAccess: {
+            organisation: components["schemas"]["OrganisationRef"];
+            /** Role */
+            role: string;
+            /** Custom Role */
+            custom_role: string | null;
+            /** Permissions */
+            permissions: string[];
+        };
         /** UserDetail */
         UserDetail: {
             /**
@@ -27404,7 +27521,27 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "unverified" | "new" | "active" | "inactive";
+            status: "suspended" | "unverified" | "new" | "active" | "inactive";
+            /**
+             * Last Active At
+             * @description Their last intention, run or source connected. Null: none.
+             */
+            last_active_at: string | null;
+            /**
+             * Active Days 30D
+             * @description Days they were seen in the product, in 30.
+             */
+            active_days_30d: number;
+            /**
+             * Actions 30D
+             * @description Intentions asked, runs, sources connected, in 30 days.
+             */
+            actions_30d: number;
+            /**
+             * Activity Level
+             * @enum {string}
+             */
+            activity_level: "none" | "low" | "medium" | "high";
             /** Company */
             company: string | null;
             /** Job Title */
@@ -27422,13 +27559,26 @@ export interface components {
              * @description Null: no cost LEKA could measure.
              */
             credits_used_30d: number | null;
-            /** Last Active At */
-            last_active_at: string | null;
             /**
              * Sign Ins
              * @description The latest sign-ins, the latest first.
              */
             sign_ins: string[];
+            /**
+             * Access
+             * @description In each organisation: their role, a role of its own, what they may do.
+             */
+            access: components["schemas"]["UserAccess"][];
+            /**
+             * Analyses Completed
+             * @description Analyses they asked that ended with a result.
+             */
+            analyses_completed: number;
+            /**
+             * Agents Used
+             * @description Every agent they ran, by key.
+             */
+            agents_used: string[];
         };
         /** UserRead */
         UserRead: {
@@ -27485,7 +27635,27 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "unverified" | "new" | "active" | "inactive";
+            status: "suspended" | "unverified" | "new" | "active" | "inactive";
+            /**
+             * Last Active At
+             * @description Their last intention, run or source connected. Null: none.
+             */
+            last_active_at: string | null;
+            /**
+             * Active Days 30D
+             * @description Days they were seen in the product, in 30.
+             */
+            active_days_30d: number;
+            /**
+             * Actions 30D
+             * @description Intentions asked, runs, sources connected, in 30 days.
+             */
+            actions_30d: number;
+            /**
+             * Activity Level
+             * @enum {string}
+             */
+            activity_level: "none" | "low" | "medium" | "high";
         };
         /**
          * ValidationIssueCount
@@ -66693,9 +66863,20 @@ export interface operations {
                 /** @description Email, name or id. */
                 q?: string | null;
                 organisation_id?: string | null;
+                /** @description An organisation's name or slug. */
+                organisation?: string | null;
+                /** @description Their role in an organisation (the one asked, if any). */
+                role?: ("owner" | "admin" | "member") | null;
                 verified?: boolean | null;
                 created_from?: string | null;
                 created_to?: string | null;
+                status?: ("suspended" | "unverified" | "new" | "active" | "inactive") | null;
+                /** @description Their last intention, run or source from then on. */
+                active_from?: string | null;
+                /** @description …before then. */
+                active_to?: string | null;
+                /** @description No intention, run nor source connected, ever. */
+                never_active?: boolean;
                 /** @description From a previous response's next_cursor. Opaque. */
                 cursor?: string | null;
                 /** @description Rows per page. */
@@ -66812,6 +66993,312 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_invitations_api_v1_admin_invitations_get: {
+        parameters: {
+            query?: {
+                /** @description Their email. */
+                q?: string | null;
+                organisation_id?: string | null;
+                include_expired?: boolean;
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_AdminInvitationRow_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_user_notes_api_v1_admin_users__user_id__notes_get: {
+        parameters: {
+            query?: {
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_NoteRow_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    add_user_note_api_v1_admin_users__user_id__notes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteRow"];
                 };
             };
             /** @description The request could not be understood. */
@@ -67097,6 +67584,8 @@ export interface operations {
                 since?: string | null;
                 until?: string | null;
                 organisation_id?: string | null;
+                /** @description The runs a person asked (LEKA-550). */
+                user_id?: string | null;
                 agent?: string | null;
                 model?: string | null;
             };

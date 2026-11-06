@@ -42,6 +42,7 @@ from leka.admin.schemas import (
 from leka.db import workspace_scope
 from leka.governance import Target, add_pack
 from leka.governance import audit as workspace_audit
+from leka.identity import User
 from leka.platform import Workspace, WorkspaceRepository, WorkspaceService, WorkspaceStatus
 
 
@@ -206,17 +207,23 @@ async def update_organisation(
 async def add_note(
     session: AsyncSession,
     principal: AdminPrincipal,
-    workspace_id: uuid.UUID,
     note: NoteCreate,
     *,
+    organisation_id: uuid.UUID | None = None,
+    user_id: uuid.UUID | None = None,
     route: str,
 ) -> NoteRow:
-    """An internal note: written down for LEKA's team, never for the customer.
-    Allowed on an organisation pending deletion too: it may say why."""
-    if await session.get(Workspace, workspace_id) is None:
-        raise ActionError(404, "No organisation with this id.")
+    """An internal note about an organisation, or a person (LEKA-550):
+    written down for LEKA's team, never for the customer. Allowed on an
+    organisation pending deletion too: it may say why."""
+    if organisation_id is not None:
+        if await session.get(Workspace, organisation_id) is None:
+            raise ActionError(404, "No organisation with this id.")
+    elif user_id is None or await session.get(User, user_id) is None:
+        raise ActionError(404, "No person with this id.")
     row = AdminNote(
-        for_workspace_id=workspace_id,
+        for_workspace_id=organisation_id,
+        for_user_id=user_id if organisation_id is None else None,
         admin_id=principal.admin_id,
         admin_email=principal.email,
         body=note.body,
@@ -227,9 +234,9 @@ async def add_note(
         session,
         "admin.note_added",
         admin_id=principal.admin_id,
-        target_type="organisation",
-        target_id=workspace_id,
-        workspace_id=workspace_id,
+        target_type="organisation" if organisation_id is not None else "user",
+        target_id=organisation_id or user_id,
+        workspace_id=organisation_id,
         route=route,
         ip_prefix=principal.ip_prefix,
         detail={"characters": len(note.body)},

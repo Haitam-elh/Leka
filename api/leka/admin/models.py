@@ -46,9 +46,9 @@ never what anyone wrote.
 `activity_watermarks`: how far each source of the activity journal has been
 read.
 
-`admin_notes` (LEKA-549): what LEKA's team writes down about an
-organisation, for each other, never shown to the customer: who, when, what.
-Kept as written, never changed; deleted with the organisation.
+`admin_notes` (LEKA-549, LEKA-550): what LEKA's team writes down about an
+organisation or a person, for each other, never shown to the customer: who,
+when, what. Kept as written, never changed; deleted with what it is about.
 
 `admin_daily_figures` (LEKA-548): what LEKA brings in each month, as it
 stood each day (the MRR, its subscriptions, those whose price is not known),
@@ -236,11 +236,17 @@ class AdminNote(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "admin_notes"
     __table_args__ = (
         Index("ix_admin_notes_workspace_created", "for_workspace_id", "created_at"),
+        Index("ix_admin_notes_user_created", "for_user_id", "created_at"),
         CheckConstraint("char_length(body) BETWEEN 1 AND 4000", name="body"),
+        # About an organisation or a person: one, never both, never none.
+        CheckConstraint("num_nonnulls(for_workspace_id, for_user_id) = 1", name="about"),
     )
 
-    for_workspace_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    for_workspace_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True
+    )
+    for_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True
     )
     # Who wrote it: kept as an address too, so a note still says who once
     # that admin's account is gone.
