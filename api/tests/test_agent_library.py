@@ -31,7 +31,7 @@ from tests.leka_voice import carries_a_credit
 
 VERSIONS = {
     "architecture-analysis": "1.5.1",
-    "build-fixer": "1.3.0",
+    "build-fixer": "1.4.0",
     "code-review": "1.4.0",
     "data-analysis": "1.4.0",
     "debug-assistant": "1.6.0",
@@ -451,6 +451,10 @@ def test_the_build_fixer_proposes_the_smallest_fix() -> None:
     # while two pull requests had a red check, a merge of two weeks before
     # as a suspect, « LEKA-390 » in the deliverable.
     assert "**Les contrôles des pull requests sont des builds.**" in said
+    # 1.4.0 (2026-11-06, a red PR in prod): what failed, read in its log
+    # before any cause; never a test guessed from the diff.
+    assert "**Ce qui a échoué se lit\n   avant de chercher pourquoi**" in said
+    assert "jamais un test deviné d'après le diff" in " ".join(said.split())
     assert "LEKA-390" not in said
     assert own_words("build-fixer")
 
