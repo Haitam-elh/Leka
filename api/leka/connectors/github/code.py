@@ -141,12 +141,27 @@ _FAILING = re.compile(
 )
 
 
+# A test runner's verdict, each line: what a reader needs whole, before any
+# excerpt (2026-11-06: pytest's « short test summary » of 8 failures cut out
+# of a 9 000-line job log, the build fixer named 2).
+_VERDICT = re.compile(
+    r"^(?:FAILED|ERROR) \S|short test summary info|^(?:=+ )?\d+ (?:failed|errors?)\b|"
+    r"^\s*Tests?(?: Files)?\s+\d+ failed"
+)
+MOST_VERDICT = 40
+
+
 def log_excerpt(text: str, *, most: int = MOST_LOG) -> str:
     """A check's log as the repair needs it: its times and colours taken
     out, the lines where it fails with a few around each — the first ones
     first — then how it ends; `[…]` where lines are left out."""
     lines = [_ANSI.sub("", _STAMP.sub("", line)).rstrip() for line in text.splitlines()]
     lines = [line for line in lines if not line.startswith(("##[group]", "##[endgroup]"))]
+    verdict = "\n".join(
+        line[:500] for line in [line for line in lines if _VERDICT.search(line)][:MOST_VERDICT]
+    )
+    if verdict:
+        most -= len(verdict) + len("\n[…]\n")
     wanted: set[int] = set(range(max(0, len(lines) - LOG_TAIL), len(lines)))
     budget = most
     for i, line in enumerate(lines):
@@ -165,7 +180,8 @@ def log_excerpt(text: str, *, most: int = MOST_LOG) -> str:
         last = i
     out = "\n".join(said)
     # Over: what comes first — where it fails first — kept, with its end.
-    return out if len(out) <= most else out[: most - 2000] + "\n[…]\n" + out[-2000:]
+    out = out if len(out) <= most else out[: most - 2005] + "\n[…]\n" + out[-2000:]
+    return f"{verdict}\n[…]\n{out}" if verdict else out
 
 
 def checks_of(runs: Sequence[dict[str, Any]], statuses: Sequence[dict[str, Any]]) -> dict[str, Any]:

@@ -1985,6 +1985,24 @@ def test_a_log_is_cut_to_where_it_fails_and_how_it_ends() -> None:
     assert "[…]" in said and "ok 10\n" not in said
 
 
+def test_a_log_keeps_every_failed_test_its_runner_names() -> None:
+    """2026-11-06: a 9 000-line job log, pytest's summary of 8 failures
+    near its end, cut out; the build fixer named 2 of them."""
+    lines = ["2026-11-06T20:30:00.0000000Z ERROR: pip's resolver warning"] * 300
+    lines += [f"2026-11-06T20:31:00.0000000Z E   AssertionError: {n}" for n in range(3000)]
+    lines += ["2026-11-06T20:45:46.0000000Z ===== short test summary info ====="]
+    lines += [
+        f"2026-11-06T20:45:46.0000000Z FAILED tests/test_billing_stripe.py::test_{n} - KeyError"
+        for n in range(8)
+    ]
+    lines += ["2026-11-06T20:45:46.0000000Z ===== 8 failed, 4638 passed in 748.05s ====="]
+    lines += [f"2026-11-06T20:45:51.0000000Z Post job cleanup {n}" for n in range(80)]
+    said = log_excerpt("\n".join(lines))
+    assert len(said) <= MOST_LOG
+    assert all(f"FAILED tests/test_billing_stripe.py::test_{n} " in said for n in range(8))
+    assert "8 failed, 4638 passed" in said
+
+
 def test_what_failed_names_its_files_as_paths_of_the_repository() -> None:
     failures = [
         {
