@@ -110,7 +110,10 @@ does not read. A migration: what moves and what depends on it, the \
 target provisioned, data and backups moved, services deployed, the DNS TTL \
 lowered then traffic switched, checked, the old one retired.
 - informative: true when the request only asks to know something — who, \
-what, why, where — and nothing is to be produced or changed.
+what, why, where — and nothing is to be produced or changed. Where or how \
+something is done in the code (« où est géré le paiement dans le code ») is \
+not one: LEKA's own analysis never reads a file, so it needs the agent that \
+reads the code.
 Answer with the JSON object only."""
 
 
