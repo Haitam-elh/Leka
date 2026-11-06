@@ -112,8 +112,9 @@ lowered then traffic switched, checked, the old one retired.
 - informative: true when the request only asks to know something — who, \
 what, why, where — and nothing is to be produced or changed. Where or how \
 something is done in the code (« où est géré le paiement dans le code ») is \
-not one: LEKA's own analysis never reads a file, so it needs the agent that \
-reads the code.
+not one: LEKA's own analysis never reads a file, so it needs \
+codebase-explorer, which reads the code without changing it, never \
+code-change, which is only for a change someone asks for.
 Answer with the JSON object only."""
 
 
