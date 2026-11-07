@@ -50,6 +50,7 @@ from leka.admin.schemas import (
     OrganisationRef,
     OrganisationRow,
     PersonRef,
+    SourceDiagnostic,
     SourceRow,
     StripeEventRow,
     UserAccess,
@@ -62,8 +63,9 @@ from leka.admin.schemas import (
 )
 from leka.billing import BillingAccount, StripeEvent
 from leka.capabilities import AgentRun, ModelCall
-from leka.connectors import HealthStatus, Source, SourceStatus
+from leka.connectors import HealthStatus, Source, SourceStatus, SyncStatus
 from leka.core.config import settings
+from leka.core.sensitive import guarded
 from leka.db import workspace_scope
 from leka.governance import WorkspacePlan, plan_of, subject_of
 from leka.identity import User
@@ -1137,9 +1139,48 @@ def sources_query(
         statement = statement.where(Source.health_status == health)
     if in_error:
         statement = statement.where(
-            or_(Source.status == SourceStatus.ERROR, Source.health_status == HealthStatus.UNHEALTHY)
+            or_(
+                Source.status == SourceStatus.ERROR,
+                Source.health_status == HealthStatus.UNHEALTHY,
+                Source.sync_status == SyncStatus.FAILED,
+            )
         )
     return statement
+
+
+def diagnostic_of(said: object) -> SourceDiagnostic | None:
+    """A failure as LEKA CORE kept it (a Diagnostic, cleaned of secrets when
+    written), scanned again before it is said (LEKA-555). Said in words
+    alone, as earlier writers kept it: its words, its code unknown."""
+    if isinstance(said, str) and said.strip():
+        return SourceDiagnostic(
+            code="UNKNOWN",
+            message=guarded(said.strip()),
+            remediation=None,
+            retryable=None,
+            provider_status=None,
+            detail=None,
+        )
+    if not isinstance(said, dict) or not said:
+        return None
+
+    def text(key: str) -> str | None:
+        value = said.get(key)
+        return guarded(str(value)) if value not in (None, "") else None
+
+    said_status = said.get("provider_status")
+    status = (
+        said_status if isinstance(said_status, int) and not isinstance(said_status, bool) else None
+    )
+    retryable = said.get("retryable")
+    return SourceDiagnostic(
+        code=str(said.get("code") or "UNKNOWN"),
+        message=text("message") or "",
+        remediation=text("remediation"),
+        retryable=retryable if isinstance(retryable, bool) else None,
+        provider_status=status,
+        detail=text("detail"),
+    )
 
 
 async def source_rows(session: AsyncSession, sources: Sequence[Source]) -> list[SourceRow]:
@@ -1153,7 +1194,7 @@ async def source_rows(session: AsyncSession, sources: Sequence[Source]) -> list[
             status=str(s.status),
             health=str(s.health_status),
             last_health_check_at=s.last_health_check_at,
-            last_error=s.last_error,
+            last_error=diagnostic_of(s.last_error),
             sync_status=str(s.sync_status),
             last_synced_at=s.last_synced_at,
             created_at=s.created_at,

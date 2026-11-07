@@ -7884,6 +7884,119 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/environments/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every organisation's environment, together
+         * @description The sources across LEKA (connected, failing, degraded, not read for
+         *     three hours), the services they found, the reads of the last 24 hours,
+         *     and each connector LEKA CORE has with who uses it (LEKA-555).
+         *     Demonstration organisations left out.
+         */
+        get: operations["get_environments_overview_api_v1_admin_environments_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/environments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every organisation's environment
+         * @description One row per organisation (LEKA-555): its state, its sources and those
+         *     failing, its connectors, its last read, what was found, the reads that
+         *     failed in the last 7 days.
+         */
+        get: operations["list_environments_api_v1_admin_environments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/environments/{organisation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * An organisation's environment
+         * @description Its sources and their diagnostics, its latest reads, what they found,
+         *     how sure LEKA is of what ties it together, the latest changes of that
+         *     (LEKA-555). Never a credential nor a source's settings. A reading kept
+         *     in the admin trail.
+         */
+        get: operations["get_environment_api_v1_admin_environments__organisation_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/environments/{organisation_id}/map": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * An organisation's map
+         * @description What it runs and only the relationships its collected data supports,
+         *     each confirmed (stated by a source, or accepted) or supposed (inferred),
+         *     with the sources that state it and what says it, scanned for secrets;
+         *     where it was read from, verified or not, and when (LEKA-555). A reading
+         *     kept in the admin trail.
+         */
+        get: operations["get_environment_map_api_v1_admin_environments__organisation_id__map_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/environments/{organisation_id}/syncs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * An organisation's reads of its sources
+         * @description Each read of its sources, the latest first, with the diagnostic it
+         *     ended on, cleaned of secrets (LEKA-555).
+         */
+        get: operations["list_environment_syncs_api_v1_admin_environments__organisation_id__syncs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/activity": {
         parameters: {
             query?: never;
@@ -14780,6 +14893,37 @@ export interface components {
          */
         ConnectorCategory: "code" | "project" | "docs" | "cloud" | "observability" | "data" | "chat" | "custom";
         /**
+         * ConnectorUse
+         * @description A connector LEKA CORE has, and who uses it.
+         */
+        ConnectorUse: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /**
+             * Category
+             * @description code, project, docs, cloud, observability, data, chat…
+             */
+            category: string;
+            /**
+             * Receives
+             * @description The system sends to LEKA rather than being read.
+             */
+            receives: boolean;
+            /**
+             * Sources
+             * @description Connected with it, not disabled.
+             */
+            sources: number;
+            /** Organisations */
+            organisations: number;
+            /** In Error */
+            in_error: number;
+            /** Last Synced At */
+            last_synced_at: string | null;
+        };
+        /**
          * ContextChange
          * @description What made a context be made again, or what it is behind on (LEKA-374):
          *     something the model changed of what it holds — an entity added, changed
@@ -18712,6 +18856,81 @@ export interface components {
              */
             recorded_at: string;
         };
+        /**
+         * EnvironmentChange
+         * @description A relationship that appeared, changed or went, at a build.
+         */
+        EnvironmentChange: {
+            /** From Name */
+            from_name: string;
+            /** To Name */
+            to_name: string;
+            /** Type */
+            type: string;
+            /**
+             * Change
+             * @description added, changed, removed.
+             */
+            change: string;
+            /**
+             * Certainty
+             * @description As it is after; none when it went.
+             */
+            certainty: ("confirmed" | "supposed") | null;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at: string;
+        };
+        /**
+         * EnvironmentDetail
+         * @description An organisation's environment (LEKA-555): its sources, their reads and
+         *     errors, what they found, how sure LEKA is of what ties it together.
+         */
+        EnvironmentDetail: {
+            organisation: components["schemas"]["OrganisationRef"];
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "error" | "degraded" | "stale" | "ok" | "none";
+            /**
+             * Built At
+             * @description When its model was last built.
+             */
+            built_at: string | null;
+            /** Sources */
+            sources: components["schemas"]["SourceRow"][];
+            /**
+             * Syncs
+             * @description The latest 20 reads.
+             */
+            syncs: components["schemas"]["SyncRunRow"][];
+            /**
+             * Failed Syncs
+             * @description Reads that failed in the last 7 days.
+             */
+            failed_syncs: number;
+            /**
+             * Entities
+             * @description What was found, by type, not removed.
+             */
+            entities: {
+                [key: string]: number;
+            };
+            /**
+             * Services
+             * @description Its services, applications and databases: the 100 seen last.
+             */
+            services: components["schemas"]["EnvironmentEntity"][];
+            relations: components["schemas"]["EnvironmentRelations"];
+            /**
+             * History
+             * @description The latest 20 changes.
+             */
+            history: components["schemas"]["EnvironmentChange"][];
+        };
         /** EnvironmentEdgeRead */
         EnvironmentEdgeRead: {
             /** From Id */
@@ -18725,6 +18944,34 @@ export interface components {
              * @description The worse state of its two ends.
              */
             status: string | null;
+        };
+        /**
+         * EnvironmentEntity
+         * @description A thing its sources show: a service, an application, a database…
+         */
+        EnvironmentEntity: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Type */
+            type: string;
+            /** Name */
+            name: string;
+            /** Lifecycle */
+            lifecycle: string;
+            /** Environment */
+            environment: string | null;
+            /** Confidence */
+            confidence: number;
+            /** Last Seen At */
+            last_seen_at: string | null;
+            /**
+             * Sources
+             * @description The sources that show it.
+             */
+            sources: components["schemas"]["SourceRef"][];
         };
         /**
          * EnvironmentEventRead
@@ -18743,6 +18990,40 @@ export interface components {
             where: components["schemas"]["EntityRef"] | null;
             /** Source Kinds */
             source_kinds: string[];
+        };
+        /**
+         * EnvironmentMap
+         * @description An organisation's map (LEKA-555): what it runs, and only the
+         *     relationships its collected data supports, each as certain as it is.
+         */
+        EnvironmentMap: {
+            organisation: components["schemas"]["OrganisationRef"];
+            /** Built At */
+            built_at: string | null;
+            /** Environment */
+            environment: string | null;
+            /** Environments */
+            environments: string[];
+            /** Nodes */
+            nodes: components["schemas"]["MapNode"][];
+            /** Links */
+            links: components["schemas"]["MapLink"][];
+            /** Confirmed */
+            confirmed: number;
+            /** Supposed */
+            supposed: number;
+            /**
+             * Unknown
+             * @description Nodes tied to nothing.
+             */
+            unknown: number;
+            /** Sources */
+            sources: components["schemas"]["MapSource"][];
+            /**
+             * Unverified
+             * @description Sources not active, not healthy, or never read.
+             */
+            unverified: number;
         };
         /**
          * EnvironmentNodeRead
@@ -18869,6 +19150,112 @@ export interface components {
             tracked?: components["schemas"]["TrackedRead"][];
             /** Sources */
             sources?: components["schemas"]["TwinSourceRead"][];
+        };
+        /**
+         * EnvironmentRelations
+         * @description How sure LEKA is of what ties its things together.
+         */
+        EnvironmentRelations: {
+            /**
+             * Confirmed
+             * @description Stated by a source's records, or accepted by a person.
+             */
+            confirmed: number;
+            /**
+             * Supposed
+             * @description Inferred by a rule: never shown as certain.
+             */
+            supposed: number;
+            /**
+             * Unknown
+             * @description Services and applications tied to nothing: what they rely on is not known.
+             */
+            unknown: number;
+            /**
+             * Issues
+             * @description What the last build found wrong with a relationship.
+             */
+            issues: number;
+        };
+        /** EnvironmentRow */
+        EnvironmentRow: {
+            organisation: components["schemas"]["OrganisationRef"];
+            /**
+             * State
+             * @description error: a source fails; degraded: one is degraded; stale: one was not read for three hours; ok; none: no source connected.
+             * @enum {string}
+             */
+            state: "error" | "degraded" | "stale" | "ok" | "none";
+            /** Sources */
+            sources: number;
+            /** In Error */
+            in_error: number;
+            /** Kinds */
+            kinds: string[];
+            /** Last Synced At */
+            last_synced_at: string | null;
+            /**
+             * Services
+             * @description Services and applications detected, not removed.
+             */
+            services: number;
+            /** Entities */
+            entities: number;
+            /** Relationships */
+            relationships: number;
+            /**
+             * Failed Syncs
+             * @description Reads that failed in the last 7 days.
+             */
+            failed_syncs: number;
+        };
+        /**
+         * EnvironmentsOverview
+         * @description Every organisation's environment, together (LEKA-555); demonstration
+         *     organisations left out.
+         */
+        EnvironmentsOverview: {
+            /**
+             * Organisations
+             * @description With a source connected, not disabled.
+             */
+            organisations: number;
+            /** Organisations In Error */
+            organisations_in_error: number;
+            /**
+             * Sources
+             * @description Not disabled.
+             */
+            sources: number;
+            /** Active */
+            active: number;
+            /** In Error */
+            in_error: number;
+            /** Degraded */
+            degraded: number;
+            /**
+             * Stale
+             * @description Active, not read for three hours or never read.
+             */
+            stale: number;
+            /** Disabled */
+            disabled: number;
+            /**
+             * Services
+             * @description Services and applications detected, not removed.
+             */
+            services: number;
+            /**
+             * Syncs
+             * @description Reads started in the last 24 hours.
+             */
+            syncs: number;
+            /** Syncs Failed */
+            syncs_failed: number;
+            /** Last Synced At */
+            last_synced_at: string | null;
+            /** Connectors */
+            connectors: components["schemas"]["ConnectorUse"][];
         };
         /**
          * ErrorBody
@@ -22585,6 +22972,106 @@ export interface components {
              */
             remember: boolean;
         };
+        /** MapLink */
+        MapLink: {
+            /** From Id */
+            from_id: string;
+            /** To Id */
+            to_id: string;
+            /** Role */
+            role: string;
+            /**
+             * Certainty
+             * @description confirmed: stated by a source or accepted by a person; supposed: inferred.
+             * @enum {string}
+             */
+            certainty: "confirmed" | "supposed";
+            /**
+             * Origin
+             * @description stated, inferred or accepted.
+             */
+            origin: string;
+            /**
+             * Rule
+             * @description What inferred it, or `stated`.
+             */
+            rule: string;
+            /** Confidence */
+            confidence: number;
+            /**
+             * Sources
+             * @description The kinds of the sources whose records state it.
+             */
+            sources: string[];
+            /**
+             * Evidence
+             * @description What says it, scanned for secrets.
+             */
+            evidence: string | null;
+        };
+        /** MapNode */
+        MapNode: {
+            /** Id */
+            id: string;
+            /**
+             * Column
+             * @description code, services, data, cloud or external.
+             */
+            column: string;
+            /** Group */
+            group: string;
+            /** Kind */
+            kind: string;
+            /** Type */
+            type: string;
+            /** Name */
+            name: string;
+            /**
+             * Status
+             * @description operational, attention, incident, unmonitored.
+             */
+            status: string | null;
+            /**
+             * Deduced
+             * @description Its state is deduced from what runs it, not measured.
+             */
+            deduced: boolean;
+            /** Environment */
+            environment: string | null;
+            /** Sources */
+            sources: string[];
+            /**
+             * Linked
+             * @description Tied to something: false, what it relies on is unknown.
+             */
+            linked: boolean;
+        };
+        /**
+         * MapSource
+         * @description Where the map was read from, and how fresh it is.
+         */
+        MapSource: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Status */
+            status: string;
+            /** Last Synced At */
+            last_synced_at: string | null;
+            /** Entities */
+            entities: number;
+            /**
+             * Verified
+             * @description Active, healthy and read at least once.
+             */
+            verified: boolean;
+        };
         /** Mapping */
         Mapping: {
             /**
@@ -23929,6 +24416,19 @@ export interface components {
              */
             next_cursor?: string | null;
         };
+        /** PageEnvelope[EnvironmentRow] */
+        PageEnvelope_EnvironmentRow_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["EnvironmentRow"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
         /** PageEnvelope[FindingRead] */
         PageEnvelope_FindingRead_: {
             /**
@@ -24339,6 +24839,19 @@ export interface components {
              * @description The rows on this page, in the requested order.
              */
             data: components["schemas"]["SyncRunRead"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
+        /** PageEnvelope[SyncRunRow] */
+        PageEnvelope_SyncRunRow_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["SyncRunRow"][];
             /**
              * Next Cursor
              * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
@@ -27674,6 +28187,29 @@ export interface components {
                 [key: string]: string;
             };
         };
+        /**
+         * SourceDiagnostic
+         * @description A source's or a read's last failure, as LEKA CORE kept it, already
+         *     cleaned of anything secret (leka.connectors.errors.Diagnostic) — and
+         *     scanned again before it is said (LEKA-555).
+         */
+        SourceDiagnostic: {
+            /**
+             * Code
+             * @description AUTH_INVALID, AUTH_EXPIRED, PERMISSION_DENIED, TIMEOUT…
+             */
+            code: string;
+            /** Message */
+            message: string;
+            /** Remediation */
+            remediation: string | null;
+            /** Retryable */
+            retryable: boolean | null;
+            /** Provider Status */
+            provider_status: number | null;
+            /** Detail */
+            detail: string | null;
+        };
         /** SourceEventRead */
         SourceEventRead: {
             /**
@@ -27915,6 +28451,18 @@ export interface components {
              */
             updated_at: string;
         };
+        /** SourceRef */
+        SourceRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+        };
         /** SourceRow */
         SourceRow: {
             /**
@@ -27933,8 +28481,7 @@ export interface components {
             health: string;
             /** Last Health Check At */
             last_health_check_at: string | null;
-            /** Last Error */
-            last_error: string | null;
+            last_error: components["schemas"]["SourceDiagnostic"] | null;
             /** Sync Status */
             sync_status: string;
             /** Last Synced At */
@@ -28476,6 +29023,37 @@ export interface components {
             error: {
                 [key: string]: unknown;
             } | null;
+        };
+        /**
+         * SyncRunRow
+         * @description One read of a source, from start to end.
+         */
+        SyncRunRow: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            source: components["schemas"]["SourceRef"];
+            /** Trigger */
+            trigger: string;
+            /**
+             * Status
+             * @description running, succeeded, failed, abandoned.
+             */
+            status: string;
+            /** Capability */
+            capability: string | null;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Finished At */
+            finished_at: string | null;
+            /** Records */
+            records: number;
+            error: components["schemas"]["SourceDiagnostic"] | null;
         };
         /**
          * SyncStatus
@@ -70793,6 +71371,502 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PageEnvelope_SourceRow_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_environments_overview_api_v1_admin_environments_overview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentsOverview"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_environments_api_v1_admin_environments_get: {
+        parameters: {
+            query?: {
+                /** @description An organisation's name, slug or id. */
+                q?: string | null;
+                /** @description Only those with a source connected. */
+                connected?: boolean;
+                /** @description Only those with a source failing. */
+                in_error?: boolean;
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_EnvironmentRow_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_environment_api_v1_admin_environments__organisation_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_environment_map_api_v1_admin_environments__organisation_id__map_get: {
+        parameters: {
+            query?: {
+                /** @description Only what runs in it. */
+                environment?: string | null;
+            };
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentMap"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_environment_syncs_api_v1_admin_environments__organisation_id__syncs_get: {
+        parameters: {
+            query?: {
+                source_id?: string | null;
+                /** @description failed: those that failed or were abandoned. */
+                status?: ("running" | "succeeded" | "failed" | "abandoned") | null;
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_SyncRunRow_"];
                 };
             };
             /** @description The request could not be understood. */
