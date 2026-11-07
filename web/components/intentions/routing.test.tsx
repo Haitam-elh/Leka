@@ -7,7 +7,9 @@
  * from what proposes actions; a chosen agent is offered to run for the
  * intention; LEKA's own analysis when nothing fits better, said so; an
  * unclear intention says what to ask and what it could mean; routed again
- * on demand.
+ * on demand. The ranking is read on demand, under « Pourquoi ces agents ? »;
+ * a chosen agent is one line, its fields under « Ajuster »; its runs and
+ * what it proposes, once for every agent (2026-11-07).
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -21,7 +23,13 @@ import { makeQueryClient } from "@/lib/query";
 
 const api = vi.hoisted(() => ({ routing: vi.fn(), route: vi.fn(), one: vi.fn() }));
 const catalogue = vi.hoisted(() => ({ one: vi.fn() }));
-const runs = vi.hoisted(() => ({ list: vi.fn(), one: vi.fn(), start: vi.fn(), cancel: vi.fn() }));
+const runs = vi.hoisted(() => ({
+  list: vi.fn(),
+  forIntention: vi.fn(),
+  one: vi.fn(),
+  start: vi.fn(),
+  cancel: vi.fn(),
+}));
 
 vi.mock("@/lib/intentions/api", async (original) => ({
   ...(await original<typeof import("@/lib/intentions/api")>()),
@@ -133,14 +141,19 @@ beforeEach(() => {
     text: "Construis l'architecture du parcours Paiement CB sur le périmètre Digital",
   });
   runs.list.mockResolvedValue([]);
+  runs.forIntention.mockResolvedValue([]);
 });
 
 describe("where an intention goes", () => {
   it("says what was chosen, why each was ranked, why one was left out — and offers the agent", async () => {
+    const user = userEvent.setup();
     show();
     const panel = await screen.findByTestId("intention-routing");
     expect(panel).toHaveAttribute("data-outcome", "routed");
     expect(panel).toHaveTextContent("LEKA la confie à : Architecte applicatif");
+    // The ranking, folded until asked for.
+    expect(within(panel).queryByTestId("routing-candidates")).not.toBeInTheDocument();
+    await user.click(within(panel).getByRole("button", { name: "Pourquoi ces agents ?" }));
     const ranked = within(panel).getByTestId("routing-candidates");
     expect(ranked).toHaveTextContent(
       "objectif · type de demande · mots : architecture, parcours · sources du contexte : confluence",
@@ -151,9 +164,35 @@ describe("where an intention goes", () => {
     );
     // The chosen agent, to run for the intention: what it names, suggested;
     // its runs, followed here.
-    expect(await screen.findByTestId("agent-run-form")).toBeInTheDocument();
+    const form = await screen.findByTestId("agent-run-form");
+    expect(form).toHaveTextContent("Architecte applicatif");
+    expect(within(form).getByRole("button", { name: "Lancer" })).toBeInTheDocument();
+    // Its fields, prefilled, under « Ajuster ».
+    expect(screen.queryByLabelText(/Parcours/)).not.toBeInTheDocument();
+    await user.click(within(form).getByRole("button", { name: "Ajuster" }));
     await waitFor(() => expect(screen.getByLabelText(/Parcours/)).toHaveValue("Paiement CB"));
     expect(await screen.findByText("Aucune exécution pour l'instant.")).toBeInTheDocument();
+    await waitFor(() => expect(runs.forIntention).toHaveBeenCalledWith("i1"));
+  });
+
+  it("two agents chosen: a line each, their runs and their code changes once", async () => {
+    const CHANGE = candidate({ key: "code-change", title: "Modification de code", kind: "agent", selected: true });
+    const TESTS = candidate({ key: "test-generation", title: "Génération de tests", kind: "agent", selected: true });
+    api.routing.mockResolvedValue(routing({ selected: [CHANGE.key, TESTS.key], candidates: [TESTS, CHANGE] }));
+    catalogue.one.mockImplementation(async (key: string) => ({
+      key,
+      title: key === "code-change" ? "Modification de code" : "Génération de tests",
+      kind: "agent",
+      available: true,
+      formats: ["markdown", "diff"],
+      inputs: [],
+    }));
+    show();
+    await waitFor(() => expect(screen.getAllByTestId("agent-run-form")).toHaveLength(2));
+    // No field to adjust: nothing folded to open.
+    expect(screen.queryByRole("button", { name: "Ajuster" })).not.toBeInTheDocument();
+    expect(await screen.findAllByText("Exécutions")).toHaveLength(1);
+    expect(screen.getAllByText("Modifications de code proposées")).toHaveLength(1);
   });
 
   it("falls back to LEKA's analysis, saying why", async () => {
@@ -191,6 +230,7 @@ describe("where an intention goes", () => {
     );
     api.routing.mockResolvedValue(routing({ outcome: "fallback", selected: [], candidates: many }));
     show();
+    await user.click(await screen.findByRole("button", { name: "Pourquoi ces agents ?" }));
     const ranked = await screen.findByTestId("routing-candidates");
     expect(within(ranked).getAllByRole("listitem")).toHaveLength(5);
     await user.click(screen.getByTestId("routing-more"));
