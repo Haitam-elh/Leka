@@ -1,6 +1,6 @@
-# Les indicateurs du tableau de bord de LEKA ADMIN (LEKA-548)
+# Les indicateurs de LEKA ADMIN (LEKA-548, LEKA-554)
 
-`GET /api/v1/admin/overview` calcule chaque chiffre de l'accueil de LEKA ADMIN à partir des données réelles de LEKA CORE. Le code est dans `api/leka/admin/overview.py`, et cette page en est la définition : un chiffre qui change de règle change ici aussi.
+`GET /api/v1/admin/overview` calcule chaque chiffre de l'accueil de LEKA ADMIN à partir des données réelles de LEKA CORE. Le code est dans `api/leka/admin/overview.py`, et cette page en est la définition : un chiffre qui change de règle change ici aussi. Le module Facturation & Finance (`GET /api/v1/admin/billing/finance`, `api/leka/admin/billing.py`) a ses règles au § 11.
 
 ## 1. Les règles communes
 
@@ -62,7 +62,7 @@ Trois notions distinctes, jamais additionnées entre elles :
 D'où viennent les montants :
 - **Le prix d'un abonnement** est lu dans l'abonnement que Stripe envoie à chacun de ses événements, et gardé à côté de son état : `billing_accounts.recurring` pour la formule, `agent_entitlements.recurring` pour une option (voir `api/leka/billing/revenue.py`).
 - **Les montants d'une facture ou d'un remboursement** sont gardés avec l'événement Stripe (`stripe_events.detail` : `amount`, `currency`, `tax`).
-- **Pour les abonnements souscrits avant LEKA-548**, `python -m leka.billing.cli amounts` lit leur prix une fois chez Stripe, en lecture seule. Les factures déjà reçues restent sans montant : la facturation complète, avec son historique, vient avec LEKA-554.
+- **Pour les abonnements souscrits avant LEKA-548**, `python -m leka.billing.cli amounts` lit leur prix une fois chez Stripe, en lecture seule. Les factures reçues avant LEKA-554 restent sans montant ici ; leur historique complet se lit au § 11, après `python -m leka.billing.cli history`.
 
 ## 5. Produit
 
@@ -128,3 +128,83 @@ Calculé quand les données existent, et dit inconnu sinon. Le Health Score pré
 | `intentions_created` | les intentions demandées |
 | `credits_consumed` | les crédits consommés |
 | `mrr` | le MRR tel qu'il était ce jour-là (par mois : le dernier jour connu du mois), gardé par la tâche du journal d'activité toutes les 5 minutes dans `admin_daily_figures`. Il commence le jour où LEKA-548 est déployé. Seulement pour un rôle qui lit la facturation |
+
+## 11. Facturation & Finance (LEKA-554)
+
+`GET /api/v1/admin/billing/finance` (`billing:read`) calcule les chiffres du module Facturation & Finance. Ce qu'ils lisent est gardé par `api/leka/billing/history.py`, à chaque événement Stripe vérifié.
+
+**Stripe est la source de vérité.** Chaque ligne gardée est ce que Stripe a dit en dernier, jamais un chiffre de LEKA. **Aucune donnée de carte n'est gardée** : ni numéro, ni marque, ni quatre derniers chiffres, ni empreinte.
+
+Trois notions, jamais additionnées entre elles :
+
+1. **Le revenu récurrent**, hors TVA : le MRR maintenant (§ 4) et ce qui l'a fait bouger pendant la période.
+2. **La facturation**, TVA comprise : ce que les factures émises dans la période demandent, proratas compris.
+3. **L'encaissement**, TVA comprise : ce que les paiements ont pris, moins ce que les remboursements ont rendu.
+
+Les règles communes du § 1 s'appliquent : période, organisations de démonstration exclues, montants réservés à `billing:read`. Les montants sont en euros. Un montant dit dans une autre devise est compté dans `other_currencies`, jamais converti.
+
+### Ce qui est gardé
+
+| Table | Écrite par | Règle |
+| --- | --- | --- |
+| `billing_invoices` | les événements `invoice.*`, et `python -m leka.billing.cli history` | une ligne par facture Stripe, telle que Stripe l'a dite en dernier : statut, montants, remise, TVA, proratas, lignes, période, dates, tentatives, lien vers sa page Stripe. Un événement plus ancien que celui qui l'a écrite ne change rien |
+| `billing_payments` | `invoice.paid`, `invoice.payment_failed` | un paiement réussi par facture payée (référence `<facture>:paid`), une tentative échouée par événement, avec sa prochaine tentative. Écrit une fois |
+| `billing_refunds` | `charge.refunded`, et `history` | une ligne par paiement remboursé : `amount` est tout ce qu'il a rendu (deux remboursements partiels font une ligne, leur somme), `at` la date du dernier |
+| `billing_subscription_changes` | `checkout.session.completed`, `customer.subscription.*`, pour la formule et pour chaque agent ou bundle acheté seul | une ligne par événement qui change ce qui compte, avec la formule, le statut et le MRR avant et après. Écrite une fois |
+
+### Les changements d'un abonnement
+
+Un abonnement **rapporte** quand il est `active` ou `past_due` (Stripe relance, la formule tient). Un essai (`trialing`) ne rapporte rien encore. Il est **terminé** quand il est `canceled`, `unpaid` ou `incomplete_expired`.
+
+| Type | Règle |
+| --- | --- |
+| `trial` | il entre en essai |
+| `new` | il se met à rapporter sans avoir été terminé avant : une souscription, ou un essai converti |
+| `reactivation` | il se met à rapporter après avoir été terminé |
+| `churn` | il cesse de rapporter |
+| `upgrade`, `downgrade` | il rapporte avant et après, et son MRR monte ou baisse. Si l'un des deux MRR n'est pas connu : selon le rang de la formule (Free, Starter, Growth, Business, Enterprise) |
+| `interval` | même MRR, autre périodicité |
+| `renewal_off`, `renewal_on` | la résiliation en fin de période est demandée, ou annulée. Le MRR ne bouge pas tant qu'il rapporte |
+
+### Les indicateurs
+
+| Indicateur | Champ | Règle |
+| --- | --- | --- |
+| MRR, ARR | `mrr`, `arr` | comme au § 4, maintenant |
+| Abonnements, prix inconnu, en essai | `subscriptions`, `unknown_prices`, `trialing` | comme au § 4 (`mrr_subscriptions`, `mrr_unknown`, `trialing`) |
+| MRR au début | `mrr_start` | le MRR gardé à la fin du jour qui précède la période (`admin_daily_figures`, § 10). `null` avant le début du suivi |
+| Nouveaux, réactivations, hausses, baisses, churn | `new`, `reactivations`, `upgrades`, `downgrades`, `churn` | les changements de la période de chaque type : `count` leur nombre, `eur` leur effet sur le MRR (nouveau, réactivation : le MRR d'après ; churn : le MRR d'avant ; hausse, baisse : l'écart), `unknown` ceux dont le montant n'est pas connu, laissés de côté |
+| MRR expliqué | `mrr_explained` | MRR au début + nouveaux + réactivations + hausses − baisses − churn, les changements comptés depuis minuit du premier jour. Seulement pour une période qui finit maintenant, sinon `null` |
+| Écart | `mrr_gap` | MRR − MRR expliqué : ce qu'aucun changement n'explique (un coupon arrivé à sa fin, un abonnement dont le prix n'était pas encore connu). 0 quand tout est expliqué |
+| Par formule | `by_plan` | les abonnements qui rapportent, par formule, et `add_ons` pour les agents et bundles achetés seuls (chaque abonnement une fois) : leur nombre, leur MRR, ceux au prix inconnu. La somme de leurs MRR est le MRR |
+| Facturé | `invoiced`, `invoices` | les factures émises dans la période (`open`, `paid` ou `uncollectible` ; un brouillon ou une facture annulée ne compte pas) : leur total, TVA comprise |
+| Dont TVA | `invoiced_tax` | la TVA de ces factures |
+| Proratas | `prorations` | la somme de leurs lignes de prorata : ce qu'un changement en cours de période a facturé (positif) ou crédité (négatif) |
+| Factures ouvertes | `open_invoices`, `open_amount` | maintenant : les factures en attente de paiement, et ce qui reste à payer |
+| Encaissé | `payments_succeeded`, `collected` | les factures payées dans la période, et ce qu'elles ont pris, TVA comprise |
+| Paiements échoués | `payments_failed`, `failed_amount` | chaque tentative échouée de la période, et ce qu'elle demandait |
+| Remboursé | `refunds`, `refunded` | les paiements remboursés dans la période, et ce qu'ils ont rendu |
+| Encaissé net | `net_collected` | encaissé − remboursé |
+| Autres devises | `other_currencies` | les factures, paiements et remboursements de la période dans une autre devise que l'euro |
+| Événements Stripe | `events`, `last_event_at` | ceux reçus dans la période, par issue (`applied`, `ignored`, `failed`) ; le dernier reçu |
+| En échec | `failed_events` | maintenant : les événements dont l'application a échoué et qu'aucune livraison n'a encore appliqués |
+| Non rattachés | `unlinked_events` | ceux de la période d'un client Stripe que LEKA ne connaît pas |
+
+### Les proratas
+
+- **Un changement de formule ou de périodicité** dans le portail est immédiat et proratisé : Stripe facture la différence maintenant, ou la crédite sur la prochaine facture (`docs/pricing.md`).
+- **Le MRR suit le nouveau prix** dès l'événement `customer.subscription.updated` : c'est un changement `upgrade` ou `downgrade`.
+- **Le prorata est de la facturation**, jamais du revenu récurrent : il apparaît dans les lignes de la facture (`proration: true`) et dans `prorations`, jamais dans le MRR.
+- **Un coupon** est retiré du MRR tant qu'il dure (§ 4). Quand il finit, le MRR monte sans événement : l'écart le montre.
+- **Une facture annuelle** compte entière dans le facturé et l'encaissé, et pour un douzième par mois dans le MRR.
+
+### Réconcilier avec Stripe
+
+Deux commandes, sur le serveur, en lecture seule chez Stripe :
+
+- **`python -m leka.billing.cli history [--since AAAA-MM-JJ] [--organisation ID]`** lit chez Stripe chaque facture et chaque paiement remboursé des clients que LEKA connaît, et les garde comme Stripe les dit maintenant. C'est ce que les webhooks ont manqué, et l'historique d'avant LEKA-554. La relancer n'écrit rien deux fois.
+- **`python -m leka.billing.cli reconcile [--organisation ID]`** met chaque abonnement compté par LEKA (formule et options) à côté de celui de Stripe : statut, formule, MRR, et le MRR des deux côtés. Chaque écart est listé, rien n'est corrigé : l'état d'un abonnement reste celui du webhook. Elle sort avec le code 1 s'il y a un écart.
+
+### Les erreurs de synchronisation
+
+Un événement dont l'application échoue est annulé en entier, puis gardé `failed` avec son erreur (`detail.error`, `detail.message`) et le nombre de tentatives (`detail.attempts`). Stripe le redélivre pendant trois jours. La livraison qui réussit l'applique, une fois, et garde le nombre de tentatives. Un événement en échec se voit dans LEKA ADMIN (Événements Stripe, filtre « En échec ») et dans `failed_events`. Un événement d'un client inconnu est gardé `ignored`, sans organisation, et compté dans `unlinked_events`.

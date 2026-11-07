@@ -53,6 +53,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.billing.catalogue import Catalogue, Interval, Plan, Quote, catalogue, quote
+from leka.billing.history import (
+    State,
+    keep_change,
+    keep_failed_payment,
+    keep_invoice,
+    keep_refund,
+    mrr_of,
+)
 from leka.billing.models import BillingAccount, StripeEvent
 from leka.billing.revenue import recurring_of
 from leka.billing.stripe import SignatureError, Stripe, StripeError, verify
@@ -413,11 +421,27 @@ def _plan_of(subscription: dict[str, Any]) -> tuple[str | None, str | None]:
     return plan, interval
 
 
+def _account_state(account: BillingAccount, at: datetime) -> State:
+    return State(
+        plan=account.plan,
+        status=account.status,
+        interval=account.interval,
+        cancel_at_period_end=account.cancel_at_period_end,
+        mrr=mrr_of(account.recurring, at),
+    )
+
+
 async def _apply_subscription(
-    session: AsyncSession, account: BillingAccount, subscription: dict[str, Any], made: datetime
+    session: AsyncSession,
+    account: BillingAccount,
+    subscription: dict[str, Any],
+    made: datetime,
+    *,
+    event_id: str = "",
 ) -> str:
     if account.applied_at is not None and made < account.applied_at:
         return "stale"
+    before = _account_state(account, made)
     status = str(subscription.get("status") or "")
     plan, interval = _plan_of(subscription)
     paying = status in PAYING and plan is not None
@@ -442,6 +466,17 @@ async def _apply_subscription(
     account.applied_at = made
     wanted = plan if paying and plan else "free"
     account.plan = wanted
+    # What it changed in what it brings in, kept (LEKA-554).
+    await keep_change(
+        session,
+        account.workspace_id,
+        event_id=event_id,
+        source="plan",
+        subscription_id=said or "",
+        before=before,
+        after=_account_state(account, made),
+        at=made,
+    )
     now = await plan_of(session, account.workspace_id)
     if now.name != wanted:
         await set_plan(
@@ -483,7 +518,9 @@ async def _apply(
     from leka.billing.add_ons import apply_add_on, marked
 
     if marked(data) is not None:
-        return await apply_add_on(session, workspace_id, kind, data, made=made)
+        return await apply_add_on(
+            session, workspace_id, kind, data, made=made, event_id=str(event.get("id") or "")
+        )
     account = await account_of(session, workspace_id)
     if kind == "checkout.session.completed":
         if data.get("mode") == "subscription" and data.get("subscription"):
@@ -491,11 +528,15 @@ async def _apply(
                 raise BillingUnavailableError("Stripe is not configured.")
             subscription = await client.get(f"/v1/subscriptions/{data['subscription']}")
             account.stripe_customer_id = str(data.get("customer") or "") or None
-            return await _apply_subscription(session, account, subscription, made)
+            return await _apply_subscription(
+                session, account, subscription, made, event_id=str(event.get("id") or "")
+            )
         # A one-time payment buys nothing: no AI capacity is sold (LEKA-446).
         return "ignored"
     if kind.startswith("customer.subscription."):
-        return await _apply_subscription(session, account, data, made)
+        return await _apply_subscription(
+            session, account, data, made, event_id=str(event.get("id") or "")
+        )
     if kind in ("invoice.paid", "invoice.payment_failed"):
         account.last_invoice = kind.removeprefix("invoice.")
         return account.last_invoice
@@ -551,12 +592,76 @@ def _amounts(kind: str, data: dict[str, Any]) -> dict[str, Any]:
     return kept
 
 
+async def _keep_money(
+    session: AsyncSession,
+    workspace_id: uuid.UUID,
+    kind: str,
+    data: dict[str, Any],
+    *,
+    event_id: str,
+    made: datetime,
+) -> bool:
+    """What an event said of money, kept (LEKA-554): an invoice as it
+    stands, a payment taken or an attempt failed, what a charge gave back.
+    True: something kept."""
+    kept = False
+    if kind.startswith("invoice."):
+        kept = await keep_invoice(session, workspace_id, data, said_at=made, said_by=event_id)
+        if kind == "invoice.payment_failed":
+            kept |= await keep_failed_payment(
+                session, workspace_id, data, event_id=event_id, at=made
+            )
+    elif kind == "charge.refunded":
+        kept = await keep_refund(session, workspace_id, data, said_at=made)
+    return kept
+
+
+def _attempts(row: StripeEvent | None) -> int:
+    """How many deliveries of an event failed before."""
+    said = (row.detail or {}).get("attempts") if row is not None else None
+    return said if isinstance(said, int) else 0
+
+
+async def _failed(
+    event_id: str, kind: str, workspace_id: uuid.UUID, error: Exception, now: datetime
+) -> None:
+    """A delivery that could not be applied, kept and said (LEKA-554): seen
+    in LEKA ADMIN, never lost: Stripe delivers it again, and the next
+    delivery applies it, its attempts counted."""
+    with system_scope():
+        async with session_factory() as session:
+            row = await session.scalar(select(StripeEvent).where(StripeEvent.event_id == event_id))
+            attempts = _attempts(row) + 1
+            detail = {
+                "error": type(error).__name__,
+                "message": str(error)[:300],
+                "attempts": attempts,
+            }
+            if row is None:
+                session.add(
+                    StripeEvent(
+                        event_id=event_id,
+                        type=kind[:80],
+                        for_workspace_id=workspace_id,
+                        outcome="failed",
+                        detail=detail,
+                        received_at=now,
+                    )
+                )
+            else:
+                row.outcome = "failed"
+                row.detail = detail
+                row.received_at = now
+            await session.commit()
+
+
 async def receive(
     payload: bytes, signature: str, *, now: datetime, client: Stripe | None = None
 ) -> str:
     """One webhook delivery: verified, kept once, applied. Raises
     SignatureError when it is not Stripe's; anything else that fails rolls
-    back — the event is not kept, and Stripe delivers it again."""
+    back what it did, keeps the event said failed (LEKA-554) and raises:
+    Stripe delivers it again, and that delivery applies it."""
     secret = settings.stripe_webhook_secret
     if secret is None:
         raise SignatureError("no webhook secret configured")
@@ -565,12 +670,14 @@ async def receive(
     if not event_id:
         raise SignatureError("no event id")
     data: dict[str, Any] = (event.get("data") or {}).get("object") or {}
+    made = _moment(event.get("created")) or now
     with system_scope():
         async with session_factory() as session:
             seen = await session.scalar(
-                select(StripeEvent.id).where(StripeEvent.event_id == event_id)
+                select(StripeEvent.outcome).where(StripeEvent.event_id == event_id)
             )
-            if seen is not None:
+            # Applied or ignored once: never again. Failed: tried again.
+            if seen is not None and seen != "failed":
                 return "duplicate"
             workspace_id = await _workspace_of(session, data)
     if workspace_id is None:
@@ -590,29 +697,67 @@ async def receive(
                 except IntegrityError:
                     return "duplicate"
         return "ignored"
+    try:
+        said = await _receive_for(
+            event, event_id, kind, data, workspace_id, made=made, now=now, client=client
+        )
+    except Exception as error:
+        logger.warning("stripe_event_failed", stripe_event=event_id, type=kind, exc_info=True)
+        await _failed(event_id, kind, workspace_id, error, now)
+        raise
+    logger.info("stripe_event_applied", stripe_event=event_id, type=kind, said=said)
+    return said
+
+
+async def _receive_for(
+    event: dict[str, Any],
+    event_id: str,
+    kind: str,
+    data: dict[str, Any],
+    workspace_id: uuid.UUID,
+    *,
+    made: datetime,
+    now: datetime,
+    client: Stripe | None,
+) -> str:
     with workspace_scope(workspace_id):
         async with session_factory() as session:
-            # Kept first: a delivery racing this one stops on its id.
-            session.add(
-                StripeEvent(
-                    event_id=event_id,
-                    type=kind[:80],
-                    for_workspace_id=workspace_id,
-                    outcome="applied",
-                    received_at=now,
-                )
+            failed = await session.scalar(
+                select(StripeEvent)
+                .where(StripeEvent.event_id == event_id, StripeEvent.outcome == "failed")
+                .with_for_update()
             )
-            try:
-                await session.flush()
-            except IntegrityError:
-                await session.rollback()
-                return "duplicate"
+            attempts = _attempts(failed)
+            if failed is None:
+                # Kept first: a delivery racing this one stops on its id.
+                session.add(
+                    StripeEvent(
+                        event_id=event_id,
+                        type=kind[:80],
+                        for_workspace_id=workspace_id,
+                        outcome="applied",
+                        received_at=now,
+                    )
+                )
+                try:
+                    await session.flush()
+                except IntegrityError:
+                    await session.rollback()
+                    return "duplicate"
             before = await _standing(session, workspace_id)
             said = await _apply(session, event, workspace_id, client)
+            if (
+                await _keep_money(session, workspace_id, kind, data, event_id=event_id, made=made)
+                and said == "ignored"
+            ):
+                # An invoice finalized, voided...: no plan changed, the
+                # invoice kept all the same.
+                said = "kept"
             after = await _standing(session, workspace_id)
             row = await session.scalar(select(StripeEvent).where(StripeEvent.event_id == event_id))
             if row is not None:
                 row.outcome = "ignored" if said in ("ignored", "stale", "not_paid") else "applied"
+                row.received_at = now
                 # What it changed, kept with it: the notification centre
                 # tells it from here (LEKA-476) — a renewal, a cancellation,
                 # a plan — never from a guess.
@@ -625,13 +770,13 @@ async def receive(
                         else {}
                     )
                     | _amounts(kind, data)
+                    | ({"attempts": attempts + 1} if attempts else {})
                 )
             await session.commit()
             if said.startswith("add_on:"):
                 from leka.billing.add_ons import launch_bought
 
                 await launch_bought(session, workspace_id, str(data.get("id") or ""))
-    logger.info("stripe_event_applied", stripe_event=event_id, type=kind, said=said)
     return said
 
 

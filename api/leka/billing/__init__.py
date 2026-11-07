@@ -30,13 +30,21 @@ from leka.billing.entitlements import (
     owned,
     plan_runs_agents,
 )
+from leka.billing.history import State as SubscriptionState
+from leka.billing.history import keep_invoice, keep_refund, kind_of, mrr_of
 from leka.billing.models import (
+    CHANGE_KINDS,
     EVENTS,
+    INVOICE_STATUSES,
     AddOnCheckout,
     AgentEntitlement,
     BillingAccount,
+    BillingInvoice,
+    BillingPayment,
+    BillingRefund,
     SiteEvent,
     StripeEvent,
+    SubscriptionChange,
 )
 from leka.billing.revenue import monthly, recurring_of
 from leka.billing.schemas import (
@@ -75,8 +83,10 @@ from leka.billing.subscriptions import (
 from leka.billing.sync import sync
 
 __all__ = [
+    "CHANGE_KINDS",
     "EVENTS",
     "INTERVALS",
+    "INVOICE_STATUSES",
     "PAYING",
     "AddOn",
     "AddOnCheckout",
@@ -85,6 +95,9 @@ __all__ = [
     "AgentEntitlement",
     "AgentOfferRead",
     "BillingAccount",
+    "BillingInvoice",
+    "BillingPayment",
+    "BillingRefund",
     "BillingUnavailableError",
     "BundleMemberRead",
     "BundleOfferRead",
@@ -108,7 +121,9 @@ __all__ = [
     "Stripe",
     "StripeError",
     "StripeEvent",
+    "SubscriptionChange",
     "SubscriptionRead",
+    "SubscriptionState",
     "account_of",
     "add_on",
     "add_on_renewal",
@@ -121,11 +136,15 @@ __all__ = [
     "entitlements",
     "grant",
     "is_enterprise",
+    "keep_invoice",
+    "keep_refund",
+    "kind_of",
     "launch_bought",
     "launch_eligible",
     "load",
     "marked",
     "monthly",
+    "mrr_of",
     "owned",
     "payments_open",
     "plan_runs_agents",
