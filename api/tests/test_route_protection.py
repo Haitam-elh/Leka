@@ -64,6 +64,10 @@ PUBLIC_ROUTES: dict[tuple[str, str], str] = {
         "Liveness and readiness. A probe has no credentials, and requiring "
         "them would make the service look down to whatever watches it."
     ),
+    ("GET", "/api/v1/health/live"): (
+        "What Caddy routes on: the process answers. Says nothing but « ok », "
+        "probes no service, and a load balancer holds no credentials."
+    ),
     ("POST", "/api/v1/auth/register"): (
         "Creating an account. There is nobody to authenticate yet."
     ),

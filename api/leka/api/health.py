@@ -27,3 +27,12 @@ async def health(response: Response) -> HealthResponse:
     if not healthy:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     return HealthResponse(status="ok" if healthy else "degraded", services=services)
+
+
+@router.get("/health/live", response_model=HealthResponse)
+async def live() -> HealthResponse:
+    """The process answers: what Caddy routes on. With one API behind it,
+    taking it out of rotation when the database is slow turned every page
+    into a 503 (2026-11-07) — a slow database is said by `/health`, and by
+    the pages that wait on it, never by the whole site going dark."""
+    return HealthResponse(status="ok", services={})
