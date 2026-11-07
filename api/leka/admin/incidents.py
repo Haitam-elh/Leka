@@ -42,6 +42,7 @@ a secret: names, codes and ids, diagnostics scanned again.
 from __future__ import annotations
 
 import asyncio
+import re
 import uuid
 from collections import defaultdict
 from collections.abc import Sequence
@@ -790,6 +791,7 @@ def run_watch() -> dict[str, int]:
 
 def incidents_query(
     *,
+    q: str | None = None,
     status: Sequence[str] = (),
     severity: str | None = None,
     category: str | None = None,
@@ -803,6 +805,8 @@ def incidents_query(
     number: int | None = None,
 ) -> Select[tuple[Incident]]:
     statement = select(Incident)
+    if q and q.strip():
+        statement = statement.where(_matching(q.strip()))
     if status:
         statement = statement.where(Incident.status.in_(status))
     if severity:
@@ -833,6 +837,23 @@ def incidents_query(
     if number is not None:
         statement = statement.where(Incident.number == number)
     return statement
+
+
+def _matching(q: str) -> Any:
+    """An incident by its number (`INC-42`, `42`), its id or technical id, or
+    words of what names its problem: an agent's key, a route, an exception,
+    a rule, Stripe's id of an invoice (LEKA-557)."""
+    numbered = re.fullmatch(r"(?:INC-?)?(\d{1,9})", q, re.IGNORECASE)
+    if numbered:
+        return Incident.number == int(numbered.group(1))
+    try:
+        as_id = uuid.UUID(q)
+    except ValueError:
+        as_id = None
+    if as_id is not None:
+        return or_(Incident.id == as_id, Incident.technical_id == str(as_id))
+    pattern = _like(q)
+    return or_(Incident.technical_id.ilike(pattern), Incident.fingerprint.ilike(pattern))
 
 
 async def _assignees(

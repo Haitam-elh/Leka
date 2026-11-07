@@ -98,6 +98,11 @@ class ErrorCode(enum.StrEnum):
     # is named in the message.
     PLAN_LIMIT = "plan_limit"
 
+    # ── LEKA ADMIN ───────────────────────────────────────────────────────
+    # More rows than one export takes (LEKA-557): the count and the ceiling
+    # in the details, the filters to narrow.
+    EXPORT_TOO_LARGE = "export_too_large"
+
 
 # What a 500 says out loud. Fixed, and deliberately uninformative: whoever
 # reads it has the request id, and everything else is in our logs.

@@ -221,10 +221,11 @@ def organisations_query(
     activity: Activity | None = None,
     now: datetime | None = None,
 ) -> Select[tuple[Workspace]]:
-    """Every organisation, or those that match: its name, slug, id or an
-    owner's email; its plan, status, creation; its country and size (the
-    size LEKA keeps, else the one its owner declared); its activity in the
-    last 30 days (active), before (inactive), or none at all (never)."""
+    """Every organisation, or those that match: its name, slug, id, an
+    owner's email or its Stripe customer or subscription id (LEKA-557); its
+    plan, status, creation; its country and size (the size LEKA keeps, else
+    the one its owner declared); its activity in the last 30 days (active),
+    before (inactive), or none at all (never)."""
     statement = select(Workspace)
     if not include_demo:
         statement = statement.where(Workspace.demo.is_(False))
@@ -239,11 +240,19 @@ def organisations_query(
                 .join(User, User.id == Membership.user_id)
                 .where(User.email.ilike(pattern))
             )
+            # Stripe's ids whole, as Stripe writes them: a customer's own.
+            customers = select(BillingAccount.workspace_id).where(
+                or_(
+                    BillingAccount.stripe_customer_id == q.strip(),
+                    BillingAccount.stripe_subscription_id == q.strip(),
+                )
+            )
             statement = statement.where(
                 or_(
                     Workspace.name.ilike(pattern),
                     Workspace.slug.ilike(pattern),
                     Workspace.id.in_(owners),
+                    Workspace.id.in_(customers),
                 )
             )
     if plan:
@@ -1210,17 +1219,44 @@ def activity_query(
     *,
     kind: str | None = None,
     organisation_id: uuid.UUID | None = None,
+    organisation: str | None = None,
     user_id: uuid.UUID | None = None,
+    user: str | None = None,
     at_from: datetime | None = None,
     at_to: datetime | None = None,
 ) -> Select[tuple[ActivityEvent]]:
+    """The journal, or what matches: a kind (`*` a wildcard); an organisation
+    (by id, or by name or slug) and a person (by id, or by address or name),
+    LEKA-557; a period."""
     statement = select(ActivityEvent)
     if kind:
         statement = statement.where(ActivityEvent.kind.like(kind.replace("*", "%")))
     if organisation_id:
         statement = statement.where(ActivityEvent.for_workspace_id == organisation_id)
+    if organisation and organisation.strip():
+        pattern = _like(organisation)
+        statement = statement.where(
+            ActivityEvent.for_workspace_id.in_(
+                select(Workspace.id).where(
+                    or_(Workspace.name.ilike(pattern), Workspace.slug.ilike(pattern))
+                )
+            )
+        )
     if user_id:
         statement = statement.where(ActivityEvent.user_id == user_id)
+    if user and user.strip():
+        pattern = _like(user)
+        statement = statement.where(
+            ActivityEvent.user_id.in_(
+                select(User.id).where(
+                    or_(
+                        User.email.ilike(pattern),
+                        User.first_name.ilike(pattern),
+                        User.last_name.ilike(pattern),
+                    )
+                )
+            )
+        )
     if at_from:
         statement = statement.where(ActivityEvent.at >= at_from)
     if at_to:
@@ -1228,7 +1264,11 @@ def activity_query(
     return statement
 
 
-def activity_row(event: ActivityEvent) -> ActivityRow:
+def activity_row(
+    event: ActivityEvent,
+    names: dict[uuid.UUID, str] | None = None,
+    people: dict[uuid.UUID, PersonRef] | None = None,
+) -> ActivityRow:
     return ActivityRow(
         id=event.id,
         kind=event.kind,
@@ -1238,7 +1278,27 @@ def activity_row(event: ActivityEvent) -> ActivityRow:
         ref=event.ref,
         request_id=event.request_id,
         properties=dict(event.properties),
+        organisation=_ref(names or {}, event.for_workspace_id),
+        person=(people or {}).get(event.user_id) if event.user_id else None,
     )
+
+
+async def activity_rows(
+    session: AsyncSession, events: Sequence[ActivityEvent]
+) -> list[ActivityRow]:
+    """A page of the journal, each fact with its organisation's name and its
+    person's address (LEKA-557)."""
+    names = await _organisation_names(session, (e.for_workspace_id for e in events))
+    wanted = {e.user_id for e in events if e.user_id is not None}
+    people = (
+        {
+            u.id: PersonRef(id=u.id, email=u.email, name=_name(u))
+            for u in await session.scalars(select(User).where(User.id.in_(wanted)))
+        }
+        if wanted
+        else {}
+    )
+    return [activity_row(e, names, people) for e in events]
 
 
 # ── The admin trail ──────────────────────────────────────────────────────────
@@ -1285,6 +1345,7 @@ __all__ = [
     "MEANINGFUL",
     "activity_query",
     "activity_row",
+    "activity_rows",
     "admin_audit_query",
     "admin_emails",
     "credits_breakdown",

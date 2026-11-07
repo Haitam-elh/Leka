@@ -25,9 +25,13 @@ from fastapi import (
     status,
 )
 from pydantic import BaseModel
+from sqlalchemy import Select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.admin import (
+    DATASETS,
+    EXPORT_MAX_ROWS,
+    MIN_QUERY,
     ActionError,
     ActionReason,
     ActivityEvent,
@@ -59,6 +63,7 @@ from leka.admin import (
     AdminRolePermissionsUpdate,
     AdminRoleRead,
     AdminRolesRead,
+    AdminSearch,
     AdminSessionRead,
     AdminSessionsEnded,
     AdminSessionsRead,
@@ -116,9 +121,8 @@ from leka.admin import (
     SyncRunRow,
     UserDetail,
     UserRow,
-    UserStatus,
     activity_query,
-    activity_row,
+    activity_rows,
     add_credits,
     add_note,
     adjust_credits,
@@ -135,14 +139,18 @@ from leka.admin import (
     change_rows,
     changes_query,
     client_ip,
+    count_of,
     credits_breakdown,
     credits_of,
     credits_overview,
+    csv_of,
     environment_detail,
     environment_map,
     environment_rows,
     environments_overview,
     environments_query,
+    every_row,
+    filename_of,
     finance,
     forgot_password,
     history_query,
@@ -150,18 +158,14 @@ from leka.admin import (
     incident_assignees,
     incident_detail,
     incident_rows,
-    incidents_query,
     incidents_summary,
     intention_detail,
     intention_rows,
-    intentions_query,
     invitation_rows,
     invitations_query,
     invoice_rows,
-    invoices_query,
     mark_read,
     movement_rows,
-    movements_query,
     note_rows,
     notes_query,
     notification_rows,
@@ -173,14 +177,13 @@ from leka.admin import (
     organisations_query,
     overview,
     payment_rows,
-    payments_query,
     permissions_now,
     reconciliation,
     redeem_code,
     refund_rows,
-    refunds_query,
     require_admin,
     route_of,
+    search,
     set_suspended,
     source_rows,
     sources_query,
@@ -188,7 +191,6 @@ from leka.admin import (
     stripe_events_query,
     subscription_detail,
     subscription_rows,
-    subscriptions_query,
     sync_run_rows,
     sync_runs_query,
     team,
@@ -196,11 +198,27 @@ from leka.admin import (
     update_organisation,
     user_detail,
     user_rows,
-    users_query,
     window_of,
 )
+from leka.api.admin_filters import (
+    IncidentsFound,
+    IntentionsFound,
+    InvoicesFound,
+    MovementsFound,
+    OrganisationsFound,
+    PaymentsFound,
+    RefundsFound,
+    SubscriptionsFound,
+    UsersFound,
+)
 from leka.api.errors import ApiError
-from leka.api.pagination import PageEnvelope, PageParams, SortCatalogue, serve_page
+from leka.api.pagination import (
+    PageEnvelope,
+    PageParams,
+    PageRequest,
+    SortCatalogue,
+    serve_page,
+)
 from leka.billing import (
     BillingAccount,
     BillingInvoice,
@@ -214,6 +232,7 @@ from leka.core import ratelimit
 from leka.core.config import settings
 from leka.core.errors import ErrorCode
 from leka.db import DatabaseSession, SortableField
+from leka.db.pagination import MAX_PAGE_SIZE, Direction
 from leka.governance import CreditTransaction
 from leka.identity import DeferredEmailSender, EmailSender, User, build_email_sender
 from leka.ingestion import SyncRun
@@ -556,42 +575,11 @@ async def get_overview(
     "/organisations", response_model=PageEnvelope[OrganisationRow], summary="Every organisation"
 )
 async def list_organisations(
-    session: SessionDep,
-    _: Admin,
-    page: PageParams,
-    q: Annotated[
-        str | None, Query(max_length=200, description="Name, slug, id or an owner's email.")
-    ] = None,
-    plan: str | None = None,
-    organisation_status: Annotated[str | None, Query(alias="status")] = None,
-    created_from: datetime | None = None,
-    created_to: datetime | None = None,
-    include_demo: bool = False,
-    country: Annotated[
-        str | None, Query(pattern=r"^[A-Za-z]{2}$", description="ISO 3166-1 alpha-2.")
-    ] = None,
-    size: Annotated[
-        str | None,
-        Query(description="1-10, 11-50, 51-200, 201-1000, 1000+: kept by LEKA, else declared."),
-    ] = None,
-    activity: Annotated[
-        Literal["active", "inactive", "never"] | None,
-        Query(description="Something done in the last 30 days, before only, or never."),
-    ] = None,
+    session: SessionDep, _: Admin, page: PageParams, statement: OrganisationsFound
 ) -> PageEnvelope[OrganisationRow]:
     found = await serve_page(
         session,
-        organisations_query(
-            q=q,
-            plan=plan,
-            status=organisation_status,
-            created_from=created_from,
-            created_to=created_to,
-            include_demo=include_demo,
-            country=country,
-            size=size,
-            activity=activity,
-        ),
+        statement,
         request=page,
         catalogue=ORGANISATION_SORTS,
         id_column=Workspace.id,
@@ -676,7 +664,9 @@ async def get_organisation_activity(
         catalogue=ACTIVITY_SORTS,
         id_column=ActivityEvent.id,
     )
-    return PageEnvelope(data=[activity_row(e) for e in found.items], next_cursor=found.next_cursor)
+    return PageEnvelope(
+        data=await activity_rows(session, found.items), next_cursor=found.next_cursor
+    )
 
 
 @router.get(
@@ -755,45 +745,14 @@ async def list_users(
     session: SessionDep,
     _: Annotated[AdminPrincipal, Depends(require_admin(P.USERS_READ))],
     page: PageParams,
-    q: Annotated[str | None, Query(max_length=200, description="Email, name or id.")] = None,
-    organisation_id: uuid.UUID | None = None,
-    organisation: Annotated[
-        str | None, Query(max_length=200, description="An organisation's name or slug.")
-    ] = None,
-    role: Annotated[
-        Literal["owner", "admin", "member"] | None,
-        Query(description="Their role in an organisation (the one asked, if any)."),
-    ] = None,
-    verified: bool | None = None,
-    created_from: datetime | None = None,
-    created_to: datetime | None = None,
-    user_status: Annotated[UserStatus | None, Query(alias="status")] = None,
-    active_from: Annotated[
-        datetime | None, Query(description="Their last intention, run or source from then on.")
-    ] = None,
-    active_to: Annotated[datetime | None, Query(description="…before then.")] = None,
-    never_active: Annotated[
-        bool, Query(description="No intention, run nor source connected, ever.")
-    ] = False,
+    statement: UsersFound,
 ) -> PageEnvelope[UserRow]:
     """Every person (LEKA-550): their organisations and roles, intentions,
     status and level of activity (docs/admin/api.md § 5). Someone invited
     with no account yet is in GET /admin/invitations."""
     found = await serve_page(
         session,
-        users_query(
-            q=q,
-            organisation_id=organisation_id,
-            organisation=organisation,
-            role=role,
-            verified=verified,
-            created_from=created_from,
-            created_to=created_to,
-            status=user_status,
-            active_from=active_from,
-            active_to=active_to,
-            never_active=never_active,
-        ),
+        statement,
         request=page,
         catalogue=USER_SORTS,
         id_column=User.id,
@@ -895,28 +854,7 @@ async def list_intentions(
     session: SessionDep,
     principal: Annotated[AdminPrincipal, Depends(require_admin(P.INTENTIONS_READ))],
     page: PageParams,
-    q: Annotated[
-        str | None, Query(max_length=200, description="Its id, or words of its title.")
-    ] = None,
-    organisation_id: uuid.UUID | None = None,
-    organisation: Annotated[
-        str | None, Query(max_length=200, description="An organisation's name or slug.")
-    ] = None,
-    user_id: uuid.UUID | None = None,
-    user: Annotated[
-        str | None, Query(max_length=200, description="Who asked it: their address or name.")
-    ] = None,
-    intention_status: Annotated[
-        str | None,
-        Query(
-            alias="status",
-            description="pending, running, completed, failed, cancelled, or LEKA's own",
-        ),
-    ] = None,
-    kind: Annotated[str | None, Query(max_length=30)] = None,
-    agent: Annotated[str | None, Query(max_length=100, description="An agent's key.")] = None,
-    created_from: datetime | None = None,
-    created_to: datetime | None = None,
+    statement: IntentionsFound,
 ) -> PageEnvelope[AdminIntentionRow]:
     """Every intention of every customer (LEKA-551): its organisation, who
     asked it, its title, its five statuses, agents, duration and credits. Its
@@ -924,18 +862,7 @@ async def list_intentions(
     page of it read is kept in the admin trail."""
     found = await serve_page(
         session,
-        intentions_query(
-            q=q,
-            organisation_id=organisation_id,
-            organisation=organisation,
-            user_id=user_id,
-            user=user,
-            status=intention_status,
-            kind=kind,
-            agent=agent,
-            created_from=created_from,
-            created_to=created_to,
-        ),
+        statement,
         request=page,
         catalogue=INTENTION_SORTS,
         id_column=Intention.id,
@@ -1117,34 +1044,14 @@ async def list_credit_movements(
     session: SessionDep,
     _: Annotated[AdminPrincipal, Depends(require_admin(P.CREDITS_READ))],
     page: PageParams,
-    organisation_id: uuid.UUID | None = None,
-    organisation: Annotated[
-        str | None, Query(max_length=200, description="An organisation's name or slug.")
-    ] = None,
-    kind: Literal["grant", "consumption", "refund", "adjustment", "expiration"] | None = None,
-    origin: Literal["plan", "pack", "metering", "admin", "close"] | None = None,
-    period: Annotated[
-        str | None, Query(pattern=r"^\d{4}-\d{2}$", description="A month, YYYY-MM.")
-    ] = None,
-    execution: Annotated[str | None, Query(max_length=160)] = None,
-    since: datetime | None = None,
-    until: datetime | None = None,
+    statement: MovementsFound,
 ) -> PageEnvelope[CreditMovement]:
     """The ledger (LEKA-553): each movement with its organisation, kind,
     credits, month, date, origin, operation reference and, written by
     LEKA's team, its author and reason. The latest first by default."""
     found = await serve_page(
         session,
-        movements_query(
-            organisation_id=organisation_id,
-            organisation=organisation,
-            kind=kind,
-            origin=origin,
-            period=period,
-            execution=execution,
-            since=since,
-            until=until,
-        ),
+        statement,
         request=page,
         catalogue=MOVEMENT_SORTS,
         id_column=CreditTransaction.id,
@@ -1215,21 +1122,14 @@ async def list_subscriptions(
     session: SessionDep,
     _: Annotated[AdminPrincipal, Depends(require_admin(P.BILLING_READ))],
     page: PageParams,
-    plan: str | None = None,
-    subscription_status: Annotated[str | None, Query(alias="status")] = None,
-    interval: str | None = None,
-    organisation: Annotated[
-        str | None, Query(max_length=200, description="An organisation's name or slug.")
-    ] = None,
+    statement: SubscriptionsFound,
 ) -> PageEnvelope[SubscriptionRow]:
     """Each organisation's plan subscription, as Stripe last said it: its
     price, what it brings in a month now, its coupon, since when it earns,
     its agents bought alone (LEKA-554)."""
     found = await serve_page(
         session,
-        subscriptions_query(
-            plan=plan, status=subscription_status, interval=interval, organisation=organisation
-        ),
+        statement,
         request=page,
         catalogue=SUBSCRIPTION_SORTS,
         id_column=BillingAccount.id,
@@ -1279,25 +1179,13 @@ async def list_invoices(
     session: SessionDep,
     _: Annotated[AdminPrincipal, Depends(require_admin(P.BILLING_READ))],
     page: PageParams,
-    organisation_id: uuid.UUID | None = None,
-    organisation: Annotated[str | None, Query(max_length=200)] = None,
-    invoice_status: Annotated[
-        Literal["draft", "open", "paid", "uncollectible", "void"] | None, Query(alias="status")
-    ] = None,
-    since: datetime | None = None,
-    until: datetime | None = None,
+    statement: InvoicesFound,
 ) -> PageEnvelope[InvoiceRow]:
     """Each invoice as Stripe last said it, its lines, discount, tax and
     prorations apart (LEKA-554). The latest issued first by default."""
     found = await serve_page(
         session,
-        invoices_query(
-            organisation_id=organisation_id,
-            organisation=organisation,
-            status=invoice_status,
-            since=since,
-            until=until,
-        ),
+        statement,
         request=page,
         catalogue=INVOICE_SORTS,
         id_column=BillingInvoice.id,
@@ -1312,22 +1200,12 @@ async def list_payments(
     session: SessionDep,
     _: Annotated[AdminPrincipal, Depends(require_admin(P.BILLING_READ))],
     page: PageParams,
-    organisation_id: uuid.UUID | None = None,
-    organisation: Annotated[str | None, Query(max_length=200)] = None,
-    outcome: Literal["succeeded", "failed"] | None = None,
-    since: datetime | None = None,
-    until: datetime | None = None,
+    statement: PaymentsFound,
 ) -> PageEnvelope[PaymentRow]:
     """Each invoice paid, and each attempt that failed (LEKA-554)."""
     found = await serve_page(
         session,
-        payments_query(
-            organisation_id=organisation_id,
-            organisation=organisation,
-            outcome=outcome,
-            since=since,
-            until=until,
-        ),
+        statement,
         request=page,
         catalogue=PAYMENT_SORTS,
         id_column=BillingPayment.id,
@@ -1342,17 +1220,12 @@ async def list_refunds(
     session: SessionDep,
     _: Annotated[AdminPrincipal, Depends(require_admin(P.BILLING_READ))],
     page: PageParams,
-    organisation_id: uuid.UUID | None = None,
-    organisation: Annotated[str | None, Query(max_length=200)] = None,
-    since: datetime | None = None,
-    until: datetime | None = None,
+    statement: RefundsFound,
 ) -> PageEnvelope[RefundRow]:
     """What each charge gave back, its refunds together (LEKA-554)."""
     found = await serve_page(
         session,
-        refunds_query(
-            organisation_id=organisation_id, organisation=organisation, since=since, until=until
-        ),
+        statement,
         request=page,
         catalogue=REFUND_SORTS,
         id_column=BillingRefund.id,
@@ -1610,14 +1483,6 @@ async def list_environment_syncs(
 # ── Incidents & notifications (LEKA-556) ─────────────────────────────────────
 
 
-def _statuses(said: Sequence[str] | None) -> tuple[str, ...]:
-    """`open` said as what it is: new and in progress."""
-    found: list[str] = []
-    for status_ in said or ():
-        found += ["new", "in_progress"] if status_ == "open" else [status_]
-    return tuple(dict.fromkeys(found))
-
-
 @router.get("/incidents/summary", response_model=IncidentSummary, summary="Open incidents, counted")
 async def get_incidents_summary(
     session: SessionDep,
@@ -1644,56 +1509,16 @@ async def list_incident_assignees(
 @router.get("/incidents", response_model=PageEnvelope[IncidentRow], summary="Every incident")
 async def list_incidents(
     session: SessionDep,
-    principal: Annotated[AdminPrincipal, Depends(require_admin(P.INCIDENTS_READ))],
+    _: Annotated[AdminPrincipal, Depends(require_admin(P.INCIDENTS_READ))],
     page: PageParams,
-    incident_status: Annotated[
-        list[Literal["open", "new", "in_progress", "resolved", "closed"]] | None,
-        Query(
-            alias="status",
-            description="One or several; `open`: new and in progress; every one when none.",
-        ),
-    ] = None,
-    severity: Literal["critical", "high", "medium", "low"] | None = None,
-    category: Literal[
-        "intention_failed",
-        "agent_failed",
-        "api_error",
-        "integration_disconnected",
-        "sync_failed",
-        "credits",
-        "payment_failed",
-        "platform",
-    ]
-    | None = None,
-    recurring: Annotated[bool | None, Query(description="Three times in a day.")] = None,
-    organisation_id: uuid.UUID | None = None,
-    organisation: Annotated[
-        str | None, Query(max_length=200, description="An organisation's name or slug.")
-    ] = None,
-    mine: Annotated[bool, Query(description="Given to me.")] = False,
-    unassigned: Annotated[bool, Query(description="Given to no one.")] = False,
-    since: datetime | None = None,
-    until: datetime | None = None,
-    number: Annotated[int | None, Query(ge=1, description="INC-<number>.")] = None,
+    statement: IncidentsFound,
 ) -> PageEnvelope[IncidentRow]:
     """Each incident (LEKA-556), the last seen first by default: its
     organisation (none: the platform), category, severity, status,
     occurrences, recurring or not, who it is given to."""
     found = await serve_page(
         session,
-        incidents_query(
-            status=_statuses(incident_status),
-            severity=severity,
-            category=category,
-            recurring=recurring,
-            organisation_id=organisation_id,
-            organisation=organisation,
-            assignee_id=principal.admin_id if mine else None,
-            unassigned=unassigned,
-            since=since,
-            until=until,
-            number=number,
-        ),
+        statement,
         request=page,
         catalogue=INCIDENT_SORTS,
         id_column=Incident.id,
@@ -1746,7 +1571,7 @@ async def update_incident(
         raise ApiError(
             status.HTTP_409_CONFLICT
             if error.code == "reopened"
-            else status.HTTP_422_UNPROCESSABLE_ENTITY,
+            else status.HTTP_422_UNPROCESSABLE_CONTENT,
             ErrorCode.CONFLICT if error.code == "reopened" else ErrorCode.VALIDATION_FAILED,
             str(error),
         ) from error
@@ -1851,16 +1676,26 @@ async def list_activity(
         str | None, Query(description="A kind; * matches anything, as `intention.*`.")
     ] = None,
     organisation_id: uuid.UUID | None = None,
+    organisation: Annotated[
+        str | None, Query(max_length=200, description="An organisation's name or slug.")
+    ] = None,
     user_id: uuid.UUID | None = None,
+    user: Annotated[
+        str | None, Query(max_length=200, description="A person's address or name.")
+    ] = None,
     at_from: Annotated[datetime | None, Query(alias="from")] = None,
     at_to: Annotated[datetime | None, Query(alias="to")] = None,
 ) -> PageEnvelope[ActivityRow]:
+    """The activity journal (§ 7), each fact with its organisation's name and
+    its person's address; filters that combine (LEKA-557)."""
     found = await serve_page(
         session,
         activity_query(
             kind=kind,
             organisation_id=organisation_id,
+            organisation=organisation,
             user_id=user_id,
+            user=user,
             at_from=at_from,
             at_to=at_to,
         ),
@@ -1868,7 +1703,9 @@ async def list_activity(
         catalogue=ACTIVITY_SORTS,
         id_column=ActivityEvent.id,
     )
-    return PageEnvelope(data=[activity_row(e) for e in found.items], next_cursor=found.next_cursor)
+    return PageEnvelope(
+        data=await activity_rows(session, found.items), next_cursor=found.next_cursor
+    )
 
 
 @router.get(
@@ -1946,6 +1783,364 @@ async def list_admin_audit(
             for e in found.items
         ],
         next_cursor=found.next_cursor,
+    )
+
+
+# ── The global search and the exports (LEKA-557) ─────────────────────────────
+
+
+@router.get("/search", response_model=AdminSearch, summary="Search every list at once")
+async def search_everything(
+    session: SessionDep,
+    principal: AdminPrincipalDep,
+    q: Annotated[str, Query(min_length=MIN_QUERY, max_length=200)],
+) -> AdminSearch:
+    """The organisations, people, intentions, transactions and incidents `q`
+    finds, the first five of each, as each list's own `q` finds them; a list
+    the role does not read is not searched (`granted` false)."""
+    return await search(session, q, principal.permissions)
+
+
+def export_request(
+    sort: Annotated[
+        str | None,
+        Query(description="Field to sort by, as the list allows."),
+    ] = None,
+    order: Annotated[Direction, Query(description="Ascending or descending.")] = "desc",
+) -> PageRequest:
+    """An export's order, the list's: no cursor, no page, every row."""
+    return PageRequest(cursor=None, limit=MAX_PAGE_SIZE, sort=sort, order=order)
+
+
+ExportParams = Annotated[PageRequest, Depends(export_request)]
+
+CSV_RESPONSE: dict[int | str, dict[str, Any]] = {
+    200: {
+        "content": {"text/csv": {"schema": {"type": "string"}}},
+        "description": "The rows, UTF-8 with its byte order mark, RFC 4180.",
+    },
+    422: {"description": "export_too_large: more rows than one export takes."},
+}
+
+
+# An export: the list's reading, and the export's own (LEKA-557).
+ExportingOrganisations = Annotated[
+    AdminPrincipal, Depends(require_admin(P.ORGANISATIONS_READ, P.EXPORTS_CREATE))
+]
+ExportingUsers = Annotated[AdminPrincipal, Depends(require_admin(P.USERS_READ, P.EXPORTS_CREATE))]
+ExportingIntentions = Annotated[
+    AdminPrincipal, Depends(require_admin(P.INTENTIONS_READ, P.EXPORTS_CREATE))
+]
+ExportingCredits = Annotated[
+    AdminPrincipal, Depends(require_admin(P.CREDITS_READ, P.EXPORTS_CREATE))
+]
+ExportingBilling = Annotated[
+    AdminPrincipal, Depends(require_admin(P.BILLING_READ, P.EXPORTS_CREATE))
+]
+ExportingIncidents = Annotated[
+    AdminPrincipal, Depends(require_admin(P.INCIDENTS_READ, P.EXPORTS_CREATE))
+]
+
+
+async def _export[RowT](
+    request: Request,
+    session: AsyncSession,
+    principal: AdminPrincipal,
+    dataset: str,
+    statement: Select[tuple[RowT]],
+    order: PageRequest,
+    catalogue: SortCatalogue,
+    id_column: Any,
+    to_rows: Callable[[Sequence[RowT]], Awaitable[Sequence[BaseModel]]],
+) -> Response:
+    """A list as filtered, in a CSV file: counted first, refused past the
+    ceiling, kept in the admin trail with its filters and its rows."""
+    sort_by = catalogue.resolve(order.sort)
+    rows_found = await count_of(session, statement)
+    if rows_found > EXPORT_MAX_ROWS:
+        raise ApiError(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ErrorCode.EXPORT_TOO_LARGE,
+            f"{rows_found} rows match; one export takes {EXPORT_MAX_ROWS} at most. "
+            "Narrow the filters.",
+        )
+    _, columns = DATASETS[dataset]
+    rows = await every_row(
+        session,
+        statement,
+        sort_by=sort_by,
+        id_column=id_column,
+        direction=order.order,
+        to_rows=to_rows,
+    )
+    filters = {
+        key: ",".join(request.query_params.getlist(key))[:200] for key in request.query_params
+    }
+    audit_record(
+        session,
+        "admin.exported",
+        admin_id=principal.admin_id,
+        target_type="export",
+        target_id=dataset,
+        route=route_of(request),
+        ip_prefix=principal.ip_prefix,
+        detail={"dataset": dataset, "filters": filters, "rows": len(rows)},
+    )
+    now = datetime.now(UTC)
+    return Response(
+        content=csv_of(columns, rows),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename_of(dataset, now)}"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.get(
+    "/exports/organisations",
+    response_class=Response,
+    responses=CSV_RESPONSE,
+    summary="Every organisation, as filtered, in a CSV file",
+)
+async def export_organisations(
+    request: Request,
+    session: SessionDep,
+    principal: ExportingOrganisations,
+    order: ExportParams,
+    statement: OrganisationsFound,
+) -> Response:
+    """GET /admin/organisations's rows and filters (LEKA-557)."""
+    return await _export(
+        request,
+        session,
+        principal,
+        "organisations",
+        statement,
+        order,
+        ORGANISATION_SORTS,
+        Workspace.id,
+        lambda found: organisation_rows(session, found),
+    )
+
+
+@router.get(
+    "/exports/users",
+    response_class=Response,
+    responses=CSV_RESPONSE,
+    summary="Every person, as filtered, in a CSV file",
+)
+async def export_users(
+    request: Request,
+    session: SessionDep,
+    principal: ExportingUsers,
+    order: ExportParams,
+    statement: UsersFound,
+) -> Response:
+    """GET /admin/users's rows and filters, never a sign-in (LEKA-557)."""
+    return await _export(
+        request,
+        session,
+        principal,
+        "users",
+        statement,
+        order,
+        USER_SORTS,
+        User.id,
+        lambda found: user_rows(session, found),
+    )
+
+
+@router.get(
+    "/exports/intentions",
+    response_class=Response,
+    responses=CSV_RESPONSE,
+    summary="Every intention, as filtered, in a CSV file",
+)
+async def export_intentions(
+    request: Request,
+    session: SessionDep,
+    principal: ExportingIntentions,
+    order: ExportParams,
+    statement: IntentionsFound,
+) -> Response:
+    """GET /admin/intentions's rows and filters, never what a customer wrote
+    (LEKA-557)."""
+    return await _export(
+        request,
+        session,
+        principal,
+        "intentions",
+        statement,
+        order,
+        INTENTION_SORTS,
+        Intention.id,
+        lambda found: intention_rows(session, found, with_content=False),
+    )
+
+
+@router.get(
+    "/exports/credit-movements",
+    response_class=Response,
+    responses=CSV_RESPONSE,
+    summary="The credits ledger, as filtered, in a CSV file",
+)
+async def export_credit_movements(
+    request: Request,
+    session: SessionDep,
+    principal: ExportingCredits,
+    order: ExportParams,
+    statement: MovementsFound,
+) -> Response:
+    """GET /admin/credits/movements's rows and filters: the consumption, the
+    grants, every movement (LEKA-557)."""
+    return await _export(
+        request,
+        session,
+        principal,
+        "credit-movements",
+        statement,
+        order,
+        MOVEMENT_SORTS,
+        CreditTransaction.id,
+        lambda found: movement_rows(session, found),
+    )
+
+
+@router.get(
+    "/exports/subscriptions",
+    response_class=Response,
+    responses=CSV_RESPONSE,
+    summary="Every subscription, as filtered, in a CSV file",
+)
+async def export_subscriptions(
+    request: Request,
+    session: SessionDep,
+    principal: ExportingBilling,
+    order: ExportParams,
+    statement: SubscriptionsFound,
+) -> Response:
+    """GET /admin/subscriptions's rows and filters (LEKA-557)."""
+    now = datetime.now(UTC)
+    return await _export(
+        request,
+        session,
+        principal,
+        "subscriptions",
+        statement,
+        order,
+        SUBSCRIPTION_SORTS,
+        BillingAccount.id,
+        lambda found: subscription_rows(session, found, now=now),
+    )
+
+
+@router.get(
+    "/exports/invoices",
+    response_class=Response,
+    responses=CSV_RESPONSE,
+    summary="Every invoice, as filtered, in a CSV file",
+)
+async def export_invoices(
+    request: Request,
+    session: SessionDep,
+    principal: ExportingBilling,
+    order: ExportParams,
+    statement: InvoicesFound,
+) -> Response:
+    """GET /admin/billing/invoices's rows and filters, never the link that
+    opens an invoice (LEKA-557)."""
+    return await _export(
+        request,
+        session,
+        principal,
+        "invoices",
+        statement,
+        order,
+        INVOICE_SORTS,
+        BillingInvoice.id,
+        lambda found: invoice_rows(session, found),
+    )
+
+
+@router.get(
+    "/exports/payments",
+    response_class=Response,
+    responses=CSV_RESPONSE,
+    summary="Every payment, as filtered, in a CSV file",
+)
+async def export_payments(
+    request: Request,
+    session: SessionDep,
+    principal: ExportingBilling,
+    order: ExportParams,
+    statement: PaymentsFound,
+) -> Response:
+    """GET /admin/billing/payments's rows and filters (LEKA-557)."""
+    return await _export(
+        request,
+        session,
+        principal,
+        "payments",
+        statement,
+        order,
+        PAYMENT_SORTS,
+        BillingPayment.id,
+        lambda found: payment_rows(session, found),
+    )
+
+
+@router.get(
+    "/exports/refunds",
+    response_class=Response,
+    responses=CSV_RESPONSE,
+    summary="Every refund, as filtered, in a CSV file",
+)
+async def export_refunds(
+    request: Request,
+    session: SessionDep,
+    principal: ExportingBilling,
+    order: ExportParams,
+    statement: RefundsFound,
+) -> Response:
+    """GET /admin/billing/refunds's rows and filters (LEKA-557)."""
+    return await _export(
+        request,
+        session,
+        principal,
+        "refunds",
+        statement,
+        order,
+        REFUND_SORTS,
+        BillingRefund.id,
+        lambda found: refund_rows(session, found),
+    )
+
+
+@router.get(
+    "/exports/incidents",
+    response_class=Response,
+    responses=CSV_RESPONSE,
+    summary="Every incident, as filtered, in a CSV file",
+)
+async def export_incidents(
+    request: Request,
+    session: SessionDep,
+    principal: ExportingIncidents,
+    order: ExportParams,
+    statement: IncidentsFound,
+) -> Response:
+    """GET /admin/incidents's rows and filters (LEKA-557)."""
+    return await _export(
+        request,
+        session,
+        principal,
+        "incidents",
+        statement,
+        order,
+        INCIDENT_SORTS,
+        Incident.id,
+        lambda found: incident_rows(session, found),
     )
 
 
