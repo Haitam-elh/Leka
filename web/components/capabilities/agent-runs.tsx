@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, Download, Play, Workflow } from "lucide-react";
+import { Ban, Download, Play, SlidersHorizontal, Workflow } from "lucide-react";
 import { useState } from "react";
 
 import { Card } from "@/components/environment/parts";
@@ -19,7 +19,12 @@ import {
   type AgentRunEvent,
   type RunInputs,
 } from "@/lib/agent-runs";
-import { useAgentRun, useAgentRunChange, useAgentRuns } from "@/lib/agent-runs-queries";
+import {
+  useAgentRun,
+  useAgentRunChange,
+  useAgentRuns,
+  useIntentionRuns,
+} from "@/lib/agent-runs-queries";
 import { ApiError, apiAddress } from "@/lib/api";
 import type { CapabilityDetail } from "@/lib/capabilities";
 import { fill, type Dictionary } from "@/lib/i18n/dictionaries";
@@ -116,18 +121,23 @@ export function RunAgent({
   capability,
   intentionId,
   prefill,
+  compact = false,
 }: {
   capability: CapabilityDetail;
   /** Run for an intention: its context is the agent's (LEKA-398). */
   intentionId?: string;
   /** What the intention already says of its inputs: suggested, editable. */
   prefill?: Values;
+  /** One line, its fields folded under « Ajuster » (2026-11-07: a form per
+   * agent, prefilled, ran down the intention and read as a step to fill). */
+  compact?: boolean;
 }) {
   const t = useDictionary();
   const w = t.agentRuns;
   const { start } = useAgentRunChange();
   const [values, setValues] = useState<Values>(() => prefill ?? {});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [adjusting, setAdjusting] = useState(false);
 
   async function run(event: React.FormEvent) {
     event.preventDefault();
@@ -148,87 +158,128 @@ export function RunAgent({
     } catch (error) {
       if (error instanceof ApiError && error.fieldErrors) {
         setErrors(error.fieldErrors);
+        // What was wrong is shown where it can be changed.
+        setAdjusting(true);
       }
       notify.error({ title: error instanceof ApiError ? error.message : w.failedToStart });
     }
   }
 
   const files = capability.formats.filter((f) => f === "pptx" || f === "pdf");
+  const busy = !capability.available || start.isPending;
+  const fields = (
+    <>
+      {prefill && Object.keys(prefill).length ? (
+        <p className="text-xs text-shell-muted" data-testid="agent-run-prefilled">
+          {w.prefilled}
+        </p>
+      ) : null}
+      {capability.inputs.map((field) => {
+        const id = `agent-input-${field.name}`;
+        const error = errors[`inputs.${field.name}`];
+        return (
+          <div key={field.name} className="flex flex-col gap-1">
+            {field.type === "boolean" ? (
+              <label htmlFor={id} className="flex items-center gap-2 text-[0.8125rem] text-brand-navy">
+                <Checkbox
+                  id={id}
+                  checked={values[field.name] === true}
+                  onCheckedChange={(checked) =>
+                    setValues((was) => ({ ...was, [field.name]: checked === true }))
+                  }
+                />
+                {fieldLabel(t, field.name)}
+              </label>
+            ) : (
+              <>
+                <label htmlFor={id} className="text-[0.8125rem] font-medium text-brand-navy">
+                  {fieldLabel(t, field.name)}
+                  <span className="font-normal text-shell-muted">
+                    {" · "}
+                    {field.required ? t.catalogue.detail.required : t.catalogue.detail.optional}
+                  </span>
+                </label>
+                {field.type === "choice" ? (
+                  <select
+                    id={id}
+                    className="h-9 rounded-md border border-shell-line bg-white px-2 text-sm"
+                    value={String(values[field.name] ?? "")}
+                    onChange={(e) => setValues((was) => ({ ...was, [field.name]: e.target.value }))}
+                  >
+                    <option value="">-</option>
+                    {field.choices.map((choice) => (
+                      <option key={choice} value={choice}>
+                        {choice}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <Input
+                    id={id}
+                    type={field.type === "number" ? "number" : "text"}
+                        aria-invalid={Boolean(error)}
+                    value={String(values[field.name] ?? "")}
+                    onChange={(e) => setValues((was) => ({ ...was, [field.name]: e.target.value }))}
+                  />
+                )}
+              </>
+            )}
+            {field.description && field.type !== "boolean" ? (
+              <p className="text-xs text-shell-muted">{field.description}</p>
+            ) : null}
+            {error ? (
+              <p className="text-xs text-state-danger" role="alert">
+                {(w.inputErrors as Record<string, string>)[error] ?? error}
+              </p>
+            ) : null}
+          </div>
+        );
+      })}
+    </>
+  );
+  if (compact) {
+    return (
+      <form
+        className="flex flex-col gap-3 rounded-lg border border-shell-line p-3"
+        onSubmit={(e) => void run(e)}
+        data-testid="agent-run-form"
+        data-key={capability.key}
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="min-w-0 flex-1 text-[0.875rem] font-medium text-brand-navy">
+            {capability.title}
+          </span>
+          {capability.inputs.length ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-expanded={adjusting}
+              onClick={() => setAdjusting(!adjusting)}
+            >
+              <SlidersHorizontal className="size-3.5" aria-hidden="true" />
+              {w.adjust}
+            </Button>
+          ) : null}
+          <Button type="submit" size="sm" disabled={busy}>
+            <Play className="size-3.5" aria-hidden="true" />
+            {start.isPending ? w.starting : w.start}
+          </Button>
+        </div>
+        {adjusting ? fields : null}
+        {capability.available ? null : <p className="text-xs text-shell-muted">{w.cannotRun}</p>}
+      </form>
+    );
+  }
   return (
     <Card
       title={fill(w.runNamed, { title: capability.title })}
       icon={<Play className="size-4 text-shell-muted" aria-hidden="true" />}
     >
       <form className="flex flex-col gap-3" onSubmit={(e) => void run(e)} data-testid="agent-run-form">
-        {prefill && Object.keys(prefill).length ? (
-          <p className="text-xs text-shell-muted" data-testid="agent-run-prefilled">
-            {w.prefilled}
-          </p>
-        ) : null}
-        {capability.inputs.map((field) => {
-          const id = `agent-input-${field.name}`;
-          const error = errors[`inputs.${field.name}`];
-          return (
-            <div key={field.name} className="flex flex-col gap-1">
-              {field.type === "boolean" ? (
-                <label htmlFor={id} className="flex items-center gap-2 text-[0.8125rem] text-brand-navy">
-                  <Checkbox
-                    id={id}
-                    checked={values[field.name] === true}
-                    onCheckedChange={(checked) =>
-                      setValues((was) => ({ ...was, [field.name]: checked === true }))
-                    }
-                  />
-                  {fieldLabel(t, field.name)}
-                </label>
-              ) : (
-                <>
-                  <label htmlFor={id} className="text-[0.8125rem] font-medium text-brand-navy">
-                    {fieldLabel(t, field.name)}
-                    <span className="font-normal text-shell-muted">
-                      {" · "}
-                      {field.required ? t.catalogue.detail.required : t.catalogue.detail.optional}
-                    </span>
-                  </label>
-                  {field.type === "choice" ? (
-                    <select
-                      id={id}
-                      className="h-9 rounded-md border border-shell-line bg-white px-2 text-sm"
-                      value={String(values[field.name] ?? "")}
-                      onChange={(e) => setValues((was) => ({ ...was, [field.name]: e.target.value }))}
-                    >
-                      <option value="">-</option>
-                      {field.choices.map((choice) => (
-                        <option key={choice} value={choice}>
-                          {choice}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <Input
-                      id={id}
-                      type={field.type === "number" ? "number" : "text"}
-                      placeholder={field.description}
-                      aria-invalid={Boolean(error)}
-                      value={String(values[field.name] ?? "")}
-                      onChange={(e) => setValues((was) => ({ ...was, [field.name]: e.target.value }))}
-                    />
-                  )}
-                </>
-              )}
-              {field.description && field.type !== "boolean" ? (
-                <p className="text-xs text-shell-muted">{field.description}</p>
-              ) : null}
-              {error ? (
-                <p className="text-xs text-state-danger" role="alert">
-                  {(w.inputErrors as Record<string, string>)[error] ?? error}
-                </p>
-              ) : null}
-            </div>
-          );
-        })}
+        {fields}
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="submit" disabled={!capability.available || start.isPending}>
+          <Button type="submit" disabled={busy}>
             <Play className="size-4" aria-hidden="true" />
             {start.isPending ? w.starting : w.start}
           </Button>
@@ -386,13 +437,18 @@ function RunDetail({ id }: { id: string }) {
   );
 }
 
-export function AgentRuns({ agentKey, intentionId }: { agentKey: string; intentionId?: string }) {
+export function AgentRuns({ agentKey, intentionId }: { agentKey?: string; intentionId?: string }) {
   const t = useDictionary();
   const { format: locale } = useLocale();
   const w = t.agentRuns;
-  const { data: all } = useAgentRuns(agentKey);
-  // For an intention: its runs only.
-  const data = intentionId ? all?.filter((run) => run.intention_id === intentionId) : all;
+  const { data: all } = useAgentRuns(agentKey ?? "");
+  // No agent named: every agent's runs for the intention, one list.
+  const { data: ofIntention } = useIntentionRuns(agentKey ? "" : (intentionId ?? ""));
+  const data = !agentKey
+    ? ofIntention
+    : intentionId
+      ? all?.filter((run) => run.intention_id === intentionId)
+      : all;
   const { cancel } = useAgentRunChange();
   const [open, setOpen] = useState<string | null>(null);
 
@@ -423,6 +479,7 @@ export function AgentRuns({ agentKey, intentionId }: { agentKey: string; intenti
                   aria-expanded={open === run.id}
                   onClick={() => setOpen(open === run.id ? null : run.id)}
                 >
+                  {agentKey ? null : <span className="font-medium">{run.title ?? run.key} · </span>}
                   {Object.values(run.inputs).filter((v) => typeof v === "string").join(" · ") ||
                     run.title}
                 </button>

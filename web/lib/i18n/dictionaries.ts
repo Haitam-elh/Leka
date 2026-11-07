@@ -1907,6 +1907,7 @@ const fr = {
     },
     start: "Lancer",
     starting: "Lancement…",
+    adjust: "Ajuster",
     readOnly: "En lecture seule : l'agent propose, il ne change rien.",
     readOnlyFiles:
       "En lecture seule : l'agent analyse vos sources connectées, LEKA en produit le {formats} à télécharger.",
@@ -7806,6 +7807,7 @@ const fr = {
       suggestions: "Elle pourrait concerner : {titles}",
       more: "Voir {count} {count|autre compétence|autres compétences}",
       fewer: "Voir moins",
+      why: "Pourquoi ces agents ?",
       score: "score {score}",
       chosen: "choisie",
       weak: "trop faible",
@@ -11254,6 +11256,7 @@ const en: Dictionary = {
     },
     start: "Run",
     starting: "Starting…",
+    adjust: "Adjust",
     readOnly: "Read-only: the agent proposes, it changes nothing.",
     readOnlyFiles:
       "Read-only: the agent analyses your connected sources, LEKA draws its {formats} to download.",
@@ -16990,6 +16993,7 @@ const en: Dictionary = {
       suggestions: "It could be about: {titles}",
       more: "See {count} more {count|skill|skills}",
       fewer: "See fewer",
+      why: "Why these agents?",
       score: "score {score}",
       chosen: "chosen",
       weak: "too weak",

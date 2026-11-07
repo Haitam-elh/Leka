@@ -1,6 +1,7 @@
 "use client";
 
-import { Compass, RefreshCw } from "lucide-react";
+import { useQueries } from "@tanstack/react-query";
+import { ChevronDown, Compass, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -12,8 +13,8 @@ import { Card, type TileTone } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
 import { Button } from "@/components/ui/button";
 import { routes } from "@/config/routes";
-import type { CapabilityReason } from "@/lib/capabilities";
-import { useCapability } from "@/lib/capabilities-queries";
+import { capabilities, type CapabilityDetail, type CapabilityReason } from "@/lib/capabilities";
+import { capabilityKeys } from "@/lib/capabilities-queries";
 import { fill, type Dictionary } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 import type { RoutedCandidate, Routing } from "@/lib/intentions/api";
@@ -54,26 +55,6 @@ function excludedSaid(t: Dictionary, candidate: RoutedCandidate): string {
     .join(" · ");
 }
 
-function SelectedAgent({ candidate, intentionId }: { candidate: RoutedCandidate; intentionId: string }) {
-  const { data } = useCapability(candidate.key);
-  const { data: intention } = useIntention(intentionId);
-  if (!data) return null;
-  if (data.kind === "workflow") return <WorkflowPanel capability={data} intentionId={intentionId} />;
-  // What the intention says of its inputs, suggested; its runs, followed here.
-  return (
-    <>
-      <RunAgent
-        key={intention ? "prefilled" : "empty"}
-        capability={data}
-        intentionId={intentionId}
-        prefill={suggestedInputs(data.inputs, intention)}
-      />
-      <AgentRuns agentKey={data.key} intentionId={intentionId} />
-      {/* What it proposes to change in code: a diff, accepted as a pull request. */}
-      {data.formats.includes("diff") ? <CodeChanges intentionId={intentionId} /> : null}
-    </>
-  );
-}
 
 export function RoutingPanel({ intentionId }: { intentionId: string }) {
   const t = useDictionary();
@@ -81,13 +62,26 @@ export function RoutingPanel({ intentionId }: { intentionId: string }) {
   const { data } = useIntentionRouting(intentionId);
   const again = useRouteAgain(intentionId);
   const [all, setAll] = useState(false);
+  // Why these agents: the ranking, read on demand (2026-11-07: scores and
+  // signals, shown to everyone, read as the thing to act on).
+  const [why, setWhy] = useState(false);
+  const { data: intention } = useIntention(intentionId);
+  const chosen = useQueries({
+    queries: (data?.candidates ?? [])
+      .filter((c) => c.selected && (c.kind === "agent" || c.kind === "workflow"))
+      .map((c) => ({ queryKey: capabilityKeys.one(c.key), queryFn: () => capabilities.one(c.key) })),
+  })
+    .map((q) => q.data)
+    .filter((c): c is CapabilityDetail => Boolean(c));
   if (!data) return null;
   const titles = new Map(
     [...data.candidates, ...data.excluded].map((c) => [c.key, titleOf(t, c)] as const),
   );
   const selected = data.candidates.filter((c) => c.selected);
-  // What a person runs for it: an agent, a workflow (LEKA-397).
-  const agents = selected.filter((c) => c.kind === "agent" || c.kind === "workflow");
+  // What a person runs for it: an agent, a line each; a workflow, its panel
+  // (LEKA-397).
+  const agents = chosen.filter((c) => c.kind !== "workflow");
+  const workflows = chosen.filter((c) => c.kind === "workflow");
   const headline =
     data.outcome === "routed"
       ? fill(w.routed, { titles: selected.map((c) => titleOf(t, c)).join(", ") })
@@ -127,7 +121,36 @@ export function RoutingPanel({ intentionId }: { intentionId: string }) {
               })}
             </p>
           ) : null}
-          {data.candidates.length ? (
+          {agents.length ? (
+            <div className="flex flex-col gap-2" data-testid="routing-agents">
+              {agents.map((capability) => (
+                <RunAgent
+                  key={`${capability.key}-${intention ? "prefilled" : "empty"}`}
+                  capability={capability}
+                  intentionId={intentionId}
+                  prefill={suggestedInputs(capability.inputs, intention)}
+                  compact
+                />
+              ))}
+              <p className="text-xs text-shell-muted">{t.agentRuns.readOnly}</p>
+            </div>
+          ) : null}
+          {data.candidates.length || data.excluded.length ? (
+            <button
+              type="button"
+              aria-expanded={why}
+              onClick={() => setWhy(!why)}
+              className="flex items-center gap-1 self-start text-[0.8125rem] font-medium text-brand-violet hover:underline"
+              data-testid="routing-why"
+            >
+              <ChevronDown
+                className={`size-3.5 transition-transform duration-150 motion-reduce:transition-none ${why ? "" : "-rotate-90"}`}
+                aria-hidden="true"
+              />
+              {w.why}
+            </button>
+          ) : null}
+          {why && data.candidates.length ? (
             <ol className="space-y-2 text-[0.8125rem]" data-testid="routing-candidates">
               {(all ? data.candidates : data.candidates.slice(0, SHOWN)).map((c) => (
                 <li key={c.key} data-key={c.key} className="flex flex-col">
@@ -147,7 +170,7 @@ export function RoutingPanel({ intentionId }: { intentionId: string }) {
               ))}
             </ol>
           ) : null}
-          {data.candidates.length > SHOWN ? (
+          {why && data.candidates.length > SHOWN ? (
             <button
               type="button"
               onClick={() => setAll(!all)}
@@ -157,7 +180,7 @@ export function RoutingPanel({ intentionId }: { intentionId: string }) {
               {all ? w.fewer : fill(w.more, { count: data.candidates.length - SHOWN })}
             </button>
           ) : null}
-          {data.excluded.length ? (
+          {why && data.excluded.length ? (
             <div>
               <p className="mb-1 text-xs font-semibold text-shell-muted">{w.excluded}</p>
               <ul className="space-y-1 text-xs" data-testid="routing-excluded">
@@ -171,9 +194,13 @@ export function RoutingPanel({ intentionId }: { intentionId: string }) {
           ) : null}
         </div>
       </Card>
-      {agents.map((c) => (
-        <SelectedAgent key={c.key} candidate={c} intentionId={intentionId} />
+      {workflows.map((capability) => (
+        <WorkflowPanel key={capability.key} capability={capability} intentionId={intentionId} />
       ))}
+      {/* Every agent's runs for it, and what they propose to change in code:
+          once each, whichever agent ran (2026-11-07: a pair per agent). */}
+      {agents.length ? <AgentRuns intentionId={intentionId} /> : null}
+      {agents.some((c) => c.formats.includes("diff")) ? <CodeChanges intentionId={intentionId} /> : null}
     </div>
   );
 }
