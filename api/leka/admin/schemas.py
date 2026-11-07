@@ -822,20 +822,44 @@ class SubscriptionRow(BaseModel):
     cancel_at_period_end: bool
     launch_offer_used: bool
     updated_at: datetime
-    stripe_subscription_id: str | None = None
+    stripe_subscription_id: str | None
     price_eur: float | None = Field(
-        default=None, description="Its list price for one interval, excluding VAT (LEKA-554)."
+        description="Its list price for one interval, excluding VAT (LEKA-554)."
     )
     mrr_eur: float | None = Field(
-        default=None,
         description="What it brings in a month now, coupon taken off, excluding VAT; null: "
         "not known; 0: it earns nothing (a trial, ended).",
     )
-    discount: SubscriptionDiscount | None = None
-    since: datetime | None = Field(
-        default=None, description="When it started earning, as its changes say."
-    )
-    add_ons: int = Field(default=0, description="Agents or bundles bought alone, active.")
+    discount: SubscriptionDiscount | None
+    since: datetime | None = Field(description="When it started earning, as its changes say.")
+    add_ons: int = Field(description="Agents or bundles bought alone, active.")
+
+
+class SubscriptionAddOn(BaseModel):
+    """An agent or a bundle bought alone, its own subscription (LEKA-554)."""
+
+    key: str
+    kind: str
+    status: str
+    started_at: datetime
+    ended_at: datetime | None
+    cancel_at_period_end: bool
+    mrr_eur: float | None = Field(description="Null: not known; 0: ended.")
+
+
+class PlanRevenue(BaseModel):
+    plan: str = Field(description="A plan, or add_ons: the agents and bundles bought alone.")
+    subscriptions: int
+    mrr: float
+    unknown: int = Field(description="Of them, whose price is not known: left out of `mrr`.")
+
+
+class InvoiceLine(BaseModel):
+    description: str | None
+    amount: float = Field(description="In its invoice's currency's main unit.")
+    proration: bool = Field(description="Billed for a change mid-period.")
+    start: datetime | None
+    end: datetime | None
 
 
 class InvoiceRow(BaseModel):
@@ -861,7 +885,7 @@ class InvoiceRow(BaseModel):
     paid_at: datetime | None
     attempts: int
     hosted_url: str | None = Field(description="Stripe's page of it.")
-    lines: list[dict[str, object]]
+    lines: list[InvoiceLine] = Field(description="The first 50, as Stripe said them.")
 
 
 class PaymentRow(BaseModel):
@@ -911,7 +935,7 @@ class SubscriptionDetail(BaseModel):
     every change, its latest invoices, payments and refunds."""
 
     subscription: SubscriptionRow
-    add_ons: list[dict[str, object]]
+    add_ons: list[SubscriptionAddOn]
     changes: list[SubscriptionChangeRow]
     invoices: list[InvoiceRow]
     payments: list[PaymentRow]
@@ -949,7 +973,7 @@ class FinanceOverview(BaseModel):
         "else moved it (a coupon ended, a price changed)."
     )
     mrr_gap: float | None
-    by_plan: list[dict[str, object]] = Field(description="Paying subscriptions by plan.")
+    by_plan: list[PlanRevenue] = Field(description="Paying subscriptions by plan.")
     invoiced: float = Field(description="Billing: the total of the invoices issued, VAT included.")
     invoiced_tax: float = Field(description="The VAT within `invoiced`.")
     invoices: int

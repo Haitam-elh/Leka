@@ -31,11 +31,14 @@ from leka.admin.overview import AdminWindow, revenue
 from leka.admin.reads import _like, _organisation_names
 from leka.admin.schemas import (
     FinanceOverview,
+    InvoiceLine,
     InvoiceRow,
     MrrMovement,
     OrganisationRef,
     PaymentRow,
+    PlanRevenue,
     RefundRow,
+    SubscriptionAddOn,
     SubscriptionChangeRow,
     SubscriptionDetail,
     SubscriptionDiscount,
@@ -203,6 +206,18 @@ def invoices_query(
     return statement
 
 
+def _line(said: dict[str, object]) -> InvoiceLine:
+    amount = said.get("amount")
+    start, end = said.get("start"), said.get("end")
+    return InvoiceLine(
+        description=str(said["description"]) if said.get("description") else None,
+        amount=(_eur(amount) or 0.0) if isinstance(amount, int | float) else 0.0,
+        proration=bool(said.get("proration")),
+        start=datetime.fromisoformat(start) if isinstance(start, str) else None,
+        end=datetime.fromisoformat(end) if isinstance(end, str) else None,
+    )
+
+
 async def invoice_rows(
     session: AsyncSession, invoices: Sequence[BillingInvoice]
 ) -> list[InvoiceRow]:
@@ -228,7 +243,7 @@ async def invoice_rows(
             paid_at=i.paid_at,
             attempts=i.attempts,
             hosted_url=i.hosted_url,
-            lines=list(i.lines),
+            lines=[_line(line) for line in i.lines],
         )
         for i in invoices
     ]
@@ -393,15 +408,15 @@ async def subscription_detail(
     return SubscriptionDetail(
         subscription=row,
         add_ons=[
-            {
-                "key": b.key,
-                "kind": b.kind,
-                "status": b.status,
-                "started_at": b.started_at.isoformat(),
-                "ended_at": b.ended_at.isoformat() if b.ended_at else None,
-                "cancel_at_period_end": b.cancel_at_period_end,
-                "mrr_eur": _eur(mrr_of(b.recurring, now)) if b.status == "active" else 0.0,
-            }
+            SubscriptionAddOn(
+                key=b.key,
+                kind=b.kind,
+                status=b.status,
+                started_at=b.started_at,
+                ended_at=b.ended_at,
+                cancel_at_period_end=b.cancel_at_period_end,
+                mrr_eur=_eur(mrr_of(b.recurring, now)) if b.status == "active" else 0.0,
+            )
             for b in bought
         ],
         changes=await change_rows(
@@ -654,7 +669,7 @@ async def finance(session: AsyncSession, window: AdminWindow, *, now: datetime) 
         if current.mrr is not None and explained is not None
         else None,
         by_plan=[
-            {"plan": plan, **said}
+            PlanRevenue(plan=plan, **said)
             for plan, said in sorted(by_plan.items(), key=lambda item: -float(item[1]["mrr"]))
         ],
         invoiced=_eur(issued[1]) or 0.0,

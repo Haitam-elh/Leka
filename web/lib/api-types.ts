@@ -19477,9 +19477,7 @@ export interface components {
              * By Plan
              * @description Paying subscriptions by plan.
              */
-            by_plan: {
-                [key: string]: unknown;
-            }[];
+            by_plan: components["schemas"]["PlanRevenue"][];
             /**
              * Invoiced
              * @description Billing: the total of the invoices issued, VAT included.
@@ -21689,6 +21687,25 @@ export interface components {
          * @enum {string}
          */
         InvitationStatus: "pending" | "accepted" | "revoked";
+        /** InvoiceLine */
+        InvoiceLine: {
+            /** Description */
+            description: string | null;
+            /**
+             * Amount
+             * @description In its invoice's currency's main unit.
+             */
+            amount: number;
+            /**
+             * Proration
+             * @description Billed for a change mid-period.
+             */
+            proration: boolean;
+            /** Start */
+            start: string | null;
+            /** End */
+            end: string | null;
+        };
         /**
          * InvoiceRow
          * @description An invoice, as Stripe last said it (LEKA-554): amounts in its
@@ -21744,10 +21761,11 @@ export interface components {
              * @description Stripe's page of it.
              */
             hosted_url: string | null;
-            /** Lines */
-            lines: {
-                [key: string]: unknown;
-            }[];
+            /**
+             * Lines
+             * @description The first 50, as Stripe said them.
+             */
+            lines: components["schemas"]["InvoiceLine"][];
         };
         /**
          * JobQueue
@@ -24727,6 +24745,23 @@ export interface components {
              * @description Every specialised agent on sale is included.
              */
             agents_every: boolean;
+        };
+        /** PlanRevenue */
+        PlanRevenue: {
+            /**
+             * Plan
+             * @description A plan, or add_ons: the agents and bundles bought alone.
+             */
+            plan: string;
+            /** Subscriptions */
+            subscriptions: number;
+            /** Mrr */
+            mrr: number;
+            /**
+             * Unknown
+             * @description Of them, whose price is not known: left out of `mrr`.
+             */
+            unknown: number;
         };
         /**
          * PlanStartRequest
@@ -28172,6 +28207,32 @@ export interface components {
             /** Kind */
             kind: string | null;
         };
+        /**
+         * SubscriptionAddOn
+         * @description An agent or a bundle bought alone, its own subscription (LEKA-554).
+         */
+        SubscriptionAddOn: {
+            /** Key */
+            key: string;
+            /** Kind */
+            kind: string;
+            /** Status */
+            status: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Ended At */
+            ended_at: string | null;
+            /** Cancel At Period End */
+            cancel_at_period_end: boolean;
+            /**
+             * Mrr Eur
+             * @description Null: not known; 0: ended.
+             */
+            mrr_eur: number | null;
+        };
         /** SubscriptionChangeRow */
         SubscriptionChangeRow: {
             /**
@@ -28218,9 +28279,7 @@ export interface components {
         SubscriptionDetail: {
             subscription: components["schemas"]["SubscriptionRow"];
             /** Add Ons */
-            add_ons: {
-                [key: string]: unknown;
-            }[];
+            add_ons: components["schemas"]["SubscriptionAddOn"][];
             /** Changes */
             changes: components["schemas"]["SubscriptionChangeRow"][];
             /** Invoices */
@@ -28298,27 +28357,26 @@ export interface components {
              */
             updated_at: string;
             /** Stripe Subscription Id */
-            stripe_subscription_id?: string | null;
+            stripe_subscription_id: string | null;
             /**
              * Price Eur
              * @description Its list price for one interval, excluding VAT (LEKA-554).
              */
-            price_eur?: number | null;
+            price_eur: number | null;
             /**
              * Mrr Eur
              * @description What it brings in a month now, coupon taken off, excluding VAT; null: not known; 0: it earns nothing (a trial, ended).
              */
-            mrr_eur?: number | null;
-            discount?: components["schemas"]["SubscriptionDiscount"] | null;
+            mrr_eur: number | null;
+            discount: components["schemas"]["SubscriptionDiscount"] | null;
             /**
              * Since
              * @description When it started earning, as its changes say.
              */
-            since?: string | null;
+            since: string | null;
             /**
              * Add Ons
              * @description Agents or bundles bought alone, active.
-             * @default 0
              */
             add_ons: number;
         };

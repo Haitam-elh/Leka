@@ -282,7 +282,10 @@ async def test_invoices_payments_refunds_and_changes_are_read_with_their_filters
         "eur",
     )
     assert paid["organisation"] == {"id": str(world.alpha), "name": f"Alpha {world.marker}"}
-    assert paid["lines"] == [{"description": "Growth", "amount": 17900, "proration": False}]
+    # Each line in euros, like its invoice.
+    assert paid["lines"] == [
+        {"description": "Growth", "amount": 179.0, "proration": False, "start": None, "end": None}
+    ]
     opened = await client.get(
         f"{API}/billing/invoices",
         params={"organisation": f"alpha-{world.marker}", "status": "open"},
