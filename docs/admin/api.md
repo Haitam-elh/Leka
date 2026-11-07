@@ -1,4 +1,4 @@
-# L'Admin API de LEKA ADMIN (LEKA-544, LEKA-545, LEKA-546, LEKA-551, LEKA-552, LEKA-553, LEKA-554, LEKA-555, LEKA-556)
+# L'Admin API de LEKA ADMIN (LEKA-544, LEKA-545, LEKA-546, LEKA-551, LEKA-552, LEKA-553, LEKA-554, LEKA-555, LEKA-556, LEKA-557)
 
 Le contrat entre LEKA CORE et LEKA ADMIN : ce que l'application Android envoie et reçoit aujourd'hui, et ce que la version web recevra demain, à l'identique. Les routes sont sous `/api/v1/admin`. Le schéma OpenAPI de LEKA CORE (`/api/v1/openapi.json`, étiquette `admin`) en est la source exacte ; ce document dit le sens.
 
@@ -68,6 +68,7 @@ Une route demande une **permission**, jamais un rôle. Ce que le rôle n'accorde
 | `activity:read` journal d'activité | ✓ | ✓ | ✓ | ✓ |
 | `incidents:read` incidents et notifications de l'équipe (LEKA-556) | ✓ | ✓ | ✓ | ✓ |
 | `incidents:write` prendre en charge, résoudre, fermer, attribuer un incident, y noter (LEKA-556) | ✓ | ✓ | ✓ | |
+| `exports:create` exporter une liste en CSV, telle que filtrée, en plus de la lire (LEKA-557) | ✓ | ✓ | | ✓ |
 | `audit:read` journal admin | ✓ | | | |
 | `admins:manage` les admins (LEKA-545) | ✓ | | | |
 
@@ -79,7 +80,7 @@ C'est la matrice **de départ** (`api/leka/admin/access.py`, `ROLE_PERMISSIONS`)
 Chaque permission a un **module** et un **niveau d'action** (`GET /admin/roles`) :
 - `read` (lecture) ;
 - `write` (écriture, aucune pour l'instant) ;
-- `sensitive` (opération sensible) : ce qu'un client a écrit, l'accès d'une organisation, les crédits, le journal admin, les admins eux-mêmes.
+- `sensitive` (opération sensible) : ce qu'un client a écrit, l'accès d'une organisation, les crédits, les exports, le journal admin, les admins eux-mêmes.
 
 ## 3. Conventions
 
@@ -96,7 +97,7 @@ Chaque permission a un **module** et un **niveau d'action** (`GET /admin/roles`)
 | Méthode et chemin | Permission | Filtres et tri | Rend |
 | --- | --- | --- | --- |
 | `GET /admin/overview` | `dashboard:read` (les montants : `billing:read`) | `period` = `today`, `7d`, `30d` (défaut), `90d`, `12m`, `custom` avec `from` et `to` (2 ans au plus) | les chiffres du § 5 et leurs séries ([indicateurs.md](indicateurs.md)) |
-| `GET /admin/organisations` | `organisations:read` | `q` (nom, slug, id, e-mail d'un propriétaire), `plan`, `status`, `created_from`, `created_to`, `country` (code ISO à deux lettres), `size` (celle que garde LEKA, sinon celle déclarée), `activity` (`active` : quelque chose dans les 30 derniers jours, `inactive` : avant seulement, `never` : jamais), `include_demo` ; tri `created_at`, `name` | une ligne par organisation : formule, propriétaire, pays, taille et taille déclarée, membres, intentions, dernière activité |
+| `GET /admin/organisations` | `organisations:read` | `q` (nom, slug, id, e-mail d'un propriétaire ; LEKA-557 : l'identifiant client ou d'abonnement Stripe, entier), `plan`, `status`, `created_from`, `created_to`, `country` (code ISO à deux lettres), `size` (celle que garde LEKA, sinon celle déclarée), `activity` (`active` : quelque chose dans les 30 derniers jours, `inactive` : avant seulement, `never` : jamais), `include_demo` ; tri `created_at`, `name` | une ligne par organisation : formule, propriétaire, pays, taille et taille déclarée, membres, intentions, dernière activité |
 | `GET /admin/organisations/{id}` | `organisations:read` | | la fiche 360° : informations, formule et depuis quand, abonnement Stripe, crédits du mois, compteurs (dont analyses terminées et échouées, alertes ouvertes), agents utilisés. **Lecture journalisée** |
 | `GET /admin/organisations/{id}/members` | `organisations:read` | | ses membres (rôle, depuis, dernière connexion) et ses invitations en attente |
 | `GET /admin/organisations/{id}/credits` | `credits:read` | `since` (début du mois par défaut) | crédits du mois, consommation par agent et par modèle |
@@ -125,9 +126,9 @@ Chaque permission a un **module** et un **niveau d'action** (`GET /admin/roles`)
 | `GET /admin/subscriptions` | `billing:read` | `plan`, `status`, `interval`, `organisation` (nom ou slug) ; tri `updated_at`, `created_at` | les abonnements Stripe tels que LEKA les connaît. LEKA-554 : leur prix (`price_eur`), ce qu'ils rapportent par mois maintenant, coupon déduit (`mrr_eur`), leur coupon (`discount`), depuis quand ils rapportent (`since`), les agents ou bundles achetés seuls actifs (`add_ons`) |
 | `GET /admin/subscriptions/{organisation_id}` | `billing:read` | | LEKA-554 : l'abonnement d'une organisation (Free si elle n'a jamais souscrit), ses options achetées, chacun de ses changements, ses 12 dernières factures, ses 12 derniers paiements et remboursements ; `404` pour une organisation inconnue |
 | `GET /admin/billing/finance` | `billing:read` | `period` (30 jours par défaut, `from`, `to`) | LEKA-554 : le revenu récurrent, la facturation et l'encaissement, à part (indicateurs § 11) |
-| `GET /admin/billing/invoices` | `billing:read` | `organisation_id` ou `organisation`, `status` (`draft`, `open`, `paid`, `uncollectible`, `void`), `since`, `until` (sur l'émission) ; tri `issued_at`, `total` | LEKA-554 : chaque facture telle que Stripe l'a dite en dernier, ses lignes, sa remise, sa TVA et ses proratas à part, en unités de sa devise |
-| `GET /admin/billing/payments` | `billing:read` | `organisation_id` ou `organisation`, `outcome` (`succeeded`, `failed`), `since`, `until` ; tri `at` | LEKA-554 : chaque facture payée, et chaque tentative échouée avec la prochaine |
-| `GET /admin/billing/refunds` | `billing:read` | `organisation_id` ou `organisation`, `since`, `until` ; tri `at` | LEKA-554 : ce que chaque paiement a rendu, ses remboursements ensemble |
+| `GET /admin/billing/invoices` | `billing:read` | `q` (LEKA-557 : son numéro, l'identifiant Stripe de la facture ou de son abonnement), `organisation_id` ou `organisation`, `status` (`draft`, `open`, `paid`, `uncollectible`, `void`), `since`, `until` (sur l'émission) ; tri `issued_at`, `total` | LEKA-554 : chaque facture telle que Stripe l'a dite en dernier, ses lignes, sa remise, sa TVA et ses proratas à part, en unités de sa devise |
+| `GET /admin/billing/payments` | `billing:read` | `q` (LEKA-557 : l'identifiant Stripe de sa facture ou de son paiement), `organisation_id` ou `organisation`, `outcome` (`succeeded`, `failed`), `since`, `until` ; tri `at` | LEKA-554 : chaque facture payée, et chaque tentative échouée avec la prochaine |
+| `GET /admin/billing/refunds` | `billing:read` | `q` (LEKA-557 : l'identifiant Stripe du paiement remboursé ou de sa facture), `organisation_id` ou `organisation`, `since`, `until` ; tri `at` | LEKA-554 : ce que chaque paiement a rendu, ses remboursements ensemble |
 | `GET /admin/billing/changes` | `billing:read` | `organisation_id` ou `organisation`, `kind` (indicateurs § 11), `source` (`plan`, `add_on`), `since`, `until` ; tri `at` | LEKA-554 : chaque changement d'un abonnement, son MRR avant et après |
 | `GET /admin/billing/events` | `billing:read` | `type` (`*` joker), `outcome` (`applied`, `ignored`, `failed`), `organisation_id`, `received_from`, `received_to`, `linked` (`false` : ceux d'un client que LEKA ne connaît pas) ; tri `received_at` | chaque webhook Stripe reçu et ce qui en a été fait : les erreurs de synchronisation se voient ici, avec leur erreur et leurs tentatives (LEKA-554) |
 | `GET /admin/sources` | `environments:read` | `organisation_id`, `kind`, `status`, `health`, `in_error` (en erreur, non saine, ou dernière lecture échouée) ; tri `created_at`, `name` | les intégrations : statut, santé, dernière erreur, dernière synchronisation. Jamais un secret. LEKA-555 : la dernière erreur est un diagnostic (`code`, `message`, `remediation`, `retryable`, `provider_status`, `detail`), nettoyé des secrets à l'écriture et relu par le détecteur de LEKA avant d'être rendu ; une erreur gardée en mots seulement vient avec le code `UNKNOWN` |
@@ -136,8 +137,8 @@ Chaque permission a un **module** et un **niveau d'action** (`GET /admin/roles`)
 | `GET /admin/environments/{organisation_id}` | `environments:read` | | LEKA-555 : la fiche d'un environnement : ses sources et leur diagnostic, ses 20 dernières lectures, ce qu'elles ont trouvé par type, ses services, applications et bases (les 100 vus en dernier, avec les sources qui les montrent), ses relations confirmées, supposées et inconnues, les problèmes de relations, ses 20 derniers changements de relations. Jamais un identifiant de connexion ni un réglage de source. **Lecture journalisée** (`admin.viewed`, cible `environment`) |
 | `GET /admin/environments/{organisation_id}/map` | `environments:read` | `environment` (seulement ce qui y tourne) | LEKA-555 : la cartographie : ce qu'il fait tourner, et seulement les relations que ses données collectées étayent, chacune `confirmed` (affirmée par une source, ou validée) ou `supposed` (déduite par une règle), avec les sources qui l'affirment, la règle, la confiance et sa preuve passée au détecteur de secrets ; ce qui n'est relié à rien ; les sources lues, vérifiées ou non, et leur fraîcheur. **Lecture journalisée** (`admin.viewed`, cible `environment`) |
 | `GET /admin/environments/{organisation_id}/syncs` | `environments:read` | `source_id`, `status` (`running`, `succeeded`, `failed` : échouées ou abandonnées, `abandoned`) ; tri `started_at` | LEKA-555 : chaque lecture de ses sources, la plus récente d'abord, avec le diagnostic sur lequel elle s'est arrêtée |
-| `GET /admin/activity` | `activity:read` | `kind` (`*` joker), `organisation_id`, `user_id`, `from`, `to` ; tri `at` | le journal d'activité (§ 7) |
-| `GET /admin/incidents` | `incidents:read` | `status` (un ou plusieurs : `new`, `in_progress`, `resolved`, `closed` ; `open` pour nouveaux et en cours), `severity` (`critical`, `high`, `medium`, `low`), `category` (indicateurs § 13), `recurring`, `organisation_id` ou `organisation`, `mine`, `unassigned`, `since`, `until` (sur la dernière occurrence), `number` ; tri `last_seen_at`, `first_seen_at`, `number` | LEKA-556 : chaque incident : son numéro (INC-…), son organisation (aucune : la plateforme), sa catégorie, sa gravité, son statut, son identifiant technique, ses occurrences, s'il est récurrent, à qui il est attribué |
+| `GET /admin/activity` | `activity:read` | `kind` (`*` joker), `organisation_id` ou `organisation` (nom ou slug), `user_id` ou `user` (adresse ou nom), `from`, `to` ; tri `at` | le journal d'activité (§ 7) ; LEKA-557 : chaque fait avec le nom de son organisation et l'adresse de sa personne |
+| `GET /admin/incidents` | `incidents:read` | `q` (LEKA-557 : `INC-42` ou `42`, son id ou son identifiant technique, ou des mots de ce qui nomme son problème : un agent, une route, une exception, une règle), `status` (un ou plusieurs : `new`, `in_progress`, `resolved`, `closed` ; `open` pour nouveaux et en cours), `severity` (`critical`, `high`, `medium`, `low`), `category` (indicateurs § 13), `recurring`, `organisation_id` ou `organisation`, `mine`, `unassigned`, `since`, `until` (sur la dernière occurrence), `number` ; tri `last_seen_at`, `first_seen_at`, `number` | LEKA-556 : chaque incident : son numéro (INC-…), son organisation (aucune : la plateforme), sa catégorie, sa gravité, son statut, son identifiant technique, ses occurrences, s'il est récurrent, à qui il est attribué |
 | `GET /admin/incidents/summary` | `incidents:read` | | LEKA-556 : les incidents ouverts (nouveaux, en cours) par statut, gravité et catégorie ; ceux attribués à personne ; les récurrents |
 | `GET /admin/incidents/assignees` | `incidents:read` | | LEKA-556 : à qui un incident peut être attribué : l'équipe, active |
 | `GET /admin/incidents/{id}` | `incidents:read` | | LEKA-556 : la fiche d'un incident et son historique, le plus récent d'abord : ouvert, chaque occurrence, récurrent, attribué, son statut, les notes, résolu par LEKA quand le problème a disparu ; l'incident d'avant pour le même problème |
@@ -153,6 +154,8 @@ Chaque permission a un **module** et un **niveau d'action** (`GET /admin/roles`)
 | `GET /admin/roles` | connecté | | les 4 rôles, ce que chacun accorde, et chaque permission avec son module et son niveau |
 | `PUT /admin/roles/{role}/permissions` | `admins:manage` | corps `{permissions}` (la liste entière) | le rôle changé ; refusé pour `super_admin` et pour ce qui n'appartient qu'au Super Admin |
 | `GET /admin/audit` | `audit:read` | `admin_id`, `action` (`*` joker), `organisation_id`, `outcome`, `from`, `to` ; tri `at` | le journal admin (§ 8). **Lecture journalisée**, avec les filtres |
+| `GET /admin/search` | connecté (chaque partie : la permission de sa liste) | `q` (2 caractères au moins) | LEKA-557 : la recherche globale (§ 9) : les organisations, personnes, intentions, transactions et incidents que `q` trouve, les cinq premiers de chaque, et s'il y en a d'autres |
+| `GET /admin/exports/{liste}` | la permission de la liste et `exports:create` | les filtres et le tri de la liste, à l'identique | LEKA-557 : la liste telle que filtrée, en CSV (§ 9). Listes : `organisations`, `users`, `intentions`, `credit-movements`, `subscriptions`, `invoices`, `payments`, `refunds`, `incidents`. **Journalisé** (`admin.exported`) |
 
 **Pas encore de données** (le ticket qui les apporte) : le registre des crédits (LEKA-553), l'historique des factures et des abonnements (LEKA-554), l'historique des incidents de la plateforme (LEKA-556).
 
@@ -324,10 +327,11 @@ Suspendre, réactiver, ajouter des crédits : chacune appelle la règle du modul
 | Lectures | `admin.refused` (un rôle qui n'accorde pas), `admin.viewed` (une organisation, une personne, une intention, un environnement et sa cartographie), `admin.viewed_content` (ce que le client a écrit, les livrables ; pour une page d'intentions avec leur description, les intentions lues), `admin.viewed_trail` (ce journal) |
 | Clients, crédits | `admin.organisation_suspended`, `admin.organisation_reactivated`, `admin.credits_added`, `admin.credits_adjusted` (LEKA-553 : un remboursement ou un ajustement du registre, avec son motif), `admin.organisation_updated` (LEKA-549 : avec ce qui a changé, avant et après), chacune avec son motif ; `admin.note_added` (une note interne : sa longueur, jamais son texte) |
 | Incidents | `admin.incident_updated` (LEKA-556 : un incident pris en charge, résolu, fermé ou repris, attribué, ou une note écrite : ce qui a changé, jamais le texte de la note) |
+| Exports | `admin.exported` (LEKA-557 : une liste exportée en CSV : laquelle, ses filtres, son nombre de lignes ; jamais son contenu) |
 | L'équipe, les rôles, les permissions | `admin.account_created`, `admin.invited`, `admin.invitation_sent`, `admin.account_changed` (nom, rôle, accès : avant et après), `admin.role_changed` (les permissions d'un rôle : avant et après) |
 | Le journal lui-même | `admin.trail_expired` (ce que la tâche de nuit a supprimé), `admin.trail_unprotected` (sa protection trouvée absente) |
 
-Les abonnements ne changent aujourd'hui que par Stripe, côté client : ils sont dans le journal d'activité (§ 7). Quand LEKA ADMIN pourra les changer (LEKA-554), et quand il exportera (LEKA-557), chaque opération ajoutera son action ici, dans `ACTIONS` et dans ce tableau. `tests/test_admin_security.py` refuse une action enregistrée par le code qui manque à l'un ou à l'autre.
+Les abonnements ne changent aujourd'hui que par Stripe, côté client : ils sont dans le journal d'activité (§ 7). Quand LEKA ADMIN pourra les changer, chaque opération ajoutera son action ici, dans `ACTIONS` et dans ce tableau. `tests/test_admin_security.py` refuse une action enregistrée par le code qui manque à l'un ou à l'autre.
 
 **Protégé contre la modification** :
 - **Aucune route** n'écrit dans ce journal autrement qu'en ajoutant une ligne, ni ne le modifie ni ne le supprime.
@@ -345,3 +349,38 @@ Les abonnements ne changent aujourd'hui que par Stripe, côté client : ils sont
 | Les sessions terminées | 30 jours après leur fin | supprimées ; le journal garde quelle session a fait quoi |
 | Les codes utilisés ou expirés | 7 jours | supprimés |
 | Le journal d'activité, les clés d'idempotence | 25 mois, 7 jours | § 6 et 7 |
+
+## 9. La recherche globale, les filtres et les exports (LEKA-557)
+
+**La recherche globale** (`GET /admin/search?q=`, `api/leka/admin/search.py`). Une seule requête, et pour chaque sorte de fiche que le rôle lit, les cinq premières que `q` trouve, avec `more` quand il y en a d'autres. Chaque partie est la requête de sa liste avec le même `q` : ce que la recherche montre, la liste le montre, et « voir tout » retrouve les mêmes lignes.
+
+| Partie | Permission | `q` trouve |
+| --- | --- | --- |
+| `organisations` | `organisations:read` | son nom, son slug, son id, l'e-mail d'un propriétaire, son identifiant client ou d'abonnement Stripe (entier) |
+| `users` | `users:read` | son e-mail, son nom, son id |
+| `intentions` | `intentions:read` | son id, des mots de son titre ; jamais ce que le client a écrit |
+| `transactions` | `billing:read` | les factures, paiements et remboursements, le plus récent d'abord : le numéro d'une facture, l'identifiant Stripe d'une facture, d'un paiement ou d'un abonnement |
+| `incidents` | `incidents:read` | `INC-42` ou `42`, son id, son identifiant technique, ce qui nomme son problème (un agent, une route, une exception, une règle) |
+
+Une partie que le rôle ne lit pas n'est pas cherchée (`granted` à `false`) et rien n'en est dit. Les organisations de démonstration en sont exclues, comme des listes. Une recherche n'est pas une lecture d'une fiche : elle n'est pas journalisée, et ne rend jamais la description d'une intention.
+
+**Les filtres** se combinent : chacun resserre ce que les autres ont laissé (date ou période, organisation, personne, statut, formule, agent, type d'événement, gravité, selon la liste : le § 4 dit ceux de chacune). Ceux d'une liste exportable sont déclarés une fois (`api/leka/api/admin_filters.py`) et pris par la liste et par son export.
+
+**Les exports CSV** (`GET /admin/exports/{liste}`, `api/leka/admin/exports.py`) :
+
+| Liste | Ce que le ticket appelle | Permission en plus de `exports:create` | La liste filtrée |
+| --- | --- | --- | --- |
+| `organisations` | les clients | `organisations:read` | `GET /admin/organisations` |
+| `users` | les utilisateurs | `users:read` | `GET /admin/users` |
+| `intentions` | les intentions | `intentions:read` | `GET /admin/intentions` |
+| `credit-movements` | les consommations (le registre des crédits, ligne par ligne : `kind=consumption` pour la seule consommation) | `credits:read` | `GET /admin/credits/movements` |
+| `subscriptions` | les abonnements | `billing:read` | `GET /admin/subscriptions` |
+| `invoices`, `payments`, `refunds` | les transactions | `billing:read` | `GET /admin/billing/invoices`, `/payments`, `/refunds` |
+| `incidents` | les incidents | `incidents:read` | `GET /admin/incidents` |
+
+- **Telle que filtrée** : un export prend les filtres et le tri de sa liste, à l'identique, et en lit toutes les lignes, page par page, dans l'ordre de la liste.
+- **Selon les permissions** : la permission de la liste, et `exports:create` en plus (au départ : Super Admin, Opérations, Finance ; le Super Admin la donne ou la reprend). Un rôle à qui l'une manque est refusé (`403`), et le refus est journalisé.
+- **Journalisé** : chaque export est une ligne du journal admin (`admin.exported`) : la liste, ses filtres, son nombre de lignes, jamais son contenu.
+- **Jamais un secret ni une donnée de connexion** : les colonnes sont choisies une à une, jamais une ligne recopiée telle quelle. Ni mot de passe, ni jeton, ni session, ni adresse IP, ni date de connexion ; ni le lien Stripe qui ouvre une facture (il permet de la payer) ; ni ce qu'un client a écrit (la description d'une intention, ses livrables). Le détail d'un incident, ce sont des noms et des codes ; ses diagnostics sont déjà passés au détecteur de secrets.
+- **Un fichier qu'un tableur ouvre sans risque** : UTF-8 avec sa marque d'ordre, RFC 4180 (virgules, fins de ligne CRLF), des dates ISO 8601 en UTC, des décimales avec un point, des colonnes nommées en anglais comme l'API. Un texte qui commence comme une formule (`=`, `+`, `-`, `@`) est écrit après une apostrophe : le tableur l'affiche, il ne l'exécute jamais.
+- **50 000 lignes au plus** par export : au-delà, l'export est refusé avant toute lecture (`422 export_too_large`), avec le nombre de lignes, pour resserrer les filtres (une période, une organisation).

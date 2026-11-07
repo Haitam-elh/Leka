@@ -1356,6 +1356,12 @@ class ActivityRow(BaseModel):
     ref: str | None = Field(description="The row it was read from, as `intention:<id>`.")
     request_id: str | None
     properties: dict[str, object]
+    organisation: OrganisationRef | None = Field(
+        default=None, description="Its organisation, by name (LEKA-557); null: none, or gone."
+    )
+    person: PersonRef | None = Field(
+        default=None, description="Its person, by address (LEKA-557); null: none, or gone."
+    )
 
 
 # ── Passwords and the team (LEKA-545) ────────────────────────────────────────
@@ -1598,3 +1604,41 @@ class NotificationsRead(BaseModel):
 class NotificationsCount(BaseModel):
     unread: int
     marked: int | None = Field(default=None, description="How many were marked read.")
+
+
+# ── The global search (LEKA-557) ─────────────────────────────────────────────
+
+
+class SearchPart[T](BaseModel):
+    """What one kind of record the search found: the first few, read as its
+    list reads them; nothing when the role does not read that list."""
+
+    granted: bool = Field(description="False: the role does not read these, nothing searched.")
+    rows: list[T]
+    more: bool = Field(description="More match: the list, with the same `q`, has them all.")
+
+
+class TransactionHit(BaseModel):
+    """An invoice, a payment or a refund, as the search finds it."""
+
+    kind: Literal["invoice", "payment", "refund"]
+    id: str = Field(description="An invoice: Stripe's id; a payment, a refund: LEKA's.")
+    organisation: OrganisationRef
+    reference: str | None = Field(
+        description="What it is known by: the invoice's number, Stripe's id of the charge."
+    )
+    status: str = Field(description="An invoice's status, a payment's outcome; a refund: refunded.")
+    amount: float = Field(description="In units of its currency.")
+    currency: str
+    at: datetime
+
+
+class AdminSearch(BaseModel):
+    """One query across LEKA ADMIN's records, each kind as the role reads it."""
+
+    query: str
+    organisations: SearchPart[OrganisationRow]
+    users: SearchPart[UserRow]
+    intentions: SearchPart[AdminIntentionRow]
+    transactions: SearchPart[TransactionHit]
+    incidents: SearchPart[IncidentRow]

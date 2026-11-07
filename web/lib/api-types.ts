@@ -8154,7 +8154,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** What happened across LEKA */
+        /**
+         * What happened across LEKA
+         * @description The activity journal (§ 7), each fact with its organisation's name and
+         *     its person's address; filters that combine (LEKA-557).
+         */
         get: operations["list_activity_api_v1_admin_activity_get"];
         put?: never;
         post?: never;
@@ -8173,6 +8177,211 @@ export interface paths {
         };
         /** What LEKA's team did and read */
         get: operations["list_admin_audit_api_v1_admin_audit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search every list at once
+         * @description The organisations, people, intentions, transactions and incidents `q`
+         *     finds, the first five of each, as each list's own `q` finds them; a list
+         *     the role does not read is not searched (`granted` false).
+         */
+        get: operations["search_everything_api_v1_admin_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/exports/organisations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every organisation, as filtered, in a CSV file
+         * @description GET /admin/organisations's rows and filters (LEKA-557).
+         */
+        get: operations["export_organisations_api_v1_admin_exports_organisations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/exports/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every person, as filtered, in a CSV file
+         * @description GET /admin/users's rows and filters, never a sign-in (LEKA-557).
+         */
+        get: operations["export_users_api_v1_admin_exports_users_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/exports/intentions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every intention, as filtered, in a CSV file
+         * @description GET /admin/intentions's rows and filters, never what a customer wrote
+         *     (LEKA-557).
+         */
+        get: operations["export_intentions_api_v1_admin_exports_intentions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/exports/credit-movements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The credits ledger, as filtered, in a CSV file
+         * @description GET /admin/credits/movements's rows and filters: the consumption, the
+         *     grants, every movement (LEKA-557).
+         */
+        get: operations["export_credit_movements_api_v1_admin_exports_credit_movements_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/exports/subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every subscription, as filtered, in a CSV file
+         * @description GET /admin/subscriptions's rows and filters (LEKA-557).
+         */
+        get: operations["export_subscriptions_api_v1_admin_exports_subscriptions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/exports/invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every invoice, as filtered, in a CSV file
+         * @description GET /admin/billing/invoices's rows and filters, never the link that
+         *     opens an invoice (LEKA-557).
+         */
+        get: operations["export_invoices_api_v1_admin_exports_invoices_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/exports/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every payment, as filtered, in a CSV file
+         * @description GET /admin/billing/payments's rows and filters (LEKA-557).
+         */
+        get: operations["export_payments_api_v1_admin_exports_payments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/exports/refunds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every refund, as filtered, in a CSV file
+         * @description GET /admin/billing/refunds's rows and filters (LEKA-557).
+         */
+        get: operations["export_refunds_api_v1_admin_exports_refunds_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/exports/incidents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every incident, as filtered, in a CSV file
+         * @description GET /admin/incidents's rows and filters (LEKA-557).
+         */
+        get: operations["export_incidents_api_v1_admin_exports_incidents_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -9054,6 +9263,10 @@ export interface components {
             properties: {
                 [key: string]: unknown;
             };
+            /** @description Its organisation, by name (LEKA-557); null: none, or gone. */
+            organisation?: components["schemas"]["OrganisationRef"] | null;
+            /** @description Its person, by address (LEKA-557); null: none, or gone. */
+            person?: components["schemas"]["PersonRef"] | null;
         };
         /** ActivityStats */
         ActivityStats: {
@@ -9929,7 +10142,7 @@ export interface components {
          * AdminPermission
          * @enum {string}
          */
-        AdminPermission: "dashboard:read" | "organisations:read" | "organisations:write" | "organisations:notes" | "users:read" | "users:notes" | "intentions:read" | "intentions:content" | "agents:read" | "credits:read" | "credits:write" | "billing:read" | "environments:read" | "activity:read" | "incidents:read" | "incidents:write" | "audit:read" | "admins:manage";
+        AdminPermission: "dashboard:read" | "organisations:read" | "organisations:write" | "organisations:notes" | "users:read" | "users:notes" | "intentions:read" | "intentions:content" | "agents:read" | "credits:read" | "credits:write" | "billing:read" | "environments:read" | "activity:read" | "incidents:read" | "incidents:write" | "exports:create" | "audit:read" | "admins:manage";
         /** AdminPermissionRead */
         AdminPermissionRead: {
             permission: components["schemas"]["AdminPermission"];
@@ -10280,6 +10493,19 @@ export interface components {
             tokens_in: number | null;
             /** Tokens Out */
             tokens_out: number | null;
+        };
+        /**
+         * AdminSearch
+         * @description One query across LEKA ADMIN's records, each kind as the role reads it.
+         */
+        AdminSearch: {
+            /** Query */
+            query: string;
+            organisations: components["schemas"]["SearchPart_OrganisationRow_"];
+            users: components["schemas"]["SearchPart_UserRow_"];
+            intentions: components["schemas"]["SearchPart_AdminIntentionRow_"];
+            transactions: components["schemas"]["SearchPart_TransactionHit_"];
+            incidents: components["schemas"]["SearchPart_IncidentRow_"];
         };
         /**
          * AdminSessionRead
@@ -19476,7 +19702,7 @@ export interface components {
          *     them and a rename would be a breaking change for nothing.
          * @enum {string}
          */
-        ErrorCode: "validation_failed" | "not_authenticated" | "permission_denied" | "not_found" | "conflict" | "rate_limited" | "internal_error" | "service_unavailable" | "invalid_cursor" | "invalid_sort" | "invalid_filter" | "contract_unsupported" | "off_topic" | "agent_unavailable" | "agent_inputs_missing" | "agent_not_proposed" | "credits_short" | "plan_required" | "agent_not_owned" | "source_required" | "invalid_credentials" | "account_unverified" | "token_invalid" | "token_expired" | "password_too_short" | "password_breached" | "session_expired" | "last_owner" | "csrf_failed" | "plan_limit";
+        ErrorCode: "validation_failed" | "not_authenticated" | "permission_denied" | "not_found" | "conflict" | "rate_limited" | "internal_error" | "service_unavailable" | "invalid_cursor" | "invalid_sort" | "invalid_filter" | "contract_unsupported" | "off_topic" | "agent_unavailable" | "agent_inputs_missing" | "agent_not_proposed" | "credits_short" | "plan_required" | "agent_not_owned" | "source_required" | "invalid_credentials" | "account_unverified" | "token_invalid" | "token_expired" | "password_too_short" | "password_breached" | "session_expired" | "last_owner" | "csrf_failed" | "plan_limit" | "export_too_large";
         /**
          * ErrorEnvelope
          * @description Every error response the API returns, whatever the status.
@@ -28142,6 +28368,81 @@ export interface components {
              */
             sources: string[];
         };
+        /** SearchPart[AdminIntentionRow] */
+        SearchPart_AdminIntentionRow_: {
+            /**
+             * Granted
+             * @description False: the role does not read these, nothing searched.
+             */
+            granted: boolean;
+            /** Rows */
+            rows: components["schemas"]["AdminIntentionRow"][];
+            /**
+             * More
+             * @description More match: the list, with the same `q`, has them all.
+             */
+            more: boolean;
+        };
+        /** SearchPart[IncidentRow] */
+        SearchPart_IncidentRow_: {
+            /**
+             * Granted
+             * @description False: the role does not read these, nothing searched.
+             */
+            granted: boolean;
+            /** Rows */
+            rows: components["schemas"]["IncidentRow"][];
+            /**
+             * More
+             * @description More match: the list, with the same `q`, has them all.
+             */
+            more: boolean;
+        };
+        /** SearchPart[OrganisationRow] */
+        SearchPart_OrganisationRow_: {
+            /**
+             * Granted
+             * @description False: the role does not read these, nothing searched.
+             */
+            granted: boolean;
+            /** Rows */
+            rows: components["schemas"]["OrganisationRow"][];
+            /**
+             * More
+             * @description More match: the list, with the same `q`, has them all.
+             */
+            more: boolean;
+        };
+        /** SearchPart[TransactionHit] */
+        SearchPart_TransactionHit_: {
+            /**
+             * Granted
+             * @description False: the role does not read these, nothing searched.
+             */
+            granted: boolean;
+            /** Rows */
+            rows: components["schemas"]["TransactionHit"][];
+            /**
+             * More
+             * @description More match: the list, with the same `q`, has them all.
+             */
+            more: boolean;
+        };
+        /** SearchPart[UserRow] */
+        SearchPart_UserRow_: {
+            /**
+             * Granted
+             * @description False: the role does not read these, nothing searched.
+             */
+            granted: boolean;
+            /** Rows */
+            rows: components["schemas"]["UserRow"][];
+            /**
+             * More
+             * @description More match: the list, with the same `q`, has them all.
+             */
+            more: boolean;
+        };
         /**
          * SearchResults
          * @description What a search found: entities, the best first, and what they say of
@@ -29830,6 +30131,45 @@ export interface components {
              * @description The sources that show it.
              */
             sources: string[];
+        };
+        /**
+         * TransactionHit
+         * @description An invoice, a payment or a refund, as the search finds it.
+         */
+        TransactionHit: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "invoice" | "payment" | "refund";
+            /**
+             * Id
+             * @description An invoice: Stripe's id; a payment, a refund: LEKA's.
+             */
+            id: string;
+            organisation: components["schemas"]["OrganisationRef"];
+            /**
+             * Reference
+             * @description What it is known by: the invoice's number, Stripe's id of the charge.
+             */
+            reference: string | null;
+            /**
+             * Status
+             * @description An invoice's status, a payment's outcome; a refund: refunded.
+             */
+            status: string;
+            /**
+             * Amount
+             * @description In units of its currency.
+             */
+            amount: number;
+            /** Currency */
+            currency: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
         };
         /**
          * TranscriptRead
@@ -68446,7 +68786,15 @@ export interface operations {
     list_organisations_api_v1_admin_organisations_get: {
         parameters: {
             query?: {
-                /** @description Name, slug, id or an owner's email. */
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+                /** @description Name, slug, id, an owner's email, a Stripe customer or subscription id. */
                 q?: string | null;
                 plan?: string | null;
                 status?: string | null;
@@ -68459,14 +68807,6 @@ export interface operations {
                 size?: string | null;
                 /** @description Something done in the last 30 days, before only, or never. */
                 activity?: ("active" | "inactive" | "never") | null;
-                /** @description From a previous response's next_cursor. Opaque. */
-                cursor?: string | null;
-                /** @description Rows per page. */
-                limit?: number;
-                /** @description Field to sort by. Each resource documents what it allows. */
-                sort?: string | null;
-                /** @description Ascending or descending. */
-                order?: "asc" | "desc";
             };
             header?: never;
             path?: never;
@@ -69558,6 +69898,14 @@ export interface operations {
     list_users_api_v1_admin_users_get: {
         parameters: {
             query?: {
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
                 /** @description Email, name or id. */
                 q?: string | null;
                 organisation_id?: string | null;
@@ -69575,14 +69923,6 @@ export interface operations {
                 active_to?: string | null;
                 /** @description No intention, run nor source connected, ever. */
                 never_active?: boolean;
-                /** @description From a previous response's next_cursor. Opaque. */
-                cursor?: string | null;
-                /** @description Rows per page. */
-                limit?: number;
-                /** @description Field to sort by. Each resource documents what it allows. */
-                sort?: string | null;
-                /** @description Ascending or descending. */
-                order?: "asc" | "desc";
             };
             header?: never;
             path?: never;
@@ -70076,6 +70416,14 @@ export interface operations {
     list_intentions_api_v1_admin_intentions_get: {
         parameters: {
             query?: {
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
                 /** @description Its id, or words of its title. */
                 q?: string | null;
                 organisation_id?: string | null;
@@ -70091,14 +70439,6 @@ export interface operations {
                 agent?: string | null;
                 created_from?: string | null;
                 created_to?: string | null;
-                /** @description From a previous response's next_cursor. Opaque. */
-                cursor?: string | null;
-                /** @description Rows per page. */
-                limit?: number;
-                /** @description Field to sort by. Each resource documents what it allows. */
-                sort?: string | null;
-                /** @description Ascending or descending. */
-                order?: "asc" | "desc";
             };
             header?: never;
             path?: never;
@@ -70596,6 +70936,14 @@ export interface operations {
     list_credit_movements_api_v1_admin_credits_movements_get: {
         parameters: {
             query?: {
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
                 organisation_id?: string | null;
                 /** @description An organisation's name or slug. */
                 organisation?: string | null;
@@ -70606,14 +70954,6 @@ export interface operations {
                 execution?: string | null;
                 since?: string | null;
                 until?: string | null;
-                /** @description From a previous response's next_cursor. Opaque. */
-                cursor?: string | null;
-                /** @description Rows per page. */
-                limit?: number;
-                /** @description Field to sort by. Each resource documents what it allows. */
-                sort?: string | null;
-                /** @description Ascending or descending. */
-                order?: "asc" | "desc";
             };
             header?: never;
             path?: never;
@@ -70906,11 +71246,6 @@ export interface operations {
     list_subscriptions_api_v1_admin_subscriptions_get: {
         parameters: {
             query?: {
-                plan?: string | null;
-                status?: string | null;
-                interval?: string | null;
-                /** @description An organisation's name or slug. */
-                organisation?: string | null;
                 /** @description From a previous response's next_cursor. Opaque. */
                 cursor?: string | null;
                 /** @description Rows per page. */
@@ -70919,6 +71254,11 @@ export interface operations {
                 sort?: string | null;
                 /** @description Ascending or descending. */
                 order?: "asc" | "desc";
+                plan?: string | null;
+                status?: string | null;
+                interval?: string | null;
+                /** @description An organisation's name or slug. */
+                organisation?: string | null;
             };
             header?: never;
             path?: never;
@@ -71202,11 +71542,6 @@ export interface operations {
     list_invoices_api_v1_admin_billing_invoices_get: {
         parameters: {
             query?: {
-                organisation_id?: string | null;
-                organisation?: string | null;
-                status?: ("draft" | "open" | "paid" | "uncollectible" | "void") | null;
-                since?: string | null;
-                until?: string | null;
                 /** @description From a previous response's next_cursor. Opaque. */
                 cursor?: string | null;
                 /** @description Rows per page. */
@@ -71215,6 +71550,13 @@ export interface operations {
                 sort?: string | null;
                 /** @description Ascending or descending. */
                 order?: "asc" | "desc";
+                /** @description Its number, or Stripe's id of it (LEKA-557). */
+                q?: string | null;
+                organisation_id?: string | null;
+                organisation?: string | null;
+                status?: ("draft" | "open" | "paid" | "uncollectible" | "void") | null;
+                since?: string | null;
+                until?: string | null;
             };
             header?: never;
             path?: never;
@@ -71308,11 +71650,6 @@ export interface operations {
     list_payments_api_v1_admin_billing_payments_get: {
         parameters: {
             query?: {
-                organisation_id?: string | null;
-                organisation?: string | null;
-                outcome?: ("succeeded" | "failed") | null;
-                since?: string | null;
-                until?: string | null;
                 /** @description From a previous response's next_cursor. Opaque. */
                 cursor?: string | null;
                 /** @description Rows per page. */
@@ -71321,6 +71658,13 @@ export interface operations {
                 sort?: string | null;
                 /** @description Ascending or descending. */
                 order?: "asc" | "desc";
+                /** @description Its number, or Stripe's id of it (LEKA-557). */
+                q?: string | null;
+                organisation_id?: string | null;
+                organisation?: string | null;
+                outcome?: ("succeeded" | "failed") | null;
+                since?: string | null;
+                until?: string | null;
             };
             header?: never;
             path?: never;
@@ -71414,10 +71758,6 @@ export interface operations {
     list_refunds_api_v1_admin_billing_refunds_get: {
         parameters: {
             query?: {
-                organisation_id?: string | null;
-                organisation?: string | null;
-                since?: string | null;
-                until?: string | null;
                 /** @description From a previous response's next_cursor. Opaque. */
                 cursor?: string | null;
                 /** @description Rows per page. */
@@ -71426,6 +71766,12 @@ export interface operations {
                 sort?: string | null;
                 /** @description Ascending or descending. */
                 order?: "asc" | "desc";
+                /** @description Its number, or Stripe's id of it (LEKA-557). */
+                q?: string | null;
+                organisation_id?: string | null;
+                organisation?: string | null;
+                since?: string | null;
+                until?: string | null;
             };
             header?: never;
             path?: never;
@@ -72522,6 +72868,16 @@ export interface operations {
     list_incidents_api_v1_admin_incidents_get: {
         parameters: {
             query?: {
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+                /** @description INC-<number>, its id or technical id, or words of what names its problem. */
+                q?: string | null;
                 /** @description One or several; `open`: new and in progress; every one when none. */
                 status?: ("open" | "new" | "in_progress" | "resolved" | "closed")[] | null;
                 severity?: ("critical" | "high" | "medium" | "low") | null;
@@ -72539,14 +72895,6 @@ export interface operations {
                 until?: string | null;
                 /** @description INC-<number>. */
                 number?: number | null;
-                /** @description From a previous response's next_cursor. Opaque. */
-                cursor?: string | null;
-                /** @description Rows per page. */
-                limit?: number;
-                /** @description Field to sort by. Each resource documents what it allows. */
-                sort?: string | null;
-                /** @description Ascending or descending. */
-                order?: "asc" | "desc";
             };
             header?: never;
             path?: never;
@@ -73128,7 +73476,11 @@ export interface operations {
                 /** @description A kind; * matches anything, as `intention.*`. */
                 kind?: string | null;
                 organisation_id?: string | null;
+                /** @description An organisation's name or slug. */
+                organisation?: string | null;
                 user_id?: string | null;
+                /** @description A person's address or name. */
+                user?: string | null;
                 from?: string | null;
                 to?: string | null;
                 /** @description From a previous response's next_cursor. Opaque. */
@@ -73316,6 +73668,1054 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    search_everything_api_v1_admin_search_get: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSearch"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    export_organisations_api_v1_admin_exports_organisations_get: {
+        parameters: {
+            query?: {
+                /** @description Field to sort by, as the list allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+                /** @description Name, slug, id, an owner's email, a Stripe customer or subscription id. */
+                q?: string | null;
+                plan?: string | null;
+                status?: string | null;
+                created_from?: string | null;
+                created_to?: string | null;
+                include_demo?: boolean;
+                /** @description ISO 3166-1 alpha-2. */
+                country?: string | null;
+                /** @description 1-10, 11-50, 51-200, 201-1000, 1000+: kept by LEKA, else declared. */
+                size?: string | null;
+                /** @description Something done in the last 30 days, before only, or never. */
+                activity?: ("active" | "inactive" | "never") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rows, UTF-8 with its byte order mark, RFC 4180. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description export_too_large: more rows than one export takes. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    export_users_api_v1_admin_exports_users_get: {
+        parameters: {
+            query?: {
+                /** @description Field to sort by, as the list allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+                /** @description Email, name or id. */
+                q?: string | null;
+                organisation_id?: string | null;
+                /** @description An organisation's name or slug. */
+                organisation?: string | null;
+                /** @description Their role in an organisation (the one asked, if any). */
+                role?: ("owner" | "admin" | "member") | null;
+                verified?: boolean | null;
+                created_from?: string | null;
+                created_to?: string | null;
+                status?: ("suspended" | "unverified" | "new" | "active" | "inactive") | null;
+                /** @description Their last intention, run or source from then on. */
+                active_from?: string | null;
+                /** @description …before then. */
+                active_to?: string | null;
+                /** @description No intention, run nor source connected, ever. */
+                never_active?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rows, UTF-8 with its byte order mark, RFC 4180. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description export_too_large: more rows than one export takes. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    export_intentions_api_v1_admin_exports_intentions_get: {
+        parameters: {
+            query?: {
+                /** @description Field to sort by, as the list allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+                /** @description Its id, or words of its title. */
+                q?: string | null;
+                organisation_id?: string | null;
+                /** @description An organisation's name or slug. */
+                organisation?: string | null;
+                user_id?: string | null;
+                /** @description Who asked it: their address or name. */
+                user?: string | null;
+                /** @description pending, running, completed, failed, cancelled, or LEKA's own */
+                status?: string | null;
+                kind?: string | null;
+                /** @description An agent's key. */
+                agent?: string | null;
+                created_from?: string | null;
+                created_to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rows, UTF-8 with its byte order mark, RFC 4180. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description export_too_large: more rows than one export takes. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    export_credit_movements_api_v1_admin_exports_credit_movements_get: {
+        parameters: {
+            query?: {
+                /** @description Field to sort by, as the list allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+                organisation_id?: string | null;
+                /** @description An organisation's name or slug. */
+                organisation?: string | null;
+                kind?: ("grant" | "consumption" | "refund" | "adjustment" | "expiration") | null;
+                origin?: ("plan" | "pack" | "metering" | "admin" | "close") | null;
+                /** @description A month, YYYY-MM. */
+                period?: string | null;
+                execution?: string | null;
+                since?: string | null;
+                until?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rows, UTF-8 with its byte order mark, RFC 4180. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description export_too_large: more rows than one export takes. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    export_subscriptions_api_v1_admin_exports_subscriptions_get: {
+        parameters: {
+            query?: {
+                /** @description Field to sort by, as the list allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+                plan?: string | null;
+                status?: string | null;
+                interval?: string | null;
+                /** @description An organisation's name or slug. */
+                organisation?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rows, UTF-8 with its byte order mark, RFC 4180. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description export_too_large: more rows than one export takes. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    export_invoices_api_v1_admin_exports_invoices_get: {
+        parameters: {
+            query?: {
+                /** @description Field to sort by, as the list allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+                /** @description Its number, or Stripe's id of it (LEKA-557). */
+                q?: string | null;
+                organisation_id?: string | null;
+                organisation?: string | null;
+                status?: ("draft" | "open" | "paid" | "uncollectible" | "void") | null;
+                since?: string | null;
+                until?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rows, UTF-8 with its byte order mark, RFC 4180. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description export_too_large: more rows than one export takes. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    export_payments_api_v1_admin_exports_payments_get: {
+        parameters: {
+            query?: {
+                /** @description Field to sort by, as the list allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+                /** @description Its number, or Stripe's id of it (LEKA-557). */
+                q?: string | null;
+                organisation_id?: string | null;
+                organisation?: string | null;
+                outcome?: ("succeeded" | "failed") | null;
+                since?: string | null;
+                until?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rows, UTF-8 with its byte order mark, RFC 4180. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description export_too_large: more rows than one export takes. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    export_refunds_api_v1_admin_exports_refunds_get: {
+        parameters: {
+            query?: {
+                /** @description Field to sort by, as the list allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+                /** @description Its number, or Stripe's id of it (LEKA-557). */
+                q?: string | null;
+                organisation_id?: string | null;
+                organisation?: string | null;
+                since?: string | null;
+                until?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rows, UTF-8 with its byte order mark, RFC 4180. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description export_too_large: more rows than one export takes. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    export_incidents_api_v1_admin_exports_incidents_get: {
+        parameters: {
+            query?: {
+                /** @description Field to sort by, as the list allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+                /** @description INC-<number>, its id or technical id, or words of what names its problem. */
+                q?: string | null;
+                /** @description One or several; `open`: new and in progress; every one when none. */
+                status?: ("open" | "new" | "in_progress" | "resolved" | "closed")[] | null;
+                severity?: ("critical" | "high" | "medium" | "low") | null;
+                category?: ("intention_failed" | "agent_failed" | "api_error" | "integration_disconnected" | "sync_failed" | "credits" | "payment_failed" | "platform") | null;
+                /** @description Three times in a day. */
+                recurring?: boolean | null;
+                organisation_id?: string | null;
+                /** @description An organisation's name or slug. */
+                organisation?: string | null;
+                /** @description Given to me. */
+                mine?: boolean;
+                /** @description Given to no one. */
+                unassigned?: boolean;
+                since?: string | null;
+                until?: string | null;
+                /** @description INC-<number>. */
+                number?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rows, UTF-8 with its byte order mark, RFC 4180. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description export_too_large: more rows than one export takes. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Too many requests. */
             429: {

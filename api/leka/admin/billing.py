@@ -188,13 +188,25 @@ async def subscription_rows(
 
 def invoices_query(
     *,
+    q: str | None = None,
     organisation_id: uuid.UUID | None = None,
     organisation: str | None = None,
     status: str | None = None,
     since: datetime | None = None,
     until: datetime | None = None,
 ) -> Select[tuple[BillingInvoice]]:
+    """Every invoice, or those that match: its number, or Stripe's id of it
+    or of its subscription (LEKA-557); its organisation, status, issue."""
     statement = select(BillingInvoice).where(*_named(BillingInvoice.workspace_id, organisation))
+    if q and q.strip():
+        pattern = _like(q)
+        statement = statement.where(
+            or_(
+                BillingInvoice.number.ilike(pattern),
+                BillingInvoice.stripe_invoice_id.ilike(pattern),
+                BillingInvoice.stripe_subscription_id == q.strip(),
+            )
+        )
     if organisation_id:
         statement = statement.where(BillingInvoice.workspace_id == organisation_id)
     if status:
@@ -251,13 +263,24 @@ async def invoice_rows(
 
 def payments_query(
     *,
+    q: str | None = None,
     organisation_id: uuid.UUID | None = None,
     organisation: str | None = None,
     outcome: str | None = None,
     since: datetime | None = None,
     until: datetime | None = None,
 ) -> Select[tuple[BillingPayment]]:
+    """Every payment, or those that match: Stripe's id of its invoice or its
+    charge (LEKA-557); its organisation, outcome, date."""
     statement = select(BillingPayment).where(*_named(BillingPayment.workspace_id, organisation))
+    if q and q.strip():
+        pattern = _like(q)
+        statement = statement.where(
+            or_(
+                BillingPayment.stripe_invoice_id.ilike(pattern),
+                BillingPayment.stripe_charge_id.ilike(pattern),
+            )
+        )
     if organisation_id:
         statement = statement.where(BillingPayment.workspace_id == organisation_id)
     if outcome:
@@ -291,12 +314,23 @@ async def payment_rows(
 
 def refunds_query(
     *,
+    q: str | None = None,
     organisation_id: uuid.UUID | None = None,
     organisation: str | None = None,
     since: datetime | None = None,
     until: datetime | None = None,
 ) -> Select[tuple[BillingRefund]]:
+    """Every refund, or those that match: Stripe's id of its charge or its
+    invoice (LEKA-557); its organisation, date."""
     statement = select(BillingRefund).where(*_named(BillingRefund.workspace_id, organisation))
+    if q and q.strip():
+        pattern = _like(q)
+        statement = statement.where(
+            or_(
+                BillingRefund.stripe_charge_id.ilike(pattern),
+                BillingRefund.stripe_invoice_id.ilike(pattern),
+            )
+        )
     if organisation_id:
         statement = statement.where(BillingRefund.workspace_id == organisation_id)
     if since:

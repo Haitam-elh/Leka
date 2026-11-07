@@ -73,24 +73,27 @@ AdminPrincipalDep = Annotated[AdminPrincipal, Depends(get_admin, scope="function
 
 
 def require_admin(
-    permission: AdminPermission,
+    permission: AdminPermission, *also: AdminPermission
 ) -> Callable[..., Coroutine[Any, Any, AdminPrincipal]]:
-    """The route needs `permission`. Refused by default: what a role does not
-    grant (leka/admin/access.py) is refused here, not hidden on a screen."""
+    """The route needs `permission`, and each of `also` (an export: the list's
+    reading and the export's own, LEKA-557). Refused by default: what a role
+    does not grant (leka/admin/access.py) is refused here, not hidden on a
+    screen; the first permission missing is the one said."""
 
     async def dependency(request: Request, principal: AdminPrincipalDep) -> AdminPrincipal:
-        if permission not in principal.permissions:
+        missing = [p for p in (permission, *also) if p not in principal.permissions]
+        if missing:
             await audit.apart(
                 "admin.refused",
                 admin_id=principal.admin_id,
                 admin_email=principal.email,
                 route=route_of(request),
                 ip_prefix=principal.ip_prefix,
-                detail={"permission": permission.value, "role": principal.role.value},
+                detail={"permission": missing[0].value, "role": principal.role.value},
             )
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
-                detail=f"Your role ({principal.role.value}) does not allow {permission.value}.",
+                detail=f"Your role ({principal.role.value}) does not allow {missing[0].value}.",
             )
         return principal
 

@@ -64,6 +64,9 @@ class AdminPermission(enum.StrEnum):
     # taking it, resolving or closing it, assigning it, a note.
     INCIDENTS_READ = "incidents:read"
     INCIDENTS_WRITE = "incidents:write"
+    # A list taken away as a CSV file, as filtered (LEKA-557): on top of
+    # reading that list, and each one kept in the admin trail.
+    EXPORTS_CREATE = "exports:create"
     AUDIT_READ = "audit:read"
     # The admins, their roles (LEKA-545).
     ADMINS_MANAGE = "admins:manage"
@@ -93,6 +96,7 @@ PERMISSION_INFO: dict[AdminPermission, tuple[str, Level]] = {
     P.ACTIVITY_READ: ("activity", "read"),
     P.INCIDENTS_READ: ("incidents", "read"),
     P.INCIDENTS_WRITE: ("incidents", "write"),
+    P.EXPORTS_CREATE: ("exports", "sensitive"),
     P.AUDIT_READ: ("audit", "sensitive"),
     P.ADMINS_MANAGE: ("admins", "sensitive"),
 }
@@ -123,6 +127,7 @@ ROLE_PERMISSIONS: dict[AdminRole, frozenset[AdminPermission]] = {
         P.CREDITS_READ,
         P.ENVIRONMENTS_READ,
         P.INCIDENTS_WRITE,
+        P.EXPORTS_CREATE,
     },
     AdminRole.SUPPORT: _COMMON
     | {
@@ -133,7 +138,8 @@ ROLE_PERMISSIONS: dict[AdminRole, frozenset[AdminPermission]] = {
         P.ENVIRONMENTS_READ,
         P.INCIDENTS_WRITE,
     },
-    AdminRole.FINANCE: _COMMON | {P.AGENTS_READ, P.CREDITS_READ, P.CREDITS_WRITE, P.BILLING_READ},
+    AdminRole.FINANCE: _COMMON
+    | {P.AGENTS_READ, P.CREDITS_READ, P.CREDITS_WRITE, P.BILLING_READ, P.EXPORTS_CREATE},
 }
 
 

@@ -58,6 +58,7 @@ ACTIONS: dict[str, str] = {
     "admin.viewed": "an organisation, a person or an intention read",
     "admin.viewed_content": "what a customer wrote or an agent delivered, read",
     "admin.viewed_trail": "this trail read",
+    "admin.exported": "a list taken as a CSV file: which, its filters, how many rows (LEKA-557)",
     # Changing a customer.
     "admin.organisation_suspended": "an organisation suspended, with the reason",
     "admin.organisation_reactivated": "an organisation reactivated, with the reason",

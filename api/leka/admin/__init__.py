@@ -57,6 +57,15 @@ from leka.admin.environments import (
     sync_runs_query,
 )
 from leka.admin.environments import overview as environments_overview
+from leka.admin.exports import (
+    DATASETS,
+    EXPORT_MAX_ROWS,
+    cell,
+    count_of,
+    csv_of,
+    every_row,
+    filename_of,
+)
 from leka.admin.incidents import (
     IncidentError,
     change_incident,
@@ -89,6 +98,7 @@ from leka.admin.overview import AdminOverview, AdminWindow, Period, overview, wi
 from leka.admin.reads import (
     activity_query,
     activity_row,
+    activity_rows,
     admin_audit_query,
     admin_emails,
     alert_row,
@@ -137,6 +147,7 @@ from leka.admin.schemas import (
     AdminRolePermissionsUpdate,
     AdminRoleRead,
     AdminRolesRead,
+    AdminSearch,
     AdminSessionRead,
     AdminSessionsEnded,
     AdminSessionsRead,
@@ -200,6 +211,7 @@ from leka.admin.schemas import (
     UserRow,
     UserStatus,
 )
+from leka.admin.search import MIN_QUERY, search
 from leka.admin.service import (
     AdminAccountError,
     AdminAuth,
@@ -217,6 +229,9 @@ from leka.admin.service import (
 )
 
 __all__ = [
+    "DATASETS",
+    "EXPORT_MAX_ROWS",
+    "MIN_QUERY",
     "ROLE_PERMISSIONS",
     "ActionError",
     "ActionReason",
@@ -254,6 +269,7 @@ __all__ = [
     "AdminRolePermissionsUpdate",
     "AdminRoleRead",
     "AdminRolesRead",
+    "AdminSearch",
     "AdminSession",
     "AdminSessionRead",
     "AdminSessionsEnded",
@@ -330,6 +346,7 @@ __all__ = [
     "UserStatus",
     "activity_query",
     "activity_row",
+    "activity_rows",
     "add_credits",
     "add_note",
     "adjust_credits",
@@ -342,20 +359,25 @@ __all__ = [
     "allows",
     "audit_apart",
     "audit_record",
+    "cell",
     "change_incident",
     "change_password",
     "change_rows",
     "changes_query",
     "client_ip",
+    "count_of",
     "create_account",
     "credits_breakdown",
     "credits_of",
     "credits_overview",
+    "csv_of",
     "environment_detail",
     "environment_map",
     "environment_rows",
     "environments_overview",
     "environments_query",
+    "every_row",
+    "filename_of",
     "finance",
     "forgot_password",
     "get_admin",
@@ -398,6 +420,7 @@ __all__ = [
     "route_of",
     "run_activity_sweep",
     "run_retention_sweep",
+    "search",
     "set_suspended",
     "source_rows",
     "sources_query",
