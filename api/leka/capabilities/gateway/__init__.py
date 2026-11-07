@@ -62,7 +62,7 @@ from leka.capabilities.gateway.service import (
     leka_keys,
     leka_ready,
 )
-from leka.capabilities.gateway.usage import leka_cost, model_calls
+from leka.capabilities.gateway.usage import leka_cost, leka_costs, model_calls
 from leka.capabilities.gateway.workspace import (
     ModelSettingError,
     ModelSettings,
@@ -117,6 +117,7 @@ __all__ = [
     "cost_at",
     "leka_complete",
     "leka_cost",
+    "leka_costs",
     "leka_keys",
     "leka_ready",
     "load_rates",

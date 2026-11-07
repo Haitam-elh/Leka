@@ -2,7 +2,7 @@
 
 Le contrat entre LEKA CORE et LEKA ADMIN : ce que l'application Android envoie et reçoit aujourd'hui, et ce que la version web recevra demain, à l'identique. Les routes sont sous `/api/v1/admin`. Le schéma OpenAPI de LEKA CORE (`/api/v1/openapi.json`, étiquette `admin`) en est la source exacte ; ce document dit le sens.
 
-Le code : `api/leka/admin/` (règles et lectures), `api/leka/api/admin.py` (routes). La décision d'architecture : [ADR 016](../adr/016-leka-admin.md).
+Le code : `api/leka/admin/` (règles et lectures), `api/leka/api/admin.py` (routes). La décision d'architecture : [ADR 016](../adr/016-leka-admin.md). Le rapport QA et sécurité : [rapport-qa-securite.md](rapport-qa-securite.md) (LEKA-558).
 
 ## 1. Qui peut appeler
 

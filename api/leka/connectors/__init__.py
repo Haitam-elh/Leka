@@ -61,7 +61,7 @@ from leka.connectors.base import (
     ScopeListing,
     ScopeOption,
 )
-from leka.connectors.errors import ConnectorError, Diagnostic, DiagnosticCode, diagnose
+from leka.connectors.errors import ConnectorError, Diagnostic, DiagnosticCode, diagnose, kept
 from leka.connectors.github import (
     CodeRefusedError,
     FileChange,
@@ -216,6 +216,7 @@ __all__ = [
     "first_match",
     "get_connector",
     "in_scope",
+    "kept",
     "manifests",
     "next_status",
     "open_code",

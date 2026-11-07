@@ -6,7 +6,7 @@ the API, the schedule and its command (cli.py) only.
 """
 
 from leka.metering import reports
-from leka.metering.credits import credits_now, run_credit_watch, watch_credits
+from leka.metering.credits import credits_now, credits_now_many, run_credit_watch, watch_credits
 from leka.metering.ledger import Month as LedgerMonth
 from leka.metering.ledger import month as ledger_month
 from leka.metering.ledger import post as post_ledger
@@ -50,6 +50,7 @@ __all__ = [
     "UsageRecord",
     "credit_prompt",
     "credits_now",
+    "credits_now_many",
     "dismiss_credit_prompt",
     "execution_of",
     "ledger_month",

@@ -17,7 +17,7 @@ import enum
 import re
 from collections.abc import Iterable
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from leka.core.sensitive import SECRETS, redacted, scan
 
@@ -194,3 +194,24 @@ def diagnose(
             detail=sanitise(detail, secrets) if detail else None,
         )
     )
+
+
+def kept(said: object) -> Diagnostic | None:
+    """A failure as a source keeps it (`sources.last_error`), said again as a
+    Diagnostic. Earlier writers kept words alone, or a diagnostic before a
+    field was added: either is said with what it has, its code unknown when
+    it gave none, never a 500 for the whole list (LEKA-558). Words are
+    cleaned of secrets again."""
+    if said is None or said == "" or said == {}:
+        return None
+    if isinstance(said, dict):
+        try:
+            return Diagnostic.model_validate(said)
+        except ValidationError:
+            try:
+                code = DiagnosticCode(str(said.get("code")))
+            except ValueError:
+                code = DiagnosticCode.UNKNOWN
+            message = said.get("message")
+            return diagnose(code, message=sanitise(str(message)) if message else None).diagnostic
+    return diagnose(DiagnosticCode.UNKNOWN, message=sanitise(str(said))).diagnostic

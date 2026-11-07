@@ -70,6 +70,7 @@ from leka.capabilities.gateway import (
     ToolCall,
     ToolChoice,
     leka_cost,
+    leka_costs,
     leka_ready,
     model_calls,
 )
@@ -500,6 +501,7 @@ __all__ = [
     "interfaces",
     "items_read",
     "leka_cost",
+    "leka_costs",
     "leka_ready",
     "load_all",
     "may_move",
