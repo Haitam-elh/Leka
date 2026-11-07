@@ -62,7 +62,9 @@ RETRY_AFTER_HEADER = "Retry-After"
 # /health is polled by whatever watches the service. Refusing it would make
 # a busy probe look like an outage, which is the one failure this must not
 # invent. CORS preflights carry no credentials and do no work.
-EXEMPT_PATHS = frozenset({f"{settings.api_v1_prefix}/health"})
+EXEMPT_PATHS = frozenset(
+    {f"{settings.api_v1_prefix}/health", f"{settings.api_v1_prefix}/health/live"}
+)
 EXEMPT_METHODS = frozenset({"OPTIONS"})
 
 

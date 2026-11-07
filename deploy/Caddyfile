@@ -59,11 +59,11 @@
 {$LEKA_API_DOMAIN} {
 	import common
 
-	# The health endpoint answers 503 when Postgres or Redis is unreachable.
-	# Caddy is told to believe it, so a degraded instance stops receiving
-	# traffic instead of returning errors.
+	# Routed while the process answers (/health/live). Not /api/v1/health:
+	# with one API behind it, a slow database made Caddy take it out and
+	# every page answered 503 (2026-11-07).
 	reverse_proxy api:8000 {
-		health_uri /api/v1/health
+		health_uri /api/v1/health/live
 		health_interval 10s
 		health_timeout 5s
 	}

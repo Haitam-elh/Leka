@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import event
 
 from leka.api import api_router
 from leka.api.errors import ERROR_RESPONSES, register_error_handlers
@@ -31,6 +32,21 @@ from leka.identity.csrf import csrf_middleware
 from leka.platform.monitoring import configure_monitoring
 
 logger = structlog.get_logger(__name__)
+
+# What one of the API's queries may take, at most: past it, PostgreSQL cuts
+# it. 2026-11-07: one ran 310 s and starved the database until the health
+# probe failed and the site went dark. A page waits seconds, never minutes;
+# the workers, which import this module never, keep their long jobs.
+STATEMENT_TIMEOUT_MS = 60_000
+
+
+@event.listens_for(engine.sync_engine, "do_connect")
+def _bounded_statements(
+    _dialect: object, _record: object, _cargs: object, cparams: dict[str, object]
+) -> None:
+    said = cparams.setdefault("server_settings", {})
+    assert isinstance(said, dict)
+    said["statement_timeout"] = str(STATEMENT_TIMEOUT_MS)
 
 
 @asynccontextmanager

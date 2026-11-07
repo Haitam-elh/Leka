@@ -34,7 +34,10 @@ Operating data only: counts, ages, rates — no customer's name, text or id.
 ### Health
 
 - `GET /api/v1/health` — open: can **this API** serve (PostgreSQL, Redis).
-  What the load balancer and the container's healthcheck ask.
+  What the container's healthcheck and deploy.sh ask.
+- `GET /api/v1/health/live` — open: the process answers. What Caddy routes
+  on: with one API, a slow database must not turn every page into a 503.
+  The API's queries are cut at 60 s (`STATEMENT_TIMEOUT_MS`, leka/main.py).
 - `GET /api/v1/ops/health` — the token: is **LEKA** working — database,
   Redis, object store, worker, scheduler, queues, dependencies (breakers) —
   each `ok`, `degraded` or `down`, said why. `down` (503) when the database,
