@@ -72522,8 +72522,8 @@ export interface operations {
     list_incidents_api_v1_admin_incidents_get: {
         parameters: {
             query?: {
-                /** @description One or several; every one when none. */
-                status?: ("new" | "in_progress" | "resolved" | "closed")[] | null;
+                /** @description One or several; `open`: new and in progress; every one when none. */
+                status?: ("open" | "new" | "in_progress" | "resolved" | "closed")[] | null;
                 severity?: ("critical" | "high" | "medium" | "low") | null;
                 category?: ("intention_failed" | "agent_failed" | "api_error" | "integration_disconnected" | "sync_failed" | "credits" | "payment_failed" | "platform") | null;
                 /** @description Three times in a day. */

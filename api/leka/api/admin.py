@@ -9,7 +9,7 @@ them. docs/admin/api.md is the contract, route by route.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
@@ -1610,6 +1610,14 @@ async def list_environment_syncs(
 # ── Incidents & notifications (LEKA-556) ─────────────────────────────────────
 
 
+def _statuses(said: Sequence[str] | None) -> tuple[str, ...]:
+    """`open` said as what it is: new and in progress."""
+    found: list[str] = []
+    for status_ in said or ():
+        found += ["new", "in_progress"] if status_ == "open" else [status_]
+    return tuple(dict.fromkeys(found))
+
+
 @router.get("/incidents/summary", response_model=IncidentSummary, summary="Open incidents, counted")
 async def get_incidents_summary(
     session: SessionDep,
@@ -1639,8 +1647,11 @@ async def list_incidents(
     principal: Annotated[AdminPrincipal, Depends(require_admin(P.INCIDENTS_READ))],
     page: PageParams,
     incident_status: Annotated[
-        list[Literal["new", "in_progress", "resolved", "closed"]] | None,
-        Query(alias="status", description="One or several; every one when none."),
+        list[Literal["open", "new", "in_progress", "resolved", "closed"]] | None,
+        Query(
+            alias="status",
+            description="One or several; `open`: new and in progress; every one when none.",
+        ),
     ] = None,
     severity: Literal["critical", "high", "medium", "low"] | None = None,
     category: Literal[
@@ -1671,7 +1682,7 @@ async def list_incidents(
     found = await serve_page(
         session,
         incidents_query(
-            status=incident_status or (),
+            status=_statuses(incident_status),
             severity=severity,
             category=category,
             recurring=recurring,

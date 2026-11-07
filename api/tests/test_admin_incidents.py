@@ -398,6 +398,8 @@ async def test_an_incident_dealt_with_each_step_in_its_history_and_the_trail(
     assert [e["kind"] for e in said["history"]][:3] == ["note", "status", "assigned"]
     assert said["history"][0]["detail"] == {"note": "Looking at the logs."}
     assert said["history"][0]["by"] == f"operations-{world.marker}@leka.test"
+    # To whom, by the name it had then.
+    assert said["history"][2]["detail"] == {"assignee_id": str(me), "assignee": "operations"}
 
     mine = await client.get(
         f"{API}/incidents", params={"mine": "true", "limit": 200}, headers=as_(world, OPS)
@@ -472,7 +474,7 @@ async def test_incidents_listed_with_their_filters_and_counted(
         params={
             "organisation_id": str(world.alpha),
             "category": "api_error",
-            "status": ["new", "in_progress"],
+            "status": "open",
             "severity": "high",
             "limit": 200,
         },

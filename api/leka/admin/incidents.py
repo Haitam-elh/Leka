@@ -966,10 +966,9 @@ async def change_incident(
         raise IncidentError("not_found", "No incident with this id.")
     if "assignee_id" in change.model_fields_set:
         target = change.assignee_id
-        if target is not None:
-            person = await session.get(AdminAccount, target)
-            if person is None or person.status != "active":
-                raise IncidentError("assignee", "An incident goes to an active admin.")
+        person = await session.get(AdminAccount, target) if target is not None else None
+        if target is not None and (person is None or person.status != "active"):
+            raise IncidentError("assignee", "An incident goes to an active admin.")
         if incident.assignee_id != target:
             incident.assignee_id = target
             await _event(
@@ -979,7 +978,11 @@ async def change_incident(
                 now + timedelta(microseconds=0),
                 admin_id=by_id,
                 admin_email=by_email,
-                detail={"assignee_id": str(target) if target else None},
+                # Said by name, as it was then.
+                detail={
+                    "assignee_id": str(target) if target else None,
+                    "assignee": person.name if person else None,
+                },
             )
     if change.status and change.status != incident.status:
         if change.status not in TRANSITIONS[incident.status]:
