@@ -92,6 +92,16 @@ VERBS: tuple[Verb, ...] = (
     ),
     _verb("update", True, "upgrade upgrader"),
     _verb("migrate", True, "migrer migre migrez migrate"),
+    # The code changed as asked — « ajoute un filtre », « change le texte du
+    # bouton » (2026-11-06: read as a question, the code change ruled out).
+    # « a changé », « ajouté hier »: done, told by their auxiliary.
+    _verb(
+        "change",
+        True,
+        "ajouter ajoute ajoutez changer change changez modifier modifie modifiez implementer "
+        "implemente implementez supprimer supprime supprimez renommer renomme renommez "
+        "developper developpe developpez add implement rename",
+    ),
     _verb(
         "investigate",
         False,
@@ -109,6 +119,8 @@ VERBS: tuple[Verb, ...] = (
     _verb("document", False, "documenter documente documentez rediger redige redigez"),
     _verb("notify", False, "prevenir previens prevenez notifier notifie notifiez notify informer"),
 )
+# Before « change », what makes it the noun: « a code change ».
+NAMED_BY = _words("a an the code un une le la this that")
 # Done, though they change no system: a request to do them is to act.
 DOING = frozenset({"document", "notify", "ticket"})
 # Said in more than a word.
@@ -365,9 +377,15 @@ def actions_of(text: str) -> list[Found]:
             head = word.split()[0]
             if verb.code == "document" and set(clause[index + 1 : index + 4]) & ANSWERED:
                 continue
+            # « a code change », « le change »: the noun, never the order.
+            if verb.code == "change" and set(left[-2:]) & NAMED_BY:
+                continue
             if _planned(head, left, before):
                 continue
             polarity = DONE if _done(head, left) else _polarity(clause, index, before)
+            # « sans rien modifier »: read only, a constraint said as such.
+            if verb.code == "change" and polarity == NEGATED:
+                continue
             seen.setdefault(verb.code, []).append(Found(verb, word, polarity, (position + index,)))
         earlier.extend(clause)
         position += len(clause)

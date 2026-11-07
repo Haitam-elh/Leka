@@ -187,6 +187,35 @@ def test_documenting_or_opening_a_ticket_is_acting_without_changing_systems() ->
     assert understood.clear
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Ajoute un filtre par statut à la liste des intentions, côté API et côté web",
+        "Change le texte du bouton « Analyser maintenant » en « Lancer l'analyse »",
+        "Supprime la colonne vide de la page Agents",
+    ],
+)
+def test_a_change_to_the_code_asked_is_an_act(text: str) -> None:
+    # 2026-11-06, in prod: « Ajoute un filtre … » read as a general
+    # question, the code change ruled out (« never given a question »).
+    understood = understand(text, plan(text, "general", []))
+    assert understood.goal.code == "act"
+    assert [(a.code, a.changes_systems) for a in understood.actions] == [("change", True)]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Qu'est-ce qui a changé sur Billing API depuis hier ?",
+        "Qui a ajouté ce filtre dans le code ?",
+        "Le bouton a été modifié hier",
+    ],
+)
+def test_what_was_changed_is_asked_about_never_an_act(text: str) -> None:
+    understood = understand(text, plan(text, "general", []))
+    assert understood.goal.code != "act"
+
+
 def test_looking_without_a_known_kind_is_investigating() -> None:
     text = "Analyser les erreurs de connexion sur Billing API"
     understood = understand(text, plan(text, "general", []))
