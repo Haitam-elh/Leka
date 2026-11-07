@@ -196,7 +196,9 @@ def sources_seen(rows: Iterable[Source]) -> list[SourceSeen]:
     for row in rows:
         kind = row.kind.value
         found = manifest.get(kind)
-        error = row.last_error or {}
+        # A diagnostic (code, message…); an older one kept as words alone
+        # (LEKA-558: a source's screen answered 500 on it).
+        error = row.last_error if isinstance(row.last_error, dict) else {"message": row.last_error}
         unread = _unread(kind, found.capabilities if found else frozenset(), row.capabilities)
         out.append(
             SourceSeen(

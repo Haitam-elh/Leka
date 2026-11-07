@@ -35,7 +35,6 @@ from leka.connectors import (
     CatalogEntry,
     CredentialsRead,
     CredentialsUpdate,
-    Diagnostic,
     DuplicateSourceError,
     HealthRead,
     InvalidSettingsError,
@@ -61,6 +60,7 @@ from leka.connectors import (
     SourceTestOutcome,
     SourceUpdate,
     UnknownConnectorError,
+    kept,
     manifests,
 )
 from leka.core.errors import ErrorCode, FieldError
@@ -169,7 +169,7 @@ async def _read(service: SourceService, source: Source) -> SourceRead:
         source_metadata=source.source_metadata,
         health_status=source.health_status,
         last_health_check_at=source.last_health_check_at,
-        last_error=Diagnostic.model_validate(source.last_error) if source.last_error else None,
+        last_error=kept(source.last_error),
         sync_status=source.sync_status,
         last_sync_at=source.last_synced_at,
         credentials=CredentialsRead(hint=stored.hint, rotated_at=stored.rotated_at)
@@ -457,7 +457,7 @@ def _health(source: Source) -> HealthRead:
         status=source.status,
         health_status=source.health_status,
         last_health_check_at=source.last_health_check_at,
-        last_error=Diagnostic.model_validate(source.last_error) if source.last_error else None,
+        last_error=kept(source.last_error),
     )
 
 

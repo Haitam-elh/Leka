@@ -10,7 +10,8 @@ What these protect:
 - Sensitive data: across every GET route and every export, as each role, no
   password, token, session nor a source's settings; a secret in a source's
   error is masked; what a customer wrote only for intentions:content.
-- Isolation: what is read about an organisation says nothing of another.
+- Isolation: what is read about an organisation says nothing of another; what
+  LEKA's team keeps (notes, incidents, who did it) never reaches a customer.
 - Performance: a list's page is read in the same number of queries whatever
   its size (no query per row), within a budget.
 """
@@ -55,7 +56,7 @@ from leka.billing import (
     SubscriptionChange,
 )
 from leka.capabilities import AgentRun, ModelCall
-from leka.connectors import Source
+from leka.connectors import Diagnostic, DiagnosticCode, Source, kept
 from leka.core.security import hash_token
 from leka.db import engine, session_factory, system_scope, workspace_scope
 from leka.governance import CreditPack, month_of
@@ -64,7 +65,9 @@ from leka.ingestion import SyncRun
 from leka.metering import credits_now, post_ledger
 from leka.monitoring import MonitoringAlert
 from leka.platform import Invitation, InvitationStatus, Role, Workspace
+from tests.conftest import FakeIdentity
 from tests.test_admin_api import API, NOW, SUPER, World, _build, as_, world  # noqa: F401
+from tests.test_tenant_isolation import _readable_paths
 
 pytestmark = pytest.mark.integration
 
@@ -661,3 +664,51 @@ async def test_what_a_list_says_its_record_says_and_the_customer_sees(
             assert person[field] == detail[field], field
     finally:
         await _drop([other])
+
+
+async def test_what_leka_s_team_keeps_never_reaches_a_customer(
+    client: AsyncClient, identity: FakeIdentity, world: World
+) -> None:
+    """LEKA's team writes notes about an organisation, opens incidents about
+    it: the organisation's own owner, calling every route it may read, sees
+    none of it, nor who in LEKA's team did it."""
+    note = f"QA internal note {world.marker} - never shown"
+    written = await client.post(
+        f"{API}/organisations/{world.alpha}/notes", json={"body": note}, headers=as_(world, SUPER)
+    )
+    assert written.status_code == 201
+    incident = await _incident(world, world.marker)
+    kept = {note, f"run-{world.marker}", incident, *world.admins}
+    identity.sign_in(world.owner, world.alpha)
+    try:
+        leaks: list[str] = []
+        for path in _readable_paths():
+            response = await client.get(path)
+            assert response.status_code < 500, (path, response.status_code)
+            leaks += [f"{path}: {k[:24]}" for k in kept if k in response.text]
+        assert not leaks, "LEKA's team's own, shown to a customer:\n" + "\n".join(leaks)
+    finally:
+        await _forget(world)
+
+
+def test_a_source_error_kept_in_an_older_shape_is_still_said() -> None:
+    """Found by the sweep (LEKA-558): a source whose error was kept as words,
+    or as a diagnostic missing a field, made the customer's sources answer
+    500. Said now with what it has, cleaned of secrets."""
+    assert kept(None) is None and kept("") is None and kept({}) is None
+    words = kept(f"GitHub refused {GITHUB_TOKEN}")
+    assert words is not None
+    assert words.code == DiagnosticCode.UNKNOWN and GITHUB_TOKEN not in words.message
+    partial = kept({"code": "AUTH_EXPIRED", "message": "expired", "retryable": False})
+    assert partial is not None
+    assert (partial.code, partial.message, partial.remediation != "") == (
+        DiagnosticCode.AUTH_EXPIRED,
+        "expired",
+        True,
+    )
+    whole = Diagnostic(
+        code=DiagnosticCode.TIMEOUT, retryable=True, message="slow", remediation="wait"
+    )
+    assert kept(whole.model_dump()) == whole
+    odd = kept({"code": "NOT_A_CODE", "message": "odd"})
+    assert odd is not None and odd.code == DiagnosticCode.UNKNOWN
