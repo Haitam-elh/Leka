@@ -97,6 +97,13 @@ pytestmark = pytest.mark.integration
 #   admin_daily_figures
 #                  LEKA's MRR as it stood each day (LEKA-548), across every
 #                  customer and about none: a sum, no organisation in it.
+#   admin_incidents, admin_incident_events, admin_notifications,
+#   admin_notification_reads
+#                  the problems LEKA's team deals with and what it is told of
+#                  them (LEKA-556), across every customer; a platform's own
+#                  incident is about none. Which organisation: `for_workspace_id`
+#                  again, read by the Admin API only; a notification read is a
+#                  team member's, no customer's.
 TENANT_FREE_TABLES = frozenset(
     {
         "workspaces",
@@ -121,6 +128,10 @@ TENANT_FREE_TABLES = frozenset(
         "activity_watermarks",
         "admin_daily_figures",
         "admin_notes",
+        "admin_incidents",
+        "admin_incident_events",
+        "admin_notifications",
+        "admin_notification_reads",
     }
 )
 
