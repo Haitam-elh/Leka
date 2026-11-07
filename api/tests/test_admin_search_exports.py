@@ -212,7 +212,11 @@ async def test_one_search_finds_each_kind_the_role_reads(client: AsyncClient, wo
         ]
         charged = (await found(f"ch_{world.marker}"))["transactions"]["rows"]
         assert [t["kind"] for t in charged] == ["refund", "payment"]  # the latest first
-        for q in (f"INC-{number}", str(number), f"run-{world.marker}", f"agent-{world.marker}"):
+        # Its number as said (INC-42, inc42) or bare once it has two digits:
+        # a search takes two characters at least.
+        bare = [str(number)] if number >= 10 else []
+        named = (f"INC-{number}", f"inc{number}", *bare)
+        for q in (*named, f"run-{world.marker}", f"agent-{world.marker}"):
             assert [i["number"] for i in (await found(q))["incidents"]["rows"]] == [number], q
 
         # Each part only for a role that reads its list.
