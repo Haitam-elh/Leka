@@ -1,4 +1,4 @@
-# Les indicateurs de LEKA ADMIN (LEKA-548, LEKA-554)
+# Les indicateurs de LEKA ADMIN (LEKA-548, LEKA-554, LEKA-555)
 
 `GET /api/v1/admin/overview` calcule chaque chiffre de l'accueil de LEKA ADMIN à partir des données réelles de LEKA CORE. Le code est dans `api/leka/admin/overview.py`, et cette page en est la définition : un chiffre qui change de règle change ici aussi. Le module Facturation & Finance (`GET /api/v1/admin/billing/finance`, `api/leka/admin/billing.py`) a ses règles au § 11.
 
@@ -208,3 +208,33 @@ Deux commandes, sur le serveur, en lecture seule chez Stripe :
 ### Les erreurs de synchronisation
 
 Un événement dont l'application échoue est annulé en entier, puis gardé `failed` avec son erreur (`detail.error`, `detail.message`) et le nombre de tentatives (`detail.attempts`). Stripe le redélivre pendant trois jours. La livraison qui réussit l'applique, une fois, et garde le nombre de tentatives. Un événement en échec se voit dans LEKA ADMIN (Événements Stripe, filtre « En échec ») et dans `failed_events`. Un événement d'un client inconnu est gardé `ignored`, sans organisation, et compté dans `unlinked_events`.
+
+## 12. Environnements & Intégrations (LEKA-555)
+
+`GET /api/v1/admin/environments/…` (`environments:read`, `api/leka/admin/environments.py`) lit ce que LEKA CORE sait des environnements de ses clients : leurs sources et leurs lectures (`sources`, `sync_runs`), et ce que le modèle de l'entreprise en a tiré (`entities`, `relationships`). Jamais un chiffre à part, jamais un identifiant de connexion ni un réglage de source.
+
+### L'état d'une source et d'un environnement
+
+| État | Règle |
+| --- | --- |
+| En erreur | une source en erreur (`status` `error`), non saine (`health` `unhealthy`), ou dont la dernière lecture a échoué (`sync_status` `failed`) |
+| Dégradé | aucune en erreur, une dégradée (`status` ou `health` `degraded`) |
+| Non à jour | aucune en erreur ni dégradée, une source active non lue depuis 3 heures, ou jamais lue. Les sources sont lues toutes les heures : trois lectures manquées, ce qu'elle disait n'est plus ce qui est (la règle du jumeau numérique) |
+| À jour | toutes ses sources actives lues dans les 3 heures, saines |
+| Aucune source | rien de connecté, hors sources désactivées |
+
+L'état d'un environnement est le pire de ses sources, les désactivées mises à part. Une source est **vérifiée** quand elle est active, saine et a été lue au moins une fois.
+
+### Les erreurs
+
+L'erreur d'une source ou d'une lecture est son **diagnostic** : un code (`AUTH_INVALID`, `AUTH_EXPIRED`, `PERMISSION_DENIED`, `INSUFFICIENT_SCOPE`, `NOT_FOUND`, `RATE_LIMITED`, `TIMEOUT`, `NETWORK_UNREACHABLE`, `PROVIDER_ERROR`, `CONFIG_INVALID`, `UNSUPPORTED`, `UNKNOWN`), ce qui s'est passé, ce qu'il faut faire, si réessayer peut suffire, le statut HTTP du fournisseur. Il est nettoyé des secrets quand il est écrit (`leka.connectors.errors`), et passé de nouveau au détecteur de LEKA (`leka.core.sensitive`) avant d'être rendu.
+
+### Les relations
+
+| Certitude | Règle |
+| --- | --- |
+| Confirmée | affirmée par les enregistrements d'une source (`origin` `stated`), ou proposée par LEKA puis validée par une personne (`accepted`, LEKA-380) |
+| Supposée | déduite par une règle d'enrichissement (`inferred`), avec sa règle et sa confiance. Jamais présentée comme certaine |
+| Inconnue | un service ou une application reliés à rien : on ne sait pas de quoi ils dépendent |
+
+La **cartographie** reprend l'architecture que le client voit dans « Mon environnement » (`leka.knowledge`, toutes les cartes). Elle ne montre que les relations que le modèle tient, donc étayées par les données collectées, entre deux éléments affichés. Chaque relation dit les sources qui l'affirment, sa règle, sa confiance et sa preuve (passée au détecteur de secrets). La **fraîcheur** est la date de la dernière construction du modèle et celle de la dernière lecture de chaque source ; la **provenance** est la source de chaque élément et de chaque relation.

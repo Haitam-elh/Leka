@@ -75,6 +75,10 @@ from leka.admin import (
     CreditReconciliation,
     CreditsBreakdown,
     CreditsOverview,
+    EnvironmentDetail,
+    EnvironmentMap,
+    EnvironmentRow,
+    EnvironmentsOverview,
     FinanceOverview,
     IdempotencyConflictError,
     InvoiceRow,
@@ -98,6 +102,7 @@ from leka.admin import (
     SubscriptionChangeRow,
     SubscriptionDetail,
     SubscriptionRow,
+    SyncRunRow,
     UserDetail,
     UserRow,
     UserStatus,
@@ -121,6 +126,11 @@ from leka.admin import (
     credits_breakdown,
     credits_of,
     credits_overview,
+    environment_detail,
+    environment_map,
+    environment_rows,
+    environments_overview,
+    environments_query,
     finance,
     forgot_password,
     history_query,
@@ -159,6 +169,8 @@ from leka.admin import (
     subscription_detail,
     subscription_rows,
     subscriptions_query,
+    sync_run_rows,
+    sync_runs_query,
     team,
     update_organisation,
     user_detail,
@@ -183,6 +195,7 @@ from leka.core.errors import ErrorCode
 from leka.db import DatabaseSession, SortableField
 from leka.governance import CreditTransaction
 from leka.identity import DeferredEmailSender, EmailSender, User, build_email_sender
+from leka.ingestion import SyncRun
 from leka.intentions import Intention
 from leka.monitoring import MonitoringAlert
 from leka.platform import Invitation, Workspace
@@ -440,6 +453,9 @@ PAYMENT_SORTS = _sorts(("at", BillingPayment.at, "ix_billing_payments_at"), defa
 REFUND_SORTS = _sorts(("at", BillingRefund.at, "ix_billing_refunds_at"), default="at")
 CHANGE_SORTS = _sorts(
     ("at", SubscriptionChange.at, "ix_billing_subscription_changes_at"), default="at"
+)
+SYNC_SORTS = _sorts(
+    ("started_at", SyncRun.started_at, "ix_sync_runs_source_started_at"), default="started_at"
 )
 SOURCE_SORTS = _sorts(
     ("created_at", Source.created_at, "a few per organisation"),
@@ -1430,6 +1446,137 @@ async def list_sources(
         id_column=Source.id,
     )
     return PageEnvelope(data=await source_rows(session, found.items), next_cursor=found.next_cursor)
+
+
+@router.get(
+    "/environments/overview",
+    response_model=EnvironmentsOverview,
+    summary="Every organisation's environment, together",
+)
+async def get_environments_overview(
+    session: SessionDep,
+    _: Annotated[AdminPrincipal, Depends(require_admin(P.ENVIRONMENTS_READ))],
+) -> EnvironmentsOverview:
+    """The sources across LEKA (connected, failing, degraded, not read for
+    three hours), the services they found, the reads of the last 24 hours,
+    and each connector LEKA CORE has with who uses it (LEKA-555).
+    Demonstration organisations left out."""
+    return await environments_overview(session, now=datetime.now(UTC))
+
+
+@router.get(
+    "/environments",
+    response_model=PageEnvelope[EnvironmentRow],
+    summary="Every organisation's environment",
+)
+async def list_environments(
+    session: SessionDep,
+    _: Annotated[AdminPrincipal, Depends(require_admin(P.ENVIRONMENTS_READ))],
+    page: PageParams,
+    q: Annotated[
+        str | None, Query(max_length=200, description="An organisation's name, slug or id.")
+    ] = None,
+    connected: Annotated[bool, Query(description="Only those with a source connected.")] = False,
+    in_error: Annotated[bool, Query(description="Only those with a source failing.")] = False,
+) -> PageEnvelope[EnvironmentRow]:
+    """One row per organisation (LEKA-555): its state, its sources and those
+    failing, its connectors, its last read, what was found, the reads that
+    failed in the last 7 days."""
+    found = await serve_page(
+        session,
+        environments_query(q=q, connected=connected, in_error=in_error),
+        request=page,
+        catalogue=ORGANISATION_SORTS,
+        id_column=Workspace.id,
+    )
+    return PageEnvelope(
+        data=await environment_rows(session, found.items, now=datetime.now(UTC)),
+        next_cursor=found.next_cursor,
+    )
+
+
+@router.get(
+    "/environments/{organisation_id}",
+    response_model=EnvironmentDetail,
+    summary="An organisation's environment",
+)
+async def get_environment(
+    organisation_id: uuid.UUID,
+    request: Request,
+    session: SessionDep,
+    principal: Annotated[AdminPrincipal, Depends(require_admin(P.ENVIRONMENTS_READ))],
+) -> EnvironmentDetail:
+    """Its sources and their diagnostics, its latest reads, what they found,
+    how sure LEKA is of what ties it together, the latest changes of that
+    (LEKA-555). Never a credential nor a source's settings. A reading kept
+    in the admin trail."""
+    found = await environment_detail(session, organisation_id, now=datetime.now(UTC))
+    if found is None:
+        raise _not_found("organisation")
+    _viewed(
+        session, request, principal, "environment", organisation_id, workspace_id=organisation_id
+    )
+    return found
+
+
+@router.get(
+    "/environments/{organisation_id}/map",
+    response_model=EnvironmentMap,
+    summary="An organisation's map",
+)
+async def get_environment_map(
+    organisation_id: uuid.UUID,
+    request: Request,
+    session: SessionDep,
+    principal: Annotated[AdminPrincipal, Depends(require_admin(P.ENVIRONMENTS_READ))],
+    environment: Annotated[
+        str | None, Query(max_length=100, description="Only what runs in it.")
+    ] = None,
+) -> EnvironmentMap:
+    """What it runs and only the relationships its collected data supports,
+    each confirmed (stated by a source, or accepted) or supposed (inferred),
+    with the sources that state it and what says it, scanned for secrets;
+    where it was read from, verified or not, and when (LEKA-555). A reading
+    kept in the admin trail."""
+    found = await environment_map(
+        session, organisation_id, now=datetime.now(UTC), environment=environment
+    )
+    if found is None:
+        raise _not_found("organisation")
+    _viewed(
+        session, request, principal, "environment", organisation_id, workspace_id=organisation_id
+    )
+    return found
+
+
+@router.get(
+    "/environments/{organisation_id}/syncs",
+    response_model=PageEnvelope[SyncRunRow],
+    summary="An organisation's reads of its sources",
+)
+async def list_environment_syncs(
+    organisation_id: uuid.UUID,
+    session: SessionDep,
+    _: Annotated[AdminPrincipal, Depends(require_admin(P.ENVIRONMENTS_READ))],
+    page: PageParams,
+    source_id: uuid.UUID | None = None,
+    sync_status: Annotated[
+        Literal["running", "succeeded", "failed", "abandoned"] | None,
+        Query(alias="status", description="failed: those that failed or were abandoned."),
+    ] = None,
+) -> PageEnvelope[SyncRunRow]:
+    """Each read of its sources, the latest first, with the diagnostic it
+    ended on, cleaned of secrets (LEKA-555)."""
+    found = await serve_page(
+        session,
+        sync_runs_query(organisation_id=organisation_id, source_id=source_id, status=sync_status),
+        request=page,
+        catalogue=SYNC_SORTS,
+        id_column=SyncRun.id,
+    )
+    return PageEnvelope(
+        data=await sync_run_rows(session, found.items), next_cursor=found.next_cursor
+    )
 
 
 @router.get(

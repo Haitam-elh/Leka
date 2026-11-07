@@ -467,11 +467,13 @@ async def test_credits_and_sources_in_error(client: AsyncClient, world: World) -
         headers=as_(world, AdminRole.OPERATIONS),
     )
     (row,) = sources.json()["data"]
-    assert (row["kind"], row["health"], row["last_error"]) == (
+    # Its diagnostic typed (LEKA-555): what was kept in words alone, its words.
+    assert (row["kind"], row["health"], row["last_error"]["message"]) == (
         "github",
         "unhealthy",
         "401 from GitHub",
     )
+    assert row["last_error"]["code"] == "UNKNOWN"
     assert "credential" not in sources.text
 
 

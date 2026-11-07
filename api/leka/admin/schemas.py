@@ -1003,6 +1003,19 @@ class StripeEventRow(BaseModel):
     detail: dict[str, object]
 
 
+class SourceDiagnostic(BaseModel):
+    """A source's or a read's last failure, as LEKA CORE kept it, already
+    cleaned of anything secret (leka.connectors.errors.Diagnostic) — and
+    scanned again before it is said (LEKA-555)."""
+
+    code: str = Field(description="AUTH_INVALID, AUTH_EXPIRED, PERMISSION_DENIED, TIMEOUT…")
+    message: str
+    remediation: str | None
+    retryable: bool | None
+    provider_status: int | None
+    detail: str | None
+
+
 class SourceRow(BaseModel):
     id: uuid.UUID
     organisation: OrganisationRef
@@ -1011,10 +1024,195 @@ class SourceRow(BaseModel):
     status: str
     health: str
     last_health_check_at: datetime | None
-    last_error: str | None
+    last_error: SourceDiagnostic | None
     sync_status: str
     last_synced_at: datetime | None
     created_at: datetime
+
+
+# ── Environments & integrations (LEKA-555) ───────────────────────────────────
+
+EnvironmentState = Literal["error", "degraded", "stale", "ok", "none"]
+
+
+class ConnectorUse(BaseModel):
+    """A connector LEKA CORE has, and who uses it."""
+
+    key: str
+    name: str
+    category: str = Field(description="code, project, docs, cloud, observability, data, chat…")
+    receives: bool = Field(description="The system sends to LEKA rather than being read.")
+    sources: int = Field(description="Connected with it, not disabled.")
+    organisations: int
+    in_error: int
+    last_synced_at: datetime | None
+
+
+class EnvironmentsOverview(BaseModel):
+    """Every organisation's environment, together (LEKA-555); demonstration
+    organisations left out."""
+
+    organisations: int = Field(description="With a source connected, not disabled.")
+    organisations_in_error: int
+    sources: int = Field(description="Not disabled.")
+    active: int
+    in_error: int
+    degraded: int
+    stale: int = Field(description="Active, not read for three hours or never read.")
+    disabled: int
+    services: int = Field(description="Services and applications detected, not removed.")
+    syncs: int = Field(description="Reads started in the last 24 hours.")
+    syncs_failed: int
+    last_synced_at: datetime | None
+    connectors: list[ConnectorUse]
+
+
+class EnvironmentRow(BaseModel):
+    organisation: OrganisationRef
+    state: EnvironmentState = Field(
+        description="error: a source fails; degraded: one is degraded; stale: one was not "
+        "read for three hours; ok; none: no source connected."
+    )
+    sources: int
+    in_error: int
+    kinds: list[str]
+    last_synced_at: datetime | None
+    services: int = Field(description="Services and applications detected, not removed.")
+    entities: int
+    relationships: int
+    failed_syncs: int = Field(description="Reads that failed in the last 7 days.")
+
+
+class SourceRef(BaseModel):
+    id: uuid.UUID
+    kind: str
+    name: str
+
+
+class SyncRunRow(BaseModel):
+    """One read of a source, from start to end."""
+
+    id: uuid.UUID
+    source: SourceRef
+    trigger: str
+    status: str = Field(description="running, succeeded, failed, abandoned.")
+    capability: str | None
+    started_at: datetime
+    finished_at: datetime | None
+    records: int
+    error: SourceDiagnostic | None
+
+
+class EnvironmentEntity(BaseModel):
+    """A thing its sources show: a service, an application, a database…"""
+
+    id: uuid.UUID
+    type: str
+    name: str
+    lifecycle: str
+    environment: str | None
+    confidence: float
+    last_seen_at: datetime | None
+    sources: list[SourceRef] = Field(description="The sources that show it.")
+
+
+class EnvironmentRelations(BaseModel):
+    """How sure LEKA is of what ties its things together."""
+
+    confirmed: int = Field(description="Stated by a source's records, or accepted by a person.")
+    supposed: int = Field(description="Inferred by a rule: never shown as certain.")
+    unknown: int = Field(
+        description="Services and applications tied to nothing: what they rely on is not known."
+    )
+    issues: int = Field(description="What the last build found wrong with a relationship.")
+
+
+class EnvironmentChange(BaseModel):
+    """A relationship that appeared, changed or went, at a build."""
+
+    from_name: str
+    to_name: str
+    type: str
+    change: str = Field(description="added, changed, removed.")
+    certainty: Literal["confirmed", "supposed"] | None = Field(
+        description="As it is after; none when it went."
+    )
+    recorded_at: datetime
+
+
+class EnvironmentDetail(BaseModel):
+    """An organisation's environment (LEKA-555): its sources, their reads and
+    errors, what they found, how sure LEKA is of what ties it together."""
+
+    organisation: OrganisationRef
+    state: EnvironmentState
+    built_at: datetime | None = Field(description="When its model was last built.")
+    sources: list[SourceRow]
+    syncs: list[SyncRunRow] = Field(description="The latest 20 reads.")
+    failed_syncs: int = Field(description="Reads that failed in the last 7 days.")
+    entities: dict[str, int] = Field(description="What was found, by type, not removed.")
+    services: list[EnvironmentEntity] = Field(
+        description="Its services, applications and databases: the 100 seen last."
+    )
+    relations: EnvironmentRelations
+    history: list[EnvironmentChange] = Field(description="The latest 20 changes.")
+
+
+class MapSource(BaseModel):
+    """Where the map was read from, and how fresh it is."""
+
+    id: uuid.UUID
+    kind: str
+    name: str
+    status: str
+    last_synced_at: datetime | None
+    entities: int
+    verified: bool = Field(description="Active, healthy and read at least once.")
+
+
+class MapNode(BaseModel):
+    id: str
+    column: str = Field(description="code, services, data, cloud or external.")
+    group: str
+    kind: str
+    type: str
+    name: str
+    status: str | None = Field(description="operational, attention, incident, unmonitored.")
+    deduced: bool = Field(description="Its state is deduced from what runs it, not measured.")
+    environment: str | None
+    sources: list[str]
+    linked: bool = Field(description="Tied to something: false, what it relies on is unknown.")
+
+
+class MapLink(BaseModel):
+    from_id: str
+    to_id: str
+    role: str
+    certainty: Literal["confirmed", "supposed"] = Field(
+        description="confirmed: stated by a source or accepted by a person; supposed: inferred."
+    )
+    origin: str = Field(description="stated, inferred or accepted.")
+    rule: str = Field(description="What inferred it, or `stated`.")
+    confidence: float
+    sources: list[str] = Field(description="The kinds of the sources whose records state it.")
+    evidence: str | None = Field(description="What says it, scanned for secrets.")
+
+
+class EnvironmentMap(BaseModel):
+    """An organisation's map (LEKA-555): what it runs, and only the
+    relationships its collected data supports, each as certain as it is."""
+
+    organisation: OrganisationRef
+    built_at: datetime | None
+    environment: str | None
+    environments: list[str]
+    nodes: list[MapNode]
+    links: list[MapLink]
+    confirmed: int
+    supposed: int
+    unknown: int = Field(description="Nodes tied to nothing.")
+    sources: list[MapSource]
+    unverified: int = Field(description="Sources not active, not healthy, or never read.")
 
 
 class AdminAuditRow(BaseModel):
