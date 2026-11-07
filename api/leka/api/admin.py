@@ -141,7 +141,7 @@ from leka.admin import (
     client_ip,
     count_of,
     credits_breakdown,
-    credits_of,
+    credits_of_many,
     credits_overview,
     csv_of,
     environment_detail,
@@ -1101,11 +1101,12 @@ async def list_credits(
         catalogue=ORGANISATION_SORTS,
         id_column=Workspace.id,
     )
+    # The page's credits read at once (LEKA-558), not organisation by organisation.
+    month = await credits_of_many(session, [w.id for w in found.items])
     return PageEnvelope(
         data=[
             OrganisationCredits(
-                organisation=OrganisationRef(id=w.id, name=w.name),
-                credits=await credits_of(session, w.id),
+                organisation=OrganisationRef(id=w.id, name=w.name), credits=month[w.id]
             )
             for w in found.items
         ],

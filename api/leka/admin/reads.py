@@ -70,7 +70,7 @@ from leka.db import workspace_scope
 from leka.governance import WorkspacePlan, plan_of, subject_of
 from leka.identity import User
 from leka.intentions import Intention, IntentionAnalysis
-from leka.metering import CreditsRead, UsageRecord, credits_now
+from leka.metering import CreditsRead, UsageRecord, credits_now, credits_now_many
 from leka.monitoring import MonitoringAlert
 from leka.platform import (
     Invitation,
@@ -377,6 +377,15 @@ async def credits_of(
         return _credits_state(
             await credits_now(session, workspace_id, now=now or datetime.now(UTC))
         )
+
+
+async def credits_of_many(
+    session: AsyncSession, workspace_ids: Sequence[uuid.UUID], now: datetime | None = None
+) -> dict[uuid.UUID, CreditsState]:
+    """credits_of() for a page of organisations (LEKA-558): read once for them
+    all, the same figures."""
+    read = await credits_now_many(session, workspace_ids, now=now or datetime.now(UTC))
+    return {w: _credits_state(state) for w, state in read.items()}
 
 
 async def organisation_detail(
@@ -1350,6 +1359,7 @@ __all__ = [
     "admin_emails",
     "credits_breakdown",
     "credits_of",
+    "credits_of_many",
     "intention_rows",
     "intentions_query",
     "organisation_detail",

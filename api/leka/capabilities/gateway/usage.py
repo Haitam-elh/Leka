@@ -44,6 +44,29 @@ async def model_calls(
     return (await session.scalars(query)).all()
 
 
+async def leka_costs(
+    session: AsyncSession, workspace_ids: Sequence[uuid.UUID], *, since: datetime
+) -> dict[uuid.UUID, float]:
+    """leka_cost() of many workspaces at once (LEKA-558), the same calls
+    counted; a workspace with none, 0."""
+    if not workspace_ids:
+        return {}
+    spent = (
+        await session.execute(
+            select(ModelCall.workspace_id, func.coalesce(func.sum(ModelCall.cost_usd), 0.0))
+            .where(
+                ModelCall.workspace_id.in_(workspace_ids),
+                ModelCall.at >= since,
+                ModelCall.owner == "leka",
+                ModelCall.status != "failed",
+            )
+            .group_by(ModelCall.workspace_id)
+        )
+    ).tuples()
+    found = {workspace: float(cost or 0.0) for workspace, cost in spent}
+    return {w: found.get(w, 0.0) for w in workspace_ids}
+
+
 async def leka_cost(session: AsyncSession, workspace_id: uuid.UUID, *, since: datetime) -> float:
     """What the workspace's work cost LEKA since then, at the rates in force
     (LEKA-430): the calls to LEKA's models that answered — a failed one is

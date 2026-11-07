@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import replace
 from datetime import UTC, datetime, time
 
@@ -24,10 +26,10 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from leka.capabilities import ModelCall, leka_cost
+from leka.capabilities import ModelCall, leka_cost, leka_costs
 from leka.core.config import settings
 from leka.db import session_factory, system_scope, workspace_scope
-from leka.governance import allowance, credits_of, next_month
+from leka.governance import Allowance, allowance, allowances, credits_of, month_of, next_month
 from leka.identity import EmailMessage, User, build_email_sender, email_language
 from leka.metering.models import CreditWarning
 from leka.metering.schemas import CreditsRead, CreditWarningRead
@@ -49,10 +51,7 @@ async def credits_now(
 ) -> CreditsRead:
     given = await allowance(session, workspace_id, now)
     start = _start(given.period)
-    used = round(credits_of(await leka_cost(session, workspace_id, since=start)), 2)
-    total = given.credits
-    percent = round(used / total * 100, 1) if total else (100.0 if used else 0.0)
-    thresholds = warnings_at()
+    cost = await leka_cost(session, workspace_id, since=start)
     warned = (
         await session.scalars(
             select(CreditWarning)
@@ -60,6 +59,37 @@ async def credits_now(
             .order_by(CreditWarning.threshold)
         )
     ).all()
+    return _read(given, cost, warned)
+
+
+async def credits_now_many(
+    session: AsyncSession, workspace_ids: Sequence[uuid.UUID], *, now: datetime
+) -> dict[uuid.UUID, CreditsRead]:
+    """credits_now() of a page of workspaces (LEKA-558): the same reads, made
+    once for them all rather than once each, and the same figures. Across
+    workspaces: LEKA ADMIN's."""
+    if not workspace_ids:
+        return {}
+    given = await allowances(session, workspace_ids, now)
+    period = month_of(now)
+    costs = await leka_costs(session, workspace_ids, since=_start(period))
+    warned: dict[uuid.UUID, list[CreditWarning]] = defaultdict(list)
+    for warning in await session.scalars(
+        select(CreditWarning)
+        .where(CreditWarning.workspace_id.in_(workspace_ids), CreditWarning.period == period)
+        .order_by(CreditWarning.threshold)
+    ):
+        warned[warning.workspace_id].append(warning)
+    return {w: _read(given[w], costs[w], warned[w]) for w in workspace_ids}
+
+
+def _read(given: Allowance, cost: float, warned: Sequence[CreditWarning]) -> CreditsRead:
+    """Its credits this month, from what it was given and what its work cost."""
+    start = _start(given.period)
+    used = round(credits_of(cost), 2)
+    total = given.credits
+    percent = round(used / total * 100, 1) if total else (100.0 if used else 0.0)
+    thresholds = warnings_at()
     state = (
         "exhausted"
         if used >= total

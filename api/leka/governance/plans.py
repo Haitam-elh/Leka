@@ -17,6 +17,7 @@ server command (leka/metering/cli.py) is the only way in, its operator named.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 
@@ -77,6 +78,13 @@ def plan_credits(name: str) -> int:
     return int(settings.plan_credits.get(name, 0))
 
 
+def _plan(row: WorkspacePlan | None) -> Plan:
+    if row is None:
+        return Plan(FREE, plan_credits(FREE), None)
+    monthly = row.monthly_credits if row.monthly_credits is not None else plan_credits(row.plan)
+    return Plan(row.plan, monthly, row.at)
+
+
 async def plan_of(session: AsyncSession, workspace_id: uuid.UUID) -> Plan:
     row = await session.scalar(
         select(WorkspacePlan)
@@ -84,10 +92,7 @@ async def plan_of(session: AsyncSession, workspace_id: uuid.UUID) -> Plan:
         .order_by(WorkspacePlan.at.desc(), WorkspacePlan.created_at.desc())
         .limit(1)
     )
-    if row is None:
-        return Plan(FREE, plan_credits(FREE), None)
-    monthly = row.monthly_credits if row.monthly_credits is not None else plan_credits(row.plan)
-    return Plan(row.plan, monthly, row.at)
+    return _plan(row)
 
 
 async def allowance(session: AsyncSession, workspace_id: uuid.UUID, at: datetime) -> Allowance:
@@ -107,6 +112,65 @@ async def allowance(session: AsyncSession, workspace_id: uuid.UUID, at: datetime
     return Allowance(
         await plan_of(session, workspace_id), period, int(packs or 0), round(float(adjusted or 0))
     )
+
+
+async def allowances(
+    session: AsyncSession, workspace_ids: Sequence[uuid.UUID], at: datetime
+) -> dict[uuid.UUID, Allowance]:
+    """allowance() of many workspaces at once (LEKA-558): three reads for a
+    page of them, not three for each. Read across workspaces: LEKA ADMIN's."""
+    if not workspace_ids:
+        return {}
+    period = month_of(at)
+    packs = dict(
+        (
+            await session.execute(
+                select(CreditPack.workspace_id, func.coalesce(func.sum(CreditPack.credits), 0))
+                .where(CreditPack.workspace_id.in_(workspace_ids), CreditPack.period == period)
+                .group_by(CreditPack.workspace_id)
+            )
+        )
+        .tuples()
+        .all()
+    )
+    adjusted = dict(
+        (
+            await session.execute(
+                select(
+                    CreditTransaction.workspace_id,
+                    func.coalesce(func.sum(CreditTransaction.credits), 0),
+                )
+                .where(
+                    CreditTransaction.workspace_id.in_(workspace_ids),
+                    CreditTransaction.period == period,
+                    CreditTransaction.kind.in_(MANUAL_KINDS),
+                )
+                .group_by(CreditTransaction.workspace_id)
+            )
+        )
+        .tuples()
+        .all()
+    )
+    latest = {
+        row.workspace_id: row
+        for row in await session.scalars(
+            select(WorkspacePlan)
+            .where(WorkspacePlan.workspace_id.in_(workspace_ids))
+            .distinct(WorkspacePlan.workspace_id)
+            .order_by(
+                WorkspacePlan.workspace_id, WorkspacePlan.at.desc(), WorkspacePlan.created_at.desc()
+            )
+        )
+    }
+    return {
+        w: Allowance(
+            _plan(latest.get(w)),
+            period,
+            int(packs.get(w, 0) or 0),
+            round(float(adjusted.get(w, 0) or 0)),
+        )
+        for w in workspace_ids
+    }
 
 
 async def plan_at(session: AsyncSession, workspace_id: uuid.UUID, at: datetime) -> Plan:
