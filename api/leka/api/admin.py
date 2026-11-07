@@ -46,6 +46,8 @@ from leka.admin import (
     AdminInvite,
     AdminMe,
     AdminNote,
+    AdminNotification,
+    AdminNotificationRow,
     AdminOverview,
     AdminPasswordChanged,
     AdminPermission,
@@ -81,9 +83,18 @@ from leka.admin import (
     EnvironmentsOverview,
     FinanceOverview,
     IdempotencyConflictError,
+    Incident,
+    IncidentAssignee,
+    IncidentChange,
+    IncidentError,
+    IncidentRecord,
+    IncidentRow,
+    IncidentSummary,
     InvoiceRow,
     NoteCreate,
     NoteRow,
+    NotificationsCount,
+    NotificationsRead,
     OrganisationAction,
     OrganisationCredits,
     OrganisationDetail,
@@ -119,6 +130,7 @@ from leka.admin import (
     alerts_query,
     audit_apart,
     audit_record,
+    change_incident,
     change_password,
     change_rows,
     changes_query,
@@ -135,6 +147,11 @@ from leka.admin import (
     forgot_password,
     history_query,
     history_rows,
+    incident_assignees,
+    incident_detail,
+    incident_rows,
+    incidents_query,
+    incidents_summary,
     intention_detail,
     intention_rows,
     intentions_query,
@@ -142,10 +159,13 @@ from leka.admin import (
     invitations_query,
     invoice_rows,
     invoices_query,
+    mark_read,
     movement_rows,
     movements_query,
     note_rows,
     notes_query,
+    notification_rows,
+    notifications_query,
     once,
     organisation_detail,
     organisation_members,
@@ -172,6 +192,7 @@ from leka.admin import (
     sync_run_rows,
     sync_runs_query,
     team,
+    unread_count,
     update_organisation,
     user_detail,
     user_rows,
@@ -454,6 +475,13 @@ REFUND_SORTS = _sorts(("at", BillingRefund.at, "ix_billing_refunds_at"), default
 CHANGE_SORTS = _sorts(
     ("at", SubscriptionChange.at, "ix_billing_subscription_changes_at"), default="at"
 )
+INCIDENT_SORTS = _sorts(
+    ("last_seen_at", Incident.last_seen_at, "ix_admin_incidents_status_seen"),
+    ("first_seen_at", Incident.first_seen_at, "a few hundred at most"),
+    ("number", Incident.number, "uq_admin_incidents_number"),
+    default="last_seen_at",
+)
+NOTIFICATION_SORTS = _sorts(("at", AdminNotification.at, "ix_admin_notifications_at"), default="at")
 SYNC_SORTS = _sorts(
     ("started_at", SyncRun.started_at, "ix_sync_runs_source_started_at"), default="started_at"
 )
@@ -1577,6 +1605,228 @@ async def list_environment_syncs(
     return PageEnvelope(
         data=await sync_run_rows(session, found.items), next_cursor=found.next_cursor
     )
+
+
+# ── Incidents & notifications (LEKA-556) ─────────────────────────────────────
+
+
+@router.get("/incidents/summary", response_model=IncidentSummary, summary="Open incidents, counted")
+async def get_incidents_summary(
+    session: SessionDep,
+    _: Annotated[AdminPrincipal, Depends(require_admin(P.INCIDENTS_READ))],
+) -> IncidentSummary:
+    """The incidents new or in progress, by status, severity and category;
+    those given to no one; those recurring."""
+    return await incidents_summary(session)
+
+
+@router.get(
+    "/incidents/assignees",
+    response_model=list[IncidentAssignee],
+    summary="Who an incident may be given to",
+)
+async def list_incident_assignees(
+    session: SessionDep,
+    _: Annotated[AdminPrincipal, Depends(require_admin(P.INCIDENTS_READ))],
+) -> list[IncidentAssignee]:
+    """LEKA's team, active: their name and address."""
+    return await incident_assignees(session)
+
+
+@router.get("/incidents", response_model=PageEnvelope[IncidentRow], summary="Every incident")
+async def list_incidents(
+    session: SessionDep,
+    principal: Annotated[AdminPrincipal, Depends(require_admin(P.INCIDENTS_READ))],
+    page: PageParams,
+    incident_status: Annotated[
+        list[Literal["new", "in_progress", "resolved", "closed"]] | None,
+        Query(alias="status", description="One or several; every one when none."),
+    ] = None,
+    severity: Literal["critical", "high", "medium", "low"] | None = None,
+    category: Literal[
+        "intention_failed",
+        "agent_failed",
+        "api_error",
+        "integration_disconnected",
+        "sync_failed",
+        "credits",
+        "payment_failed",
+        "platform",
+    ]
+    | None = None,
+    recurring: Annotated[bool | None, Query(description="Three times in a day.")] = None,
+    organisation_id: uuid.UUID | None = None,
+    organisation: Annotated[
+        str | None, Query(max_length=200, description="An organisation's name or slug.")
+    ] = None,
+    mine: Annotated[bool, Query(description="Given to me.")] = False,
+    unassigned: Annotated[bool, Query(description="Given to no one.")] = False,
+    since: datetime | None = None,
+    until: datetime | None = None,
+    number: Annotated[int | None, Query(ge=1, description="INC-<number>.")] = None,
+) -> PageEnvelope[IncidentRow]:
+    """Each incident (LEKA-556), the last seen first by default: its
+    organisation (none: the platform), category, severity, status,
+    occurrences, recurring or not, who it is given to."""
+    found = await serve_page(
+        session,
+        incidents_query(
+            status=incident_status or (),
+            severity=severity,
+            category=category,
+            recurring=recurring,
+            organisation_id=organisation_id,
+            organisation=organisation,
+            assignee_id=principal.admin_id if mine else None,
+            unassigned=unassigned,
+            since=since,
+            until=until,
+            number=number,
+        ),
+        request=page,
+        catalogue=INCIDENT_SORTS,
+        id_column=Incident.id,
+    )
+    return PageEnvelope(
+        data=await incident_rows(session, found.items), next_cursor=found.next_cursor
+    )
+
+
+@router.get("/incidents/{incident_id}", response_model=IncidentRecord, summary="One incident")
+async def get_incident(
+    incident_id: uuid.UUID,
+    session: SessionDep,
+    _: Annotated[AdminPrincipal, Depends(require_admin(P.INCIDENTS_READ))],
+) -> IncidentRecord:
+    """Its record and its history, the latest first: opened, each
+    occurrence, recurring, given to someone, its status, the notes, resolved
+    by LEKA when the problem went."""
+    found = await incident_detail(session, incident_id)
+    if found is None:
+        raise _not_found("incident")
+    return found
+
+
+@router.patch(
+    "/incidents/{incident_id}", response_model=IncidentRecord, summary="Deal with an incident"
+)
+async def update_incident(
+    incident_id: uuid.UUID,
+    payload: IncidentChange,
+    request: Request,
+    session: SessionDep,
+    principal: Annotated[AdminPrincipal, Depends(require_admin(P.INCIDENTS_WRITE))],
+) -> IncidentRecord:
+    """Taken up, resolved, closed (for good) or taken up again; given to an
+    active admin, or to no one (`assignee_id`: null); a note. Each kept in
+    its history and in the admin trail."""
+    try:
+        incident = await change_incident(
+            session,
+            incident_id,
+            payload,
+            by_id=principal.admin_id,
+            by_email=principal.email,
+            now=datetime.now(UTC),
+        )
+    except IncidentError as error:
+        if error.code == "not_found":
+            raise _not_found("incident") from error
+        raise ApiError(
+            status.HTTP_409_CONFLICT
+            if error.code == "reopened"
+            else status.HTTP_422_UNPROCESSABLE_ENTITY,
+            ErrorCode.CONFLICT if error.code == "reopened" else ErrorCode.VALIDATION_FAILED,
+            str(error),
+        ) from error
+    audit_record(
+        session,
+        "admin.incident_updated",
+        admin_id=principal.admin_id,
+        admin_email=principal.email,
+        target_type="incident",
+        target_id=incident.id,
+        workspace_id=incident.for_workspace_id,
+        route=route_of(request),
+        ip_prefix=principal.ip_prefix,
+        detail={
+            "number": incident.number,
+            **payload.model_dump(mode="json", exclude_unset=True, exclude={"note"}),
+            **({"note": True} if payload.note else {}),
+        },
+    )
+    found = await incident_detail(session, incident.id)
+    assert found is not None
+    return found
+
+
+@router.get(
+    "/notifications",
+    response_model=PageEnvelope[AdminNotificationRow],
+    summary="The team's notifications",
+)
+async def list_notifications(
+    session: SessionDep,
+    principal: Annotated[AdminPrincipal, Depends(require_admin(P.INCIDENTS_READ))],
+    page: PageParams,
+    unread: Annotated[bool, Query(description="Only those I have not read.")] = False,
+    kind: Literal[
+        "critical_incident",
+        "payment_failed",
+        "integration_disconnected",
+        "repeated_errors",
+        "capacity_near_limit",
+        "abnormal_consumption",
+    ]
+    | None = None,
+    organisation_id: uuid.UUID | None = None,
+) -> PageEnvelope[AdminNotificationRow]:
+    """What LEKA's team is told (LEKA-556), once each, the latest first,
+    each said read or not by me, with its incident when it has one."""
+    found = await serve_page(
+        session,
+        notifications_query(
+            admin_id=principal.admin_id, unread=unread, kind=kind, organisation_id=organisation_id
+        ),
+        request=page,
+        catalogue=NOTIFICATION_SORTS,
+        id_column=AdminNotification.id,
+    )
+    return PageEnvelope(
+        data=await notification_rows(session, found.items, admin_id=principal.admin_id),
+        next_cursor=found.next_cursor,
+    )
+
+
+@router.get(
+    "/notifications/unread", response_model=NotificationsCount, summary="My unread notifications"
+)
+async def count_unread_notifications(
+    session: SessionDep,
+    principal: Annotated[AdminPrincipal, Depends(require_admin(P.INCIDENTS_READ))],
+) -> NotificationsCount:
+    return NotificationsCount(unread=await unread_count(session, principal.admin_id))
+
+
+@router.post(
+    "/notifications/read", response_model=NotificationsCount, summary="Mark notifications read"
+)
+async def read_notifications(
+    payload: NotificationsRead,
+    session: SessionDep,
+    principal: Annotated[AdminPrincipal, Depends(require_admin(P.INCIDENTS_READ))],
+) -> NotificationsCount:
+    """Read by me: these, or every one not read yet. Each admin reads on
+    their own; the history stays."""
+    marked = await mark_read(
+        session,
+        principal.admin_id,
+        ids=payload.ids,
+        every=payload.every,
+        now=datetime.now(UTC),
+    )
+    await session.flush()
+    return NotificationsCount(unread=await unread_count(session, principal.admin_id), marked=marked)
 
 
 @router.get(

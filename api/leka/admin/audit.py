@@ -66,6 +66,10 @@ ACTIONS: dict[str, str] = {
         "credits given back or adjusted in an organisation's ledger, with the reason"
     ),
     "admin.organisation_updated": "an organisation's name, country or size changed (LEKA-549)",
+    "admin.incident_updated": (
+        "an incident taken up, resolved, closed or taken up again, given to someone, or a note "
+        "written (LEKA-556)"
+    ),
     "admin.note_added": "an internal note written about an organisation: never its words",
     # The team.
     "admin.account_created": "an admin account created from the server",

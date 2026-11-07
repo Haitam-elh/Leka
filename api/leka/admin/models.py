@@ -63,10 +63,12 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
+    Identity,
     Index,
     Integer,
     Numeric,
@@ -83,6 +85,38 @@ from leka.db import Base, TimestampMixin, UUIDPrimaryKeyMixin
 ROLES = tuple(role.value for role in AdminRole)
 ACCOUNT_STATUSES = ("invited", "active", "disabled")
 CODE_PURPOSES = ("invite", "reset")
+# Incidents and the admins' notifications (LEKA-556): leka/admin/incidents.py.
+INCIDENT_CATEGORIES = (
+    "intention_failed",
+    "agent_failed",
+    "api_error",
+    "integration_disconnected",
+    "sync_failed",
+    "credits",
+    "payment_failed",
+    "platform",
+)
+SEVERITIES = ("critical", "high", "medium", "low")
+INCIDENT_STATUSES = ("new", "in_progress", "resolved", "closed")
+# Being dealt with: what a same problem adds to, rather than opening another.
+OPEN_STATUSES = ("new", "in_progress")
+INCIDENT_EVENTS = (
+    "opened",
+    "occurred",
+    "recurring",
+    "assigned",
+    "status",
+    "note",
+    "auto_resolved",
+)
+NOTIFICATION_KINDS = (
+    "critical_incident",
+    "payment_failed",
+    "integration_disconnected",
+    "repeated_errors",
+    "capacity_near_limit",
+    "abnormal_consumption",
+)
 # Why a session ended (LEKA-546): signed out on it; renewed into the next of
 # its family; closed from another of the admin's devices; closed by a Super
 # Admin; the password chosen or changed; the account disabled; an ended token
@@ -297,3 +331,126 @@ class AdminRolePermission(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     permission: Mapped[str] = mapped_column(String(40), nullable=False)
     granted_by: Mapped[str] = mapped_column(String(320), nullable=False)
+
+
+class Incident(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """A problem LEKA's team must see (LEKA-556), opened by the incident watch
+    from what LEKA CORE already records, never twice for the same problem
+    while it is dealt with: `fingerprint` names it, unique among the open
+    ones; a same problem adds an occurrence to it."""
+
+    __tablename__ = "admin_incidents"
+    __table_args__ = (
+        CheckConstraint(_among("category", INCIDENT_CATEGORIES), name="category"),
+        CheckConstraint(_among("severity", SEVERITIES), name="severity"),
+        CheckConstraint(_among("status", INCIDENT_STATUSES), name="status"),
+        CheckConstraint("occurrences >= 1", name="occurrences"),
+        Index(
+            "uq_admin_incidents_open_fingerprint",
+            "fingerprint",
+            unique=True,
+            postgresql_where=f"status IN {OPEN_STATUSES}",
+        ),
+        Index("ix_admin_incidents_status_seen", "status", "last_seen_at"),
+        Index("ix_admin_incidents_workspace_seen", "for_workspace_id", "last_seen_at"),
+    )
+
+    # Said as INC-<number>.
+    number: Mapped[int] = mapped_column(Integer, Identity(), nullable=False, unique=True)
+    for_workspace_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True
+    )
+    category: Mapped[str] = mapped_column(String(30), nullable=False)
+    severity: Mapped[str] = mapped_column(String(10), nullable=False)
+    status: Mapped[str] = mapped_column(String(15), nullable=False, default="new")
+    fingerprint: Mapped[str] = mapped_column(String(300), nullable=False)
+    # What it is about, in LEKA CORE's own ids: an intention, an agent run, a
+    # source, an invoice, a request, a rule.
+    technical_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # What is said of it: names and codes, never a secret (scanned).
+    detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default=dict)
+    occurrences: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Three times in a day: said, and its severity raised once.
+    recurring: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    assignee_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("admin_accounts.id", ondelete="SET NULL"), nullable=True
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The same problem's incident before this one, resolved or closed.
+    previous_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("admin_incidents.id", ondelete="SET NULL"), nullable=True
+    )
+
+
+class IncidentEvent(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """An incident's history (LEKA-556), append-only: opened, each occurrence,
+    recurring, assigned, its status changed, a note, resolved by LEKA when
+    the problem went. `dedupe_key`: a same fact read twice is one event."""
+
+    __tablename__ = "admin_incident_events"
+    __table_args__ = (
+        CheckConstraint(_among("kind", INCIDENT_EVENTS), name="kind"),
+        UniqueConstraint("dedupe_key", name="uq_admin_incident_events_dedupe"),
+        Index("ix_admin_incident_events_incident_at", "incident_id", "at"),
+    )
+
+    incident_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("admin_incidents.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Who at LEKA; none: LEKA itself, the incident watch.
+    admin_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("admin_accounts.id", ondelete="SET NULL"), nullable=True
+    )
+    admin_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    dedupe_key: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default=dict)
+
+
+class AdminNotification(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """What LEKA's team is told (LEKA-556): once each, its `dedupe_key`
+    unique; read by each admin on their own."""
+
+    __tablename__ = "admin_notifications"
+    __table_args__ = (
+        CheckConstraint(_among("kind", NOTIFICATION_KINDS), name="kind"),
+        CheckConstraint(_among("severity", SEVERITIES), name="severity"),
+        UniqueConstraint("dedupe_key", name="uq_admin_notifications_dedupe"),
+        Index("ix_admin_notifications_at", "at"),
+    )
+
+    kind: Mapped[str] = mapped_column(String(30), nullable=False)
+    severity: Mapped[str] = mapped_column(String(10), nullable=False)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    for_workspace_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True
+    )
+    incident_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("admin_incidents.id", ondelete="SET NULL"), nullable=True
+    )
+    dedupe_key: Mapped[str] = mapped_column(String(300), nullable=False)
+    detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default=dict)
+
+
+class AdminNotificationRead(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    __tablename__ = "admin_notification_reads"
+    __table_args__ = (
+        UniqueConstraint("notification_id", "admin_id", name="uq_admin_notification_reads"),
+    )
+
+    notification_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("admin_notifications.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    admin_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("admin_accounts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    read_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

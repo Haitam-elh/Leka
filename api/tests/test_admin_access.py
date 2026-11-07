@@ -256,6 +256,7 @@ async def test_every_admin_route_but_the_public_three_wants_an_admin_token(
             .replace("{session_id}", str(uuid.uuid4()))
             .replace("{role}", "support")
             .replace("{key}", "code-review")
+            .replace("{incident_id}", str(uuid.uuid4()))
         )
         assert "{" not in concrete, f"a path parameter this test does not fill: {path}"
         for headers in ({}, bearer("not-a-token"), {"Authorization": "Basic YWRtaW46YWRtaW4="}):

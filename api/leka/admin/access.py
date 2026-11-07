@@ -60,6 +60,10 @@ class AdminPermission(enum.StrEnum):
     BILLING_READ = "billing:read"
     ENVIRONMENTS_READ = "environments:read"
     ACTIVITY_READ = "activity:read"
+    # Incidents and the team's notifications (LEKA-556); dealing with one:
+    # taking it, resolving or closing it, assigning it, a note.
+    INCIDENTS_READ = "incidents:read"
+    INCIDENTS_WRITE = "incidents:write"
     AUDIT_READ = "audit:read"
     # The admins, their roles (LEKA-545).
     ADMINS_MANAGE = "admins:manage"
@@ -87,6 +91,8 @@ PERMISSION_INFO: dict[AdminPermission, tuple[str, Level]] = {
     P.BILLING_READ: ("billing", "read"),
     P.ENVIRONMENTS_READ: ("environments", "read"),
     P.ACTIVITY_READ: ("activity", "read"),
+    P.INCIDENTS_READ: ("incidents", "read"),
+    P.INCIDENTS_WRITE: ("incidents", "write"),
     P.AUDIT_READ: ("audit", "sensitive"),
     P.ADMINS_MANAGE: ("admins", "sensitive"),
 }
@@ -103,6 +109,7 @@ _COMMON = frozenset(
         P.USERS_READ,
         P.USERS_NOTES,
         P.ACTIVITY_READ,
+        P.INCIDENTS_READ,
     }
 )
 
@@ -115,6 +122,7 @@ ROLE_PERMISSIONS: dict[AdminRole, frozenset[AdminPermission]] = {
         P.AGENTS_READ,
         P.CREDITS_READ,
         P.ENVIRONMENTS_READ,
+        P.INCIDENTS_WRITE,
     },
     AdminRole.SUPPORT: _COMMON
     | {
@@ -123,6 +131,7 @@ ROLE_PERMISSIONS: dict[AdminRole, frozenset[AdminPermission]] = {
         P.AGENTS_READ,
         P.CREDITS_READ,
         P.ENVIRONMENTS_READ,
+        P.INCIDENTS_WRITE,
     },
     AdminRole.FINANCE: _COMMON | {P.AGENTS_READ, P.CREDITS_READ, P.CREDITS_WRITE, P.BILLING_READ},
 }

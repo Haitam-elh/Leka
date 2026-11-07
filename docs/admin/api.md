@@ -1,4 +1,4 @@
-# L'Admin API de LEKA ADMIN (LEKA-544, LEKA-545, LEKA-546, LEKA-551, LEKA-552, LEKA-553, LEKA-554, LEKA-555)
+# L'Admin API de LEKA ADMIN (LEKA-544, LEKA-545, LEKA-546, LEKA-551, LEKA-552, LEKA-553, LEKA-554, LEKA-555, LEKA-556)
 
 Le contrat entre LEKA CORE et LEKA ADMIN : ce que l'application Android envoie et reçoit aujourd'hui, et ce que la version web recevra demain, à l'identique. Les routes sont sous `/api/v1/admin`. Le schéma OpenAPI de LEKA CORE (`/api/v1/openapi.json`, étiquette `admin`) en est la source exacte ; ce document dit le sens.
 
@@ -66,6 +66,8 @@ Une route demande une **permission**, jamais un rôle. Ce que le rôle n'accorde
 | `billing:read` abonnements, événements Stripe | ✓ | | | ✓ |
 | `environments:read` intégrations | ✓ | ✓ | ✓ | |
 | `activity:read` journal d'activité | ✓ | ✓ | ✓ | ✓ |
+| `incidents:read` incidents et notifications de l'équipe (LEKA-556) | ✓ | ✓ | ✓ | ✓ |
+| `incidents:write` prendre en charge, résoudre, fermer, attribuer un incident, y noter (LEKA-556) | ✓ | ✓ | ✓ | |
 | `audit:read` journal admin | ✓ | | | |
 | `admins:manage` les admins (LEKA-545) | ✓ | | | |
 
@@ -135,6 +137,14 @@ Chaque permission a un **module** et un **niveau d'action** (`GET /admin/roles`)
 | `GET /admin/environments/{organisation_id}/map` | `environments:read` | `environment` (seulement ce qui y tourne) | LEKA-555 : la cartographie : ce qu'il fait tourner, et seulement les relations que ses données collectées étayent, chacune `confirmed` (affirmée par une source, ou validée) ou `supposed` (déduite par une règle), avec les sources qui l'affirment, la règle, la confiance et sa preuve passée au détecteur de secrets ; ce qui n'est relié à rien ; les sources lues, vérifiées ou non, et leur fraîcheur. **Lecture journalisée** (`admin.viewed`, cible `environment`) |
 | `GET /admin/environments/{organisation_id}/syncs` | `environments:read` | `source_id`, `status` (`running`, `succeeded`, `failed` : échouées ou abandonnées, `abandoned`) ; tri `started_at` | LEKA-555 : chaque lecture de ses sources, la plus récente d'abord, avec le diagnostic sur lequel elle s'est arrêtée |
 | `GET /admin/activity` | `activity:read` | `kind` (`*` joker), `organisation_id`, `user_id`, `from`, `to` ; tri `at` | le journal d'activité (§ 7) |
+| `GET /admin/incidents` | `incidents:read` | `status` (un ou plusieurs : `new`, `in_progress`, `resolved`, `closed`), `severity` (`critical`, `high`, `medium`, `low`), `category` (indicateurs § 13), `recurring`, `organisation_id` ou `organisation`, `mine`, `unassigned`, `since`, `until` (sur la dernière occurrence), `number` ; tri `last_seen_at`, `first_seen_at`, `number` | LEKA-556 : chaque incident : son numéro (INC-…), son organisation (aucune : la plateforme), sa catégorie, sa gravité, son statut, son identifiant technique, ses occurrences, s'il est récurrent, à qui il est attribué |
+| `GET /admin/incidents/summary` | `incidents:read` | | LEKA-556 : les incidents ouverts (nouveaux, en cours) par statut, gravité et catégorie ; ceux attribués à personne ; les récurrents |
+| `GET /admin/incidents/assignees` | `incidents:read` | | LEKA-556 : à qui un incident peut être attribué : l'équipe, active |
+| `GET /admin/incidents/{id}` | `incidents:read` | | LEKA-556 : la fiche d'un incident et son historique, le plus récent d'abord : ouvert, chaque occurrence, récurrent, attribué, son statut, les notes, résolu par LEKA quand le problème a disparu ; l'incident d'avant pour le même problème |
+| `PATCH /admin/incidents/{id}` | `incidents:write` | corps `{status?, assignee_id?, note?}` : `in_progress`, `resolved`, `closed` ; `assignee_id` à `null` pour n'attribuer à personne | LEKA-556 : un incident pris en charge, résolu, fermé (définitivement) ou repris ; un statut que l'incident ne peut pas prendre est refusé (`422`), une reprise quand un incident plus récent est ouvert pour le même problème aussi (`409`). Inscrit à son historique et au journal admin (`admin.incident_updated`) |
+| `GET /admin/notifications` | `incidents:read` | `unread`, `kind`, `organisation_id` ; tri `at` | LEKA-556 : les notifications de l'équipe, une fois chacune, chacune dite lue ou non par l'admin qui appelle, avec son incident quand elle en a un |
+| `GET /admin/notifications/unread` | `incidents:read` | | LEKA-556 : combien l'admin n'en a pas lu |
+| `POST /admin/notifications/read` | `incidents:read` | corps `{ids}` ou `{every: true}` | LEKA-556 : lues par l'admin qui appelle, chacun pour soi ; l'historique reste |
 | `GET /admin/admins` | `admins:manage` | | l'équipe : invités, actifs, désactivés, leurs sessions ouvertes |
 | `POST /admin/admins` | `admins:manage` | corps `{email, name, role}` | l'admin invité (201) ; un e-mail lui porte son code |
 | `PATCH /admin/admins/{id}` | `admins:manage` | corps `{name?, role?, status?}` (`active`, `disabled`) | l'admin changé. Le désactiver ferme ses sessions. Jamais son propre rôle ou accès, jamais le dernier Super Admin actif |
@@ -313,6 +323,7 @@ Suspendre, réactiver, ajouter des crédits : chacune appelle la règle du modul
 | Mots de passe et codes | `admin.password_reset_asked`, `admin.code_refused`, `admin.password_set`, `admin.password_changed`, `admin.password_change_refused` |
 | Lectures | `admin.refused` (un rôle qui n'accorde pas), `admin.viewed` (une organisation, une personne, une intention, un environnement et sa cartographie), `admin.viewed_content` (ce que le client a écrit, les livrables ; pour une page d'intentions avec leur description, les intentions lues), `admin.viewed_trail` (ce journal) |
 | Clients, crédits | `admin.organisation_suspended`, `admin.organisation_reactivated`, `admin.credits_added`, `admin.credits_adjusted` (LEKA-553 : un remboursement ou un ajustement du registre, avec son motif), `admin.organisation_updated` (LEKA-549 : avec ce qui a changé, avant et après), chacune avec son motif ; `admin.note_added` (une note interne : sa longueur, jamais son texte) |
+| Incidents | `admin.incident_updated` (LEKA-556 : un incident pris en charge, résolu, fermé ou repris, attribué, ou une note écrite : ce qui a changé, jamais le texte de la note) |
 | L'équipe, les rôles, les permissions | `admin.account_created`, `admin.invited`, `admin.invitation_sent`, `admin.account_changed` (nom, rôle, accès : avant et après), `admin.role_changed` (les permissions d'un rôle : avant et après) |
 | Le journal lui-même | `admin.trail_expired` (ce que la tâche de nuit a supprimé), `admin.trail_unprotected` (sa protection trouvée absente) |
 
