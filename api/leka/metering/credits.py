@@ -72,6 +72,7 @@ async def credits_now(
         plan_since=given.plan.since,
         monthly=given.plan.monthly_credits,
         packs=given.packs,
+        adjustments=given.adjustments,
         allowance=total,
         used=used,
         remaining=round(max(total - used, 0.0), 2),

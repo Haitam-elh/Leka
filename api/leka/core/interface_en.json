@@ -1194,6 +1194,7 @@
  "governance.audit.actions.audit.retention_changed": "Audit retention changed",
  "governance.audit.actions.workspace.plan_changed": "Plan changed",
  "governance.audit.actions.workspace.credits_added": "AI credits added",
+ "governance.audit.actions.workspace.credits_adjusted": "AI credits adjusted by LEKA",
  "governance.audit.actions.monitoring.night_review_enabled": "Night review turned on",
  "governance.audit.actions.monitoring.night_review_disabled": "Night review turned off",
  "governance.audit.actions.audit.expired": "Expired events deleted",

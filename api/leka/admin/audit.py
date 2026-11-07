@@ -62,6 +62,9 @@ ACTIONS: dict[str, str] = {
     "admin.organisation_suspended": "an organisation suspended, with the reason",
     "admin.organisation_reactivated": "an organisation reactivated, with the reason",
     "admin.credits_added": "credits added to an organisation's month, with the reason",
+    "admin.credits_adjusted": (
+        "credits given back or adjusted in an organisation's ledger, with the reason"
+    ),
     "admin.organisation_updated": "an organisation's name, country or size changed (LEKA-549)",
     "admin.note_added": "an internal note written about an organisation: never its words",
     # The team.

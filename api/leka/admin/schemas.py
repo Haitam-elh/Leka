@@ -150,6 +150,9 @@ class CreditsState(BaseModel):
     plan: str
     monthly: int = Field(description="The plan's credits for the month (a contract's, Enterprise).")
     packs: int = Field(description="Credits added to the month.")
+    adjustments: int = Field(
+        default=0, description="Given back or adjusted by LEKA's team this month (LEKA-553)."
+    )
     allowance: int
     used: float
     remaining: float
@@ -687,6 +690,121 @@ class CreditsBreakdown(BaseModel):
     by_model: list[ModelCost]
 
 
+CreditKind = Literal["grant", "consumption", "refund", "adjustment", "expiration"]
+
+
+class CreditMovement(BaseModel):
+    """One line of an organisation's credits ledger (LEKA-553)."""
+
+    id: uuid.UUID
+    organisation: OrganisationRef
+    kind: CreditKind
+    credits: float = Field(description="Added (more than 0) or taken (less than 0).")
+    period: str = Field(description="The month it counts in, YYYY-MM.")
+    at: datetime
+    origin: str = Field(description="plan, pack, metering, admin, close.")
+    reference: str = Field(description="The operation it records, unique in the organisation.")
+    execution: str | None = Field(description="A consumption's: what was metered.")
+    subject: str | None = Field(description="A consumption's: the agent, or LEKA's call.")
+    by: str | None = Field(description="A manual movement's author.")
+    reason: str | None
+    cost_usd: float | None = Field(
+        description="A consumption's cost at the providers' rates, as metered."
+    )
+    cost_status: str | None = Field(description="estimated, partial: as the metering said it.")
+
+
+class CreditSubject(BaseModel):
+    subject: str
+    credits: float
+
+
+class CreditMonth(BaseModel):
+    """One month of an organisation's credits, read from its ledger, beside
+    the source: what LEKA's models cost it, as the gateway counts it."""
+
+    period: str
+    granted: float = Field(description="By the plan.")
+    packs: float
+    refunds: float
+    adjustments: float
+    consumed: float
+    expired: float
+    balance: float = Field(description="The sum of the month's lines.")
+    source: float = Field(description="Consumed at the gateway: LEKA's models, in credits.")
+    pending: float = Field(description="Consumed at the gateway, not yet in the ledger.")
+    unpriced: int = Field(description="Executions LEKA could not price: no line, no guess.")
+    allowance_now: int | None = Field(description="This month's allowance at the gateway.")
+    allowance_gap: float | None = Field(
+        description="The gateway's allowance, less the ledger's; null: a month past."
+    )
+    closed: bool
+    reconciled: bool = Field(
+        description="Nothing pending, and this month's allowance the same in both."
+    )
+    lines: int
+    by_subject: list[CreditSubject]
+
+
+class CreditReconciliation(BaseModel):
+    organisation: OrganisationRef
+    credits: CreditsState
+    months: list[CreditMonth] = Field(description="The latest first.")
+
+
+class CreditCapacity(BaseModel):
+    """This month, across every organisation."""
+
+    period: str
+    organisations: int
+    capacity: int = Field(description="Credits given: plans, packs, adjustments.")
+    plans: int
+    packs: int
+    adjustments: int
+    used: float
+    remaining: float
+    utilisation: float | None
+    exhausted: int = Field(description="Organisations with nothing left.")
+
+
+class CreditUse(BaseModel):
+    key: str
+    label: str | None
+    credits: float
+    cost_usd: float | None
+
+
+class CreditDay(BaseModel):
+    at: datetime
+    credits: float
+
+
+class ProviderCost(BaseModel):
+    """What the models cost at the providers' rates (`model_rates`): an
+    estimate from the tokens each call used, never an invoice."""
+
+    leka_usd: float = Field(description="LEKA's models: what the credits stand for.")
+    workspace_usd: float = Field(description="An organisation's own models: its own account.")
+    unpriced_calls: int = Field(description="Calls with no rate known: left out, never guessed.")
+    basis: Literal["rates"] = "rates"
+
+
+class CreditsOverview(BaseModel):
+    """AI credits across LEKA (LEKA-553): this month's capacity and balance;
+    over the period, what was consumed by organisation, agent and model, day
+    by day, and what it cost at the providers' rates."""
+
+    month: CreditCapacity
+    since: datetime
+    until: datetime
+    consumed: float
+    by_organisation: list[CreditUse] = Field(description="The 20 that consumed most.")
+    by_agent: list[CreditUse]
+    by_model: list[CreditUse]
+    series: list[CreditDay]
+    provider_cost: ProviderCost
+
+
 class SubscriptionRow(BaseModel):
     organisation: OrganisationRef
     plan: str
@@ -747,6 +865,31 @@ class ActionReason(BaseModel):
 
 class CreditGrant(ActionReason):
     credits: int = Field(gt=0, le=1_000_000, description="Credits added to this month.")
+
+
+class CreditAdjustment(ActionReason):
+    """Credits given back or adjusted by LEKA's team in this month (LEKA-553):
+    a line of the organisation's ledger, counted in its allowance at once."""
+
+    kind: Literal["adjustment", "refund"]
+    credits: int = Field(
+        ge=-1_000_000,
+        le=1_000_000,
+        description="Added (more than 0) or taken (less than 0); a refund gives back.",
+    )
+    refund_of: uuid.UUID | None = Field(
+        default=None, description="A refund's: the consumption it gives back, in this ledger."
+    )
+
+    @model_validator(mode="after")
+    def _moves(self) -> CreditAdjustment:
+        if self.credits == 0:
+            raise ValueError("an adjustment moves credits")
+        if self.kind == "refund" and self.credits < 0:
+            raise ValueError("a refund gives credits back")
+        if self.kind == "adjustment" and self.refund_of is not None:
+            raise ValueError("only a refund gives a consumption back")
+        return self
 
 
 class OrganisationUpdate(ActionReason):

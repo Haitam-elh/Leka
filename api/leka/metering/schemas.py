@@ -87,6 +87,10 @@ class CreditsRead(BaseModel):
     plan_since: datetime | None = Field(description="None: Free from the start.")
     monthly: int = Field(description="The plan's credits a month.")
     packs: int = Field(description="Credits added to this month.")
+    adjustments: int = Field(
+        default=0,
+        description="Given back or adjusted by LEKA this month (LEKA-553): in the allowance.",
+    )
     allowance: int
     used: float
     remaining: float

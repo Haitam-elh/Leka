@@ -23,6 +23,7 @@ from leka.admin.actions import (
     ActionError,
     add_credits,
     add_note,
+    adjust_credits,
     set_suspended,
     update_organisation,
 )
@@ -31,6 +32,7 @@ from leka.admin.activity import sweep as sweep_activity
 from leka.admin.agents import AgentFilters, AgentSort, agent_record, agent_stats
 from leka.admin.audit import apart as audit_apart
 from leka.admin.audit import record as audit_record
+from leka.admin.credits import credits_overview, movement_rows, movements_query, reconciliation
 from leka.admin.dependencies import AdminPrincipalDep, client_ip, get_admin, require_admin, route_of
 from leka.admin.intentions import intention_detail
 from leka.admin.models import (
@@ -104,8 +106,12 @@ from leka.admin.schemas import (
     AgentRecord,
     AgentStat,
     AlertRow,
+    CreditAdjustment,
     CreditGrant,
+    CreditMovement,
+    CreditReconciliation,
     CreditsBreakdown,
+    CreditsOverview,
     NoteCreate,
     NoteRow,
     OrganisationAction,
@@ -188,8 +194,12 @@ __all__ = [
     "AgentStat",
     "AlertRow",
     "CodeError",
+    "CreditAdjustment",
     "CreditGrant",
+    "CreditMovement",
+    "CreditReconciliation",
     "CreditsBreakdown",
+    "CreditsOverview",
     "IdempotencyConflictError",
     "NoteCreate",
     "NoteRow",
@@ -215,6 +225,7 @@ __all__ = [
     "activity_row",
     "add_credits",
     "add_note",
+    "adjust_credits",
     "admin_audit_query",
     "admin_emails",
     "agent_record",
@@ -229,6 +240,7 @@ __all__ = [
     "create_account",
     "credits_breakdown",
     "credits_of",
+    "credits_overview",
     "forgot_password",
     "get_admin",
     "history_query",
@@ -238,6 +250,8 @@ __all__ = [
     "intentions_query",
     "invitation_rows",
     "invitations_query",
+    "movement_rows",
+    "movements_query",
     "note_rows",
     "notes_query",
     "once",
@@ -248,6 +262,7 @@ __all__ = [
     "overview",
     "permissions_now",
     "permissions_of",
+    "reconciliation",
     "redeem_code",
     "require_admin",
     "route_of",

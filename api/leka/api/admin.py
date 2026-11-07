@@ -69,8 +69,12 @@ from leka.admin import (
     AgentStat,
     AlertRow,
     CodeError,
+    CreditAdjustment,
     CreditGrant,
+    CreditMovement,
+    CreditReconciliation,
     CreditsBreakdown,
+    CreditsOverview,
     IdempotencyConflictError,
     NoteCreate,
     NoteRow,
@@ -95,6 +99,7 @@ from leka.admin import (
     activity_row,
     add_credits,
     add_note,
+    adjust_credits,
     admin_audit_query,
     admin_emails,
     agent_record,
@@ -107,6 +112,7 @@ from leka.admin import (
     client_ip,
     credits_breakdown,
     credits_of,
+    credits_overview,
     forgot_password,
     history_query,
     history_rows,
@@ -115,6 +121,8 @@ from leka.admin import (
     intentions_query,
     invitation_rows,
     invitations_query,
+    movement_rows,
+    movements_query,
     note_rows,
     notes_query,
     once,
@@ -124,6 +132,7 @@ from leka.admin import (
     organisations_query,
     overview,
     permissions_now,
+    reconciliation,
     redeem_code,
     require_admin,
     route_of,
@@ -149,6 +158,7 @@ from leka.core import ratelimit
 from leka.core.config import settings
 from leka.core.errors import ErrorCode
 from leka.db import DatabaseSession, SortableField
+from leka.governance import CreditTransaction
 from leka.identity import DeferredEmailSender, EmailSender, User, build_email_sender
 from leka.intentions import Intention
 from leka.monitoring import MonitoringAlert
@@ -386,6 +396,9 @@ USER_SORTS = _sorts(
 )
 INTENTION_SORTS = _sorts(
     ("created_at", Intention.created_at, "ix_intentions_workspace_created"), default="created_at"
+)
+MOVEMENT_SORTS = _sorts(
+    ("at", CreditTransaction.at, "ix_credit_transactions_workspace_at"), default="at"
 )
 SUBSCRIPTION_SORTS = _sorts(
     ("updated_at", BillingAccount.updated_at, "one row per organisation"),
@@ -1003,6 +1016,88 @@ async def get_agent(
     return found
 
 
+@router.get("/credits/overview", response_model=CreditsOverview, summary="AI credits across LEKA")
+async def get_credits_overview(
+    session: SessionDep,
+    _: Annotated[AdminPrincipal, Depends(require_admin(P.CREDITS_READ))],
+    period: Period = "30d",
+    start: Annotated[datetime | None, Query(alias="from")] = None,
+    end: Annotated[datetime | None, Query(alias="to")] = None,
+) -> CreditsOverview:
+    """This month's capacity and balance across organisations; over the
+    period, what was consumed by organisation, agent and model, day by day,
+    and what it cost at the providers' rates (LEKA-553). Capacity, credits
+    and the providers' cost are said apart."""
+    return await credits_overview(session, _window(period, start, end), now=datetime.now(UTC))
+
+
+@router.get(
+    "/credits/movements",
+    response_model=PageEnvelope[CreditMovement],
+    summary="Every line of every credits ledger",
+)
+async def list_credit_movements(
+    session: SessionDep,
+    _: Annotated[AdminPrincipal, Depends(require_admin(P.CREDITS_READ))],
+    page: PageParams,
+    organisation_id: uuid.UUID | None = None,
+    organisation: Annotated[
+        str | None, Query(max_length=200, description="An organisation's name or slug.")
+    ] = None,
+    kind: Literal["grant", "consumption", "refund", "adjustment", "expiration"] | None = None,
+    origin: Literal["plan", "pack", "metering", "admin", "close"] | None = None,
+    period: Annotated[
+        str | None, Query(pattern=r"^\d{4}-\d{2}$", description="A month, YYYY-MM.")
+    ] = None,
+    execution: Annotated[str | None, Query(max_length=160)] = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
+) -> PageEnvelope[CreditMovement]:
+    """The ledger (LEKA-553): each movement with its organisation, kind,
+    credits, month, date, origin, operation reference and, written by
+    LEKA's team, its author and reason. The latest first by default."""
+    found = await serve_page(
+        session,
+        movements_query(
+            organisation_id=organisation_id,
+            organisation=organisation,
+            kind=kind,
+            origin=origin,
+            period=period,
+            execution=execution,
+            since=since,
+            until=until,
+        ),
+        request=page,
+        catalogue=MOVEMENT_SORTS,
+        id_column=CreditTransaction.id,
+    )
+    return PageEnvelope(
+        data=await movement_rows(session, found.items), next_cursor=found.next_cursor
+    )
+
+
+@router.get(
+    "/organisations/{organisation_id}/credits/reconciliation",
+    response_model=CreditReconciliation,
+    summary="An organisation's credits, month by month, reconciled",
+)
+async def get_credit_reconciliation(
+    organisation_id: uuid.UUID,
+    session: SessionDep,
+    _: Annotated[AdminPrincipal, Depends(require_admin(P.CREDITS_READ))],
+    months: Annotated[int, Query(ge=1, le=24)] = 6,
+) -> CreditReconciliation:
+    """Each month of its ledger (LEKA-553): given by the plan and the packs,
+    given back and adjusted, consumed, expired, its balance — beside what
+    LEKA's models cost it at the gateway: what is pending, what differs,
+    what could not be priced."""
+    found = await reconciliation(session, organisation_id, months=months, now=datetime.now(UTC))
+    if found is None:
+        raise _not_found("organisation")
+    return found
+
+
 @router.get(
     "/credits",
     response_model=PageEnvelope[OrganisationCredits],
@@ -1260,7 +1355,9 @@ async def _once(
         try:
             result = await run()
         except ActionError as error:
-            code = ErrorCode.NOT_FOUND if error.status_code == 404 else ErrorCode.CONFLICT
+            code = {404: ErrorCode.NOT_FOUND, 422: ErrorCode.VALIDATION_FAILED}.get(
+                error.status_code, ErrorCode.CONFLICT
+            )
             raise ApiError(error.status_code, code, error.message) from error
         return 200, result.model_dump(mode="json")
 
@@ -1363,6 +1460,41 @@ async def add_organisation_credits(
             organisation_id,
             amount=payload.credits,
             reason=payload.reason,
+            route=route_of(request),
+        ),
+    )
+
+
+@router.post(
+    "/organisations/{organisation_id}/credits/adjustments",
+    response_model=OrganisationAction,
+    summary="Give back or adjust an organisation's credits",
+)
+async def adjust_organisation_credits(
+    organisation_id: uuid.UUID,
+    payload: CreditAdjustment,
+    request: Request,
+    session: SessionDep,
+    key: IdempotencyKey,
+    principal: Annotated[AdminPrincipal, Depends(require_admin(P.CREDITS_WRITE))],
+) -> OrganisationAction:
+    """A line of its ledger (LEKA-553), written by LEKA's team: credits given
+    back (`refund`, of a consumption it names) or adjusted (`adjustment`,
+    added or taken), with the reason; counted in this month's allowance at
+    once, written once for this Idempotency-Key, kept in its trail and in
+    the admin trail."""
+    return await _once(
+        request,
+        session,
+        principal,
+        key,
+        payload,
+        lambda: adjust_credits(
+            session,
+            principal,
+            organisation_id,
+            payload,
+            key=key,
             route=route_of(request),
         ),
     )
