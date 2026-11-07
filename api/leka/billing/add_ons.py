@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any
 
@@ -37,6 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from leka.background import JobQueue, enqueue_job
 from leka.billing.catalogue import catalogue
 from leka.billing.entitlements import end, entitlements, grant, owned, plan_runs_agents
+from leka.billing.history import State, keep_change, mrr_of
 from leka.billing.models import AddOnCheckout, AgentEntitlement
 from leka.billing.revenue import recurring_of
 from leka.billing.stripe import Stripe
@@ -227,8 +228,10 @@ async def apply_add_on(
     data: Mapping[str, Any],
     *,
     made: datetime,
+    event_id: str = "",
 ) -> str:
-    """What one of an add-on's events changes."""
+    """What one of an add-on's events changes, and the change it made to
+    what it brings in, kept (LEKA-554)."""
     found = marked(data)
     if found is None:
         return "ignored"
@@ -265,11 +268,25 @@ async def apply_add_on(
         return f"add_on:{what}:{key}"
     if kind.startswith("customer.subscription."):
         status = str(data.get("status") or "")
+        subscription = str(data.get("id") or "")
+        held = await _bought(session, workspace_id, subscription)
+        before = _state(held, made)
         # Ended only by a status that ends it: an event delivered late — the
         # subscription « incomplete » as it was made, before its payment —
         # never takes back what its paid checkout granted.
         if kind.endswith(".deleted") or status in ENDING:
-            ended = await end(session, workspace_id, subscription=str(data.get("id") or ""))
+            ended = await end(session, workspace_id, subscription=subscription)
+            if held:
+                await keep_change(
+                    session,
+                    workspace_id,
+                    event_id=event_id,
+                    source="add_on",
+                    subscription_id=subscription,
+                    before=before,
+                    after=replace(before, status=status or "canceled", mrr=0),
+                    at=made,
+                )
             return f"add_on_ended:{ended}"
         # Cancelled or renewed from Stripe's portal too: said as Stripe says it.
         # shortcut: no ordering of these events — a late older one can say an
@@ -279,6 +296,20 @@ async def apply_add_on(
             bought.current_period_end = _period_end(dict(data)) or bought.current_period_end
             # What it brings in (LEKA-548), the subscription's own price.
             bought.recurring = recurring_of(data) or bought.recurring
+        if held:
+            after = _state(held, made, status=status)
+            # Its price first said: what it brings in from now on.
+            first = before.mrr is None and after.mrr is not None
+            await keep_change(
+                session,
+                workspace_id,
+                event_id=event_id,
+                source="add_on",
+                subscription_id=subscription,
+                before=replace(before, status=None) if first else before,
+                after=after,
+                at=made,
+            )
         return "add_on_kept"
     return "ignored"
 
@@ -336,3 +367,16 @@ async def launch_bought(session: AsyncSession, workspace_id: uuid.UUID, session_
         concurrency_key=f"bought-launch:{row.id}",
     )
     return queued is not None
+
+
+def _state(held: list[AgentEntitlement], at: datetime, *, status: str | None = None) -> State:
+    """What an add-on subscription stands at: its keys, renewal, and what it
+    brings in a month (one subscription, its price on each of its rows)."""
+    recurring = next((row.recurring for row in held if row.recurring), None)
+    return State(
+        plan=",".join(sorted(row.key for row in held))[:100] or None,
+        status=(status or "active") if held else None,
+        interval="month",
+        cancel_at_period_end=any(row.cancel_at_period_end for row in held),
+        mrr=mrr_of(recurring, at),
+    )

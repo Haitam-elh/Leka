@@ -7701,8 +7701,140 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Every Stripe subscription */
+        /**
+         * Every Stripe subscription
+         * @description Each organisation's plan subscription, as Stripe last said it: its
+         *     price, what it brings in a month now, its coupon, since when it earns,
+         *     its agents bought alone (LEKA-554).
+         */
         get: operations["list_subscriptions_api_v1_admin_subscriptions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/subscriptions/{organisation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * An organisation's subscriptions and their history
+         * @description Its plan's subscription, its agents bought alone, every change of
+         *     them, its latest invoices, payments and refunds (LEKA-554).
+         */
+        get: operations["get_subscription_api_v1_admin_subscriptions__organisation_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/billing/finance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * LEKA's finance
+         * @description Recurring revenue (the MRR now, the ARR, the movements of the
+         *     period), billing (the invoices issued), collection (the payments, the
+         *     refunds) kept apart; Stripe's events of the period (LEKA-554). In euros:
+         *     the MRR excluding VAT, billing and collection VAT included;
+         *     demonstration organisations left out.
+         */
+        get: operations["get_finance_api_v1_admin_billing_finance_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/billing/invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every invoice
+         * @description Each invoice as Stripe last said it, its lines, discount, tax and
+         *     prorations apart (LEKA-554). The latest issued first by default.
+         */
+        get: operations["list_invoices_api_v1_admin_billing_invoices_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/billing/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every payment
+         * @description Each invoice paid, and each attempt that failed (LEKA-554).
+         */
+        get: operations["list_payments_api_v1_admin_billing_payments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/billing/refunds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every refund
+         * @description What each charge gave back, its refunds together (LEKA-554).
+         */
+        get: operations["list_refunds_api_v1_admin_billing_refunds_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/billing/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every change of a subscription
+         * @description Each change a Stripe event made to a plan's or an add-on's
+         *     subscription, its MRR before and after (LEKA-554).
+         */
+        get: operations["list_subscription_changes_api_v1_admin_billing_changes_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -7718,7 +7850,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Every Stripe event received */
+        /**
+         * Every Stripe event received
+         * @description Each event Stripe sent, once: applied, ignored, or failed with its
+         *     error and attempts until a delivery applies it (LEKA-554).
+         */
         get: operations["list_stripe_events_api_v1_admin_billing_events_get"];
         put?: never;
         post?: never;
@@ -19286,6 +19422,126 @@ export interface components {
             message: string;
         };
         /**
+         * FinanceOverview
+         * @description LEKA's finance over a period (LEKA-554), Stripe the source of truth;
+         *     recurring revenue, billing and collection kept apart. In euros: the MRR
+         *     excluding VAT, what was billed and collected as Stripe charged it, VAT
+         *     included (said apart); what was said in another currency is counted
+         *     apart, never converted.
+         */
+        FinanceOverview: {
+            /**
+             * Since
+             * Format: date-time
+             */
+            since: string;
+            /**
+             * Until
+             * Format: date-time
+             */
+            until: string;
+            /**
+             * Mrr
+             * @description Now: each paying subscription's price a month.
+             */
+            mrr: number | null;
+            /** Arr */
+            arr: number | null;
+            /**
+             * Mrr Start
+             * @description At the period's start, as kept each day.
+             */
+            mrr_start: number | null;
+            /**
+             * Subscriptions
+             * @description Paying, counted in the MRR.
+             */
+            subscriptions: number;
+            /** Unknown Prices */
+            unknown_prices: number;
+            /** Trialing */
+            trialing: number;
+            new: components["schemas"]["MrrMovement"];
+            reactivations: components["schemas"]["MrrMovement"];
+            upgrades: components["schemas"]["MrrMovement"];
+            downgrades: components["schemas"]["MrrMovement"];
+            churn: components["schemas"]["MrrMovement"];
+            /**
+             * Mrr Explained
+             * @description The MRR at the start and the movements: equal to `mrr` when nothing else moved it (a coupon ended, a price changed).
+             */
+            mrr_explained: number | null;
+            /** Mrr Gap */
+            mrr_gap: number | null;
+            /**
+             * By Plan
+             * @description Paying subscriptions by plan.
+             */
+            by_plan: components["schemas"]["PlanRevenue"][];
+            /**
+             * Invoiced
+             * @description Billing: the total of the invoices issued, VAT included.
+             */
+            invoiced: number;
+            /**
+             * Invoiced Tax
+             * @description The VAT within `invoiced`.
+             */
+            invoiced_tax: number;
+            /** Invoices */
+            invoices: number;
+            /** Prorations */
+            prorations: number;
+            /** Open Invoices */
+            open_invoices: number;
+            /** Open Amount */
+            open_amount: number;
+            /** Payments Succeeded */
+            payments_succeeded: number;
+            /**
+             * Collected
+             * @description Collection: what the payments took, VAT included.
+             */
+            collected: number;
+            /** Payments Failed */
+            payments_failed: number;
+            /** Failed Amount */
+            failed_amount: number;
+            /** Refunds */
+            refunds: number;
+            /** Refunded */
+            refunded: number;
+            /**
+             * Net Collected
+             * @description Collected, less what refunds gave back.
+             */
+            net_collected: number;
+            /**
+             * Other Currencies
+             * @description Amounts said in another currency: left out.
+             */
+            other_currencies: number;
+            /**
+             * Events
+             * @description Stripe's events of the period, by outcome.
+             */
+            events: {
+                [key: string]: number;
+            };
+            /**
+             * Failed Events
+             * @description Events not applied now: to look at.
+             */
+            failed_events: number;
+            /**
+             * Unlinked Events
+             * @description Of the period, of a customer LEKA does not know.
+             */
+            unlinked_events: number;
+            /** Last Event At */
+            last_event_at: string | null;
+        };
+        /**
          * Finding
          * @description What is wrong with a setting (`error`: refused) or may be (`warning`).
          */
@@ -21431,6 +21687,86 @@ export interface components {
          * @enum {string}
          */
         InvitationStatus: "pending" | "accepted" | "revoked";
+        /** InvoiceLine */
+        InvoiceLine: {
+            /** Description */
+            description: string | null;
+            /**
+             * Amount
+             * @description In its invoice's currency's main unit.
+             */
+            amount: number;
+            /**
+             * Proration
+             * @description Billed for a change mid-period.
+             */
+            proration: boolean;
+            /** Start */
+            start: string | null;
+            /** End */
+            end: string | null;
+        };
+        /**
+         * InvoiceRow
+         * @description An invoice, as Stripe last said it (LEKA-554): amounts in its
+         *     currency's main unit, its discount, tax and prorations apart.
+         */
+        InvoiceRow: {
+            /**
+             * Id
+             * @description Stripe's.
+             */
+            id: string;
+            organisation: components["schemas"]["OrganisationRef"];
+            /** Number */
+            number: string | null;
+            /** Status */
+            status: string;
+            /** Billing Reason */
+            billing_reason: string | null;
+            /** Currency */
+            currency: string;
+            /** Subtotal */
+            subtotal: number | null;
+            /** Discount */
+            discount: number | null;
+            /** Tax */
+            tax: number | null;
+            /** Total */
+            total: number;
+            /** Amount Paid */
+            amount_paid: number;
+            /** Amount Remaining */
+            amount_remaining: number;
+            /**
+             * Proration
+             * @description What prorations billed: a plan changed mid-period.
+             */
+            proration: number;
+            /** Period Start */
+            period_start: string | null;
+            /** Period End */
+            period_end: string | null;
+            /**
+             * Issued At
+             * Format: date-time
+             */
+            issued_at: string;
+            /** Paid At */
+            paid_at: string | null;
+            /** Attempts */
+            attempts: number;
+            /**
+             * Hosted Url
+             * @description Stripe's page of it.
+             */
+            hosted_url: string | null;
+            /**
+             * Lines
+             * @description The first 50, as Stripe said them.
+             */
+            lines: components["schemas"]["InvoiceLine"][];
+        };
         /**
          * JobQueue
          * @description The three queues, in the order a worker drains them.
@@ -22511,6 +22847,21 @@ export interface components {
              * @description Resolved or closed in the last 7 days.
              */
             ended: components["schemas"]["AlertRead"][];
+        };
+        /** MrrMovement */
+        MrrMovement: {
+            /** Count */
+            count: number;
+            /**
+             * Eur
+             * @description Its effect on the MRR, a month, excluding VAT.
+             */
+            eur: number;
+            /**
+             * Unknown
+             * @description Changes whose amount is not known: left out.
+             */
+            unknown: number;
         };
         /**
          * NeededRead
@@ -23643,6 +23994,19 @@ export interface components {
              */
             next_cursor?: string | null;
         };
+        /** PageEnvelope[InvoiceRow] */
+        PageEnvelope_InvoiceRow_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["InvoiceRow"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
         /** PageEnvelope[JobRunRead] */
         PageEnvelope_JobRunRead_: {
             /**
@@ -23760,6 +24124,19 @@ export interface components {
              */
             next_cursor?: string | null;
         };
+        /** PageEnvelope[PaymentRow] */
+        PageEnvelope_PaymentRow_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["PaymentRow"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
         /** PageEnvelope[PersonRead] */
         PageEnvelope_PersonRead_: {
             /**
@@ -23780,6 +24157,19 @@ export interface components {
              * @description The rows on this page, in the requested order.
              */
             data: components["schemas"]["ProcessingRunRead"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
+        /** PageEnvelope[RefundRow] */
+        PageEnvelope_RefundRow_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["RefundRow"][];
             /**
              * Next Cursor
              * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
@@ -23910,6 +24300,19 @@ export interface components {
              * @description The rows on this page, in the requested order.
              */
             data: components["schemas"]["StripeEventRow"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
+        /** PageEnvelope[SubscriptionChangeRow] */
+        PageEnvelope_SubscriptionChangeRow_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["SubscriptionChangeRow"][];
             /**
              * Next Cursor
              * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
@@ -24074,6 +24477,35 @@ export interface components {
              * @description The walk stopped before it was done: too much reached.
              */
             truncated: boolean;
+        };
+        /** PaymentRow */
+        PaymentRow: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            organisation: components["schemas"]["OrganisationRef"];
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "succeeded" | "failed";
+            /** Amount */
+            amount: number;
+            /** Currency */
+            currency: string;
+            /** Invoice */
+            invoice: string | null;
+            /** Attempt */
+            attempt: number | null;
+            /** Next Attempt At */
+            next_attempt_at: string | null;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
         };
         /** PendingInvitationRead */
         PendingInvitationRead: {
@@ -24313,6 +24745,23 @@ export interface components {
              * @description Every specialised agent on sale is included.
              */
             agents_every: boolean;
+        };
+        /** PlanRevenue */
+        PlanRevenue: {
+            /**
+             * Plan
+             * @description A plan, or add_ons: the agents and bundles bought alone.
+             */
+            plan: string;
+            /** Subscriptions */
+            subscriptions: number;
+            /** Mrr */
+            mrr: number;
+            /**
+             * Unknown
+             * @description Of them, whose price is not known: left out of `mrr`.
+             */
+            unknown: number;
         };
         /**
          * PlanStartRequest
@@ -25523,6 +25972,32 @@ export interface components {
             version: components["schemas"]["ContextVersionRead"];
             /** @description The check it was, and after which changes (LEKA-374). */
             check?: components["schemas"]["ContextCheckRead"] | null;
+        };
+        /** RefundRow */
+        RefundRow: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            organisation: components["schemas"]["OrganisationRef"];
+            /** Charge */
+            charge: string;
+            /** Invoice */
+            invoice: string | null;
+            /** Amount */
+            amount: number;
+            /** Charged */
+            charged: number;
+            /** Currency */
+            currency: string;
+            /** Reason */
+            reason: string | null;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
         };
         /**
          * RegisterRequest
@@ -27733,6 +28208,103 @@ export interface components {
             kind: string | null;
         };
         /**
+         * SubscriptionAddOn
+         * @description An agent or a bundle bought alone, its own subscription (LEKA-554).
+         */
+        SubscriptionAddOn: {
+            /** Key */
+            key: string;
+            /** Kind */
+            kind: string;
+            /** Status */
+            status: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Ended At */
+            ended_at: string | null;
+            /** Cancel At Period End */
+            cancel_at_period_end: boolean;
+            /**
+             * Mrr Eur
+             * @description Null: not known; 0: ended.
+             */
+            mrr_eur: number | null;
+        };
+        /** SubscriptionChangeRow */
+        SubscriptionChangeRow: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            organisation: components["schemas"]["OrganisationRef"];
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "plan" | "add_on";
+            /** Subscription */
+            subscription: string;
+            /**
+             * Kind
+             * @description trial, new, reactivation, upgrade, downgrade, interval, renewal_off, renewal_on, churn.
+             */
+            kind: string;
+            /** Plan Before */
+            plan_before: string | null;
+            /** Plan After */
+            plan_after: string | null;
+            /** Status Before */
+            status_before: string | null;
+            /** Status After */
+            status_after: string | null;
+            /** Mrr Before Eur */
+            mrr_before_eur: number | null;
+            /** Mrr After Eur */
+            mrr_after_eur: number | null;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+        };
+        /**
+         * SubscriptionDetail
+         * @description An organisation's subscriptions (LEKA-554): its plan's, its add-ons,
+         *     every change, its latest invoices, payments and refunds.
+         */
+        SubscriptionDetail: {
+            subscription: components["schemas"]["SubscriptionRow"];
+            /** Add Ons */
+            add_ons: components["schemas"]["SubscriptionAddOn"][];
+            /** Changes */
+            changes: components["schemas"]["SubscriptionChangeRow"][];
+            /** Invoices */
+            invoices: components["schemas"]["InvoiceRow"][];
+            /** Payments */
+            payments: components["schemas"]["PaymentRow"][];
+            /** Refunds */
+            refunds: components["schemas"]["RefundRow"][];
+        };
+        /**
+         * SubscriptionDiscount
+         * @description A coupon on a subscription, as Stripe said it (LEKA-554).
+         */
+        SubscriptionDiscount: {
+            /** Percent Off */
+            percent_off: number | null;
+            /** Amount Off Eur */
+            amount_off_eur: number | null;
+            /**
+             * Ends
+             * @description Null: as long as the subscription lasts.
+             */
+            ends: string | null;
+        };
+        /**
          * SubscriptionRead
          * @description The workspace's subscription, as Stripe last said it.
          */
@@ -27784,6 +28356,29 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /** Stripe Subscription Id */
+            stripe_subscription_id: string | null;
+            /**
+             * Price Eur
+             * @description Its list price for one interval, excluding VAT (LEKA-554).
+             */
+            price_eur: number | null;
+            /**
+             * Mrr Eur
+             * @description What it brings in a month now, coupon taken off, excluding VAT; null: not known; 0: it earns nothing (a trial, ended).
+             */
+            mrr_eur: number | null;
+            discount: components["schemas"]["SubscriptionDiscount"] | null;
+            /**
+             * Since
+             * @description When it started earning, as its changes say.
+             */
+            since: string | null;
+            /**
+             * Add Ons
+             * @description Agents or bundles bought alone, active.
+             */
+            add_ons: number;
         };
         /** SuggestionRead */
         SuggestionRead: {
@@ -69344,6 +69939,8 @@ export interface operations {
                 plan?: string | null;
                 status?: string | null;
                 interval?: string | null;
+                /** @description An organisation's name or slug. */
+                organisation?: string | null;
                 /** @description From a previous response's next_cursor. Opaque. */
                 cursor?: string | null;
                 /** @description Rows per page. */
@@ -69442,6 +70039,620 @@ export interface operations {
             };
         };
     };
+    get_subscription_api_v1_admin_subscriptions__organisation_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_finance_api_v1_admin_billing_finance_get: {
+        parameters: {
+            query?: {
+                period?: "today" | "7d" | "30d" | "90d" | "12m" | "custom";
+                from?: string | null;
+                to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceOverview"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_invoices_api_v1_admin_billing_invoices_get: {
+        parameters: {
+            query?: {
+                organisation_id?: string | null;
+                organisation?: string | null;
+                status?: ("draft" | "open" | "paid" | "uncollectible" | "void") | null;
+                since?: string | null;
+                until?: string | null;
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_InvoiceRow_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_payments_api_v1_admin_billing_payments_get: {
+        parameters: {
+            query?: {
+                organisation_id?: string | null;
+                organisation?: string | null;
+                outcome?: ("succeeded" | "failed") | null;
+                since?: string | null;
+                until?: string | null;
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_PaymentRow_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_refunds_api_v1_admin_billing_refunds_get: {
+        parameters: {
+            query?: {
+                organisation_id?: string | null;
+                organisation?: string | null;
+                since?: string | null;
+                until?: string | null;
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_RefundRow_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_subscription_changes_api_v1_admin_billing_changes_get: {
+        parameters: {
+            query?: {
+                organisation_id?: string | null;
+                organisation?: string | null;
+                kind?: ("trial" | "new" | "reactivation" | "upgrade" | "downgrade" | "interval" | "renewal_off" | "renewal_on" | "churn") | null;
+                source?: ("plan" | "add_on") | null;
+                since?: string | null;
+                until?: string | null;
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_SubscriptionChangeRow_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     list_stripe_events_api_v1_admin_billing_events_get: {
         parameters: {
             query?: {
@@ -69452,6 +70663,8 @@ export interface operations {
                 organisation_id?: string | null;
                 received_from?: string | null;
                 received_to?: string | null;
+                /** @description false: the events of a customer LEKA does not know (LEKA-554). */
+                linked?: boolean | null;
                 /** @description From a previous response's next_cursor. Opaque. */
                 cursor?: string | null;
                 /** @description Rows per page. */

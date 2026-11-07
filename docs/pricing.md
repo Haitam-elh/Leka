@@ -180,7 +180,7 @@ Self-service plans are paid through **Stripe**, with no SDK:
 | **The catalogue in Stripe** | `python -m leka.billing.cli stripe-sync` creates what is missing (`leka/billing/sync.py`): each plan a product (`leka_core_<plan>`), each price a Stripe price found by its **lookup key** (`leka_core_<plan>_<interval>_<cents>`, e.g. `leka_core_growth_year_150360`), the launch offer a coupon (`leka_launch_20_12m`: 20 %, 12 months, on the plans' products), and the customer portal's settings. Prices are amounts excluding VAT (`tax_behavior: exclusive`). No price id is configured: a price changed in the catalogue is a new Stripe price, found by its new key. Run it once per environment, then after each catalogue change |
 | **Checkout** | `POST /billing/checkout {plan, interval}` (`workspace:update`) opens Stripe Checkout for Starter, Growth or Business. It charges the price found by its key, so it charges what the page shows. The launch coupon is added **only** for monthly billing, while the offer is open, on a workspace that never subscribed. A year gets the annual discount alone, and no promotion codes are accepted. Growth, for a workspace that never subscribed, gets its trial: `trial_period_days: 14`, the card always taken (`payment_method_collection: always`), and a trial without a card ends rather than converts. A workspace already subscribed is sent to the portal (409) |
 | **The portal** | `POST /billing/portal`: Stripe's customer portal, to change the card, see invoices, change plan or cancel |
-| **The webhook** | `POST /billing/stripe/webhook`, public. It is believed only when its `Stripe-Signature` holds (HMAC-SHA256, 5 minutes of tolerance); otherwise it gets a 400. Each event is kept once by its id (`stripe_events`), so a repeated delivery changes nothing. When applying it fails, the event is not kept and Stripe delivers it again |
+| **The webhook** | `POST /billing/stripe/webhook`, public. It is believed only when its `Stripe-Signature` holds (HMAC-SHA256, 5 minutes of tolerance); otherwise it gets a 400. Each event is kept once by its id (`stripe_events`), so a repeated delivery changes nothing. When applying it fails, everything it did is undone and the event is kept `failed`, with its error and attempts, seen in LEKA ADMIN; Stripe delivers it again, and the delivery that succeeds applies it, once (LEKA-554) |
 
 **What a verified event changes**:
 
@@ -188,9 +188,10 @@ Self-service plans are paid through **Stripe**, with no SDK:
 | --- | --- |
 | `checkout.session.completed`, a subscription | Its subscription is read, and the workspace is put on its plan (`leka.governance.set_plan`, audited, with "stripe" as who) |
 | `checkout.session.completed`, a one-time payment | Nothing: no AI capacity is sold. Ignored, kept as such |
-| `customer.subscription.created/updated/deleted` | The plan as Stripe says it now: `active`, `trialing` and `past_due` keep it; `unpaid`, `canceled` and `incomplete_expired` go back to Free — a trial cancelled before its end too. An event older than the last one applied never undoes it |
-| `invoice.paid`, `invoice.payment_failed` | Said on the account. A failed payment is shown on Facturation |
-| `charge.refunded` | Kept. What a refund undoes is a person's decision |
+| `customer.subscription.created/updated/deleted` | The plan as Stripe says it now: `active`, `trialing` and `past_due` keep it; `unpaid`, `canceled` and `incomplete_expired` go back to Free — a trial cancelled before its end too. An event older than the last one applied never undoes it. Each change that counts (new, up, down, ended…) is kept with its monthly revenue before and after (`billing_subscription_changes`, LEKA-554) |
+| `invoice.paid`, `invoice.payment_failed` | Said on the account. A failed payment is shown on Facturation. The invoice is kept as Stripe says it, with the payment taken or the attempt failed (`billing_invoices`, `billing_payments`, LEKA-554) |
+| `invoice.finalized`, `invoice.updated`, `invoice.voided`, `invoice.marked_uncollectible` | The invoice kept as Stripe says it now (LEKA-554). Nothing else changes |
+| `charge.refunded` | Kept, with what the charge gave back in all (`billing_refunds`, LEKA-554). What a refund undoes is a person's decision |
 
 The plan comes **only from a verified event**, never from the browser coming back from Checkout. Each month's included credits are the plan's (LEKA-430, `leka.governance.allowance`).
 
@@ -221,7 +222,8 @@ The plan comes **only from a verified event**, never from the browser coming bac
 2. **Catalogue**: `docker compose … exec api python -m leka.billing.cli stripe-sync`. It prints each price's key and id.
 3. **Webhook**: in Stripe, Developers → Webhooks → Add endpoint:
    - URL: `https://api.leka-core.com/api/v1/billing/stripe/webhook`;
-   - events: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`, `charge.refunded`.
+   - events: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`, `invoice.finalized`, `invoice.updated`, `invoice.voided`, `invoice.marked_uncollectible`, `charge.refunded`.
+   - Once, and after a webhook was down: `python -m leka.billing.cli history` keeps every invoice and refund Stripe holds for the customers LEKA knows; `python -m leka.billing.cli reconcile` says every difference between LEKA's subscriptions and Stripe's (`docs/admin/indicateurs.md` § 11).
    - Settings → Billing → Subscriptions and emails: turn on the **reminder e-mail before a trial ends** (the trial notification), and the e-mails for failed payments.
 
    Then put its signing secret (`whsec_…`) in `LEKA_STRIPE_WEBHOOK_SECRET` and redeploy.

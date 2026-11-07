@@ -52,7 +52,6 @@ from leka.admin.schemas import (
     PersonRef,
     SourceRow,
     StripeEventRow,
-    SubscriptionRow,
     UserAccess,
     UserDetail,
     UserRow,
@@ -1070,38 +1069,6 @@ async def credits_breakdown(
 # ── Billing ──────────────────────────────────────────────────────────────────
 
 
-def subscriptions_query(
-    *, plan: str | None = None, status: str | None = None, interval: str | None = None
-) -> Select[tuple[BillingAccount]]:
-    statement = select(BillingAccount)
-    if plan:
-        statement = statement.where(BillingAccount.plan == plan)
-    if status:
-        statement = statement.where(BillingAccount.status == status)
-    if interval:
-        statement = statement.where(BillingAccount.interval == interval)
-    return statement
-
-
-async def subscription_rows(
-    session: AsyncSession, accounts: Sequence[BillingAccount]
-) -> list[SubscriptionRow]:
-    names = await _organisation_names(session, (a.workspace_id for a in accounts))
-    return [
-        SubscriptionRow(
-            organisation=OrganisationRef(id=a.workspace_id, name=names.get(a.workspace_id, "")),
-            plan=a.plan,
-            interval=a.interval,
-            status=a.status,
-            current_period_end=a.current_period_end,
-            cancel_at_period_end=a.cancel_at_period_end,
-            launch_offer_used=a.launch_offer_used,
-            updated_at=a.updated_at,
-        )
-        for a in accounts
-    ]
-
-
 def stripe_events_query(
     *,
     type_: str | None = None,
@@ -1109,8 +1076,15 @@ def stripe_events_query(
     organisation_id: uuid.UUID | None = None,
     received_from: datetime | None = None,
     received_to: datetime | None = None,
+    linked: bool | None = None,
 ) -> Select[tuple[StripeEvent]]:
     statement = select(StripeEvent)
+    if linked is not None:
+        statement = statement.where(
+            StripeEvent.for_workspace_id.is_not(None)
+            if linked
+            else StripeEvent.for_workspace_id.is_(None)
+        )
     if type_:
         statement = statement.where(StripeEvent.type.like(type_.replace("*", "%")))
     if outcome:
@@ -1285,8 +1259,6 @@ __all__ = [
     "status_of",
     "stripe_event_rows",
     "stripe_events_query",
-    "subscription_rows",
-    "subscriptions_query",
     "user_detail",
     "user_rows",
     "users_query",

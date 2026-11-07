@@ -75,7 +75,9 @@ from leka.admin import (
     CreditReconciliation,
     CreditsBreakdown,
     CreditsOverview,
+    FinanceOverview,
     IdempotencyConflictError,
+    InvoiceRow,
     NoteCreate,
     NoteRow,
     OrganisationAction,
@@ -87,10 +89,14 @@ from leka.admin import (
     OrganisationRow,
     OrganisationUpdate,
     PasswordRefusedError,
+    PaymentRow,
     Period,
+    RefundRow,
     RenewalError,
     SourceRow,
     StripeEventRow,
+    SubscriptionChangeRow,
+    SubscriptionDetail,
     SubscriptionRow,
     UserDetail,
     UserRow,
@@ -109,10 +115,13 @@ from leka.admin import (
     audit_apart,
     audit_record,
     change_password,
+    change_rows,
+    changes_query,
     client_ip,
     credits_breakdown,
     credits_of,
     credits_overview,
+    finance,
     forgot_password,
     history_query,
     history_rows,
@@ -121,6 +130,8 @@ from leka.admin import (
     intentions_query,
     invitation_rows,
     invitations_query,
+    invoice_rows,
+    invoices_query,
     movement_rows,
     movements_query,
     note_rows,
@@ -131,9 +142,13 @@ from leka.admin import (
     organisation_rows,
     organisations_query,
     overview,
+    payment_rows,
+    payments_query,
     permissions_now,
     reconciliation,
     redeem_code,
+    refund_rows,
+    refunds_query,
     require_admin,
     route_of,
     set_suspended,
@@ -141,6 +156,7 @@ from leka.admin import (
     sources_query,
     stripe_event_rows,
     stripe_events_query,
+    subscription_detail,
     subscription_rows,
     subscriptions_query,
     team,
@@ -152,7 +168,14 @@ from leka.admin import (
 )
 from leka.api.errors import ApiError
 from leka.api.pagination import PageEnvelope, PageParams, SortCatalogue, serve_page
-from leka.billing import BillingAccount, StripeEvent
+from leka.billing import (
+    BillingAccount,
+    BillingInvoice,
+    BillingPayment,
+    BillingRefund,
+    StripeEvent,
+    SubscriptionChange,
+)
 from leka.connectors import Source
 from leka.core import ratelimit
 from leka.core.config import settings
@@ -407,6 +430,16 @@ SUBSCRIPTION_SORTS = _sorts(
 )
 STRIPE_SORTS = _sorts(
     ("received_at", StripeEvent.received_at, "one row per Stripe event"), default="received_at"
+)
+INVOICE_SORTS = _sorts(
+    ("issued_at", BillingInvoice.issued_at, "ix_billing_invoices_issued"),
+    ("total", BillingInvoice.total, "a few per organisation a month"),
+    default="issued_at",
+)
+PAYMENT_SORTS = _sorts(("at", BillingPayment.at, "ix_billing_payments_at"), default="at")
+REFUND_SORTS = _sorts(("at", BillingRefund.at, "ix_billing_refunds_at"), default="at")
+CHANGE_SORTS = _sorts(
+    ("at", SubscriptionChange.at, "ix_billing_subscription_changes_at"), default="at"
 )
 SOURCE_SORTS = _sorts(
     ("created_at", Source.created_at, "a few per organisation"),
@@ -1141,17 +1174,192 @@ async def list_subscriptions(
     plan: str | None = None,
     subscription_status: Annotated[str | None, Query(alias="status")] = None,
     interval: str | None = None,
+    organisation: Annotated[
+        str | None, Query(max_length=200, description="An organisation's name or slug.")
+    ] = None,
 ) -> PageEnvelope[SubscriptionRow]:
+    """Each organisation's plan subscription, as Stripe last said it: its
+    price, what it brings in a month now, its coupon, since when it earns,
+    its agents bought alone (LEKA-554)."""
     found = await serve_page(
         session,
-        subscriptions_query(plan=plan, status=subscription_status, interval=interval),
+        subscriptions_query(
+            plan=plan, status=subscription_status, interval=interval, organisation=organisation
+        ),
         request=page,
         catalogue=SUBSCRIPTION_SORTS,
         id_column=BillingAccount.id,
     )
     return PageEnvelope(
-        data=await subscription_rows(session, found.items), next_cursor=found.next_cursor
+        data=await subscription_rows(session, found.items, now=datetime.now(UTC)),
+        next_cursor=found.next_cursor,
     )
+
+
+@router.get(
+    "/subscriptions/{organisation_id}",
+    response_model=SubscriptionDetail,
+    summary="An organisation's subscriptions and their history",
+)
+async def get_subscription(
+    organisation_id: uuid.UUID,
+    session: SessionDep,
+    _: Annotated[AdminPrincipal, Depends(require_admin(P.BILLING_READ))],
+) -> SubscriptionDetail:
+    """Its plan's subscription, its agents bought alone, every change of
+    them, its latest invoices, payments and refunds (LEKA-554)."""
+    found = await subscription_detail(session, organisation_id, now=datetime.now(UTC))
+    if found is None:
+        raise _not_found("organisation")
+    return found
+
+
+@router.get("/billing/finance", response_model=FinanceOverview, summary="LEKA's finance")
+async def get_finance(
+    session: SessionDep,
+    _: Annotated[AdminPrincipal, Depends(require_admin(P.BILLING_READ))],
+    period: Period = "30d",
+    start: Annotated[datetime | None, Query(alias="from")] = None,
+    end: Annotated[datetime | None, Query(alias="to")] = None,
+) -> FinanceOverview:
+    """Recurring revenue (the MRR now, the ARR, the movements of the
+    period), billing (the invoices issued), collection (the payments, the
+    refunds) kept apart; Stripe's events of the period (LEKA-554). In euros:
+    the MRR excluding VAT, billing and collection VAT included;
+    demonstration organisations left out."""
+    return await finance(session, _window(period, start, end), now=datetime.now(UTC))
+
+
+@router.get("/billing/invoices", response_model=PageEnvelope[InvoiceRow], summary="Every invoice")
+async def list_invoices(
+    session: SessionDep,
+    _: Annotated[AdminPrincipal, Depends(require_admin(P.BILLING_READ))],
+    page: PageParams,
+    organisation_id: uuid.UUID | None = None,
+    organisation: Annotated[str | None, Query(max_length=200)] = None,
+    invoice_status: Annotated[
+        Literal["draft", "open", "paid", "uncollectible", "void"] | None, Query(alias="status")
+    ] = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
+) -> PageEnvelope[InvoiceRow]:
+    """Each invoice as Stripe last said it, its lines, discount, tax and
+    prorations apart (LEKA-554). The latest issued first by default."""
+    found = await serve_page(
+        session,
+        invoices_query(
+            organisation_id=organisation_id,
+            organisation=organisation,
+            status=invoice_status,
+            since=since,
+            until=until,
+        ),
+        request=page,
+        catalogue=INVOICE_SORTS,
+        id_column=BillingInvoice.id,
+    )
+    return PageEnvelope(
+        data=await invoice_rows(session, found.items), next_cursor=found.next_cursor
+    )
+
+
+@router.get("/billing/payments", response_model=PageEnvelope[PaymentRow], summary="Every payment")
+async def list_payments(
+    session: SessionDep,
+    _: Annotated[AdminPrincipal, Depends(require_admin(P.BILLING_READ))],
+    page: PageParams,
+    organisation_id: uuid.UUID | None = None,
+    organisation: Annotated[str | None, Query(max_length=200)] = None,
+    outcome: Literal["succeeded", "failed"] | None = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
+) -> PageEnvelope[PaymentRow]:
+    """Each invoice paid, and each attempt that failed (LEKA-554)."""
+    found = await serve_page(
+        session,
+        payments_query(
+            organisation_id=organisation_id,
+            organisation=organisation,
+            outcome=outcome,
+            since=since,
+            until=until,
+        ),
+        request=page,
+        catalogue=PAYMENT_SORTS,
+        id_column=BillingPayment.id,
+    )
+    return PageEnvelope(
+        data=await payment_rows(session, found.items), next_cursor=found.next_cursor
+    )
+
+
+@router.get("/billing/refunds", response_model=PageEnvelope[RefundRow], summary="Every refund")
+async def list_refunds(
+    session: SessionDep,
+    _: Annotated[AdminPrincipal, Depends(require_admin(P.BILLING_READ))],
+    page: PageParams,
+    organisation_id: uuid.UUID | None = None,
+    organisation: Annotated[str | None, Query(max_length=200)] = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
+) -> PageEnvelope[RefundRow]:
+    """What each charge gave back, its refunds together (LEKA-554)."""
+    found = await serve_page(
+        session,
+        refunds_query(
+            organisation_id=organisation_id, organisation=organisation, since=since, until=until
+        ),
+        request=page,
+        catalogue=REFUND_SORTS,
+        id_column=BillingRefund.id,
+    )
+    return PageEnvelope(data=await refund_rows(session, found.items), next_cursor=found.next_cursor)
+
+
+@router.get(
+    "/billing/changes",
+    response_model=PageEnvelope[SubscriptionChangeRow],
+    summary="Every change of a subscription",
+)
+async def list_subscription_changes(
+    session: SessionDep,
+    _: Annotated[AdminPrincipal, Depends(require_admin(P.BILLING_READ))],
+    page: PageParams,
+    organisation_id: uuid.UUID | None = None,
+    organisation: Annotated[str | None, Query(max_length=200)] = None,
+    kind: Literal[
+        "trial",
+        "new",
+        "reactivation",
+        "upgrade",
+        "downgrade",
+        "interval",
+        "renewal_off",
+        "renewal_on",
+        "churn",
+    ]
+    | None = None,
+    source: Literal["plan", "add_on"] | None = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
+) -> PageEnvelope[SubscriptionChangeRow]:
+    """Each change a Stripe event made to a plan's or an add-on's
+    subscription, its MRR before and after (LEKA-554)."""
+    found = await serve_page(
+        session,
+        changes_query(
+            organisation_id=organisation_id,
+            organisation=organisation,
+            kind=kind,
+            source=source,
+            since=since,
+            until=until,
+        ),
+        request=page,
+        catalogue=CHANGE_SORTS,
+        id_column=SubscriptionChange.id,
+    )
+    return PageEnvelope(data=await change_rows(session, found.items), next_cursor=found.next_cursor)
 
 
 @router.get(
@@ -1170,7 +1378,13 @@ async def list_stripe_events(
     organisation_id: uuid.UUID | None = None,
     received_from: datetime | None = None,
     received_to: datetime | None = None,
+    linked: Annotated[
+        bool | None,
+        Query(description="false: the events of a customer LEKA does not know (LEKA-554)."),
+    ] = None,
 ) -> PageEnvelope[StripeEventRow]:
+    """Each event Stripe sent, once: applied, ignored, or failed with its
+    error and attempts until a delivery applies it (LEKA-554)."""
     found = await serve_page(
         session,
         stripe_events_query(
@@ -1179,6 +1393,7 @@ async def list_stripe_events(
             organisation_id=organisation_id,
             received_from=received_from,
             received_to=received_to,
+            linked=linked,
         ),
         request=page,
         catalogue=STRIPE_SORTS,

@@ -805,6 +805,14 @@ class CreditsOverview(BaseModel):
     provider_cost: ProviderCost
 
 
+class SubscriptionDiscount(BaseModel):
+    """A coupon on a subscription, as Stripe said it (LEKA-554)."""
+
+    percent_off: float | None
+    amount_off_eur: float | None
+    ends: datetime | None = Field(description="Null: as long as the subscription lasts.")
+
+
 class SubscriptionRow(BaseModel):
     organisation: OrganisationRef
     plan: str
@@ -814,6 +822,176 @@ class SubscriptionRow(BaseModel):
     cancel_at_period_end: bool
     launch_offer_used: bool
     updated_at: datetime
+    stripe_subscription_id: str | None
+    price_eur: float | None = Field(
+        description="Its list price for one interval, excluding VAT (LEKA-554)."
+    )
+    mrr_eur: float | None = Field(
+        description="What it brings in a month now, coupon taken off, excluding VAT; null: "
+        "not known; 0: it earns nothing (a trial, ended).",
+    )
+    discount: SubscriptionDiscount | None
+    since: datetime | None = Field(description="When it started earning, as its changes say.")
+    add_ons: int = Field(description="Agents or bundles bought alone, active.")
+
+
+class SubscriptionAddOn(BaseModel):
+    """An agent or a bundle bought alone, its own subscription (LEKA-554)."""
+
+    key: str
+    kind: str
+    status: str
+    started_at: datetime
+    ended_at: datetime | None
+    cancel_at_period_end: bool
+    mrr_eur: float | None = Field(description="Null: not known; 0: ended.")
+
+
+class PlanRevenue(BaseModel):
+    plan: str = Field(description="A plan, or add_ons: the agents and bundles bought alone.")
+    subscriptions: int
+    mrr: float
+    unknown: int = Field(description="Of them, whose price is not known: left out of `mrr`.")
+
+
+class InvoiceLine(BaseModel):
+    description: str | None
+    amount: float = Field(description="In its invoice's currency's main unit.")
+    proration: bool = Field(description="Billed for a change mid-period.")
+    start: datetime | None
+    end: datetime | None
+
+
+class InvoiceRow(BaseModel):
+    """An invoice, as Stripe last said it (LEKA-554): amounts in its
+    currency's main unit, its discount, tax and prorations apart."""
+
+    id: str = Field(description="Stripe's.")
+    organisation: OrganisationRef
+    number: str | None
+    status: str
+    billing_reason: str | None
+    currency: str
+    subtotal: float | None
+    discount: float | None
+    tax: float | None
+    total: float
+    amount_paid: float
+    amount_remaining: float
+    proration: float = Field(description="What prorations billed: a plan changed mid-period.")
+    period_start: datetime | None
+    period_end: datetime | None
+    issued_at: datetime
+    paid_at: datetime | None
+    attempts: int
+    hosted_url: str | None = Field(description="Stripe's page of it.")
+    lines: list[InvoiceLine] = Field(description="The first 50, as Stripe said them.")
+
+
+class PaymentRow(BaseModel):
+    id: uuid.UUID
+    organisation: OrganisationRef
+    outcome: Literal["succeeded", "failed"]
+    amount: float
+    currency: str
+    invoice: str | None
+    attempt: int | None
+    next_attempt_at: datetime | None
+    at: datetime
+
+
+class RefundRow(BaseModel):
+    id: uuid.UUID
+    organisation: OrganisationRef
+    charge: str
+    invoice: str | None
+    amount: float
+    charged: float
+    currency: str
+    reason: str | None
+    at: datetime
+
+
+class SubscriptionChangeRow(BaseModel):
+    id: uuid.UUID
+    organisation: OrganisationRef
+    source: Literal["plan", "add_on"]
+    subscription: str
+    kind: str = Field(
+        description="trial, new, reactivation, upgrade, downgrade, interval, renewal_off, "
+        "renewal_on, churn."
+    )
+    plan_before: str | None
+    plan_after: str | None
+    status_before: str | None
+    status_after: str | None
+    mrr_before_eur: float | None
+    mrr_after_eur: float | None
+    at: datetime
+
+
+class SubscriptionDetail(BaseModel):
+    """An organisation's subscriptions (LEKA-554): its plan's, its add-ons,
+    every change, its latest invoices, payments and refunds."""
+
+    subscription: SubscriptionRow
+    add_ons: list[SubscriptionAddOn]
+    changes: list[SubscriptionChangeRow]
+    invoices: list[InvoiceRow]
+    payments: list[PaymentRow]
+    refunds: list[RefundRow]
+
+
+class MrrMovement(BaseModel):
+    count: int
+    eur: float = Field(description="Its effect on the MRR, a month, excluding VAT.")
+    unknown: int = Field(description="Changes whose amount is not known: left out.")
+
+
+class FinanceOverview(BaseModel):
+    """LEKA's finance over a period (LEKA-554), Stripe the source of truth;
+    recurring revenue, billing and collection kept apart. In euros: the MRR
+    excluding VAT, what was billed and collected as Stripe charged it, VAT
+    included (said apart); what was said in another currency is counted
+    apart, never converted."""
+
+    since: datetime
+    until: datetime
+    mrr: float | None = Field(description="Now: each paying subscription's price a month.")
+    arr: float | None
+    mrr_start: float | None = Field(description="At the period's start, as kept each day.")
+    subscriptions: int = Field(description="Paying, counted in the MRR.")
+    unknown_prices: int
+    trialing: int
+    new: MrrMovement
+    reactivations: MrrMovement
+    upgrades: MrrMovement
+    downgrades: MrrMovement
+    churn: MrrMovement
+    mrr_explained: float | None = Field(
+        description="The MRR at the start and the movements: equal to `mrr` when nothing "
+        "else moved it (a coupon ended, a price changed)."
+    )
+    mrr_gap: float | None
+    by_plan: list[PlanRevenue] = Field(description="Paying subscriptions by plan.")
+    invoiced: float = Field(description="Billing: the total of the invoices issued, VAT included.")
+    invoiced_tax: float = Field(description="The VAT within `invoiced`.")
+    invoices: int
+    prorations: float
+    open_invoices: int
+    open_amount: float
+    payments_succeeded: int
+    collected: float = Field(description="Collection: what the payments took, VAT included.")
+    payments_failed: int
+    failed_amount: float
+    refunds: int
+    refunded: float
+    net_collected: float = Field(description="Collected, less what refunds gave back.")
+    other_currencies: int = Field(description="Amounts said in another currency: left out.")
+    events: dict[str, int] = Field(description="Stripe's events of the period, by outcome.")
+    failed_events: int = Field(description="Events not applied now: to look at.")
+    unlinked_events: int = Field(description="Of the period, of a customer LEKA does not know.")
+    last_event_at: datetime | None
 
 
 class StripeEventRow(BaseModel):

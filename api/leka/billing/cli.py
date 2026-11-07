@@ -16,6 +16,16 @@ python -m leka.billing.cli amounts [--all]
     bought before its subscription's first event. Only GETs to Stripe, and
     only the price is written: a subscription's state stays the webhook's.
     `--all` reads again those already known. Prints what it filled.
+
+python -m leka.billing.cli history [--since YYYY-MM-DD] [--organisation ID]
+    Every invoice and every refunded charge of each customer LEKA knows,
+    read from Stripe and kept as it says them now (LEKA-554): what the
+    webhooks missed, or what came before LEKA kept them. Only GETs.
+
+python -m leka.billing.cli reconcile [--organisation ID]
+    Each subscription LEKA counts beside Stripe's (status, plan, what it
+    brings in a month) and the MRR both ways (LEKA-554). Prints every
+    difference; exits 1 when there is one. Only GETs: nothing is fixed.
 """
 
 from __future__ import annotations
@@ -26,7 +36,7 @@ import json
 import sys
 import uuid
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time
 from typing import Any
 
 from sqlalchemy import select, update
@@ -34,6 +44,7 @@ from sqlalchemy import select, update
 from leka.billing.catalogue import catalogue
 from leka.billing.entitlements import EVERY, end, grant
 from leka.billing.models import AgentEntitlement, BillingAccount
+from leka.billing.reconcile import read_history, reconcile
 from leka.billing.revenue import recurring_of
 from leka.billing.stripe import Stripe, StripeError
 from leka.billing.subscriptions import PAYING, BillingUnavailableError, stripe
@@ -140,6 +151,28 @@ async def _amounts(every: bool) -> int:
     return 0
 
 
+async def _history(since: datetime | None, only: uuid.UUID | None) -> int:
+    try:
+        client = stripe()
+    except BillingUnavailableError:
+        sys.stderr.write("LEKA_STRIPE_SECRET_KEY is not set.\n")
+        return 2
+    done = await read_history(client, now=datetime.now(UTC), since=since, only=only)
+    sys.stdout.write(json.dumps(done) + "\n")
+    return 0
+
+
+async def _reconcile(only: uuid.UUID | None) -> int:
+    try:
+        client = stripe()
+    except BillingUnavailableError:
+        sys.stderr.write("LEKA_STRIPE_SECRET_KEY is not set.\n")
+        return 2
+    report = await reconcile(client, at=datetime.now(UTC), only=only)
+    sys.stdout.write(json.dumps(report, indent=1) + "\n")
+    return 1 if report["differences"] else 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m leka.billing.cli")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -151,7 +184,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     granting.add_argument("--end", action="store_true", help="take it back")
     amounts = commands.add_parser("amounts", help="each paying subscription's price, from Stripe")
     amounts.add_argument("--all", action="store_true", help="read again those already known")
+    history = commands.add_parser("history", help="invoices and refunds, read from Stripe")
+    history.add_argument("--since", type=date.fromisoformat, default=None)
+    history.add_argument("--organisation", type=uuid.UUID, default=None, help="this one only")
+    reconciling = commands.add_parser("reconcile", help="each subscription beside Stripe's")
+    reconciling.add_argument("--organisation", type=uuid.UUID, default=None, help="this one only")
     said = parser.parse_args(argv)
+    if said.command == "history":
+        since = datetime.combine(said.since, time.min, tzinfo=UTC) if said.since else None
+        return asyncio.run(_history(since, said.organisation))
+    if said.command == "reconcile":
+        return asyncio.run(_reconcile(said.organisation))
     if said.command == "amounts":
         return asyncio.run(_amounts(said.all))
     if said.command == "grant-agents":
