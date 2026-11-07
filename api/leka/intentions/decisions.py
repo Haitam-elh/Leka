@@ -61,6 +61,8 @@ REVERSIBLE: Mapping[str, bool] = {
     "stop": True,
     "update": True,
     "fix": True,
+    # A change to the code: its pull request reverted.
+    "change": True,
     "migrate": False,
 }
 
