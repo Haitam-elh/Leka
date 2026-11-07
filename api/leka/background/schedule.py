@@ -203,6 +203,8 @@ SCHEDULE: tuple[Scheduled, ...] = (
     # read from the tables that say it, each fact once; a minute after the
     # notifications' sweep, so they do not start together.
     Scheduled("admin-activity", "leka.admin.activity.run_sweep", cron="1-59/5 * * * *"),
+    # Incidents and the team's notifications (LEKA-556): after the journal.
+    Scheduled("admin-incidents", "leka.admin.incidents.run_watch", cron="3-59/5 * * * *"),
     # LEKA ADMIN's own rows past their keeping (LEKA-546): its trail after a
     # year, its ended sessions and spent codes; the trail's protection checked.
     Scheduled("admin-retention", "leka.admin.retention.run_sweep", cron="25 4 * * *"),

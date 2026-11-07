@@ -29,6 +29,7 @@ environment is all it would take.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -46,6 +47,7 @@ from leka.core.errors import (
     FieldError,
     error_envelope,
 )
+from leka.ops import record_api_error
 
 logger = structlog.get_logger(__name__)
 
@@ -197,6 +199,16 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
         exception_type=type(exc).__name__,
     )
     request_id = _request_id_of(request)
+    # Kept for LEKA ADMIN's incidents (LEKA-556): its route as declared, never
+    # its values; whose request it was, when it said.
+    await record_api_error(
+        method=request.method,
+        route=_declared(request),
+        exception=type(exc).__name__,
+        request_id=request_id,
+        workspace_id=getattr(request.state, "workspace_id", None),
+        at=datetime.now(UTC),
+    )
     response = JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content=error_envelope(
@@ -207,6 +219,15 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     )
     _readable_by_the_page(request, response, request_id)
     return response
+
+
+def _declared(request: Request) -> str:
+    """The route as declared — `/api/v1/intentions/{intention_id}` — its
+    values put back as their names: never an id, never what was asked."""
+    path = request.url.path
+    for name, value in request.path_params.items():
+        path = path.replace(f"/{value}", f"/{{{name}}}")
+    return path
 
 
 def _readable_by_the_page(request: Request, response: JSONResponse, request_id: str | None) -> None:

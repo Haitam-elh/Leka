@@ -1465,3 +1465,136 @@ class AdminInvitationRow(BaseModel):
     expires_at: datetime
     expired: bool
     has_account: bool = Field(description="True: the address already has a LEKA account.")
+
+
+# ── Incidents & notifications (LEKA-556) ─────────────────────────────────────
+
+IncidentCategory = Literal[
+    "intention_failed",
+    "agent_failed",
+    "api_error",
+    "integration_disconnected",
+    "sync_failed",
+    "credits",
+    "payment_failed",
+    "platform",
+]
+Severity = Literal["critical", "high", "medium", "low"]
+IncidentStatus = Literal["new", "in_progress", "resolved", "closed"]
+NotificationKind = Literal[
+    "critical_incident",
+    "payment_failed",
+    "integration_disconnected",
+    "repeated_errors",
+    "capacity_near_limit",
+    "abnormal_consumption",
+]
+
+
+class IncidentAssignee(BaseModel):
+    id: uuid.UUID
+    name: str
+    email: str
+
+
+class IncidentRow(BaseModel):
+    """A problem LEKA's team must see: said as INC-<number>."""
+
+    id: uuid.UUID
+    number: int
+    organisation: OrganisationRef | None = Field(description="None: the platform itself.")
+    category: IncidentCategory
+    severity: Severity
+    status: IncidentStatus
+    technical_id: str | None = Field(
+        description="LEKA CORE's own id of what it is about: an intention, an agent run, a "
+        "source, an invoice, a request, a rule."
+    )
+    detail: dict[str, object] = Field(description="Names and codes, never a secret.")
+    occurrences: int
+    recurring: bool = Field(description="Three times in a day: its severity raised once.")
+    first_seen_at: datetime
+    last_seen_at: datetime
+    assignee: IncidentAssignee | None
+    resolved_at: datetime | None
+    closed_at: datetime | None
+
+
+class IncidentEventRow(BaseModel):
+    id: uuid.UUID
+    kind: Literal["opened", "occurred", "recurring", "assigned", "status", "note", "auto_resolved"]
+    at: datetime
+    by: str | None = Field(description="The admin's address; none: LEKA, its watch.")
+    detail: dict[str, object]
+
+
+class IncidentRecord(BaseModel):
+    incident: IncidentRow
+    previous_id: uuid.UUID | None = Field(description="The same problem's incident before.")
+    previous_number: int | None
+    history: list[IncidentEventRow] = Field(description="The latest first.")
+
+
+class IncidentSummary(BaseModel):
+    """The open incidents (new, in progress), counted."""
+
+    open: int
+    by_status: dict[str, int]
+    by_severity: dict[str, int]
+    by_category: dict[str, int]
+    unassigned: int
+    recurring: int
+
+
+class IncidentChange(BaseModel):
+    """Taken up, resolved, closed or taken up again; given to someone (null:
+    to no one); a note. One at least."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["in_progress", "resolved", "closed"] | None = None
+    assignee_id: uuid.UUID | None = None
+    note: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("note")
+    @classmethod
+    def _said(cls, note: str | None) -> str | None:
+        return note.strip() or None if note is not None else None
+
+    @model_validator(mode="after")
+    def _something(self) -> IncidentChange:
+        if not ({"status", "assignee_id"} & self.model_fields_set) and not self.note:
+            raise ValueError("a change says what changes")
+        return self
+
+
+class AdminNotificationRow(BaseModel):
+    id: uuid.UUID
+    kind: NotificationKind
+    severity: Severity
+    at: datetime
+    organisation: OrganisationRef | None
+    incident_id: uuid.UUID | None
+    incident_number: int | None
+    detail: dict[str, object]
+    read_at: datetime | None = Field(description="When this admin read it; none: unread.")
+
+
+class NotificationsRead(BaseModel):
+    """Read: these, or every one not read yet."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ids: list[uuid.UUID] = Field(default_factory=list, max_length=200)
+    every: bool = False
+
+    @model_validator(mode="after")
+    def _which(self) -> NotificationsRead:
+        if not self.ids and not self.every:
+            raise ValueError("say which, or every one")
+        return self
+
+
+class NotificationsCount(BaseModel):
+    unread: int
+    marked: int | None = Field(default=None, description="How many were marked read.")

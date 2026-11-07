@@ -1,4 +1,4 @@
-# Les indicateurs de LEKA ADMIN (LEKA-548, LEKA-554, LEKA-555)
+# Les indicateurs de LEKA ADMIN (LEKA-548, LEKA-554, LEKA-555, LEKA-556)
 
 `GET /api/v1/admin/overview` calcule chaque chiffre de l'accueil de LEKA ADMIN à partir des données réelles de LEKA CORE. Le code est dans `api/leka/admin/overview.py`, et cette page en est la définition : un chiffre qui change de règle change ici aussi. Le module Facturation & Finance (`GET /api/v1/admin/billing/finance`, `api/leka/admin/billing.py`) a ses règles au § 11.
 
@@ -238,3 +238,49 @@ L'erreur d'une source ou d'une lecture est son **diagnostic** : un code (`AUTH_I
 | Inconnue | un service ou une application reliés à rien : on ne sait pas de quoi ils dépendent |
 
 La **cartographie** reprend l'architecture que le client voit dans « Mon environnement » (`leka.knowledge`, toutes les cartes). Elle ne montre que les relations que le modèle tient, donc étayées par les données collectées, entre deux éléments affichés. Chaque relation dit les sources qui l'affirment, sa règle, sa confiance et sa preuve (passée au détecteur de secrets). La **fraîcheur** est la date de la dernière construction du modèle et celle de la dernière lecture de chaque source ; la **provenance** est la source de chaque élément et de chaque relation.
+
+## 13. Incidents & notifications (LEKA-556)
+
+`api/leka/admin/incidents.py`. Une surveillance tourne toutes les 5 minutes, juste après le journal d'activité. Elle ouvre les incidents à partir de ce que LEKA CORE enregistre déjà, jamais d'un chiffre à part. Chaque incident nomme son organisation ; aucune, quand c'est la plateforme elle-même. Les organisations de démonstration sont mises à part.
+
+### Les catégories
+
+| Catégorie | Ouvert par | Un incident par | Résolu par LEKA quand |
+| --- | --- | --- | --- |
+| Intentions échouées (`intention_failed`) | une intention passée en échec (journal d'activité) | intention | elle se termine finalement |
+| Agents en erreur (`agent_failed`) | une exécution d'agent échouée | organisation et agent | l'agent réussit de nouveau chez elle |
+| Erreurs API (`api_error`) | une requête qui échoue du côté de LEKA (une 500), gardée par l'API (`leka.ops.api_errors`) : sa route déclarée, jamais ses valeurs, le type d'erreur, l'identifiant de requête, l'organisation quand la requête la connaît | route, type d'erreur et organisation | une personne le résout |
+| Intégrations déconnectées (`integration_disconnected`) | une source en erreur ou non saine | source | elle redevient saine |
+| Synchronisations échouées (`sync_failed`) | une lecture échouée | source | elle est relue avec succès |
+| Problèmes de crédits (`credits`) | les crédits du mois épuisés | organisation et mois | ils ne le sont plus |
+| Paiements échoués (`payment_failed`) | une tentative de paiement échouée (LEKA-554) | facture | la facture est payée ou annulée |
+| Plateforme (`platform`) | une règle de la surveillance des opérations (LEKA-408) | règle | elle ne se déclenche plus |
+| Erreurs récurrentes | un incident vu 3 fois en 24 heures, quelle que soit sa catégorie : dit récurrent (`recurring`), sa gravité relevée d'un cran, une fois | | |
+
+### Jamais de doublon indu
+
+Un problème a une empreinte (`fingerprint`), unique parmi les incidents ouverts (nouveaux ou en cours). Le même problème ajoute une occurrence à l'incident ouvert. Chaque fait n'est compté qu'une fois, car l'événement qui le dit a sa clé (`dedupe_key`). Un problème qui revient après que son incident a été résolu ou fermé ouvre un nouvel incident, qui nomme le précédent.
+
+### Gravité et statuts
+
+| Gravité | Pour |
+| --- | --- |
+| Critique | quelqu'un agit maintenant : une règle critique de la plateforme, ou un incident élevé devenu récurrent |
+| Élevée | aujourd'hui : erreurs API, intégration déconnectée, paiement échoué, crédits épuisés |
+| Moyenne | intention échouée, agent en erreur, synchronisation échouée, règle d'avertissement |
+| Faible | réservée à ce qui ne gêne personne |
+
+Les statuts sont `new` (nouveau), `in_progress` (en cours), `resolved` (résolu) et `closed` (fermé). Un incident nouveau ou en cours peut être résolu ou fermé ; un incident résolu peut être repris ou fermé ; un incident fermé l'est pour de bon. LEKA résout lui-même un incident quand son problème a disparu, et le dit dans son historique.
+
+### Les notifications
+
+Chaque notification n'est écrite qu'une fois (sa clé `dedupe_key`), et chaque admin la lit pour soi.
+
+| Notification | Quand |
+| --- | --- |
+| Incident critique | un incident s'ouvre critique, ou le devient |
+| Paiement échoué | un incident de paiement s'ouvre |
+| Intégration déconnectée | un incident d'intégration s'ouvre |
+| Erreurs répétées | un incident devient récurrent |
+| Capacité proche de la limite | les crédits du mois d'une organisation passent le premier seuil d'avertissement (une fois par mois) |
+| Consommation anormale | les crédits des dernières 24 heures dépassent 3 fois la journée moyenne des 4 semaines précédentes, et 20 crédits (une fois par jour) |

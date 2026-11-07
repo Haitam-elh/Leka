@@ -177,6 +177,8 @@ def require_permission(
     async def dependency(
         request: Request, principal: PrincipalDep, session: SessionDep
     ) -> Principal:
+        # Whose request it is, for what is kept of it should it fail (LEKA-556).
+        request.state.workspace_id = principal.workspace_id
         decided = evaluate(Subject.of(principal), permission)
         route = f"{request.method} {request.url.path}"
         if not decided.allowed:
